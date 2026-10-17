@@ -1,6 +1,7 @@
 import { isValidAsciiHostname } from '../packages/contracts/domain-name.mts';
 import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 import { parseDmarcRecords } from './domain-posture-parsers.mts';
+import { MAX_DMARC_DISCOVERY_OWNERS } from '../packages/evidence/dmarc-policy-context.mts';
 
 export type DmarcDnsObservation = { records: unknown[]; error: string | null; observedAt?: string | null };
 export type DmarcResolver = (name: string) => Promise<DmarcDnsObservation>;
@@ -33,7 +34,8 @@ export function dmarcPolicyObservation(owner: string, observation: DmarcDnsObser
     : state;
   const time = typeof observation.observedAt === 'string' && observation.observedAt.length <= 64
     ? normalizeExplicitIsoTimestamp(observation.observedAt) : null;
-  return { owner, parsed, psd, valid, unavailable, incomplete,
+  return { owner, parsed, psd, valid, unavailable, incomplete, observedAt: time,
+    state: unavailable ? 'unavailable' : valid ? 'observed' : parsed.records.length ? 'invalid' : 'not_found',
     record: `Recursive DNS TXT _dmarc.${owner} · ${time ?? 'time unavailable'} · ${description}` };
 }
 
@@ -43,7 +45,7 @@ export async function walkDmarcTree(domain: string, exact: DmarcDnsObservation, 
   const rows = [dmarcPolicyObservation(domain, exact)];
   const first = rows[0]!;
   const labels = domain.split('.');
-  let next = labels.length >= 8 ? labels.slice(-7) : labels.slice(1);
+  let next = labels.length >= MAX_DMARC_DISCOVERY_OWNERS ? labels.slice(-(MAX_DMARC_DISCOVERY_OWNERS - 1)) : labels.slice(1);
   const policyOnly = purpose === 'policy' && first.valid;
   if (!policyOnly && !first.unavailable && !(first.valid && ['n', 'y'].includes(first.psd))) {
     while (next.length) {

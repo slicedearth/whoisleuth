@@ -101,7 +101,7 @@
   $effect(()=>{if(page>pageCount)page=pageCount;});
 </script>
 
-<section class="wl-toolbar card" bind:this={componentRoot}><div class="top-actions toolbar"><button class="btn" onclick={downloadWatchlists} disabled={!names.length}>Export JSON</button><label class="btn file-btn">Import JSON<input id="watchlist-import" type="file" accept="application/json,.json" onchange={importFile}></label><button class="btn danger" onclick={() => void clearAllAndFocus()} disabled={!names.length}>Clear all</button></div></section>
+<section class="wl-toolbar card" bind:this={componentRoot}><div class="top-actions toolbar"><button class="btn" onclick={downloadWatchlists} disabled={!names.length}>Export JSON</button><label class="btn file-btn">Import JSON<input id="watchlist-import" type="file" accept="application/json,.json" onchange={importFile}></label><button class="btn danger" onclick={() => void clearAllAndFocus()} disabled={!names.length}>Clear all watchlists</button></div></section>
 {#if message}<p class="message" role="status" aria-live="polite">{message}</p>{/if}
 
 {#if names.length}

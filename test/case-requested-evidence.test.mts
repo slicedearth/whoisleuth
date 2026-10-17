@@ -7,6 +7,7 @@ import { readCaseEvidenceRequest, readCasePacketAmendment, latestEvidenceRequest
 import { buildCliCasePack, verifyCliCasePack } from '../cli/case-pack.mts';
 import { validateOfflineArtifactStructure } from '../cli/offline-artifact-validation.mts';
 import { CASE_SCHEMA_VERSION, CASE_RESPONSE_PACKET_SCHEMA, serialiseCasePortableJson } from '../packages/contracts/case-portability.mts';
+import { buildAnalystReviewInbox } from '../frontend/src/lib/analysis/analyst-review-inbox.ts';
 
 const NOW = '2026-09-20T10:00:00.000Z';
 const DIGEST = 'a'.repeat(64);
@@ -128,11 +129,17 @@ test('amendment packets require every prepared pin and preserve the original dig
 
 test('prepared does not mean sent; only a distinct authorised submission records amendment delivery', () => {
   const s = scenario(); s.requested(); s.prepared(); const id = s.amend();
+  const review = () => buildAnalystReviewInbox({ cases: [s.record] }, NOW).items.find(item => item.id === `action:${s.record.id}:${s.actionId}`)!;
   const eventId = s.record.actions.find(action => action.id === id)!.amendment!.requestEventIds[0]!;
   assert.deepEqual(evidenceRequestDelivery(s.record.actions, s.actionId, eventId), []);
+  const preparedReview = review();
+  assert.match(preparedReview.waitingOn![0]!.reason, /^Prepared; delivery not recorded:/u);
   for (const state of ['ready_for_review', 'reviewed', 'authorised', 'submitted']) s.transition(id, state,
     state === 'submitted' ? { reference: `response-packet-sha256:${'c'.repeat(64)}` } : {});
   assert.equal(evidenceRequestDelivery(s.record.actions, s.actionId, eventId)[0]?.digestSha256, 'c'.repeat(64));
+  assert.equal(review().waitingOn!.some(reason => reason.kind === 'evidence'), false, 'delivery removes the fulfilled request, not the provider outcome review');
+  assert.equal(review().waitingOn![0]!.kind, 'analyst');
+  assert.notEqual(review().materialFingerprint, preparedReview.materialFingerprint);
   assert.equal(submittedPacketReceipts(s.record.actions.find(action => action.id === s.actionId)!)[0]?.digestSha256, DIGEST);
   assert.throws(() => s.change({ actionUpdate: { id, amendment: { packetDigestSha256: DIGEST, requestEventIds: [] } } }), /at least one/);
 });

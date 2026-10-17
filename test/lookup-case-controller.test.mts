@@ -10,6 +10,8 @@ import { LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../frontend/src/lib/analysis/evi
 import type { ResolvedAbuseRecipient } from '../frontend/src/lib/analysis/abuse-recipient-resolver.ts';
 import type { CheckpointFact } from '../frontend/src/lib/analysis/case-evidence-checkpoint.ts';
 import { MAX_CASE_CHECKPOINT_FACTS } from '../packages/contracts/case-portability.mts';
+import { readFileSync } from 'node:fs';
+import { parseLookupCollectionReceipt } from '../packages/evidence/lookup-collection-receipt.mts';
 
 function unused(): Promise<never> {
   throw new Error('Unused test dependency');
@@ -190,7 +192,7 @@ describe('Lookup case controller', () => {
       inputHostname: 'account.example.test',
       availability: 'registered',
     }, 'deep');
-    assert.match(refreshed.status, /Refreshed the retained Case evidence/iu);
+    assert.match(refreshed.status, /Saved this Lookup observation to the Case/iu);
     assert.deepEqual(refreshed.record?.evidenceHistory.map((snapshot) => snapshot.inputHostname), [
       'login.example.test',
       'account.example.test',
@@ -199,24 +201,28 @@ describe('Lookup case controller', () => {
 
   test('persists one explicit checkpoint batch through the existing case boundary', async () => {
     const record = createCase({ domain: 'case-context.example' }, '2026-07-29T01:00:00.000Z');
-    const patches: Array<Parameters<LookupCaseApi['edit']>[1]> = [];
+    let stored = [record];
     const api: LookupCaseApi = {
       getForDomain: unused,
       open: unused,
       addNote: unused,
-      edit: async (_id, value) => {
-        patches.push(value);
-        return { record, cases: [record], pruned: 0 };
+      edit: async (id, value) => {
+        const result = updateCase(stored, id, value, '2026-07-29T02:00:00.000Z');
+        stored = result.cases;
+        return { ...result, pruned: 0 };
       },
     };
     const controller = new LookupCaseController(api);
-    const result = await controller.recordCheckpoint(record, [fixtureFact()], ['dns.mx']);
+    const receipt = parseLookupCollectionReceipt(JSON.parse(readFileSync(new URL('./fixtures/cli-lookup-v3.json', import.meta.url), 'utf8')).collectionReceipt)!;
+    const result = await controller.recordCheckpoint(record, [fixtureFact(), fixtureFact('dns.ns')], ['dns.mx'], {}, receipt);
 
     assert.match(result.status, /Saved 1 analyst-selected checkpoint fact/u);
-    const patch = patches[0];
-    assert.ok(patch);
-    assert.ok(Array.isArray(patch.evidencePins));
-    assert.equal(patch.evidencePins.length, 1);
+    assert.equal(stored[0]!.evidencePins.length, 1);
+    assert.equal(stored[0]!.evidencePins[0]!.field, 'dns.mx');
+    assert.deepEqual(stored[0]!.evidenceHistory, []);
+    assert.deepEqual(stored[0]!.checkpointCollectionReceipts, [{checkpointId: stored[0]!.evidencePins[0]!.checkpointId, collectionReceipt: receipt}]);
+    assert.deepEqual(record.evidencePins, []);
+    assert.equal(record.checkpointCollectionReceipts, undefined);
   });
 
   test('opens replay evidence as a historical imported snapshot', async () => {

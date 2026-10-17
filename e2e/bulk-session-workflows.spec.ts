@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { BULK_SESSION_SCHEMA, BULK_SESSION_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
 import { MAX_BULK_SESSIONS } from '../packages/workspace/bulk-session-model.mts';
@@ -465,11 +466,38 @@ test('resumes only unstarted rows from an explicitly saved partial session', asy
   });
 
   await openBulkWorkspaceTools(page);
-  await page.getByRole('button', { name: 'Resume unstarted' }).click();
+  const saved = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Partial review', exact: true }) });
+  await expect(saved).toContainText('Resume keeps 1 recorded row and collects only the 1 unstarted domain.');
+  const before = await readBrowserLocalCollection(page, 'bulk_sessions', { minimumRecords: 1 });
+  await saved.getByRole('button', { name: 'Load', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Loaded Partial review' })).toBeVisible();
+  expect(requests).toEqual([]);
+  expect(await readBrowserLocalCollection(page, 'bulk_sessions')).toEqual(before);
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 1280]) {
+      await page.setViewportSize({ width, height: 800 });
+      await expectNoHorizontalOverflow(page);
+      await expect(saved.getByRole('button', { name: 'Resume unstarted', exact: true })).toBeEnabled();
+      if (captureVisualEvidenceEnabled()) await saved.screenshot({ path: test.info().outputPath(`saved-reuse-${theme}-${width}.png`) });
+    }
+  }
+  await saved.getByRole('button', { name: 'Resume unstarted', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Completed 1 of 1 lookups.' })).toBeVisible();
   expect(requests).toEqual(['pending.invalid']);
   const stored = await readBrowserLocalCollection(page, 'bulk_sessions', { minimumRecords: 1, minimumRevision: 2 });
   expect(stored.records[0]?.value?.results).toHaveLength(2);
+  const priorRow = before.records[0]!.value.results[0];
+  const resumedRow = stored.records[0]!.value.results.find(row => row.domain === 'settled.invalid');
+  if (!priorRow || !resumedRow) throw new Error('The recorded failed row must exist before and after Resume.');
+  const { profileContext: priorProfile, ...priorEvidence } = priorRow;
+  const { profileContext: resumedProfile, ...resumedEvidence } = resumedRow;
+  expect(resumedEvidence).toEqual(priorEvidence);
+  expect(priorProfile.sourceState).toBe('unavailable');
+  expect(resumedProfile.sourceState).toBe('unavailable');
+  expect(resumedProfile.activeProfileId).toBeNull();
+  expect(resumedProfile.profileUpdatedAt).toBeNull();
+  expect(resumedProfile.limitation).not.toBe('');
 });
 
 test('an unavailable Profile context stays inconclusive in Bulk rows, sessions, CSV, and Monitor actions', async ({ page }) => {

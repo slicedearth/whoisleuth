@@ -3110,8 +3110,8 @@
       "id": "command.cli.case",
       "command": "case",
       "capabilityFamilyId": "analyst_cases",
-      "title": "Review and update ordinary local Case files",
-      "requestPurpose": "Reads exact Case schemas 15 or 16 or 17 or 18 or 19. Input is bounded to 16 MiB including formatting; the complete canonical Case store must fit 4 MiB without pruning. Writes current schema 19.",
+      "title": "Review and update ordinary local case files",
+      "requestPurpose": "Reads exact case schemas 15 or 16 or 17 or 18 or 19 or 20. Input is bounded to 16 MiB including formatting; the complete canonical case store must fit 4 MiB without pruning. Writes current schema 20.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -3171,7 +3171,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "No database, browser launch, request or external report is created. Select --case-id when a file contains multiple Cases. Existing files require --force; --expect-file-digest sha256:<digest> additionally checks the exact file reviewed earlier. Source and output leases reject concurrent changes. Interrupted .workflow.lock files require deliberate inspection. Recheck records supplied observations; it does not collect them. Not reproduced requires an existing saved question, a complete observation and comparable conditions. Working exports include private analyst content and file references, not attached file bytes.",
+        "No database, browser launch, request or external report is created. Select --case-id when a file contains multiple cases. Existing files require --force; --expect-file-digest sha256:<digest> additionally checks the exact file reviewed earlier. Source and output leases reject concurrent changes. Interrupted .workflow.lock files require deliberate inspection. Recheck records supplied observations; it does not collect them. Not reproduced requires an existing saved question, a complete observation and comparable conditions. Working exports include private analyst content and file references, not attached file bytes.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
@@ -3182,7 +3182,7 @@
       "command": "case-pack",
       "capabilityFamilyId": "portable_evidence",
       "title": "Build a reviewed case package",
-      "requestPurpose": "Reads one bounded Case export from schemas 15 or 16 or 17 or 18 or 19 and writes a separate audience-specific Case-pack v2.",
+      "requestPurpose": "Reads one bounded case export from schemas 15 or 16 or 17 or 18 or 19 or 20 and writes a separate audience-specific Case-pack v2.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -3243,7 +3243,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "The command creates a separate offline package without changing the source or durable Cases and requires an explicit review acknowledgement. Every audience, including public, retains domain evidence, Case, pin and decision identifiers, tags, decision summaries and rationale. Review that analyst-authored content as well as the exclusions before sharing.",
+        "The command creates a separate offline package without changing the source or durable cases and requires an explicit review acknowledgement. Every audience, including public, retains domain evidence, case, pin and decision identifiers, tags, decision summaries and rationale. Review that analyst-authored content as well as the exclusions before sharing.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
@@ -4345,7 +4345,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "The default check is offline. Public DNS and port 43 checks run only when --network is explicitly supplied.",
+        "The default check is offline. Public DNS, HTTPS and port 43 checks run only with --network. --summary-json omits private context and free-form diagnostic details.",
         "Network diagnostics are opt-in and use only fixed public diagnostic destinations."
       ],
       "variants": [
@@ -4700,7 +4700,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Saved Lookup versions 1 and 2 are capped at 8 MiB and scanned for duplicate keys, the prototype-sensitive __proto__ key, and bounded nesting, key, value, and per-container counts before parsing. Current schema-30 exports preserve evidence-source attribution and limitations; published v2 schemas 27, 28, 29 and exact v1 schema 26 remain readable, while other historical and unreleased shapes are unsupported. Markdown and HTML include a presentation-only generator footer unless --no-attribution is selected; JSON retains bounded generator provenance. Compact output intentionally omits raw registry payloads.",
+        "Supported saved Lookups are capped at 8 MiB and scanned for duplicate keys, the prototype-sensitive __proto__ key, and bounded nesting, key, value, and per-container counts before parsing. Current schema-31 exports preserve evidence-source attribution and limitations; published v2 schemas 27, 28, 29, 30 and exact v1 schema 26 remain readable, while other historical and unreleased shapes are unsupported. Markdown and HTML include a presentation-only generator footer unless --no-attribution is selected; JSON retains bounded generator provenance. Compact output intentionally omits raw registry payloads.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
@@ -4933,7 +4933,7 @@
       "command": "intake",
       "capabilityFamilyId": "offline_review",
       "title": "Review selected files and identity events offline",
-      "requestPurpose": "Reads one selected text, MIME email, calendar, PNG, PDF, DOCX, HAR or identity-event JSON file and, only with --intake-context, one bounded declaration/selection file. No collection or automatic Case write.",
+      "requestPurpose": "Reads one selected text, MIME email, calendar, PNG, PDF, DOCX, HAR or identity-event JSON file and, only with --intake-context, one bounded declaration/selection file. No collection or automatic case write.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -6980,7 +6980,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "The report retains source states and timings but excludes targets, queries, endpoints, and raw evidence.",
+        "Accepts supported Lookup, Bulk or Bulk-item documents, or an unmixed set of source-reliability reports. Retains source states and timings but excludes targets, queries, endpoints and raw evidence.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
@@ -7347,7 +7347,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Reads bounded local JSON only. Plan shows exact domains, duplicates, per-domain outcomes, destination and review priority with zero additional requests. Export emits Watchlist schema 5 without creating a scan or baseline. Neither mode enables collection or scheduling.",
+        "Reads bounded local JSON only. Plan shows exact domains, duplicates, per-domain outcomes, destination and review priority with zero additional requests. Export emits Watchlist schema 6 without creating a scan or baseline. Neither mode enables collection or scheduling.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
@@ -8345,7 +8345,7 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.browser.case-store",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 19,
+      "currentVersion": 20,
       "supportedVersions": [
         12,
         13,
@@ -8354,7 +8354,8 @@
         16,
         17,
         18,
-        19
+        19,
+        20
       ],
       "futureVersionBehavior": "preserve_without_write",
       "migration": "normalize_to_current",
@@ -8445,12 +8446,13 @@
       "schema": "whoisleuth.review-session",
       "lifecycleSchema": "whoisleuth.review-session",
       "coverageClass": "registered_schema",
-      "currentVersion": 1,
+      "currentVersion": 2,
       "supportedVersions": [
-        1
+        1,
+        2
       ],
       "futureVersionBehavior": "preserve_without_write",
-      "migration": "exact_current_only",
+      "migration": "normalize_to_current",
       "writeSemantics": "optimistic_replace",
       "byteBudget": 4194304,
       "storageClass": "browser_profile_storage",
@@ -8717,10 +8719,11 @@
       "schema": "whoisleuth.cli.lookup",
       "lifecycleSchema": "whoisleuth.cli.lookup",
       "coverageClass": "registered_schema",
-      "currentVersion": 2,
+      "currentVersion": 3,
       "supportedVersions": [
         1,
-        2
+        2,
+        3
       ],
       "futureVersionBehavior": "reject",
       "migration": "read_only",
@@ -9166,7 +9169,7 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.case-export",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 19,
+      "currentVersion": 20,
       "supportedVersions": [
         12,
         13,
@@ -9175,7 +9178,8 @@
         16,
         17,
         18,
-        19
+        19,
+        20
       ],
       "futureVersionBehavior": "reject",
       "migration": "normalize_to_current",
@@ -10223,7 +10227,8 @@
         "published-contacts",
         "source-endpoints",
         "normalised-evidence",
-        "collection-context"
+        "collection-context",
+        "collection-receipt"
       ],
       "notePolicy": "not_applicable",
       "retention": "transient_report",
@@ -10249,7 +10254,8 @@
         "source-timings",
         "normalised-evidence",
         "registrar-standing-official-projection",
-        "collection-context"
+        "collection-context",
+        "collection-receipt"
       ],
       "excludedCategories": [
         "credentials",
@@ -10280,7 +10286,8 @@
         "source-timings",
         "normalised-evidence",
         "registrar-standing-official-projection",
-        "collection-context"
+        "collection-context",
+        "collection-receipt"
       ],
       "excludedCategories": [
         "credentials",
@@ -10318,7 +10325,8 @@
         "published-contacts",
         "source-endpoints",
         "normalised-evidence",
-        "collection-context"
+        "collection-context",
+        "collection-receipt"
       ],
       "notePolicy": "not_applicable",
       "retention": "transient_report",
@@ -11137,7 +11145,9 @@
         "evidence-fingerprint",
         "unfinished-review-forms",
         "local-revision",
-        "save-time"
+        "save-time",
+        "private-review-question",
+        "admitted-view-baseline"
       ],
       "excludedCategories": [
         "collected-source-payloads",
@@ -11948,7 +11958,8 @@
             16,
             17,
             18,
-            19
+            19,
+            20
           ],
           "mode": "direct",
           "discriminator": null
@@ -11956,7 +11967,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.browser.case-store",
-        "version": 19,
+        "version": 20,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.browser-state",
@@ -11982,7 +11993,8 @@
             16,
             17,
             18,
-            19
+            19,
+            20
           ],
           "mode": "direct",
           "discriminator": null
@@ -11990,7 +12002,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.case-export",
-        "version": 19,
+        "version": 20,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.portable-output",
@@ -12016,7 +12028,8 @@
             16,
             17,
             18,
-            19
+            19,
+            20
           ],
           "mode": "direct",
           "discriminator": null
@@ -12130,7 +12143,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.case-export",
-        "version": 19,
+        "version": 20,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.portable-output",
@@ -12428,7 +12441,8 @@
             16,
             17,
             18,
-            19
+            19,
+            20
           ],
           "mode": "direct",
           "discriminator": null
@@ -12452,7 +12466,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.cli.lookup",
-        "version": 2,
+        "version": 3,
         "discriminator": null
       },
       "privacyProfileId": "cli-lookup.sensitive-collection.v1",
@@ -12475,7 +12489,8 @@
           "schema": "whoisleuth.cli.lookup",
           "versions": [
             1,
-            2
+            2,
+            3
           ],
           "mode": "direct",
           "discriminator": null
@@ -12501,7 +12516,8 @@
           "schema": "whoisleuth.cli.lookup",
           "versions": [
             1,
-            2
+            2,
+            3
           ],
           "mode": "direct",
           "discriminator": null
@@ -12527,7 +12543,8 @@
           "schema": "whoisleuth.cli.lookup",
           "versions": [
             1,
-            2
+            2,
+            3
           ],
           "mode": "direct",
           "discriminator": {
@@ -12558,7 +12575,8 @@
           "schema": "whoisleuth.cli.lookup",
           "versions": [
             1,
-            2
+            2,
+            3
           ],
           "mode": "direct",
           "discriminator": null
@@ -12584,7 +12602,8 @@
           "schema": "whoisleuth.cli.lookup",
           "versions": [
             1,
-            2
+            2,
+            3
           ],
           "mode": "direct",
           "discriminator": null
@@ -14490,7 +14509,8 @@
         {
           "schema": "whoisleuth.review-session",
           "versions": [
-            1
+            1,
+            2
           ],
           "mode": "direct",
           "discriminator": null
@@ -14498,7 +14518,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.review-session",
-        "version": 1,
+        "version": 2,
         "discriminator": null
       },
       "privacyProfileId": "review-session.privacy",

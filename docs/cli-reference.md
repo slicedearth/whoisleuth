@@ -71,11 +71,11 @@ candidate, form destination and deliberately observed navigation separately
 attributed. A similar page without a logo or brand name can still merit manual
 evidence review; correspondence does not establish authorship, rights authority
 or maliciousness. Missing optional capture or comparison evidence does not
-prevent ordinary Case pins and conclusions. Installed command help remains the
+prevent ordinary case pins and conclusions. Installed command help remains the
 authority for offline file inputs and explicit collection plans.
 
 The [reporting guide](https://www.whoisleuth.com/resources/reporting-and-takedown-guidance)
-uses the same reviewed official-route catalogue as the Console for social
+uses the same reviewed official-route catalogue as the console for social
 content, storefronts, app listings, hosted files/forms and advertising. Verify
 the exact object, current route, reporter authority and disclosure before any
 manual submission. Fraud, order complaints and rights notices are different
@@ -96,8 +96,10 @@ PKIX, STARTTLS and SMTP transport remain separate evidence states.
 STARTTLS detection uses the full bounded reply. If the retained capability
 inventory is shortened, the report remains partial and names the omission.
 
-The repository-only rendered-capture package is outside hosted and distributable
-collection. It executes remote page JavaScript only for an explicitly
+The separate optional rendered-capture companion is distributed as a locally
+assembled archive, not as part of the hosted application or main CLI, and is
+not published to a package registry. Its sandboxed, bounded browser executes
+remote page JavaScript only for an explicitly
 authorised route set, and each admitted resource operator receives the exact
 requested URL. Captures and screenshots remain local until the operator deletes
 them.
@@ -143,24 +145,60 @@ Readers accept only their declared public and current versions. Unknown,
 unreleased historical and future schemas fail before partial interpretation;
 an invalid import is not treated as an empty document.
 
-`inspect-archive` reads current workspace archive v9 and exact versions 5–8. It
+`inspect-archive` reads current workspace archive v10 and exact versions 5–9. It
 reports section metadata and digest-only search results unless `--reveal` is
 explicitly selected. It never searches notes, contacts or arbitrary raw fields.
 
-`export` reads supported saved Lookup v1 or v2 and writes current Lookup
-evidence schema 29. Published v2 schemas 27 and 28 and exact v1 schema 26 remain
-readable. Versions 27–29 exclude raw registration payloads, expanded
+`export` reads supported saved Lookup versions 1–3 and writes current Lookup
+evidence schema 31. Supported schemas 27–30 and exact v1 schema 26 remain
+readable. Versions 27–31 exclude raw registration payloads, expanded
 contacts, credentials, complete query-bearing URLs and provider payloads;
-schemas 28 and 29 also retain the bounded registrar-standing projection.
+Schemas 28 and later also retain the bounded registrar-standing projection.
 Schema 29 identifies the hostname used for DNS, TLS and web observations,
 separately from the registrable domain used by registration sources. Older
 evidence retains its original collection scope.
+Schema 31 retains WHOIS registration classification separately from collection
+completion. Lifecycle interpretation requires positive registration evidence;
+a completed negative or inconclusive WHOIS reply does not establish registration
+or absence of locks. Earlier exports retain their exact original interpretation
+for historical verification and are not silently relabelled.
+
+New WHOIS collection distinguishes confirmed no-service discovery from an
+incomplete discovery response. Empty, refused or unrecognised bootstrap
+responses remain partial; they do not establish that WHOIS is unsupported.
+`--strict-exit` treats that incomplete attempt as a source failure. Explicit
+no-request access-policy restrictions remain distinct from transport failures.
+
+Saved Lookup version 3 can retain a bounded collection receipt: original
+optional selections, admitted source families, collector starts, outcomes and
+explicitly known completeness. `lookup --verbose` and `lookup --browse`
+show this account with source-specific explanations and qualified retry guidance.
+Earlier files have no inferred receipt. The receipt contains
+no target values, URLs, contacts or raw errors and does not prove network
+delivery. It stays in full private Lookup JSON; the minimised `export` report
+does not include it. `--plan` remains offline and produces no completed receipt.
+
+Case schema 20 also retains this context when an analyst saves a completed Lookup
+assessment or selected checkpoint facts. A selected checkpoint saves only its
+selected pins and one payload-free receipt, not every Lookup result. Ordinary
+backups and internal case packs preserve it. Trusted/public case packs, case
+reports and response packets omit receipts; shared assessment identities are
+recomputed without them. Historical case formats remain readable without
+inventing missing collection choices.
 
 `verify-artifact` checks a recognised structure and its applicable integrity
 contract. `interchange-report` describes retained and omitted fields.
 `sign-artifact` and `verify-signature` keep artefact validity, signature
 validity and signer trust separate. None of these checks establishes that
 evidence is accurate, current, safe to share or attributable to a person.
+
+The text output of `verify-artifact` suggests compatible offline follow-up
+commands for recognised saved Lookups, case exports, workspace archives,
+Lookup-evidence reports, Case-packs and managed indicator revisions. These are
+examples with placeholder filenames, not executed actions or a sharing approval.
+Replace the filenames deliberately; a case or indicator inspection can display
+private contents. Encrypted workspace guidance uses a separate passphrase file,
+never a passphrase in command history. JSON output and `--quiet` are unchanged.
 
 ### Signer trust
 
@@ -211,9 +249,9 @@ own retention policy. No automatic key discovery, key storage or trust refresh o
   control, activity, intent or maliciousness.
 - Bulk applies one declared collection contract per target. Fast accepts up to
   500 targets and Deep up to 50; each target remains a separate request.
-- Respond commands package browser-created Cases and prepare local packets,
+- Respond commands package browser-created cases and prepare local packets,
   reports and sharing reviews. The offline [`case` workflow](cli.md#local-case-files)
-  also creates and updates ordinary local Case files through explicit, conflict-checked
+  also creates and updates ordinary local case files through explicit, conflict-checked
   output. Neither workflow submits, publishes, notifies or grants recipient authorisation.
 - Assurance, comparison and calibration commands describe supplied or retained
   evidence. They do not tune the running model, change infrastructure or turn an

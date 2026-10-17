@@ -10,6 +10,11 @@ import { inspectRdapCapabilities } from './rdap-capabilities.mts';
 import { isRecord, recordOrEmpty } from './json-record.mts';
 import { MAX_RDAP_REDACTIONS, MAX_RDAP_STATUSES } from './rdap-types.mts';
 import { MAX_WHOIS_STATUSES } from './whois-contracts.mts';
+import {
+  LEGACY_REGISTRY_INSIGHTS_VERSION, REGISTRY_INSIGHTS_VERSION,
+  isSupportedRegistryInsightsVersion, type RegistryInsightsVersion,
+} from '../packages/contracts/registry-insights.mts';
+export { REGISTRY_INSIGHTS_VERSION } from '../packages/contracts/registry-insights.mts';
 
 type UnknownRecord = Record<string, unknown>;
 type ContactDisclosureState =
@@ -21,7 +26,6 @@ type ContactDisclosureState =
   | 'unavailable';
 type PublicationState = 'complete' | 'partial' | 'unavailable';
 
-export const REGISTRY_INSIGHTS_VERSION = 1;
 export const MAX_REGISTRY_INSIGHT_STATUSES = 40;
 export const MAX_REGISTRY_INSIGHT_ISSUES = 12;
 export const MAX_REGISTRY_ABUSE_ROUTES = 8;
@@ -323,7 +327,9 @@ export function buildRegistryInsights(input: {
   registrarRdapParsed?: unknown;
   registrarRdapStatus?: unknown;
   registrarRdapFetchedAt?: unknown;
-}) {
+}, options: Readonly<{ rdapCapabilityCatalogReviewedAt?: string; version?: RegistryInsightsVersion }> = {}) {
+  const version = options.version ?? REGISTRY_INSIGHTS_VERSION;
+  if (!isSupportedRegistryInsightsVersion(version)) throw new TypeError('Unsupported registry insight version.');
   const rdap = record(input.rdapParsed);
   const whois = record(input.whoisParsed);
   const registrarRdap = record(input.registrarRdapParsed);
@@ -358,7 +364,14 @@ export function buildRegistryInsights(input: {
   ];
   const lifecycleCandidates = [
     { statuses: rdapStatuses.values, state: publications[0]!.state },
-    { statuses: whoisStatuses.values, state: publications[1]!.state },
+    {
+      statuses: whoisStatuses.values,
+      // A completed response describes collection, not positive registration.
+      // Preserve the old derivation only when verifying a historical export.
+      state: version === LEGACY_REGISTRY_INSIGHTS_VERSION || whois.registrationStatus === 'registered'
+        ? publications[1]!.state
+        : 'unavailable' as const,
+    },
   ].filter((candidate) => candidate.state !== 'unavailable');
   const lifecycleSource = lifecycleCandidates.find((candidate) => candidate.statuses.length)
     ?? lifecycleCandidates[0]
@@ -378,7 +391,7 @@ export function buildRegistryInsights(input: {
   }
 
   return {
-    version: REGISTRY_INSIGHTS_VERSION,
+    version,
     contactDisclosure: {
       registryRdap: disclosure('registry_rdap', input.rdapParsed, input.rdapStatus),
       whois: disclosure('whois', input.whoisParsed, input.whoisStatus),
@@ -404,8 +417,8 @@ export function buildRegistryInsights(input: {
     },
     publications,
     rdapCapabilities: {
-      registry: inspectRdapCapabilities(input.rdapParsed, input.rdapStatus),
-      registrar: inspectRdapCapabilities(input.registrarRdapParsed, input.registrarRdapStatus),
+      registry: inspectRdapCapabilities(input.rdapParsed, input.rdapStatus, options.rdapCapabilityCatalogReviewedAt),
+      registrar: inspectRdapCapabilities(input.registrarRdapParsed, input.registrarRdapStatus, options.rdapCapabilityCatalogReviewedAt),
     },
     abuseRouting: [...uniqueRoutes.values()],
   };

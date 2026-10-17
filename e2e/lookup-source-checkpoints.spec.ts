@@ -31,6 +31,16 @@ test('selected URL collection is deliberate and retains scope without its path o
   await expect(selection).toBeDisabled();
   await page.getByRole('radio', { name: /Deep/u }).check();
   await expect(selection).not.toBeChecked();
+  await page.locator('.collection-preflight > summary').click();
+  const disclosure = page.locator('.collection-preflight [data-source="website_probe"] .collection-disclosure');
+  await disclosure.getByText('Website: data and recipients', { exact: true }).click();
+  await expect(disclosure).toContainText('Homepage on the exact hostname; entered URL path and query are not selected');
+  await expect(disclosure).toContainText('current application server');
+  const networkDisclosure = page.locator('.collection-preflight [data-source="network_context"] .collection-disclosure');
+  await networkDisclosure.locator(':scope > summary').click();
+  await expect(networkDisclosure.getByText('Registry query: Observed public IP address', { exact: true })).toBeVisible();
+  await expect(networkDisclosure).not.toContainText('Registrable domain');
+  expect(requests, 'Opening the disclosure must not collect.').toEqual([]);
   await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
   await expect(page.locator('.result-head')).toContainText(hostname);
   await expect(page.getByRole('button', { name: 'Run lookup', exact: true })).toBeEnabled();
@@ -45,11 +55,20 @@ test('selected URL collection is deliberate and retains scope without its path o
   await selection.focus();
   await page.keyboard.press('Space');
   await expect(selection).toBeChecked();
+  if (await disclosure.getAttribute('open') === null) {
+    await disclosure.locator(':scope > summary').focus();
+    await page.keyboard.press('Enter');
+  }
+  await expect(disclosure.getByText('Request origin and first boundary', { exact: true })).toBeVisible();
+  await expect(disclosure).toContainText('Explicitly selected URL path and query; fragments are not sent');
+  await expect(disclosure).not.toContainText('Homepage on the exact hostname');
+  await expect(disclosure).not.toContainText('private-example');
+  expect(requests, 'Changing the plan must not collect again.').toEqual(['GET']);
   for (const theme of ['light', 'dark'] as const) {
     await useTheme(page, theme);
     for (const width of [320, 390, 1024, 1280, 2560]) {
       await page.setViewportSize({ width, height: 900 });
-      await selection.scrollIntoViewIfNeeded();
+      await disclosure.scrollIntoViewIfNeeded();
       await expectNoHorizontalOverflow(page);
       if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`selected-url-form-${theme}-${width}.png`) }); }
     }

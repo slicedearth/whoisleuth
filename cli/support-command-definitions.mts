@@ -1,4 +1,5 @@
 import { RISK_CALIBRATION_DATASET_SCHEMA, RISK_CALIBRATION_REPORT_SCHEMA } from '../packages/contracts/risk-calibration.mts';
+import { DOCTOR_SCHEMA, DOCTOR_SUMMARY_SCHEMA } from '../packages/contracts/cli-doctor.mts';
 import { positional, NO_POSITIONALS, OPTIONAL_FILE_POSITIONAL, constraint, EMPTY_CONSTRAINTS, commandSeed, text } from './command-definition.mts';
 
 export const SUPPORT_COMMAND_DEFINITIONS = Object.freeze({
@@ -26,17 +27,17 @@ export const SUPPORT_COMMAND_DEFINITIONS = Object.freeze({
     reference: {
       description: 'Check the supported runtime and local terminal capabilities.',
       example: 'whoisleuth doctor --json',
-      boundary: 'The default check is offline. Public DNS and port 43 checks run only when --network is explicitly supplied.',
+      boundary: 'The default check is offline. Public DNS, HTTPS and port 43 checks run only with --network. --summary-json omits private context and free-form diagnostic details.',
     },
     collection: { scope: 'Network access is opt-in with --network and is limited to fixed public DNS, HTTPS, and WHOIS diagnostics.' },
     summary: 'Check the local CLI runtime',
-    options: ['--network', '--json', '--quiet', '--no-color'],
+    options: ['--network', '--json', '--summary-json', '--quiet', '--no-color'],
     positionals: NO_POSITIONALS,
-    constraints: EMPTY_CONSTRAINTS,
+    constraints: Object.freeze([constraint({ kind: 'mutually_exclusive', options: ['--json', '--summary-json'] })]),
     handlerOwner: 'support',
     networkEffect: 'conditional_network',
     common: true,
-    schemaIdentifiers: Object.freeze(['whoisleuth.cli.doctor']),
+    schemaIdentifiers: Object.freeze([DOCTOR_SCHEMA, DOCTOR_SUMMARY_SCHEMA]),
     primaryArtefacts: Object.freeze([]),
     planSupport: false,
     additionalOutputFormats: Object.freeze([]),

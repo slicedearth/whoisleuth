@@ -22,6 +22,7 @@ import { formatCliJunit } from './ci-report.mts';
 import { browseLookupOperation, canBrowseLookup } from './lookup-browser.mts';
 import { writePrivateFile } from './output-file.mts';
 import { prepareLookupCollectionTarget, prepareSelectedLookupUrl } from '../packages/evidence/lookup-target.mts';
+import type { LookupCollectionReceipt } from '../packages/evidence/lookup-collection-receipt.mts';
 
 export type LookupCommandDependencies = {
   stdin?: BoundedTextStream;
@@ -89,7 +90,7 @@ async function runLookupCommand(
   }
 
   let documentGeneratedAt = '';
-  const buildDocument = (result: unknown) => {
+  const buildDocument = ({ result, collectionReceipt }: Readonly<{ result: unknown; collectionReceipt: LookupCollectionReceipt | undefined }>) => {
     documentGeneratedAt = context.now();
     return buildCliLookupDocument(
       query,
@@ -98,6 +99,7 @@ async function runLookupCommand(
       documentGeneratedAt,
       args.deep ? 'deep' : 'fast',
       {
+        collectionReceipt,
         ...(args.observerLabel ? { observerLabel: args.observerLabel } : {}),
         ...(args.vantageLabel ? { vantageLabel: args.vantageLabel } : {}),
       },
@@ -106,18 +108,24 @@ async function runLookupCommand(
   const collect = (
     signal: AbortSignal | undefined,
     onSourceSettled: NonNullable<LookupOptions['onSourceSettled']>,
-  ) => abortable(() => executeLookup(classified, {
-    fast: !args.deep,
-    compact: false,
-    ...(signal ? { signal } : {}),
-    ...(args.deep ? {
-      ...(selectedUrl ? { selectedUrl } : {}),
-      onSourceSettled: settlement => {
-        onSourceSettled(settlement);
-        eventProgress.emit({ event: 'source_settled', source: settlement.source, state: settlement.state });
-      },
-    } : {}),
-  }), signal);
+  ) => abortable(async () => {
+    let collectionReceipt: LookupCollectionReceipt | undefined;
+    const result = await executeLookup(classified, {
+      fast: !args.deep,
+      compact: false,
+      onCollectionReceipt: value => { collectionReceipt = value; },
+      ...(signal ? { signal } : {}),
+      ...(args.deep ? {
+        ...(selectedUrl ? { selectedUrl } : {}),
+        onSourceSettled: settlement => {
+          onSourceSettled(settlement);
+          eventProgress.emit({ event: 'source_settled', source: settlement.source, state: settlement.state });
+        },
+      } : {}),
+    });
+    signal?.throwIfAborted();
+    return { result, collectionReceipt };
+  }, signal);
   let document: UnknownRecord;
   if (args.browse === true) {
     const browse = dependencies.browseLookupOperation || browseLookupOperation;
@@ -151,7 +159,7 @@ async function runLookupCommand(
       ? 'Collecting deep Lookup evidence'
       : 'Collecting registration evidence');
     let settledSources = 0;
-    let result: unknown;
+    let result: Awaited<ReturnType<typeof collect>>;
     try {
       result = await collect(dependencies.signal, settlement => {
         settledSources += 1;

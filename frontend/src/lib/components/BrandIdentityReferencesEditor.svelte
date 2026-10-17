@@ -64,7 +64,7 @@
               <label class="field">Role<input aria-label={`Official channel ${index + 1} role`} value={channel.role} maxlength="200" placeholder="Primary support account" oninput={(event) => updateChannel(index, { role: event.currentTarget.value })}></label>
               <label class="field">Last reviewed<input aria-label={`Official channel ${index + 1} last reviewed`} type="date" value={dateValue(channel.reviewedAt)} onchange={(event) => updateChannel(index, { reviewedAt: dateTimestamp(event.currentTarget.value) })}></label>
             </div>
-            <button class="btn small danger" type="button" aria-label={`Remove official channel ${index + 1}`} onclick={() => removeChannel(index)}>Remove channel</button>
+            <button class="btn small danger" type="button" onclick={() => removeChannel(index)}>Remove channel<span class="sr-only"> {index + 1}</span></button>
           </article>
         {/each}
       </div>
@@ -87,7 +87,7 @@
               <label class="field">Last reviewed<input aria-label={`Rights reference ${index + 1} last reviewed`} type="date" value={dateValue(reference.reviewedAt)} onchange={(event) => updateRightsReference(index, { reviewedAt: dateTimestamp(event.currentTarget.value) })}></label>
               <label class="field span-two">Note<input aria-label={`Rights reference ${index + 1} note`} value={reference.note} maxlength="200" oninput={(event) => updateRightsReference(index, { note: event.currentTarget.value })}></label>
             </div>
-            <button class="btn small danger" type="button" aria-label={`Remove rights reference ${index + 1}`} onclick={() => removeRightsReference(index)}>Remove reference</button>
+            <button class="btn small danger" type="button" onclick={() => removeRightsReference(index)}>Remove reference<span class="sr-only"> {index + 1}</span></button>
           </article>
         {/each}
       </div>

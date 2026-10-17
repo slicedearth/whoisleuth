@@ -3,7 +3,7 @@ import { openCaseMetadata, openCaseSection, openConsoleView } from './console-na
 import { createHash } from 'node:crypto';
 import { gzipSync, zipSync } from 'fflate';
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, failNextBrowserLocalCollectionReadAfterWrite, failNextBrowserLocalManifestWrite, readBrowserLocalCollection, runBulkScan, useTheme } from './helpers';
+import { expectFocusedResultsVisible, expectNoHorizontalOverflow, failNextBrowserLocalCollectionReadAfterWrite, failNextBrowserLocalManifestWrite, readBrowserLocalCollection, runBulkScan, useTheme } from './helpers';
 import { createCase, openCaseResponseWorkspace, openCasesView } from './case-test-fixtures';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { EXTERNAL_FINDINGS_VERSION } from '../packages/interchange/external-findings-import.mts';
@@ -21,7 +21,7 @@ test('a complete maximum-size Case file imports without losing records or notes'
   expect(Buffer.byteLength(raw)).toBeGreaterThan(MAX_CASE_STORE_BYTES);
   expect(Buffer.byteLength(raw)).toBeLessThan(MAX_CASE_IMPORT_BYTES);
   await openCasesView(page);
-  const input = page.getByRole('region', { name: 'Case workspace controls' }).getByLabel('Import JSON', { exact: true });
+  const input = page.getByRole('region', { name: 'Case workspace controls' }).getByLabel('Import Cases JSON', { exact: true });
   const start = performance.now();
   await input.setInputFiles({ name: 'complete-cases.json', mimeType: 'application/json', buffer: Buffer.from(raw) });
   await expect(caseWorkspaceActionStatus(page)).toContainText('Imported 500 new and 0 merged cases.');
@@ -60,11 +60,11 @@ function pagedFindingFile(count = 100, longFields = false) {
 
 test('every accepted finding is reachable and the final deselection stays empty across pages', async ({ page }) => {
   await openCasesView(page);
-  const importer = page.locator('details').filter({ has: page.getByText('Import bounded external findings', { exact: true }) });
-  await importer.getByText('Import bounded external findings', { exact: true }).click();
+  const importer = page.locator('details').filter({ has: page.getByText('Import external observations and claims', { exact: true }) });
+  await importer.getByText('Import external observations and claims', { exact: true }).click();
   const fileInput = importer.locator('input[type="file"]');
   await fileInput.setInputFiles(pagedFindingFile());
-  const review = importer.getByRole('region', { name: 'Validated import review' });
+  const review = importer.getByRole('region', { name: 'Import content review' });
   await expect(review).toContainText('100 findings · 20 domains');
   const navigation = review.getByRole('navigation', { name: 'Import preview pages' });
   const encountered: string[] = [];
@@ -102,23 +102,160 @@ test('every accepted finding is reachable and the final deselection stays empty 
   await expect(response).not.toContainText('Independent observation 99');
 });
 
-test('new files and cancellation reset review selection without writing Cases', async ({ page }) => {
+test('new files and cancellation reset review selection without writing Cases', async ({ page }, testInfo) => {
   await openCasesView(page);
-  const importer = page.locator('details').filter({ has: page.getByText('Import bounded external findings', { exact: true }) });
-  await importer.getByText('Import bounded external findings', { exact: true }).click();
+  const importer = page.locator('details').filter({ has: page.getByText('Import external observations and claims', { exact: true }) });
+  await importer.getByText('Import external observations and claims', { exact: true }).click();
   const fileInput = importer.locator('input[type="file"]');
   await fileInput.setInputFiles(pagedFindingFile());
-  const review = importer.getByRole('region', { name: 'Validated import review' });
+  const review = importer.getByRole('region', { name: 'Import content review' });
   await review.getByRole('button', { name: 'Clear selection' }).click();
   await review.getByRole('navigation', { name: 'Import preview pages' }).getByRole('button', { name: 'Next' }).click();
-  await fileInput.setInputFiles(pagedFindingFile(1));
+  const source = pagedFindingFile(1, true);
+  await fileInput.setInputFiles(source);
   await expect(review).toContainText('1 of 1 finding selected');
   await expect(review.getByRole('checkbox', { name: 'Include finding 1: review-0.invalid' })).toBeChecked();
   await expect(review.getByRole('navigation', { name: 'Import preview pages' })).toHaveCount(0);
+  const before = await readBrowserLocalCollection(page, 'cases');
+  const copies: string[] = [];
+  let rejectCopy = false;
+  await page.exposeFunction('recordImportedFieldCopy', (value: string) => {
+    if (rejectCopy) throw new Error('private clipboard failure');
+    copies.push(value);
+  });
+  await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+    writeText: (value: string) => (window as unknown as { recordImportedFieldCopy(value: string): Promise<void> }).recordImportedFieldCopy(value),
+  } }));
+  const explanation = review.getByText('Explain a field for finding 1', { exact: true }).locator('..');
+  await explanation.locator(':scope > summary').focus(); await page.keyboard.press('Enter');
+  await expect(explanation.getByRole('combobox', { name: 'Field for finding 1', exact: true })).toBeVisible();
+  await expect(explanation.locator('pre')).toHaveCount(0);
+  await explanation.getByRole('combobox', { name: 'Field for finding 1', exact: true }).selectOption('value');
+  const copy = explanation.getByRole('button', { name: /^(?:Copy|Copied) finding 1 accepted finding\.summary$/u });
+  await copy.focus(); await page.keyboard.press('Enter');
+  const suppliedSummary = `1: ${'v'.repeat(880)}`;
+  await expect.poll(() => copies).toEqual([suppliedSummary]);
+  await expect(copy).toBeFocused();
+  const original = explanation.getByText('Show in selected original: finding.summary', { exact: true }).locator('..');
+  await original.locator(':scope > summary').focus(); await page.keyboard.press('Enter');
+  await expect(original.locator('pre')).toHaveText(JSON.stringify(suppliedSummary));
+  const originalDigest = createHash('sha256').update(source.buffer).digest('hex');
+  await expect(original).toContainText(originalDigest);
+  await expect(original).toContainText('$.findings[0].summary');
+  await original.getByRole('button', { name: 'Copy finding 1 original value finding.summary', exact: true }).click();
+  await expect.poll(() => copies.at(-1)).toBe(suppliedSummary);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const theme of ['light', 'dark'] as const) for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: width === 320 ? 700 : 720 }); await useTheme(page, theme);
+    const trigger = original.locator(':scope > summary'); await trigger.focus();
+    await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
+    await expectFocusedResultsVisible(page, trigger, trigger); await expectNoHorizontalOverflow(page);
+    if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`selected-original-${theme}-${width}.png`) });
+  }
+  await page.emulateMedia({ media: 'print' }); await expect(original).not.toBeVisible(); await page.emulateMedia({ media: null });
+  rejectCopy = true;
+  await explanation.getByRole('button', { name: 'Copy finding 1 proposed evidencePin.value', exact: true }).click();
+  await expect(explanation.locator('.copy-fallback')).toHaveText(`${suppliedSummary} Reference: ${'x'.repeat(480)}-1`.slice(0, 1000));
+  await expect(explanation).not.toContainText('private clipboard failure');
+  await fileInput.setInputFiles(pagedFindingFile(1));
+  await expect(explanation).not.toHaveAttribute('open');
+  await explanation.locator(':scope > summary').click();
+  await expect(explanation.getByRole('combobox', { name: 'Field for finding 1', exact: true })).toHaveValue('hostname');
+  await expect(explanation.locator('.copy-fallback')).toHaveCount(0);
+  await expect(explanation.locator('pre')).toHaveCount(0);
+  await expect(explanation).not.toContainText(originalDigest);
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
   await review.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(review).toHaveCount(0);
   await expect(fileInput).toBeFocused();
   await expect(page.locator('.case-head')).toHaveCount(0);
+});
+
+for (const format of ['json', 'csv'] as const) for (const phase of ['file', 'digest'] as const) for (const exit of ['replace', 'navigate'] as const) {
+  test(`selected ${format} original ${phase} completion cannot survive ${exit}`, async ({ page }) => {
+    await openCasesView(page);
+    const before = await readBrowserLocalCollection(page, 'cases');
+    const importer = page.locator('details').filter({ has: page.getByText('Import external observations and claims', { exact: true }) });
+    const toggle = importer.getByText('Import external observations and claims', { exact: true });
+    await toggle.click();
+    await page.evaluate(phase => {
+      const scope = window as unknown as { originalImportHeld: boolean; releaseOriginalImport(): Promise<void> };
+      scope.originalImportHeld = false;
+      let release!: () => void, finished!: () => void;
+      const held = new Promise<void>(resolve => { release = resolve; }), done = new Promise<void>(resolve => { finished = resolve; });
+      scope.releaseOriginalImport = async () => { release(); await done; await new Promise<void>(resolve => requestAnimationFrame(() => resolve())); };
+      if (phase === 'file') {
+        const original = File.prototype.arrayBuffer;
+        File.prototype.arrayBuffer = async function() {
+          if (!this.name.startsWith('held-original.')) return original.call(this);
+          File.prototype.arrayBuffer = original; scope.originalImportHeld = true;
+          await held;
+          try { return await original.call(this); } finally { finished(); }
+        };
+      } else {
+        const original = crypto.subtle.digest.bind(crypto.subtle);
+        crypto.subtle.digest = async (algorithm, data) => {
+          if (!new TextDecoder().decode(data as ArrayBuffer).includes('Held source')) return original(algorithm, data);
+          crypto.subtle.digest = original; scope.originalImportHeld = true;
+          await held;
+          try { return await original(algorithm, data); } finally { finished(); }
+        };
+      }
+    }, phase);
+    const file = pagedFindingFile(1);
+    await importer.locator('input[type="file"]').setInputFiles(format === 'json'
+      ? { ...file, name: 'held-original.json', buffer: Buffer.from(file.buffer.toString().replace('Paged source review', 'Held source')) }
+      : { name: 'held-original.csv', mimeType: 'text/csv', buffer: Buffer.from('domain,category,summary,observed_at,completeness,limitation,reference\nheld.example,dns,Held source,2026-10-01T00:00:00Z,partial,Fixture,') });
+    await expect.poll(() => page.evaluate(() => Reflect.get(window, 'originalImportHeld'))).toBe(true);
+    if (exit === 'replace') {
+      await toggle.click(); await expect(importer).not.toHaveAttribute('open');
+      await expect(importer.locator('input[type="file"]')).toBeEnabled(); await toggle.click();
+      await importer.locator('input[type="file"]').setInputFiles(file);
+      await expect(importer.getByRole('region', { name: 'Import content review' })).toContainText('Paged source review');
+    } else {
+      await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Lookup', exact: true }).click();
+      await expect(page).toHaveURL(/\/lookup$/u);
+    }
+    await page.evaluate(() => (window as unknown as { releaseOriginalImport(): Promise<void> }).releaseOriginalImport());
+    await expect(page.getByText('Held source', { exact: true })).toHaveCount(0);
+    if (exit === 'replace') await expect(importer.getByRole('region', { name: 'Import content review' })).toContainText('Paged source review');
+    else await expect(page.getByRole('region', { name: 'Import content review' })).toHaveCount(0);
+    expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+  });
+}
+
+test('selected CSV explains exact cells without exporting raw spelling or retaining preview identity', async ({ page }, testInfo) => {
+  await openCasesView(page);
+  const importer = page.locator('details').filter({ has: page.getByText('Import external observations and claims', { exact: true }) });
+  await importer.locator(':scope > summary').click();
+  const raw = '\ufeffdomain,category,summary,observed_at,completeness,limitation,reference\r\nLogin.Example.TEST.,dns,"=literal, ""quoted"" observation",2026-10-01T01:00:00+10:00,partial,Fixture,';
+  await importer.locator('input[type="file"]').setInputFiles({ name: 'selected.csv', mimeType: 'text/csv', buffer: Buffer.from(raw) });
+  const review = importer.getByRole('region', { name: 'Import content review' });
+  const before = await readBrowserLocalCollection(page, 'cases');
+  const explanation = review.getByText('Explain a field for finding 1', { exact: true }).locator('..');
+  await explanation.locator(':scope > summary').click();
+  await explanation.getByRole('combobox', { name: 'Field for finding 1', exact: true }).selectOption('value');
+  const original = explanation.getByText('Show in selected original: finding.summary', { exact: true }).locator('..');
+  await original.locator(':scope > summary').focus(); await page.keyboard.press('Enter');
+  await expect(original.locator('pre')).toHaveText('"=literal, ""quoted"" observation"');
+  await expect(original).toContainText('CSV record 2, column 3 (summary)');
+  await expect(original).toContainText(createHash('sha256').update(raw).digest('hex'));
+  for (const theme of ['light', 'dark'] as const) for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: width === 320 ? 700 : 720 }); await useTheme(page, theme);
+    const trigger = original.locator(':scope > summary'); await trigger.focus();
+    await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
+    await expectFocusedResultsVisible(page, trigger, trigger); await expectNoHorizontalOverflow(page);
+    if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`selected-csv-${theme}-${width}.png`) });
+  }
+  await page.emulateMedia({ media: 'print' }); await expect(original).not.toBeVisible(); await page.emulateMedia({ media: null });
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+  await review.getByRole('button', { name: 'Import into cases', exact: true }).click();
+  await expect(review).toHaveCount(0);
+  const saved = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  expect(saved.records[0]!.value.evidencePins[0]!.observationHostname).toBe('login.example.test');
+  expect(JSON.stringify(saved)).not.toContain('Login.Example.TEST.');
+  expect(JSON.stringify(saved)).not.toContain('CSV record');
+  expect(JSON.stringify(saved)).not.toContain(createHash('sha256').update(raw).digest('hex'));
 });
 
 for (const outcome of ['write-failure', 'refresh-failure'] as const) {
@@ -127,10 +264,10 @@ for (const outcome of ['write-failure', 'refresh-failure'] as const) {
     await createCase(page, 'review-2.invalid');
     await page.getByRole('link', { name: 'All Cases', exact: true }).click();
     const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
-    const importer = page.locator('details').filter({ has: page.getByText('Import bounded external findings', { exact: true }) });
-    await importer.getByText('Import bounded external findings', { exact: true }).click();
+    const importer = page.locator('details').filter({ has: page.getByText('Import external observations and claims', { exact: true }) });
+    await importer.getByText('Import external observations and claims', { exact: true }).click();
     await importer.locator('input[type="file"]').setInputFiles(pagedFindingFile(12));
-    const review = importer.getByRole('region', { name: 'Validated import review' });
+    const review = importer.getByRole('region', { name: 'Import content review' });
     await review.getByRole('button', { name: 'Clear selection' }).click();
     const navigation = review.getByRole('navigation', { name: 'Import preview pages' });
     await navigation.getByRole('button', { name: 'Next', exact: true }).click();
@@ -149,7 +286,7 @@ for (const outcome of ['write-failure', 'refresh-failure'] as const) {
       expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).manifest.revision).toBe(before.manifest.revision);
       await submit.click();
     } else {
-      await expect(caseWorkspaceActionStatus(page)).toContainText('The import was saved, but Cases could not be reread');
+      await expect(caseWorkspaceActionStatus(page)).toContainText('The import was saved, but cases could not be reread');
     }
     await expect(review).toHaveCount(0);
     const committed = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1, minimumRevision: before.manifest.revision + 1 });
@@ -167,10 +304,10 @@ for (const width of [320, 390, 1024, 1280, 1920, 3840]) {
       await page.setViewportSize({ width, height: width < 700 ? 844 : 900 });
       await useTheme(page, theme);
       await openCasesView(page);
-      const importer = page.locator('details').filter({ has: page.getByText('Import bounded external findings', { exact: true }) });
-      await importer.getByText('Import bounded external findings', { exact: true }).click();
+      const importer = page.locator('details').filter({ has: page.getByText('Import external observations and claims', { exact: true }) });
+      await importer.getByText('Import external observations and claims', { exact: true }).click();
       await importer.locator('input[type="file"]').setInputFiles(pagedFindingFile(100, true));
-      const review = importer.getByRole('region', { name: 'Validated import review' });
+      const review = importer.getByRole('region', { name: 'Import content review' });
       await expect(review).toContainText('100 findings · 20 domains');
       await expect(review.getByText(/Shortened Case fields:/)).toHaveCount(10);
       await expect(review).toContainText('Retained observation hostname: review-0.invalid · Retained completeness: partial · Storage truncation: yes');
@@ -195,6 +332,12 @@ for (const width of [320, 390, 1024, 1280, 1920, 3840]) {
       expect(await region.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
       await page.keyboard.press('PageDown');
       await expect.poll(() => region.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+      await summary.click();
+      const explanation = review.getByText('Explain a field for finding 1', { exact: true }).locator('..');
+      await explanation.locator(':scope > summary').click();
+      await explanation.getByRole('combobox', { name: 'Field for finding 1', exact: true }).selectOption('value');
+      await expect(explanation.getByRole('button', { name: 'Copy finding 1 accepted finding.summary', exact: true })).toBeVisible();
+      await expect(explanation.getByRole('button', { name: 'Copy finding 1 proposed evidencePin.value', exact: true })).toBeVisible();
       await expectNoHorizontalOverflow(page);
       if (captureVisualEvidenceEnabled()) { await testInfo.attach(`import-review-${width}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' }); }
     });
@@ -203,8 +346,8 @@ for (const width of [320, 390, 1024, 1280, 1920, 3840]) {
 
 test('external findings require a validated preview before creating local evidence pins', async ({ page }) => {
   await openCasesView(page);
-  const externalImport = page.locator('details', { hasText: 'Import bounded external findings' });
-  await externalImport.getByText('Import bounded external findings', { exact: true }).click();
+  const externalImport = page.locator('details', { hasText: 'Import external observations and claims' });
+  await externalImport.getByText('Import external observations and claims', { exact: true }).click();
   const payload = JSON.stringify({
     schema: 'whoisleuth.external-findings',
     schemaVersion: EXTERNAL_FINDINGS_VERSION,
@@ -238,7 +381,7 @@ test('external findings require a validated preview before creating local eviden
   await expect(externalWorkspace).toContainText('WHOISleuth did not collect or independently verify this provider finding');
 
   await page.getByRole('link', { name: 'All Cases', exact: true }).click();
-  await externalImport.getByText('Import bounded external findings', { exact: true }).click();
+  await externalImport.getByText('Import external observations and claims', { exact: true }).click();
   await externalImport.locator('input[type="file"]').setInputFiles(file);
   await externalImport.getByRole('button', { name: 'Import into cases' }).click();
   await expect(caseWorkspaceActionStatus(page).filter({ hasText: 'skipped 1 duplicate' })).toBeVisible();
@@ -249,8 +392,8 @@ test('external findings require a validated preview before creating local eviden
 
 test('external findings serialize file parsing before exposing import actions', async ({ page }) => {
   await openCasesView(page);
-  const externalImport = page.locator('details', { hasText: 'Import bounded external findings' });
-  await externalImport.getByText('Import bounded external findings', { exact: true }).click();
+  const externalImport = page.locator('details', { hasText: 'Import external observations and claims' });
+  await externalImport.getByText('Import external observations and claims', { exact: true }).click();
   await page.evaluate(() => {
     const originalArrayBuffer = File.prototype.arrayBuffer;
     let holdNextRead = true;
@@ -301,8 +444,8 @@ test('external findings serialize file parsing before exposing import actions', 
 
 test('portable WARC evidence is normalized locally before deliberate case import', async ({ page }) => {
   await openCasesView(page);
-  const externalImport = page.locator('details', { hasText: 'Import bounded external findings' });
-  await externalImport.getByText('Import bounded external findings', { exact: true }).click();
+  const externalImport = page.locator('details', { hasText: 'Import external observations and claims' });
+  await externalImport.getByText('Import external observations and claims', { exact: true }).click();
   const prefix = [
     'HTTP/1.1 200 OK',
     'Content-Type: text/html; charset=utf-8',
@@ -356,10 +499,10 @@ test('portable WARC evidence is normalized locally before deliberate case import
   expect(JSON.stringify(stored.records)).not.toContain('token=secret');
 });
 
-test('portable WACZ evidence verifies package fixity before using the WARC privacy filter', async ({ page }) => {
+test('portable WACZ evidence verifies package fixity before using the WARC privacy filter', async ({ page }, testInfo) => {
   await openCasesView(page);
-  const externalImport = page.locator('details', { hasText: 'Import bounded external findings' });
-  await externalImport.getByText('Import bounded external findings', { exact: true }).click();
+  const externalImport = page.locator('details', { hasText: 'Import external observations and claims' });
+  await externalImport.getByText('Import external observations and claims', { exact: true }).click();
   const block = Buffer.from([
     'HTTP/1.1 200 OK',
     'Content-Type: text/html; charset=utf-8',
@@ -420,16 +563,65 @@ test('portable WACZ evidence verifies package fixity before using the WARC priva
   await expect(externalImport).toContainText('Reviewed packaged page');
   await expect(externalImport).not.toContainText('discarded package body');
   await expect(externalImport).not.toContainText('token=secret');
+  const explanation = externalImport.getByText('Explain a field for finding 1', { exact: true }).locator('..');
+  await explanation.locator(':scope > summary').click();
+  const provenance = explanation.getByText('Show selected archive provenance for finding 1', { exact: true }).locator('..');
+  await provenance.locator(':scope > summary').focus(); await page.keyboard.press('Enter');
+  await expect(provenance).toContainText(createHash('sha256').update(wacz).digest('hex'));
+  await expect(provenance).toContainText('archive/capture.warc.gz');
+  await expect(provenance).toContainText(createHash('sha256').update(compressedWarc).digest('hex'));
+  await expect(provenance).toContainText(`Record byte range [0, ${headers.length + block.length})`);
+  await expect(provenance).toContainText('not ZIP offsets');
+  await expect(provenance).not.toContainText('token=secret'); await expect(provenance).not.toContainText('discarded package body');
+  for (const theme of ['light', 'dark'] as const) for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: width === 320 ? 700 : 720 }); await useTheme(page, theme);
+    const trigger = provenance.locator(':scope > summary'); await trigger.focus();
+    await page.keyboard.press('Tab'); await page.keyboard.press('Shift+Tab');
+    await expectFocusedResultsVisible(page, trigger, trigger); await expectNoHorizontalOverflow(page);
+    if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`selected-wacz-${theme}-${width}.png`) });
+  }
+  await page.emulateMedia({ media: 'print' }); await expect(provenance).not.toBeVisible(); await page.emulateMedia({ media: null });
+  // Hold the final record digest, after package/resource verification, then
+  // replace the selection. Its completion cannot restore the old context.
+  await page.evaluate(() => {
+    const scope = window as unknown as { archiveRecordHeld: boolean; releaseArchiveRecord(): Promise<void> };
+    scope.archiveRecordHeld = false;
+    let release!: () => void, finished!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; }), done = new Promise<void>(resolve => { finished = resolve; });
+    scope.releaseArchiveRecord = async () => { release(); await done; await new Promise<void>(resolve => requestAnimationFrame(() => resolve())); };
+    const digest = crypto.subtle.digest.bind(crypto.subtle);
+    crypto.subtle.digest = async (algorithm, data) => {
+      if (!new TextDecoder().decode(data as ArrayBuffer).startsWith('HTTP/1.1 200 OK')) return digest(algorithm, data);
+      crypto.subtle.digest = digest; scope.archiveRecordHeld = true;
+      await held;
+      try { return await digest(algorithm, data); } finally { finished(); }
+    };
+  });
+  await externalImport.locator('input[type="file"]').setInputFiles({ name: 'held.wacz', mimeType: 'application/wacz', buffer: Buffer.from(wacz) });
+  await expect.poll(() => page.evaluate(() => Reflect.get(window, 'archiveRecordHeld'))).toBe(true);
+  await externalImport.getByText('Import external observations and claims', { exact: true }).click();
+  await expect(externalImport).not.toHaveAttribute('open');
+  await externalImport.getByText('Import external observations and claims', { exact: true }).click();
+  await externalImport.locator('input[type="file"]').setInputFiles(pagedFindingFile(1));
+  await page.evaluate(() => (window as unknown as { releaseArchiveRecord(): Promise<void> }).releaseArchiveRecord());
+  await expect(externalImport.getByRole('heading', { name: 'Paged source review', exact: true })).toBeVisible();
+  await expect(provenance).toHaveCount(0);
+  await externalImport.locator('input[type="file"]').setInputFiles({ name: 'reviewed.wacz', mimeType: 'application/wacz', buffer: Buffer.from(wacz) });
+  await expect(externalImport.getByRole('heading', { name: 'Portable WACZ evidence', exact: true })).toBeVisible();
   await externalImport.getByRole('button', { name: 'Import into cases' }).click();
   await expect(page.locator('.case-head', { hasText: 'package-review.invalid' })).toBeVisible();
+  await expect(provenance).toHaveCount(0);
+  const retained = JSON.stringify(await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 }));
+  expect(retained).not.toContain('archive/capture.warc.gz');
+  expect(retained).toContain(`urn:sha256:${createHash('sha256').update(wacz).digest('hex')}`);
 });
 
 test('STIX claims require an existing selected case and remain separate from collected evidence', async ({ page }, testInfo) => {
   await openCasesView(page);
   await createCase(page, 'intelligence-case.invalid');
   await page.getByRole('link', { name: 'All Cases', exact: true }).click();
-  const externalImport = page.locator('details', { hasText: 'Import bounded external findings' });
-  await externalImport.getByText('Import bounded external findings', { exact: true }).click();
+  const externalImport = page.locator('details', { hasText: 'Import external observations and claims' });
+  await externalImport.getByText('Import external observations and claims', { exact: true }).click();
   const payload = JSON.stringify({
     type: 'bundle',
     id: 'bundle--00000000-0000-4000-8000-000000000101',
@@ -536,7 +728,7 @@ test('a case file imports and merges through the Cases toolbar', async ({ page }
   };
 
   const fileChooserPromise = page.waitForEvent('filechooser');
-  await page.locator('.case-toolbar label', { hasText: 'Import JSON' }).click();
+  await page.locator('.case-toolbar label', { hasText: 'Import Cases JSON' }).click();
   const fileChooser = await fileChooserPromise;
   await fileChooser.setFiles({
     name: 'cases.json',

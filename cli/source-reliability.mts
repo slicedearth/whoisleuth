@@ -875,6 +875,8 @@ export function buildSourceReliabilityReport(
 }
 
 export function formatSourceReliabilityReport(report: SourceReliabilityReport): string {
+  const duration = (value: DurationSummary | null): string => value
+    ? `median ${value.median} ms / p95 ${value.p95} ms (range ${value.minimum}-${value.maximum} ms)` : 'unmeasured';
   const lines = [
     'WHOISleuth source reliability report',
     `Documents: ${report.documentsReviewed}`,
@@ -886,18 +888,21 @@ export function formatSourceReliabilityReport(report: SourceReliabilityReport): 
     `Exceptions: ${report.totals.truncations} truncated · ${report.totals.rateLimits} rate-limited`,
   ];
   for (const source of report.sources) {
-    const states = Object.entries(source.states).map(([state, count]) => `${state} ${count}`).join(', ') || 'none';
-    const timing = source.durationMs.lookupTiming;
-    const timingTrend = source.durationTrend.reportTimingMedian;
+    const states = Object.entries(source.states).map(([state, count]) => `${state} ${count}`).join(', ') || 'no states retained';
     lines.push(
-      `${source.source}: ${states}; truncated ${source.truncationCount}; rate-limited ${source.rateLimitedCount}`
-        + `; failure rate ${source.rates.failure ?? 'unmeasured'}; partial rate ${source.rates.partial ?? 'unmeasured'}`
-        + (timing ? `; timing median ${timing.median} ms / p95 ${timing.p95} ms` : '')
-        + (timingTrend ? `; report-median distribution ${timingTrend.minimum}-${timingTrend.maximum} ms` : '')
-        + (source.durationTimeline.length ? `; timeline points ${source.durationTimeline.length}` : ''),
+      '', source.source,
+      `  Collection states: ${states}`,
+      `  Samples: states ${source.samples.states} · observations ${source.samples.observations} · Lookup timings ${source.samples.timing}`,
+      `  Exceptions: ${source.truncationCount} truncated · ${source.rateLimitedCount} rate-limited`,
+      `  Rates (0–1): failure ${source.rates.failure ?? 'unmeasured'} · partial ${source.rates.partial ?? 'unmeasured'}`,
+      `  Observation duration: ${duration(source.durationMs.observation)}`,
+      `  Lookup timing: ${duration(source.durationMs.lookupTiming)}`,
     );
+    if (source.durationTrend.reportObservationMedian) lines.push(`  Merged observation-median distribution: ${duration(source.durationTrend.reportObservationMedian)}`);
+    if (source.durationTrend.reportTimingMedian) lines.push(`  Merged Lookup-median distribution: ${duration(source.durationTrend.reportTimingMedian)}`);
+    if (source.durationTimeline.length) lines.push(`  Retained report timeline: ${source.durationTimeline.length} points`);
   }
-  lines.push('Privacy: targets 0 · queries 0 · raw evidence 0');
+  lines.push('', 'Privacy: targets 0 · queries 0 · raw evidence 0');
   for (const limitation of report.limitations) lines.push(`Limitation: ${limitation}`);
   return `${lines.join('\n')}\n`;
 }

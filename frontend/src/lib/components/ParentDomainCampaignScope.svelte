@@ -10,6 +10,7 @@
   } from '#lib/analysis/parent-domain-campaign-review.ts';
   import type { CampaignRecord } from '#lib/campaigns.ts';
   import type { CaseRecord } from '#lib/cases.ts';
+  import { formattedCaseNumber } from '../../../../packages/cases/case-workflow-metadata.mts';
 
   let { campaign, review, records, onselect, onmessage }: {
     campaign: CampaignRecord;
@@ -133,9 +134,9 @@
     <div class="scope-controls">
       <label for={`parent-domain-filter-${campaign.id}`}>Filter exact hostnames<input id={`parent-domain-filter-${campaign.id}`} type="search" bind:value={filter} autocomplete="off" placeholder="Hostname, parent, or Case"></label>
       <p role="status" aria-live="polite">{selected.size} of {selectableHostnames.length} exact hostnames selected; {filteredHostnameCount} currently shown.</p>
-      <button class="btn small" type="button" onclick={clearSelection} disabled={!selected.size} aria-label={`Clear selected hostnames for ${campaign.name}`}>Clear selection</button>
+      <button class="btn small" type="button" onclick={clearSelection} disabled={!selected.size}>Clear selection<span class="sr-only"> for {campaign.name}</span></button>
     </div>
-    <p class="selection-limit">Filtering and selection are held only in this component’s memory. They do not change routing, Case state, campaign membership, scores, monitoring, evidence, actions, assertions, exports, or browser storage.</p>
+    <p class="selection-limit">Filter and select hostnames for this review only. Selections are not saved or exported and do not change Cases, campaign membership or monitoring.</p>
 
     {#if filteredParents.length}<div class="table-wrap">
       <table>
@@ -164,7 +165,7 @@
                   <div class="case-pivots">
                     {#each hostname.affectedCaseIds as caseId}
                       {@const record = caseById.get(caseId)}
-                      {#if record}<button class="case-pivot" type="button" onclick={() => openCase(caseId)} aria-label={`Open Case ${record.domain} for retained hostname ${hostname.hostname}`}>{record.domain}</button>{/if}
+                      {#if record}<button class="case-pivot" type="button" onclick={() => openCase(caseId)}>{record.domain} · {formattedCaseNumber(record.id)}<span class="sr-only"> — retained hostname {hostname.hostname}</span></button>{/if}
                     {/each}
                   </div>
                 </td>
@@ -213,7 +214,7 @@
   th,td{min-width:0;padding:9px 10px;border-top:1px solid var(--border);vertical-align:top;text-align:left}thead th{color:var(--muted);font:650 var(--text-2xs) var(--mono)}tbody th{width:21%}tbody td:first-child{width:56px;text-align:center}
   input[type='checkbox']{width:18px;height:18px}input[type='checkbox']:focus-visible,.case-pivot:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .parent,.hostname,.kind,.coverage,.provenance span,.provenance small,.completeness{display:block;overflow-wrap:anywhere;word-break:break-word}.parent{margin-bottom:7px;color:var(--accent);font:700 var(--text-xs) var(--mono)}.hostname{font:650 var(--text-xs) var(--mono)}.kind,.coverage{margin-top:3px;color:var(--muted);font-size:var(--text-2xs)}.kind-child{color:var(--interface-accent)}
-  .case-pivots{display:flex;flex-wrap:wrap;gap:5px}.case-pivot{max-width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);color:var(--accent);font:600 var(--text-2xs) var(--mono);overflow-wrap:anywhere;cursor:pointer}
+  .case-pivots{display:flex;flex-wrap:wrap;gap:5px}.case-pivot{position:relative;max-width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);color:var(--accent);font:600 var(--text-2xs) var(--mono);overflow-wrap:anywhere;cursor:pointer}
   .provenance,.limits,details ul{margin:0;padding-left:17px;color:var(--muted);line-height:1.45}.provenance{display:grid;gap:7px}.provenance strong{display:block;color:var(--text);font-size:var(--text-2xs);overflow-wrap:anywhere}.provenance span,.provenance small{font-size:var(--text-2xs)}.completeness{text-transform:capitalize}.limits{margin-top:6px;font-size:var(--text-2xs)}
   .omissions{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0}.omissions div{display:flex;gap:4px;padding:4px 7px;border:1px solid var(--border);border-radius:99px;color:var(--muted);font-size:var(--text-2xs)}.omissions dt,.omissions dd{margin:0}
   details{margin-top:10px}summary{color:var(--muted);cursor:pointer;font-size:var(--text-xs)}details ul{margin-top:7px;font-size:var(--text-xs)}

@@ -3,6 +3,7 @@
   import PublicReferenceSidebar from '#lib/components/PublicReferenceSidebar.svelte';
   import { PUBLIC_REFERENCE_DESTINATIONS, relatedPublicReferences } from '#lib/public-reference-navigation.ts';
   import { revealDocumentationTarget } from '#lib/documentation-anchors.ts';
+  import { keepFocusBelow } from '#lib/visible-focus.ts';
   import { WHOISLEUTH_SITE_ORIGIN } from '../../../../packages/analysis/project-metadata.mts';
 
   let {
@@ -52,7 +53,16 @@
   }).replaceAll('<', '\\u003c'));
   const related = $derived(relatedPublicReferences(currentHref));
   let article: HTMLElement;
+  let printReady = $state(false);
   onMount(() => {
+    const navigation = article.parentElement?.querySelector<HTMLElement>('.reference-sidebar');
+    const focus = keepFocusBelow(article, () => {
+      if (!navigation) return null;
+      const edge = navigation.getBoundingClientRect(), content = article.getBoundingClientRect();
+      // The narrow toolbar overlaps the article's horizontal span. The desktop
+      // sidebar does not; its height must never become a page-scroll offset.
+      return edge.left < content.right && edge.right > content.left ? navigation : null;
+    });
     const openedForPrint: HTMLDetailsElement[] = [];
     const beforePrint = () => {
       for (const detail of article.querySelectorAll('details:not([open])')) {
@@ -72,7 +82,8 @@
     addEventListener('hashchange', revealHash);
     addEventListener('beforeprint', beforePrint);
     addEventListener('afterprint', afterPrint);
-    return () => { cancelAnimationFrame(frame); removeEventListener('hashchange', revealHash); removeEventListener('beforeprint', beforePrint); removeEventListener('afterprint', afterPrint); afterPrint(); };
+    printReady = true;
+    return () => { printReady = false; focus.destroy(); cancelAnimationFrame(frame); removeEventListener('hashchange', revealHash); removeEventListener('beforeprint', beforePrint); removeEventListener('afterprint', afterPrint); afterPrint(); };
   });
 </script>
 
@@ -106,7 +117,7 @@
         {#each related as item}<a href={item.href}><strong>{item.label}</strong><span>{item.detail}</span></a>{/each}
       </nav>
     {/if}
-    <button class="btn print-document" type="button" onclick={() => window.print()}>Print this guide</button>
+    <button class="btn print-document" type="button" disabled={!printReady} onclick={() => window.print()}>Print this guide</button>
   </article>
 </div>
 

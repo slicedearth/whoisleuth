@@ -31,9 +31,9 @@
   <section class="comparison card" aria-labelledby="domain-comparison-title">
     <header>
       <div>
-        <p class="eyebrow">Settled evidence</p>
+        <p class="eyebrow">Result comparison</p>
         <h2 id="domain-comparison-title">Two-domain comparison</h2>
-        <p>{comparison.leftDomain} and {comparison.rightDomain} are compared field by field in the exact delta table. Missing evidence remains different from an observed difference.</p>
+        <p>{comparison.leftDomain} and {comparison.rightDomain} appear in the field-by-field table. Missing evidence remains different from an observed difference.</p>
         <p class="freshness" data-state={comparison.freshness.state}>
           Evidence freshness: <strong>{comparison.freshness.state}</strong>
           {#if comparison.observedAt}
@@ -66,13 +66,13 @@
                 <span class="exact-value">{row.left}</span>
                 <small>{row.source}</small>
                 <small>Exact source state <code>{row.leftSourceState}</code></small>
-                {#if row.leftEvidenceHref}<a class="evidence-link" href={row.leftEvidenceHref} onclick={openSettledRow}>View settled row</a>{/if}
+                {#if row.leftEvidenceHref}<a class="evidence-link" href={row.leftEvidenceHref} onclick={openSettledRow}>View result row</a>{/if}
               </td>
               <td data-label={comparison.rightDomain}>
                 <span class="exact-value">{row.right}</span>
                 <small>{row.source}</small>
                 <small>Exact source state <code>{row.rightSourceState}</code></small>
-                {#if row.rightEvidenceHref}<a class="evidence-link" href={row.rightEvidenceHref} onclick={openSettledRow}>View settled row</a>{/if}
+                {#if row.rightEvidenceHref}<a class="evidence-link" href={row.rightEvidenceHref} onclick={openSettledRow}>View result row</a>{/if}
               </td>
               <td data-label="Delta">
                 <span class={`chip state-${row.state}`}>{assessment(row.state)}</span>

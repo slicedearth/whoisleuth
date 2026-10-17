@@ -692,6 +692,37 @@ describe('lookup evidence HTML rendering', () => {
     assert.ok(html.includes(`<dt>Generator</dt><dd>WHOISleuth ${APPLICATION_VERSION}</dd>`));
   });
 
+  test('includes separately attributed standing and interpretation with their unknown states', async () => {
+    const report = buildCliEvidenceExport(JSON.stringify(savedLookup()), await evidenceModule());
+    const analysis = recordValue(report.analysis);
+    analysis.registrarStanding = {
+      version: 1, ianaId: 1234,
+      assessment: { state: 'review', label: 'Review registrar context', detail: 'Notice <script>payload</script>' },
+      accreditation: { state: 'unknown', sourceHealth: 'stale', sourceUrl: 'https://authority.example/catalogue', observedAt: '2026-10-01T00:00:00.000Z' },
+      compliance: { state: 'unavailable', sourceHealth: 'unavailable', actions: [] },
+      limitations: ['No conclusion about a domain.'], nextActions: ['Review the named source.'],
+    };
+    analysis.registryInsights = {
+      version: 1, lifecycle: { label: 'Unknown', rawStatuses: [] },
+      contactDisclosure: { registryRdap: { state: 'unavailable' }, whois: { state: 'unknown' } },
+      reconciliation: { state: 'inconclusive', summary: 'Incomplete <img src=x>' }, publications: [],
+    };
+    const html = formatLookupEvidenceHtml(report);
+    assert.match(html, /<h2>Registrar standing<\/h2>/u);
+    assert.match(html, /<dt>IANA source health<\/dt><dd>Stale<\/dd>/u);
+    assert.match(html, /<dt>ICANN source health<\/dt><dd>Unavailable<\/dd>/u);
+    assert.match(html, /<h2>Registry interpretation<\/h2>/u);
+    assert.match(html, /<dt>Registry RDAP disclosure<\/dt><dd>Unavailable<\/dd>/u);
+    assert.match(html, /Incomplete &lt;img src=x&gt;/u);
+    assert.match(html, /Notice &lt;script&gt;payload&lt;\/script&gt;/u);
+    assert.doesNotMatch(html, /<script\b|<img\b|publicContact|privateNestedValue|private-registrar/iu);
+    const withoutAnalysis = buildCliEvidenceExport(JSON.stringify(savedLookup()), await evidenceModule());
+    delete recordValue(withoutAnalysis.analysis).registrarStanding;
+    delete recordValue(withoutAnalysis.analysis).registryInsights;
+    const absent = formatLookupEvidenceHtml(withoutAnalysis);
+    assert.doesNotMatch(absent, /<h2>Registrar standing<\/h2>|<h2>Registry interpretation<\/h2>/u);
+  });
+
   test('renders registry access context as escaped static HTML diagnostics', async () => {
     const source = withRegistryAccess(savedLookup(), {
       limitation: 'Restricted <script>alert(1)</script> collection context.',

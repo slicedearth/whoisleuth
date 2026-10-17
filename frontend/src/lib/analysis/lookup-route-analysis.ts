@@ -12,6 +12,7 @@ import { buildLookupEvidenceCoverageLedger } from './evidence-coverage-ledger.ts
 import { calibrateExternalIntelligenceRisk } from './external-intelligence-risk.ts';
 import { compactHttpObservation } from './http-summary.ts';
 import { webCollectionQualityForCapture } from '../../../../packages/evidence/collection-quality.mts';
+import { parseLookupCollectionReceipt } from '../../../../packages/evidence/lookup-collection-receipt.mts';
 import { analyzeDomainIdn } from './idn-confusables.ts';
 import { buildLookupAssetGraph } from './lookup-asset-graph.ts';
 import { buildLookupClaimReadiness } from './lookup-claim-readiness.ts';
@@ -496,7 +497,9 @@ export function buildLookupRouteAnalysis(input: LookupRouteAnalysisInput) {
     detail: `${show(result?.type)} · ${lookupEvidenceDepth} lookup`,
     status: show(availability.state),
   };
+  const collectionReceipt = parseLookupCollectionReceipt(result?.collectionReceipt);
   const caseEvidence = {
+    ...(collectionReceipt ? { collectionReceipt } : {}),
     inputHostname: typeof result?.inputHostname === 'string' ? result.inputHostname : null,
     ...(typeof availability.observationHostname === 'string' ? { observationHostname: availability.observationHostname } : {}),
     ...(availability.webObservationMode === 'selected_url' ? { webObservationMode: 'selected_url' as const } : {}),

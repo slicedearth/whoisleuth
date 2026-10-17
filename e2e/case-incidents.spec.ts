@@ -37,7 +37,7 @@ test('new incident creation preserves drafts on failed writes and source clocks 
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await form.getByRole('button', { name: 'Create incident Case', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Independent second review', exact: true })).toBeVisible();
-  await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('The change was saved, but Cases could not be reread.');
+  await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('The change was saved, but cases could not be reread.');
   const saved = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
   expect(saved.records).toHaveLength(2);
   const original = saved.records.find(item => item.value.id === 'incident-first')!.value;
@@ -71,8 +71,8 @@ test('Lookup respects incident selection and does not move an unsaved note to an
   page.once('dialog', dialog => dialog.accept());
   await picker.selectOption('incident-second');
   await expect(card.getByRole('textbox', { name: 'Add note', exact: true })).toHaveValue('');
-  await card.getByRole('button', { name: `Refresh retained Case evidence for ${DOMAIN}`, exact: true }).click();
-  await expect(card.getByRole('status').filter({ hasText: 'Refreshed the retained Case evidence' })).toBeVisible();
+  await card.getByRole('button', { name: /^Refresh case evidence/u }).click();
+  await expect(card.getByRole('status').filter({ hasText: 'Saved this Lookup observation to the Case' })).toBeVisible();
   const saved = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
   expect(saved.records.find(item => item.value.id === 'incident-first')!.value.notes).toHaveLength(1);
   expect(saved.records.find(item => item.value.id === 'incident-second')!.value.notes).toHaveLength(0);
@@ -121,7 +121,7 @@ test('Lookup links select the intended incident, retain it through a recheck and
   await card.getByRole('combobox', { name: 'Incident Case', exact: true }).selectOption('incident-second');
   await card.getByRole('button', { name: 'Recheck and refresh Case', exact: true }).click();
   await expect(card.getByRole('combobox', { name: 'Incident Case', exact: true })).toHaveValue('incident-second');
-  await expect(card).toContainText('Refreshed the retained Case evidence');
+  await expect(card).toContainText('Saved this Lookup observation to the Case');
   const stored = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 3 });
   expect(stored.records.find(item => item.value.id === 'incident-second')!.value.evidenceHistory).toHaveLength(1);
   expect(stored.records.find(item => item.value.id === 'incident-first')!.value).toEqual(original);

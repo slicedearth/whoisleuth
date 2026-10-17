@@ -2,6 +2,7 @@ import {
   EXTERNAL_FINDINGS_SCHEMA,
   EXTERNAL_FINDINGS_VERSION,
   parseExternalFindingsDocument,
+  type ExternalFinding,
   type ExternalFindingsDocument,
 } from './external-findings-import.ts';
 import { normalizeDomain } from '../../../../packages/evidence/domain-name.mts';
@@ -22,10 +23,14 @@ export type WarcImportReport = Readonly<{
   exclusions: readonly string[];
 }>;
 
+/** Framing positions in the complete uncompressed WARC input, not HTTP fields. */
+export type WarcFindingOrigin = Readonly<{ record: number; offset: number; end: number }>;
+
 type HeaderMap = Map<string, string>;
 type ParsedRecord = Readonly<{
   headers: HeaderMap;
   block: Uint8Array;
+  origin: WarcFindingOrigin;
 }>;
 
 const CONTROL_RE = /[\u0000-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/u;
@@ -119,6 +124,7 @@ function parseWarcRecords(bytes: Uint8Array): ParsedRecord[] {
     records.push(Object.freeze({
       headers,
       block: bytes.slice(blockStart, blockEnd),
+      origin: Object.freeze({ record: records.length + 1, offset, end: blockEnd }),
     }));
     if (records.length > MAX_WARC_RECORDS) {
       throw new Error(`WARC imports are limited to ${MAX_WARC_RECORDS} records.`);
@@ -256,6 +262,7 @@ function addExclusion(exclusions: string[], value: string): void {
 export async function parseWarcEvidenceArchive(
   input: ArrayBuffer,
   fileName = 'evidence.warc',
+  observeOrigin?: (finding: ExternalFinding, origin: WarcFindingOrigin) => void,
 ): Promise<WarcImportReport> {
   if (!input.byteLength || input.byteLength > MAX_WARC_IMPORT_BYTES) {
     throw new Error(`WARC imports must be between 1 byte and ${MAX_WARC_IMPORT_BYTES} bytes.`);
@@ -270,6 +277,7 @@ export async function parseWarcEvidenceArchive(
   const records = parseWarcRecords(bytes);
   const exclusions: string[] = [];
   const findings: Array<Record<string, unknown>> = [];
+  const origins: WarcFindingOrigin[] = [];
   let responses = 0;
   let earliestTimestamp = Number.POSITIVE_INFINITY;
   for (const [index, record] of records.entries()) {
@@ -379,6 +387,7 @@ export async function parseWarcEvidenceArchive(
       ],
       reference: `urn:sha256:${archiveDigestSha256}`,
     });
+    origins.push(record.origin);
   }
   if (!findings.length) {
     throw new Error(`The WARC archive contained no importable HTML response evidence. ${exclusions[0] ?? ''}`.trim());
@@ -392,7 +401,7 @@ export async function parseWarcEvidenceArchive(
       collectedAt: Number.isFinite(earliestTimestamp) ? new Date(earliestTimestamp).toISOString() : null,
     },
     findings,
-  });
+  }, observeOrigin ? (finding, index) => observeOrigin(finding, origins[index]!) : undefined);
   return Object.freeze({
     document,
     archiveDigestSha256,

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import express from 'express';
 import { fileURLToPath } from 'node:url';
 import { stat } from 'node:fs/promises';
+import { format } from 'node:util';
 import { recordValue, requiredValue, stringValue } from './value-assertions.mts';
 import { deferred } from './deferred.mts';
 import type { NetworkRouteServices } from '../server.mts';
@@ -129,13 +130,86 @@ test('non-API errors remain bounded without production mode and preserve range s
   const unexpected = await fetch(`${fixtureOrigin}/page-error`);
   assert.equal(unexpected.status, 500);
   assert.equal(await unexpected.text(), 'Internal Server Error\n');
-  const error = new Error('already sent');
-  let forwarded = false;
-  pageErrorHandler(error, {} as Parameters<typeof pageErrorHandler>[1], { headersSent: true } as Parameters<typeof pageErrorHandler>[2], cause => {
-    assert.equal(cause, error); forwarded = true;
-  });
-  assert.equal(forwarded, true);
 });
+
+for (const environment of ['development', 'production']) {
+  for (const [surface, handler] of [['API', apiErrorHandler], ['page', pageErrorHandler]] as const) {
+    test(`post-header ${surface} errors terminate incomplete responses with safe ${environment} diagnostics`, { timeout: 5_000 }, async (t) => {
+      const privateError = Object.assign(new Error('private-message-sentinel', {
+        cause: new Error('private-cause-sentinel'),
+      }), {
+        stack: 'Error: private-message-sentinel\n    at private-stack-sentinel',
+        detail: 'private-property-sentinel',
+        upstream: { authorization: 'private-nested-sentinel' },
+      });
+      const failAfterHeaders = deferred<void>();
+      const logged = deferred<void>();
+      const diagnostics: unknown[][] = [];
+      t.mock.method(console, 'error', (...values: unknown[]) => {
+        diagnostics.push(values);
+        logged.resolve();
+      });
+
+      const fixture = express();
+      // Exercise the framework's real default logger, which suppresses test-mode errors.
+      fixture.set('env', environment);
+      fixture.get('/interrupted', async (_request, response, next) => {
+        response.status(200).setHeader('Content-Type', 'text/plain');
+        response.setHeader('Content-Length', '32');
+        response.write('public prefix');
+        await failAfterHeaders.promise;
+        next(privateError);
+      });
+      // Each boundary must be safe without relying on another error handler.
+      fixture.use(handler);
+      const listener = await new Promise<Server>((resolve, reject) => {
+        const listener = fixture.listen(0, '127.0.0.1', () => resolve(listener));
+        listener.once('error', reject);
+      });
+      t.after(async () => {
+        failAfterHeaders.resolve();
+        listener.closeAllConnections();
+        await new Promise<void>((resolve, reject) => listener.close(error => error ? reject(error) : resolve()));
+      });
+      const address = listener.address();
+      assert.ok(address && typeof address !== 'string');
+      const outcome = new Promise<{
+        status: number | undefined; body: string; complete: boolean; aborted: boolean; ended: boolean;
+      }>((resolve, reject) => {
+        const request = httpRequest(`http://127.0.0.1:${address.port}/interrupted`, response => {
+          let body = '';
+          let ended = false;
+          response.on('data', (chunk: Buffer) => {
+            body += chunk.toString('utf8');
+            // Release the failure only after the client has received the partial response.
+            failAfterHeaders.resolve();
+          });
+          response.once('end', () => { ended = true; });
+          response.on('error', () => {});
+          response.once('close', () => resolve({
+            status: response.statusCode, body, complete: response.complete, aborted: response.aborted, ended,
+          }));
+        });
+        t.after(() => request.destroy());
+        request.once('error', reject);
+        request.end();
+      });
+
+      const [response] = await Promise.all([outcome, logged.promise]);
+      assert.deepEqual(response, { status: 200, body: 'public prefix', complete: false, aborted: true, ended: false });
+      assert.equal(diagnostics.length, 1, 'the interruption must still produce a diagnostic');
+      const diagnostic = format(...diagnostics[0]!);
+      assert.doesNotMatch(diagnostic, /private-(?:message|cause|stack|property|nested)-sentinel/u);
+      assert.match(diagnostic, /HTTP response interrupted after headers were sent\./u);
+      const error = diagnostics[0]![0];
+      assert.ok(error instanceof Error);
+      assert.notEqual(error, privateError);
+      assert.equal(error.stack, 'Error: HTTP response interrupted after headers were sent.');
+      assert.equal(error.cause, undefined);
+      assert.deepEqual(Object.keys(error), []);
+    });
+  }
+}
 
 test('expected certificate-search failures retain actionable bounded HTTP responses', async () => {
   const cookie = buildSessionCookie(createSessionToken(), { secure: false }).split(';')[0]!;

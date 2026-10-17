@@ -94,6 +94,17 @@ comparisons require their own version change if they are modified.
 
 ## Interpretation
 
+Lookup's registration section presents a Unicode identity card for IDNs and
+matched reference domains. Unicode display, DNS-safe ASCII and the visual
+skeleton each have a labelled exact-copy control. These are normalised
+registration-domain representations, not the original pasted input or an
+observed page/certificate hostname. Copying does not change the query or collect
+evidence. If the clipboard is unavailable, the same value remains selectable.
+
+The card's source disclosure uses the retained mapping's version, source URL,
+digest and licence. It does not fetch the upstream file. A visual skeleton is a
+similarity key, not a canonical identity or a replacement lookup target.
+
 Confusability is font- and context-dependent. A skeleton match or mixed-script
 label is an investigation lead only. It does not establish that a domain is
 registered, controlled by the same party, active, unsafe, or malicious.

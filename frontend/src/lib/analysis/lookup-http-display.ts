@@ -20,6 +20,14 @@ function formatBytes(value: unknown): string {
   return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(bytes < 10240 ? 1 : 0)} KiB`;
 }
 
+/** Retained request and destination are separate, including failed requests. */
+export function lookupHttpScopeRows(httpEvidence: JsonRecord) {
+  return [
+    { label: 'Requested URL', value: httpEvidence.requestUrl ? show(httpEvidence.requestUrl) : 'Not retained' },
+    { label: 'Final URL', value: httpEvidence.finalUrl ? show(httpEvidence.finalUrl) : 'Not retained' },
+  ];
+}
+
 export function buildLookupHttpDisplay(input: {
   httpEvidence: JsonRecord;
   httpResponse: JsonRecord;
@@ -73,7 +81,7 @@ export function buildLookupHttpDisplay(input: {
 
   return {
     httpRows: [
-      { label: 'Final URL', value: show(httpEvidence.finalUrl || httpEvidence.requestUrl) },
+      ...lookupHttpScopeRows(httpEvidence),
       {
         label: 'Response',
         value: responseStatus === null ? 'Not observed' : `HTTP ${responseStatus}`,

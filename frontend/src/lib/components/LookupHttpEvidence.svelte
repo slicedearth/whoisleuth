@@ -38,7 +38,7 @@
 <details class="http-card evidence-card card" aria-labelledby="http-title" open={initiallyExpanded}>
   <summary class="evidence-summary">
     <span class="evidence-summary-row">
-      <span class="evidence-summary-copy"><span class="eyebrow">Deep-scan evidence</span><span class="evidence-summary-title" id="http-title" role="heading" aria-level="4">HTTP evidence</span><span class="evidence-summary-detail">Expand for response, redirect, provenance, and limitation detail</span></span>
+      <span class="evidence-summary-copy"><span class="eyebrow">Deep-scan evidence</span><span class="evidence-summary-title" id="http-title" role="heading" aria-level="4">HTTP evidence</span><span class="evidence-summary-detail">Response, redirects and provenance</span></span>
       <span class="evidence-status {evidenceStatusTone(status, { complete })}">{status}</span>
     </span>
   </summary>
@@ -67,7 +67,7 @@
     {/if}
     {#if deliveryMetadata}<LookupMetadataDisclosure label="Observed HTTP delivery metadata" metadata={deliveryMetadata} />{/if}
     {#if limitations.length}<p class="callout warn">{limitations.join(' ')}</p>{/if}
-    <p class="card-note">Point-in-time response metadata from the homepage request already used for deep analysis. Redirects and headers provide context; missing security headers do not establish maliciousness.</p>
+    <p class="card-note">Requested and final URLs come from this HTTP collection; query strings are not retained. A requested URL alone does not establish that a page was reached. Redirects and headers provide context; missing security headers do not establish maliciousness.</p>
   </div>
 </details>
 

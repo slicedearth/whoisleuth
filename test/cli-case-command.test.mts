@@ -226,7 +226,7 @@ test('independent incidents require an explicit Case selection and stale reviewe
   assert.equal(overwrite.code, EXIT_CODES.USAGE); assert.match(overwrite.stderr, /different path/u);
   assert.equal(await readFile(file, 'utf8'), baseline);
   const ambiguous = await invoke(['case', 'note', file, '--domain', 'example.test', '--text', 'Do not choose for me', '--output', file, '--force']);
-  assert.equal(ambiguous.code, EXIT_CODES.USAGE); assert.match(ambiguous.stderr, /exactly one Case/u); assert.equal(await readFile(file, 'utf8'), baseline);
+  assert.equal(ambiguous.code, EXIT_CODES.USAGE); assert.match(ambiguous.stderr, /exactly one case/u); assert.equal(await readFile(file, 'utf8'), baseline);
   const stale = await invoke(['case', 'note', file, '--case-id', first.id, '--text', 'Do not overwrite', '--expect-file-digest', `sha256:${'0'.repeat(64)}`, '--output', file, '--force']);
   assert.equal(stale.code, EXIT_CODES.USAGE); assert.match(stale.stderr, /reviewed file digest/u); assert.equal(await readFile(file, 'utf8'), baseline);
   const selected = await invoke(['case', 'note', file, '--case-id', first.id, '--text', 'Selected deliberately', '--output', file, '--force']);

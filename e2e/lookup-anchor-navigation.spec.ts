@@ -172,7 +172,7 @@ test('Lookup section and mapped-evidence navigation settle at the requested anch
 
   for (const eventName of ['wheel', 'pointerdown', 'touchstart', 'keydown'] as const) {
     const cancellation = await page.evaluate((name) => {
-      const button = document.querySelector<HTMLButtonElement>('.family-web button.family-summary');
+      const button = document.querySelector<HTMLButtonElement>('.family-web .family-summary > button');
       const root = document.getElementById('result');
       if (!button || !root) throw new Error('The Lookup cancellation fixture is incomplete.');
       button.click();

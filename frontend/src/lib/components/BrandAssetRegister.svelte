@@ -136,23 +136,23 @@
     <div>
       <p class="eyebrow">Active profile scope</p>
       <h2 id="brand-asset-register-title" tabindex="-1">Brand asset register</h2>
-      <p>Canonical domains from authored roles, exact profile-associated Cases, and non-transitive one-hop retained observations.</p>
+      <p>Review declared profile roles, explicitly associated cases and directly linked retained observations.</p>
     </div>
     <strong class:numeric={projection.state === 'ready' || projection.state === 'partial'}>{projection.state === 'unavailable' ? 'Unavailable' : projection.state === 'loading' && !projection.rows.length ? 'Loading' : projection.rows.length}</strong>
   </header>
 
   {#if projection.state === 'unavailable'}
-    <p class="source-alert" role="alert">The register could not be loaded because saved Brand Profiles or your selected profile are unavailable.</p>
+    <p class="source-alert" role="alert">The register could not be loaded because saved brand profiles or your selected profile are unavailable.</p>
   {:else if projection.state === 'no_active_profile'}
     <div class="empty-state"><h3>No active Brand Profile</h3><p>Set a profile active above to build a transient asset register.</p></div>
   {:else if projection.state === 'unresolved_active_profile'}
-    <div class="empty-state"><h3>Active profile unresolved</h3><p>The saved active-profile reference does not match a readable local Brand Profile. It has not been cleared or reassigned.</p></div>
+    <div class="empty-state"><h3>Active profile unresolved</h3><p>The saved active-profile reference does not match a readable local brand profile. It has not been cleared or reassigned.</p></div>
   {:else}
     {#if projection.state === 'loading'}
-      <p class="loading-state" role="status" aria-live="polite">Loading saved Cases and retained relationship observations. Readable direct rows may update as each source settles.</p>
+      <p class="loading-state" role="status" aria-live="polite">Loading saved cases and retained relationship observations. Readable direct rows may update as each source settles.</p>
     {/if}
     {#if projection.sources.cases.state === 'unavailable'}
-      <p class="source-alert" role="alert">Cases could not be read. Direct profile rows remain visible with partial coverage; the associated-Case count is Unavailable, not zero.</p>
+      <p class="source-alert" role="alert">Cases could not be read. Direct profile rows remain visible with partial coverage; the associated-case count is Unavailable, not zero.</p>
     {/if}
     {#if projection.sources.relationships.state === 'unavailable'}
       <p class="source-alert" role="alert">Retained relationship observations could not be read. Direct rows remain visible with partial coverage; the qualifying-relationship count is Unavailable, not zero.</p>
@@ -169,13 +169,13 @@
       <label>Classification<select id="brand-asset-class-filter" value={assetClass} onchange={(event) => void updateCategoricalFilter('assetClass', event.currentTarget.value)}>{#each CLASS_OPTIONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
       <label>Source<select id="brand-asset-source-filter" value={assetSource} onchange={(event) => void updateCategoricalFilter('assetSource', event.currentTarget.value)}>{#each SOURCE_OPTIONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
       <label>Observation evidence<select id="brand-asset-evidence-filter" value={assetEvidence} onchange={(event) => void updateCategoricalFilter('assetEvidence', event.currentTarget.value)}>{#each EVIDENCE_OPTIONS as option}<option value={option.value}>{option.label}</option>{/each}</select></label>
-      <label>Domain contains<input type="search" value={domainFilter} oninput={(event) => { domainFilter = event.currentTarget.value; }} autocomplete="off" placeholder="Filter this page locally"></label>
+      <label>Domain contains<input type="search" value={domainFilter} oninput={(event) => { domainFilter = event.currentTarget.value; }} autocomplete="off" placeholder="Filter retained domains locally"></label>
     </form>
 
     <p class="count-status" role="status" aria-live="polite" aria-atomic="true">{filteredRows.length} matching asset row{filteredRows.length === 1 ? '' : 's'}. {filteredRows.length ? `Showing ${firstVisible}–${lastVisible}.` : 'No rows match the current filters.'}</p>
 
     {#if projection.omissions.rows || projection.omissions.caseReferences || projection.omissions.relationshipReferences}
-      <p class="omissions" role="status">Coverage bounds omitted {projection.omissions.rows} row{projection.omissions.rows === 1 ? '' : 's'}, {projection.omissions.caseReferences} Case reference{projection.omissions.caseReferences === 1 ? '' : 's'}, and {projection.omissions.relationshipReferences} relationship reference{projection.omissions.relationshipReferences === 1 ? '' : 's'}.</p>
+      <p class="omissions" role="status">Coverage bounds omitted {projection.omissions.rows} row{projection.omissions.rows === 1 ? '' : 's'}, {projection.omissions.caseReferences} case reference{projection.omissions.caseReferences === 1 ? '' : 's'}, and {projection.omissions.relationshipReferences} relationship reference{projection.omissions.relationshipReferences === 1 ? '' : 's'}.</p>
     {/if}
 
     {#if visibleRows.length}
@@ -191,7 +191,7 @@
                 <td><ul>{#each row.explanations as explanation}<li>{explanation}</li>{/each}</ul></td>
                 <td><ul>{#each row.provenanceLabels as label}<li>{label}</li>{/each}</ul><small>Row coverage: {row.coverage}<br>Observation evidence: {evidenceLabel(row.observationalCompleteness)}</small></td>
                 <td><dl class="timestamps"><div><dt>Authored</dt><dd>Unavailable</dd></div><div><dt>Profile revision</dt><dd>{formatDate(row.timestamps.profileRevisionAt)}</dd></div><div><dt>Case retained</dt><dd>{formatDate(row.timestamps.caseRetainedAt)}</dd></div><div><dt>Observed</dt><dd>{formatDate(row.timestamps.latestObservedAt)}</dd></div><div><dt>Relationship retained</dt><dd>{formatDate(row.timestamps.latestRelationshipRetainedAt)}</dd></div></dl></td>
-                <td><div class="local-links">{#each row.caseReferences as reference}<a href={caseWorkspaceHref(reference.id)} aria-label={`Open Case ${reference.id} for ${row.domain}`}>Case · {reference.sourceLabel}</a>{/each}{#each row.relationshipReferences as reference}<a href={`/monitor?view=relationships&observation=${encodeURIComponent(reference.id)}`} aria-label={`Open retained relationship ${reference.id} for ${row.domain}`}>{reference.label}</a>{/each}{#if !row.caseReferences.length && !row.relationshipReferences.length}<span>None</span>{/if}</div></td>
+                <td><div class="local-links">{#each row.caseReferences as reference}<a href={caseWorkspaceHref(reference.id)}>Case · {reference.sourceLabel}<span class="sr-only"> — {reference.id} for {row.domain}</span></a>{/each}{#each row.relationshipReferences as reference}<a href={`/monitor?view=relationships&observation=${encodeURIComponent(reference.id)}`}>{reference.label}<span class="sr-only"> — {reference.id} for {row.domain}</span></a>{/each}{#if !row.caseReferences.length && !row.relationshipReferences.length}<span>None</span>{/if}</div></td>
               </tr>
             {/each}
           </tbody>
@@ -207,7 +207,7 @@
               <div><dt>Why present</dt><dd><ul>{#each row.explanations as explanation}<li>{explanation}</li>{/each}</ul></dd></div>
               <div><dt>Source and state</dt><dd>{row.provenanceLabels.join(' · ')}<small>Row coverage: {row.coverage} · observation evidence: {evidenceLabel(row.observationalCompleteness)}</small></dd></div>
               <div><dt>Timestamps</dt><dd><span>Authored: Unavailable</span><span>Profile revision: {formatDate(row.timestamps.profileRevisionAt)}</span><span>Case retained: {formatDate(row.timestamps.caseRetainedAt)}</span><span>Observed: {formatDate(row.timestamps.latestObservedAt)}</span><span>Relationship retained: {formatDate(row.timestamps.latestRelationshipRetainedAt)}</span></dd></div>
-              <div><dt>Local links</dt><dd class="local-links">{#each row.caseReferences as reference}<a href={caseWorkspaceHref(reference.id)} aria-label={`Open Case ${reference.id} for ${row.domain}`}>Case · {reference.sourceLabel}</a>{/each}{#each row.relationshipReferences as reference}<a href={`/monitor?view=relationships&observation=${encodeURIComponent(reference.id)}`} aria-label={`Open retained relationship ${reference.id} for ${row.domain}`}>{reference.label}</a>{/each}{#if !row.caseReferences.length && !row.relationshipReferences.length}<span>None</span>{/if}</dd></div>
+              <div><dt>Local links</dt><dd class="local-links">{#each row.caseReferences as reference}<a href={caseWorkspaceHref(reference.id)}>Case · {reference.sourceLabel}<span class="sr-only"> — {reference.id} for {row.domain}</span></a>{/each}{#each row.relationshipReferences as reference}<a href={`/monitor?view=relationships&observation=${encodeURIComponent(reference.id)}`}>{reference.label}<span class="sr-only"> — {reference.id} for {row.domain}</span></a>{/each}{#if !row.caseReferences.length && !row.relationshipReferences.length}<span>None</span>{/if}</dd></div>
             </dl>
           </article>
         {/each}

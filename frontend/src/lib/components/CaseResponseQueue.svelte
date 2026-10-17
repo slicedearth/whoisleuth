@@ -47,7 +47,7 @@
             <ol>{#each [...item.latestEvent.latest, ...item.latestEvent.undated] as event (event.id)}<li>{event.nextState.replaceAll('_', ' ')} · {event.sourceClass} · {time(event.occurredAt)}{#if event.reference}<p>{event.reference}</p>{/if}</li>{/each}</ol>
           </details>
         {/if}
-        <button class="btn small" type="button" disabled={mutationBusy} onclick={() => void onaction(item.action.id)} aria-label={`Review action: ${item.action.recipient}`}>Review action and receipt</button>
+        <button class="btn small" type="button" disabled={mutationBusy} onclick={() => void onaction(item.action.id)}>Review action and receipt<span class="sr-only"> — {item.action.recipient}</span></button>
       </li>
     {:else}<li>No open response action.</li>{/each}
   </ul>
@@ -65,7 +65,7 @@
       {#each queue.questions as item (item.question.id)}
         <article><strong>{item.question.statement}</strong><p>{item.question.recheck!.targetHostname} · {item.question.recheck!.conditions}</p>
           {#each [...item.latest.latest, ...item.latest.undated] as answer (answer.id)}<small>Recorded answer: {answer.state.replaceAll('_', ' ')} · {answer.completeness} · {time(answer.observedAt)}</small>{:else}<small>No answer recorded</small>{/each}
-          <button class="btn small" type="button" disabled={mutationBusy} onclick={() => void onrecheck(item.question.id)} aria-label={`Review question: ${item.question.statement}`}>Review question and answers · {item.answers.length}</button>
+          <button class="btn small" type="button" disabled={mutationBusy} onclick={() => void onrecheck(item.question.id)}>Review question and answers · {item.answers.length}<span class="sr-only"> — {item.question.statement}</span></button>
         </article>
       {/each}
     </section>{/if}

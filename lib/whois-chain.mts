@@ -23,6 +23,9 @@ export type WhoisHop = {
   responseEncoding?: string;
   response?: string;
   error?: string;
+  /** A local admission decision, not a failed transport or a publication. */
+  status?: 'unsupported' | 'skipped';
+  detail?: string;
 };
 
 export type WhoisChain = WhoisHop[];
@@ -106,7 +109,8 @@ export async function buildWhoisChainUncached(
       server: 'registry capability policy',
       queryProfile: 'not-issued',
       responseEncoding: 'utf-8',
-      error: admission.state === 'permission_required'
+      status: admission.state === 'permission_required' ? 'skipped' : 'unsupported',
+      detail: admission.state === 'permission_required'
         ? 'WHOIS collection requires registry permission or source authorisation; no socket was opened.'
         : 'IANA publishes no domain WHOIS service for this suffix; no socket was opened.',
     }];

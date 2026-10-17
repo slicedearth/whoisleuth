@@ -60,6 +60,7 @@
 
 <AnalystReviewInbox
   {inbox}
+  sourcesAvailable={true}
   {selectedSubjectKey}
   now={review.now}
   {...(ondismiss ? { ondismiss } : {})}

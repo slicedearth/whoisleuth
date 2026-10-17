@@ -1,4 +1,5 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
 import { expandLookupFamilies, expectNoHorizontalOverflow, lookupDomainIdentity, migrateLegacyBrowserData, openLookupOptionalSources, readBrowserLocalCollection, useTheme } from './helpers';
 import { readFileSync } from 'node:fs';
@@ -13,6 +14,7 @@ import { RISK_MODEL_VERSION } from '../packages/analysis/risk-scoring.mts';
 import { INVESTIGATION_CAPSULE_VERSION, LOOKUP_INVESTIGATION_BRIEF_VERSION } from '../packages/contracts/investigation-portability.mts';
 import { buildRegistryInsights } from '../lib/registry-insights.mts';
 import { CONFUSABLE_MAPPING_VERSION } from '../lib/idn-confusables.mts';
+import { GENERATED_CONFUSABLE_SOURCE as CONFUSABLE_MAPPING_SOURCE } from '../lib/generated/unicode-confusables.mts';
 import { parseRdap } from '../lib/rdap.mts';
 import { inspectInvestigationPackage } from '../packages/investigation/investigation-package.mts';
 import { decryptInvestigationPackage } from '../packages/investigation/investigation-package-crypto.mts';
@@ -111,6 +113,72 @@ test('long registration comparisons retain complete source values and a usable r
     }
   }
   expect(requests).toBe(1);
+});
+
+test('lifecycle explanations preserve supplied values and missing provenance across lookup replacement', async ({ page }, testInfo) => {
+  const requests: string[] = [];
+  const parsed = parseRdap('domain', { objectClassName: 'domain', ldhName: 'example.test',
+    events: [{ eventAction: 'registration', eventDate: '2024-03-14T01:00:00+10:00' }] });
+  await page.route('**/api/lookup?*', async route => {
+    const domain = new URL(route.request().url()).searchParams.get('q')!;
+    requests.push(domain);
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      query: domain, type: 'domain', registrableDomain: domain,
+      rdap: { parsed: domain === 'example.test' ? parsed : {} },
+      whois: { parsed: domain === 'example.test' ? { createdDate: '03.04.2024', domainName: domain } : {}, chain: [] },
+      availability: { state: 'registered', domain },
+      diagnostics: { rdap: { status: 'success' }, whois: { status: domain === 'example.test' ? 'partial' : 'disabled' }, availability: { status: 'complete' } },
+    }) });
+  });
+  const copies: string[] = [];
+  let rejectCopy = false;
+  await page.exposeFunction('recordDateCopy', (value: string) => {
+    if (rejectCopy) throw new Error('private clipboard failure');
+    copies.push(value);
+  });
+  await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+    writeText: (value: string) => (window as unknown as { recordDateCopy(value: string): Promise<void> }).recordDateCopy(value),
+  } }));
+  const casesBefore = await readBrowserLocalCollection(page, 'cases');
+  await page.locator('#query').fill('example.test');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
+  const explanation = page.locator('.date-explanation');
+  await explanation.locator(':scope > summary').focus(); await explanation.locator(':scope > summary').press('Enter');
+  const registry = explanation.getByRole('region', { name: 'Registry RDAP date explanation', exact: true });
+  const whois = explanation.getByRole('region', { name: 'WHOIS date explanation', exact: true });
+  await expect(registry).toContainText('The current parser reproduces the supplied ISO companion.');
+  await expect(whois).toContainText('No usable ISO companion was supplied');
+  await expect(whois).toContainText('2024-04-03T00:00:00.000Z');
+  await expect(explanation.getByRole('region', { name: 'Registrar RDAP date explanation', exact: true })).toContainText('Publication: not collected');
+  const sourceCopy = registry.getByRole('button', { name: /^(?:Copy|Copied) Registry RDAP parsed\.lifecycle\.createdDate source text$/u });
+  await sourceCopy.focus(); await sourceCopy.press('Enter');
+  await expect.poll(() => copies).toEqual(['2024-03-14T01:00:00+10:00']);
+  await expect(sourceCopy).toBeFocused();
+  rejectCopy = true;
+  await registry.getByRole('button', { name: 'Copy Registry RDAP parsed.lifecycle.createdDate ISO companion', exact: true }).click();
+  await expect(registry.locator('.copy-fallback')).toHaveText('2024-03-13T15:00:00.000Z');
+  await expect(explanation).not.toContainText('private clipboard failure');
+  await whois.getByText('Selection and provenance', { exact: true }).click();
+  await expect(whois).toContainText('does not identify the selected WHOIS hop or line');
+  await expect(whois).toContainText('Publication state: partial');
+  await expect(explanation).toContainText('date-only value becomes midnight for comparison');
+  for (const width of [320, 1280]) for (const theme of ['light', 'dark'] as const) {
+    await page.setViewportSize({ width, height: width === 320 ? 700 : 720 }); await useTheme(page, theme);
+    await sourceCopy.focus(); await expect(sourceCopy).toBeInViewport(); await expectNoHorizontalOverflow(page);
+    await explanation.getByRole('combobox', { name: 'Lifecycle date' }).evaluate(element => element.scrollIntoView({ block: 'center', behavior: 'instant' }));
+    expect((await new AxeBuilder({ page }).include('.date-explanation').withTags(['wcag2a','wcag2aa','wcag21aa','wcag22aa']).analyze()).violations).toEqual([]);
+    if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`registry-date-${width}-${theme}.png`) });
+  }
+  expect(requests).toEqual(['example.test']);
+  await page.locator('#query').fill('replacement.test'); await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
+  if (!(await explanation.evaluate(element => (element as HTMLDetailsElement).open))) await explanation.locator(':scope > summary').click();
+  await expect(explanation).not.toContainText('2024-03-14T01:00:00+10:00');
+  await expect(whois).toContainText('Publication: disabled');
+  await expect(explanation.getByRole('button')).toHaveCount(0);
+  expect(requests).toEqual(['example.test', 'replacement.test']);
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(casesBefore);
 });
 
 test('registry interpretation retains late lifecycle evidence and role-scoped disclosure', async ({ page }, testInfo) => {
@@ -293,7 +361,7 @@ test('bounded RDAP contact roles and repeated channels render in Lookup', async 
   expect((await verifyOfflineInvestigationPackage(encryptedBytes, packagePassphrase)).checks.authenticatedEncryption).toBe('verified');
   await expect(capsule.getByLabel('Package passphrase', { exact: true })).toHaveValue('');
   const comparison = page.locator('.comparison');
-  await expect(comparison.getByText(/0 source-only · 0 redacted · 4 unavailable\/incomplete/)).toBeVisible();
+  await expect(comparison.getByText(/0 source-only · 0 redacted · 4 not comparable/)).toBeVisible();
   await comparison.locator('summary').click();
   await expect(comparison.getByText('WHOIS incomplete').first()).toBeVisible();
 
@@ -522,7 +590,8 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   await expect(page.getByRole('button', { name: 'Expand details: Web and DNS evidence' })).toBeVisible();
   await expandLookupFamilies(page);
 
-  const registrationSummary = page.getByRole('button', { name: 'Collapse details: Registration evidence' });
+  const registrationSummary = page.locator('.family-summary').filter({ has: page.getByRole('button', { name: 'Collapse details: Registration evidence', exact: true }) });
+  await expect(registrationSummary).toHaveCount(1);
   await expect(registrationSummary).toContainText('7 equivalent');
   await expect(registrationSummary).toContainText('1 conflict');
 
@@ -887,6 +956,8 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
     const isEs = suffix === 'es';
     const isCh = suffix === 'ch';
     const isDev = suffix === 'dev';
+    const failed = query === 'transport.dev';
+    const whoisState = failed ? 'error' : isEs || isCh ? 'skipped' : 'unsupported';
     const newlyPublished = query === 'new-service.gt';
     await route.fulfill({
       status: 200,
@@ -894,10 +965,14 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
       body: JSON.stringify({
         query: `example.${suffix}`, type: 'domain', registrableDomain: `example.${suffix}`,
         availability: { state: newlyPublished ? 'registered' : 'unknown', confidence: newlyPublished ? 'high' : 'low', domain: `example.${suffix}`, detail: newlyPublished ? 'The discovered registry returned this domain.' : 'Registry sources were inconclusive.' },
-        rdap: isDev || newlyPublished
+        rdap: failed ? { error: 'Fixture RDAP discovery failed.' } : isDev || newlyPublished
           ? { parsed: { domain: `example.${suffix}` } }
-          : { error: 'No RDAP registry found for this query via IANA bootstrap' },
-        whois: { parsed: {}, chain: [] },
+          : { status: 'unsupported', detail: 'No RDAP service is listed for this target in the IANA bootstrap.' },
+        whois: failed ? { error: 'Fixture WHOIS transport failed.', chain: [] } : {
+          status: whoisState, chain: [], detail: whoisState === 'skipped'
+            ? 'WHOIS collection requires registry permission; no socket was opened.'
+            : 'IANA publishes no domain WHOIS service for this suffix; no socket was opened.',
+        },
         diagnostics: {
           version: 5,
           registryAccess: {
@@ -923,7 +998,7 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
                   ? 'IANA publishes an RDAP bootstrap service but no domain WHOIS referral for this suffix. Missing WHOIS data is contextual only and is not evidence that the domain is unregistered.'
                   : 'IANA publishes no domain WHOIS or RDAP service for this suffix. The official browser lookup is not integrated, and missing registry data is not evidence that the domain is unregistered.',
           },
-          rdap: { status: isDev || newlyPublished ? 'success' : 'unsupported' }, whois: { status: isDev ? 'unsupported' : 'partial' }, availability: { status: 'complete' },
+          rdap: { status: failed ? 'error' : isDev || newlyPublished ? 'success' : 'unsupported' }, whois: { status: whoisState }, availability: { status: 'complete' },
         },
       }),
     });
@@ -936,6 +1011,15 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
   await expect(notice.getByText('Restricted access')).toBeVisible();
   await expect(notice.getByText('Source-IP authorisation required')).toBeVisible();
   await expect(notice.getByText(/does not decide registration, availability, safety, or maliciousness/i)).toBeVisible();
+  const rdapSource = page.locator('.sources > details').filter({ has: page.locator('summary').filter({ hasText: /^RDAP structured data$/u }) });
+  const whoisSource = page.locator('.sources > details').filter({ has: page.locator('summary').filter({ hasText: /^WHOIS structured data$/u }) });
+  const openSource = async (source: typeof rdapSource) => {
+    await expect(source).toHaveCount(1);
+    if (!(await source.evaluate(element => (element as HTMLDetailsElement).open))) await source.locator(':scope > summary').click();
+  };
+  await openSource(whoisSource);
+  await expect(whoisSource).toContainText('requires registry permission; no socket was opened');
+  await expect(whoisSource.locator('.source-error')).toHaveCount(0);
 
   await page.locator('#query').fill('example.ch');
   await page.getByRole('button', { name: 'Run lookup' }).click();
@@ -964,6 +1048,10 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
   await expect(gtLookup).toHaveAttribute('target', '_blank');
   await expect(gtLookup).toHaveAttribute('rel', /\bnoreferrer\b/);
   await expect(gtNotice.getByText(/domain is not added to this link/i)).toBeVisible();
+  await openSource(rdapSource); await openSource(whoisSource);
+  await expect(rdapSource).toContainText('No RDAP service is listed');
+  await expect(whoisSource).toContainText('IANA publishes no domain WHOIS service');
+  await expect(page.locator('.sources .source-error')).toHaveCount(0);
 
   await page.locator('#query').fill('example.dev');
   await page.locator('#console-navigation').getByRole('link', { name: /^Dashboard/u }).click();
@@ -991,6 +1079,36 @@ test('registry access constraints remain neutral, explicit, and mobile-safe', as
   await expect(devNotice.getByText('IANA bootstrap discovery')).toBeVisible();
   await expect(devNotice.getByText(/Current RDAP discovery may differ from this retained profile/u)).toBeVisible();
   await expect(devNotice).toHaveClass(/expected/);
+  await openSource(whoisSource);
+  await expect(whoisSource).toContainText('no socket was opened');
+  await expect(whoisSource.locator('dl')).toHaveCount(0);
+  await expect(page.locator('.sources .source-error')).toHaveCount(0);
+  const whoisDiagnostic = page.getByRole('group', { name: 'Source diagnostics' }).locator('article').filter({ hasText: /^whois\b/iu });
+  await expect(whoisDiagnostic.locator(':scope > strong')).toHaveText('unsupported');
+  await whoisDiagnostic.getByText('Inspect source route').click();
+  await expect(whoisDiagnostic).toContainText('not a failed lookup or a domain-absence finding');
+  await expect(page.locator('details.comparison > summary')).toContainText('not comparable');
+  for (const width of [320, 1280]) for (const theme of ['light', 'dark'] as const) {
+    await page.setViewportSize({ width, height: 844 }); await useTheme(page, theme);
+    if (width === 320) {
+      const badges = page.locator('.agreement-matrix .lane-cards li[data-comparison-state="whois_unavailable"] .lane-status');
+      await expect(badges).not.toHaveCount(0);
+      for (const badge of await badges.all()) {
+        await expect(badge).toBeVisible();
+        await expect(badge).toHaveText('WHOIS not supported');
+      }
+    }
+    await whoisSource.scrollIntoViewIfNeeded(); await expectNoHorizontalOverflow(page);
+    await expect(whoisSource.locator('.callout')).toBeVisible();
+    if (captureVisualEvidenceEnabled()) await whoisSource.screenshot({ path: testInfo.outputPath(`unsupported-whois-${width}-${theme}.png`) });
+  }
+
+  await page.locator('#query').fill('transport.dev');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expandLookupFamilies(page);
+  await openSource(rdapSource); await openSource(whoisSource);
+  await expect(rdapSource.locator('.source-error')).toHaveText('Fixture RDAP discovery failed.');
+  await expect(whoisSource.locator('.source-error')).toHaveText('Fixture WHOIS transport failed.');
 
   await page.locator('#query').fill('new-service.gt');
   await page.getByRole('button', { name: 'Run lookup' }).click();
@@ -1227,7 +1345,7 @@ for (const unsupported of ['provider', 'envelope'] as const) {
     await page.locator('#query').fill('example.test');
     await page.getByRole('button', { name: 'Run lookup' }).click();
     const advanced = page.locator('#advanced-evidence');
-    await expect(advanced).toContainText('0 usable external providers');
+    await expect(advanced).toContainText('0 external provider results');
     await expect(advanced).toContainText('1 provider record withheld');
     await page.getByRole('button', { name: 'Expand details: Advanced evidence' }).click();
     const notice = page.getByRole('region', { name: 'Withheld external-intelligence records' });
@@ -1330,7 +1448,7 @@ test('only deliberate Case creation and refresh retain the exact submitted hostn
 
   await runLookup('account.scope.test');
   const refresh = page.getByRole('button', {
-    name: 'Refresh retained Case evidence for scope.test',
+    name: /^Refresh case evidence/u,
   });
   await expect(refresh).toBeVisible();
   const beforeRefresh = await retainedCase(created.collection.manifest.revision);
@@ -1483,7 +1601,7 @@ test('bounded WHOIS lifecycle and role-based contacts render in Lookup', async (
   await expectNoHorizontalOverflow(page);
 });
 
-test('IDN review shows Unicode and ASCII together with cautious profile similarity evidence', async ({ page }) => {
+test('IDN review shows Unicode and ASCII together with cautious profile similarity evidence', async ({ page }, testInfo) => {
   await page.evaluate((profileVersion) => {
     const profile = {
       id: 'idn-profile', name: 'Example Brand', officialDomains: ['sample.example'], productNames: [], tlds: ['example'],
@@ -1495,16 +1613,26 @@ test('IDN review shows Unicode and ASCII together with cautious profile similari
     localStorage.setItem('whois-rdap-active-brand-profile-v1', profile.id);
   }, BRAND_PROFILE_SCHEMA_VERSION);
   await migrateLegacyBrowserData(page, {});
-  await page.route('**/api/lookup?*', async (route) => route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify({
-      query: 'xn--smple-4ve.example', type: 'domain', registrableDomain: 'xn--smple-4ve.example',
-      availability: { state: 'registered', confidence: 'high', domain: 'xn--smple-4ve.example' },
+  const requests: string[] = [];
+  await page.route('**/api/lookup?*', async (route) => {
+    const domain = new URL(route.request().url()).searchParams.get('q')!;
+    requests.push(domain);
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      query: domain, type: 'domain', registrableDomain: domain,
+      availability: { state: 'registered', confidence: 'high', domain },
       rdap: { upstreamStatus: 404, parsed: {} }, whois: { parsed: {}, chain: [] },
       diagnostics: { rdap: { status: 'not_found' }, whois: { status: 'partial' }, availability: { status: 'complete' } },
-    }),
-  }));
+    }) });
+  });
+  const copies: string[] = [];
+  let rejectCopy = false;
+  await page.exposeFunction('recordIdnCopy', (value: string) => {
+    if (rejectCopy) throw new Error('Private clipboard transport detail');
+    copies.push(value);
+  });
+  await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+    writeText: (value: string) => (window as unknown as { recordIdnCopy(value: string): Promise<void> }).recordIdnCopy(value),
+  } }));
 
   await page.locator('#query').fill('xn--smple-4ve.example');
   await page.getByRole('button', { name: 'Run lookup' }).click();
@@ -1518,7 +1646,47 @@ test('IDN review shows Unicode and ASCII together with cautious profile similari
   await expect(card.getByText('Mixed writing scripts', { exact: true })).toBeVisible();
   await expect(card.getByText('Confusable with an official domain', { exact: true })).toBeVisible();
   await expect(card.getByText('similarity indicators and do not establish maliciousness')).toBeVisible();
-
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expectNoHorizontalOverflow(page);
+  await expect(card.getByText('sample.example', { exact: true })).toBeVisible();
+  await expect(card).toContainText('not a DNS name or canonical domain identity');
+  for (const [label, description, value] of [
+    ['Copy Unicode', 'Copy exact Unicode display', 'sаmple.example'],
+    ['Copy ASCII', 'Copy exact DNS-safe ASCII', 'xn--smple-4ve.example'],
+    ['Copy skeleton', 'Copy exact visual skeleton', 'sample.example'],
+  ] as const) {
+    const button = card.getByRole('button', { name: new RegExp(`^(?:${label}|Copied) — ${description}$`, 'u') });
+    await expect(button).toHaveAccessibleName(`${label} — ${description}`);
+    await button.focus(); await button.press('Enter');
+    await expect.poll(() => copies.at(-1)).toBe(value);
+    await expect(button).toHaveAccessibleName(`Copied — ${description}`);
+    await expect(button).toBeFocused();
+  }
+  expect(copies).toEqual(['sаmple.example', 'xn--smple-4ve.example', 'sample.example']);
+  await expect(page.locator('#query')).toHaveValue('xn--smple-4ve.example');
+  const source = card.locator('details');
+  await source.locator('summary').focus(); await source.locator('summary').press('Enter');
+  await expect(source).toHaveAttribute('open', '');
+  await expect(source.getByRole('link')).toHaveAttribute('href', CONFUSABLE_MAPPING_SOURCE.url);
+  await expect(source).toContainText(CONFUSABLE_MAPPING_SOURCE.sha256);
+  await expect(source).toContainText(`Unicode ${CONFUSABLE_MAPPING_SOURCE.unicodeVersion}`);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const width of [320, 1280]) for (const theme of ['light', 'dark'] as const) {
+    await page.setViewportSize({ width, height: width === 320 ? 700 : 720 });
+    await useTheme(page, theme);
+    await expectNoHorizontalOverflow(page);
+    expect((await new AxeBuilder({ page }).include('.idn-card').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+    const copy = card.getByRole('button', { name: 'Copied — Copy exact Unicode display', exact: true });
+    await copy.focus(); await expect(copy).toBeInViewport();
+    if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`idn-identity-${width}-${theme}.png`) });
+  }
+  rejectCopy = true;
+  await card.getByRole('button', { name: 'Copied — Copy exact DNS-safe ASCII', exact: true }).click();
+  await expect(card.locator('.copy-fallback')).toHaveText('xn--smple-4ve.example');
+  await expect(card).not.toContainText('Private clipboard transport detail');
+  expect(requests).toEqual(['xn--smple-4ve.example']);
+  await page.locator('#query').fill('example.test');
+  await page.getByRole('button', { name: 'Run lookup' }).click();
+  await expect(page.getByRole('button', { name: 'Run lookup' })).toBeEnabled();
+  await expandLookupFamilies(page);
+  await expect(card).toHaveCount(0);
+  expect(requests).toEqual(['xn--smple-4ve.example', 'example.test']);
 });

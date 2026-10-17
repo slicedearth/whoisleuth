@@ -143,6 +143,7 @@ export type ExplicitBulkSessionPair = Readonly<{
 
 export type ComparisonLedgerInput = Readonly<{
   cases?: unknown;
+  casePairs?: unknown;
   websiteSnapshots?: unknown;
   watchlists?: unknown;
   bulkSessions?: unknown;

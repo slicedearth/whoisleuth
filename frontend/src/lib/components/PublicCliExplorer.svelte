@@ -341,7 +341,7 @@
           <section><h3>Example</h3><CopyableCommand command={detail.example} label={`${command.id} example`} compact /></section>
           <details class="compact-disclosure usage"><summary>Full command syntax</summary><CopyableCommand command={detail.usage} label={`${command.id} usage`} compact /></details>
         </div>
-        <p class="network-summary"><strong>{detail.networkEffect === 'offline' ? 'Runs locally.' : detail.networkEffect === 'conditional_network' ? 'Network use depends on the selected options.' : 'Makes network requests.'}</strong> {detail.collection.scope}{#if detail.explicitAuthorisationRequired} Explicit authorisation is required.{/if}</p>
+        <p class="network-summary"><strong>{detail.networkEffect === 'offline' ? 'Runs locally.' : detail.networkEffect === 'conditional_network' ? 'Network use depends on the selected options.' : 'Makes network requests.'}</strong> {detail.collection.scope}{#if detail.explicitAuthorisationRequired}{' '}Explicit authorisation is required.{/if}</p>
         <details class="compact-disclosure" bind:open={builderOpen}><summary>Build this command</summary>
           {#if builderOpen}<DeferredSurface load={() => import('./CliCommandBuilder.svelte')} props={{command:command.id}} loadingLabel="Opening command builder…" unavailableLabel="The command builder is unavailable. The command syntax remains above." />{/if}
         </details>
@@ -400,8 +400,6 @@
             <button
               class="command-open"
               type="button"
-              aria-label={`View ${command.id} command`}
-              aria-describedby={`command-summary-${command.id}`}
               aria-busy={loadingId === command.id}
               disabled={!clientReady || Boolean(loadError)}
               onfocus={preloadCatalogue}
@@ -412,7 +410,7 @@
                 <span class="command-identity"><code>{command.id}</code><small>{labelToken(command.group)} · {labelToken(command.mode)}{command.common ? ' · Common' : ''}</small></span>
                 <span class="command-summary" id={`command-summary-${command.id}`}>{command.summary}</span>
               </span>
-              <span class="command-action" aria-hidden="true">{loadingId === command.id ? 'Loading…' : 'View command'}</span>
+              <span class="command-action">{loadingId === command.id ? 'Loading…' : 'View command'}</span>
             </button>
           </div>
         </article>

@@ -1,5 +1,5 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
-import { openCaseClassification, openCaseMetadata, openCaseSection, openConsoleView, openInboxReview } from './console-navigation';
+import { openCaseClassification, openCaseMetadata, openCaseSection, openConsoleView, openInboxReview, inboxReviewControls } from './console-navigation';
 import { readFile } from 'node:fs/promises';
 import { expect, test } from './fixtures';
 import { currentBrowserLocalDocument, currentBulkSessionBrowserStore, expectNoHorizontalOverflow, failBrowserLocalCollectionReads, failNextBrowserLocalCollectionReadAfterWrite, holdBrowserLocalReads, holdBrowserLocalTransaction, migrateLegacyBrowserData, readBrowserLocalCollection, requiredValue, useTheme } from './helpers';
@@ -100,6 +100,71 @@ test('legacy Case destinations retain guided inputs and canonical navigation cle
 
 test('Cases and monitoring report unreadable collections without false empty states', async ({ page }) => {
   await page.goto('/monitor');
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': currentBrowserLocalDocument('cases', { cases: [
+      caseRecord({ id: 'read-recovery', domain: 'retained-case.example' }),
+    ] }),
+  }, { destination: '/monitor' });
+  const retained = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  const release = await holdBrowserLocalTransaction(page);
+  const workspace = page.getByRole('region', { name: 'Cases', exact: true });
+  try {
+    await openConsoleView(page, 'cases');
+    await expect(workspace.getByRole('heading', { name: 'Opening saved cases' })).toBeVisible();
+    await expect(workspace).toHaveAttribute('aria-busy', 'true');
+    await expect(workspace.getByText('Reading case records from this workspace.')).toBeVisible();
+    await expect(workspace.getByRole('heading', { name: 'No cases yet' })).toHaveCount(0);
+    await expect(workspace.getByRole('button', { name: 'Open or create Case', exact: true })).toHaveCount(0);
+  } finally {
+    await release();
+  }
+  await expect(page.locator('#case-head-read-recovery')).toBeVisible();
+  await expect(workspace.getByRole('button', { name: 'Open or create Case', exact: true })).toBeVisible();
+  await expect(workspace).toHaveAttribute('aria-busy', 'false');
+  await expect(workspace.getByRole('heading', { name: 'Opening saved cases' })).toHaveCount(0);
+  const monitorPanel = page.locator('#monitor-view-panel');
+  const openingViews = [
+    ['inbox', ['Opening review inbox']],
+    ['certificates', ['Opening certificate review']],
+    ['timeline', ['Opening retained timeline']],
+    ['campaigns', ['Opening saved campaigns']],
+    ['relationships', ['Opening website relationships', 'Opening saved relationships', 'Opening Case relationships']],
+    ['rules', ['Opening custom rules']],
+    ['watchlists', ['Opening saved watchlists']],
+  ] as const;
+  for (const [view, headings] of openingViews) {
+    await openConsoleView(page, 'cases');
+    await expect(page.locator('#case-head-read-recovery')).toBeVisible();
+    const releaseView = await holdBrowserLocalTransaction(page);
+    try {
+      await openConsoleView(page, view);
+      await expect(monitorPanel.locator('.local-collection-state h2')).toHaveText([...headings]);
+      await expect(page.getByRole('tab', { selected: true })).toHaveAccessibleName(/count loading$/u);
+      for (const state of await monitorPanel.locator('.local-collection-state').all()) {
+        await expect(state).toHaveAttribute('aria-busy', 'true');
+      }
+    } finally { await releaseView(); }
+    await expect(monitorPanel.locator('.local-collection-state')).toHaveCount(0);
+  }
+  // A readable Case remains available while the relationship-only sources open.
+  await openConsoleView(page, 'cases');
+  await expect(page.locator('#case-head-read-recovery')).toBeVisible();
+  await openConsoleView(page, 'inbox');
+  await expect(monitorPanel.locator('.local-collection-state')).toHaveCount(0);
+  const releaseRelationships = await holdBrowserLocalTransaction(page);
+  try {
+    await openConsoleView(page, 'relationships');
+    await expect(monitorPanel.getByRole('heading', { name: 'Completing relationship context', exact: true })).toBeVisible();
+    await expect(monitorPanel.getByRole('heading', { name: 'Opening Case relationships', exact: true })).toHaveCount(0);
+    await expect(monitorPanel.getByRole('region', { name: 'Relationship workspace', exact: true })).toBeVisible();
+    // Leave before completion: the old view's loading status must not return.
+    await openConsoleView(page, 'inbox');
+    await expect(monitorPanel.getByRole('heading', { name: 'Completing relationship context', exact: true })).toHaveCount(0);
+  } finally { await releaseRelationships(); }
+  await expect(page.getByRole('tab', { selected: true })).toHaveAccessibleName(/^Inbox /u);
+  await expect(monitorPanel.locator('.local-collection-state')).toHaveCount(0);
+  expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records).toEqual(retained.records);
+  await openConsoleView(page, 'inbox');
   await expect(page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Dashboard', exact: true })).toBeVisible();
   await failBrowserLocalCollectionReads(page, 'cases');
   await failBrowserLocalCollectionReads(page, 'watchlists');
@@ -114,6 +179,12 @@ test('Cases and monitoring report unreadable collections without false empty sta
   await expect(page.getByRole('tab', { name: /^Watchlists/ })).toHaveAccessibleName('Watchlists count unavailable');
   await expect(page.getByRole('heading', { name: 'Watchlists unavailable' })).toBeVisible();
   await expect(page.getByText(/No watchlists/i)).toHaveCount(0);
+  await openConsoleView(page, 'cases');
+  await expect(workspace.getByRole('heading', { name: 'Cases unavailable' })).toBeVisible();
+  await expect(workspace).toContainText('Reload to retry');
+  await page.reload();
+  await expect(page.locator('#case-head-read-recovery')).toBeVisible();
+  expect((await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records).toEqual(retained.records);
 });
 
 test('recorded operations reporting stays aggregate, source-qualified, and usable on mobile', async ({ page }) => {
@@ -244,8 +315,8 @@ test('response lifecycle surfaces remain accessible across major desktop and mob
     await expect(actionTimelines).toContainText('Provider outcome: accepted for review · Acknowledged for bounded review.');
     await actions.getByRole('button', { name: 'Review or append event' }).focus();
     await expect(actions.getByRole('button', { name: 'Review or append event' })).toBeFocused();
-    const remediation = workspace.locator('details', { hasText: 'Verify remediation independently and close deliberately' });
-    await remediation.getByText('Verify remediation independently and close deliberately', { exact: true }).click();
+    const remediation = workspace.locator('details', { hasText: 'Review independent observations and record closure' });
+    await remediation.getByText('Review independent observations and record closure', { exact: true }).click();
     await expect(remediation).toContainText('Provider outcome time');
     await expect(remediation).toContainText('Independently observed change time');
     const packet = workspace.locator('details', { hasText: 'Prepare a reviewed abuse evidence packet' });
@@ -334,7 +405,7 @@ test('a Case keeps its stable reference, controlled types, exact incident links 
   await workspace.getByRole('checkbox', { name: /^Trademark infringement/u }).check();
   await workspace.getByRole('checkbox', { name: /^Copyright infringement/u }).check();
   await workspace.getByRole('button', { name: 'Save Case types', exact: true }).click();
-  await expect(caseWorkspaceActionStatus(page)).toContainText('Saved Case types');
+  await expect(caseWorkspaceActionStatus(page)).toContainText('Saved case types');
   await expect(workspace.locator('.case-types')).not.toHaveAttribute('open', '');
   await expect(workspace.locator('.case-types').locator(':scope > summary')).toContainText('Phishing, Trademark infringement and 1 more');
   const typeReadiness = workspace.getByRole('region', { name: 'Evidence readiness by Case type' });
@@ -360,7 +431,7 @@ test('a Case keeps its stable reference, controlled types, exact incident links 
   await workspace.getByRole('checkbox', { name: /^Trademark infringement/u }).check();
   await expect(trademarkRoute.getByRole('checkbox').first()).not.toBeChecked();
   await workspace.getByRole('button', { name: 'Save Case types', exact: true }).click();
-  await expect(caseWorkspaceActionStatus(page)).toContainText('Saved Case types');
+  await expect(caseWorkspaceActionStatus(page)).toContainText('Saved case types');
   await routes.locator('.route', { hasText: 'Report an account or content' }).getByRole('button', { name: 'Create drafting action' }).click();
   await expect(caseWorkspaceActionStatus(page)).toContainText('Nothing was submitted');
   for (const width of [1280, 1024, 390, 320]) {
@@ -457,11 +528,10 @@ test('the evidence-gap inbox filters and dismisses a stale failed source on mobi
   await detailFilters.getByRole('combobox', { name: 'Source', exact: true }).selectOption('whois');
   await detailFilters.getByRole('combobox', { name: 'Age', exact: true }).selectOption('stale');
   await detailFilters.getByRole('textbox', { name: 'Case', exact: true }).fill('gap-mobile');
-  await detailFilters.getByRole('combobox', { name: 'Severity', exact: true }).selectOption('high');
+  await detailFilters.getByRole('combobox', { name: 'Priority', exact: true }).selectOption('high');
   await detailFilters.getByRole('combobox', { name: 'Next action', exact: true }).selectOption('refresh');
-  const item = page.locator('.review-inbox .items li', { hasText: 'gap-mobile.invalid' });
-  await expect(item).toBeVisible();
-  await openInboxReview(item);
+  await expect(inboxReviewControls(page)).toHaveCount(1);
+  const item = await openInboxReview(inboxReviewControls(page));
   await expect(item).toContainText('stale');
   await expect(item.getByRole('link', { name: 'Refresh evidence' })).toHaveAttribute('href', '/lookup?q=gap-mobile.invalid&depth=deep&case=case-gap-mobile');
   await item.getByRole('combobox').selectOption('accepted_limitation');
@@ -470,7 +540,7 @@ test('the evidence-gap inbox filters and dismisses a stale failed source on mobi
   await item.getByRole('button', { name: 'Dismiss gap' }).click();
   await expect(item).toHaveCount(0);
   await expect(reviewInboxActionStatus(page, 'Recorded the reviewed evidence-gap dismissal')).toBeVisible();
-  await expect(reviewInboxActionStatus(page, 'The change was saved, but Cases could not be reread')).toBeVisible();
+  await expect(reviewInboxActionStatus(page, 'The change was saved, but cases could not be reread')).toBeVisible();
   const committed = await readBrowserLocalCollection(page, 'cases', {
     minimumRecords: 1,
     minimumRevision: before.manifest.revision + 1,
@@ -497,8 +567,7 @@ test('the mobile review inbox reveals and focuses a saved Bulk session', async (
       }]),
   });
 
-  const item = page.locator('.review-inbox .items li', { hasText: 'Continue Incomplete review' });
-  await openInboxReview(item);
+  const item = await openInboxReview(inboxReviewControls(page, 'Continue Incomplete review'));
   await item.getByRole('link', { name: 'Review' }).click();
 
   await expect(page).toHaveURL(/\/bulk#bulk-sessions-title$/u);
@@ -870,6 +939,69 @@ test('projects retained evidence into a filterable source-attributed timeline', 
   await expectNoHorizontalOverflow(page);
 });
 
+test('timeline family coverage preserves source clocks, same-time records and undated evidence', async ({ page }, testInfo) => {
+  const observedAt = '2026-07-20T00:00:00.000Z';
+  const storedAt = '2026-07-25T00:00:00.000Z';
+  await page.clock.setFixedTime(storedAt);
+  await page.goto('/monitor?view=timeline');
+  const evidencePins = [
+    { category: 'registration', label: 'Registrar', value: 'Example registrar' },
+    { category: 'dns', label: 'Resolver one answer', value: '192.0.2.1' },
+    { category: 'dns', label: 'Resolver two answer', value: '192.0.2.2' },
+    { category: 'dns', label: 'Undated mail check', value: 'Unavailable', observedAt: null, completeness: 'inconclusive' },
+    { category: 'tls', label: 'Certificate context', value: 'Retained certificate', observedAt: '2026-07-19T00:00:00.000Z' },
+    { category: 'page_identity', label: 'Page title', value: 'Example page' },
+    { category: 'other', label: 'DNS mentioned in text', value: 'Other context' },
+  ].map((pin, index) => ({ id: `family-pin-${index}`, checkpointId: null, field: null, source: 'Fixture source', sourceState: 'complete',
+    sourceSchema: null, observedAt, collectionDepth: 'deep', completeness: 'complete', truncated: false, transitionExpectation: null,
+    limitations: [], createdAt: storedAt, ...pin }));
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: [caseRecord({ id: 'family-case', domain: 'family.example',
+      evidenceHistory: [snapshot({ capturedAt: storedAt })], evidencePins, updatedAt: storedAt,
+    })] },
+  }, { clearStorage: true, destination: '/monitor?view=timeline' });
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  expect(before.records[0]?.value.evidencePins).toHaveLength(7);
+  const timeline = page.getByRole('region', { name: 'Investigation timeline', exact: true });
+  await expect(timeline.locator('.timeline-list article')).toHaveCount(8);
+  const coverage = timeline.locator('details').filter({ has: page.locator(':scope > summary', { hasText: 'Evidence family coverage' }) });
+  await coverage.locator(':scope > summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(coverage).toHaveAttribute('open', '');
+  const dns = coverage.getByRole('button', { name: 'Show DNS', exact: true });
+  const lane = coverage.getByRole('listitem').filter({ has: page.getByRole('button', { name: 'Show DNS', exact: true }) });
+  await expect(lane).toContainText('3 retained records · 1 undated');
+  await expect(lane.locator('time')).toHaveCount(2);
+  expect(await lane.locator('time').evaluateAll(nodes => nodes.map(node => node.getAttribute('datetime')))).toEqual([observedAt, observedAt]);
+  await dns.focus();
+  await page.keyboard.press('Enter');
+  await expect(dns).toHaveAttribute('aria-pressed', 'true');
+  await expect(dns).toBeFocused();
+  await expect(timeline.locator('.timeline-list article')).toHaveCount(3);
+  await expect(timeline.getByRole('heading', { name: 'Evidence pin · Resolver one answer', exact: true })).toBeVisible();
+  await expect(timeline.getByRole('heading', { name: 'Evidence pin · Resolver two answer', exact: true })).toBeVisible();
+  await expect(timeline).toContainText('Observation time unavailable');
+  await timeline.getByRole('combobox', { name: 'Event time', exact: true }).selectOption('undated');
+  await expect(timeline.locator('.timeline-list article')).toHaveCount(1);
+  await expect(timeline.getByRole('heading', { name: 'Evidence pin · Undated mail check', exact: true })).toBeVisible();
+  await timeline.getByRole('button', { name: 'Clear filters', exact: true }).click();
+  await expect(timeline.locator('.timeline-list article')).toHaveCount(8);
+  await coverage.getByRole('button', { name: 'Show External reports', exact: true }).click();
+  await expect(timeline.getByRole('heading', { name: 'No retained events match', exact: true })).toBeVisible();
+  await coverage.getByRole('button', { name: 'Show all families', exact: true }).click();
+  for (const viewport of [{ width: 1280, height: 720 }, { width: 320, height: 700 }]) {
+    await page.setViewportSize(viewport);
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await dns.scrollIntoViewIfNeeded();
+      await expectNoHorizontalOverflow(page);
+      await expect(dns).toBeVisible();
+      if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`timeline-families-${viewport.width}-${theme}.png`) });
+    }
+  }
+  expect(await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).toEqual(before);
+});
+
 test('the timeline renders every supported Case snapshot after storage admission', async ({ page }) => {
   await page.goto('/monitor?view=timeline');
   const start = Date.parse('2026-07-22T00:00:00.000Z');
@@ -953,9 +1085,9 @@ test('saved website profiles form searchable cross-domain pivots without another
   });
   await expect(workspace.getByText('30/100 across 2 contributing fields', { exact: true })).toBeVisible();
   await expect(workspace.getByText('50/100 across 3 contributing fields', { exact: true })).toHaveCount(0);
-  await workspace.getByLabel('Search saved profiles').fill('DOM structure');
+  await page.getByRole('region', { name: 'Retained evidence gallery', exact: true }).getByLabel('Search retained metadata').fill('DOM structure');
   await expect(workspace.getByText('No saved website-profile cluster matches these filters.')).toBeVisible();
-  await workspace.getByLabel('Search saved profiles').fill('second.invalid');
+  await page.getByRole('region', { name: 'Retained evidence gallery', exact: true }).getByLabel('Search retained metadata').fill('second.invalid');
   await expect(workspace.getByText('Example commerce', { exact: true })).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
@@ -993,15 +1125,17 @@ test('custom detection rules evaluate existing cases without rewriting built-in 
   });
   await openConsoleView(page, 'rules');
 
-  await page.getByLabel('Name', { exact: true }).fill('Password page above threshold');
-  await page.getByLabel('Custom contribution').fill('15');
-  await page.getByLabel('Suggested tag').fill('manual-review');
-  await page.getByLabel('Field').selectOption('hasPasswordField');
-  await page.getByRole('button', { name: 'Add condition' }).click();
-  await page.getByLabel('Field').nth(1).selectOption('riskScore');
-  await page.getByLabel('Comparison').nth(1).selectOption('at_least');
-  await page.getByLabel('Value').nth(1).fill('60');
-  await page.getByRole('button', { name: 'Create custom rule' }).click();
+  const conditions = page.getByRole('group', { name: 'Conditions', exact: true });
+  const editor = page.locator('form').filter({ has: conditions });
+  await editor.getByLabel('Name', { exact: true }).fill('Password page above threshold');
+  await editor.getByLabel('Custom contribution').fill('15');
+  await editor.getByLabel('Suggested tag').fill('manual-review');
+  await conditions.getByLabel('Field').selectOption('hasPasswordField');
+  await conditions.getByRole('button', { name: 'Add condition' }).click();
+  await conditions.getByLabel('Field').nth(1).selectOption('riskScore');
+  await conditions.getByLabel('Comparison').nth(1).selectOption('at_least');
+  await conditions.getByLabel('Value').nth(1).fill('60');
+  await editor.getByRole('button', { name: 'Create custom rule' }).click();
 
   const result = page.locator('.test-results li', { hasText: 'rule-match.invalid' });
   await expect(result).toContainText('Built-in 65');

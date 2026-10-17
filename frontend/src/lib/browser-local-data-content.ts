@@ -24,6 +24,9 @@ export const MAX_LOCAL_DATA_RECORDS_PER_COLLECTION = 2_000;
 export const MAX_LOCAL_DATA_RECORD_ID_LENGTH = 256;
 export const MAX_LOCAL_DATA_CODEC_ID_LENGTH = 64;
 export const MAX_LOCAL_DATA_UPDATE_ATTEMPTS = 3;
+// Scheduling hint only: large verified collections can use the existing worker.
+// Both paths apply the same admission, normalisation, integrity and commit checks.
+export const LOCAL_DATA_WORKER_MINIMUM_BYTES = 256 * 1024;
 
 const TEXT_ENCODER = new TextEncoder();
 

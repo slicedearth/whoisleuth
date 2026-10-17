@@ -31,6 +31,7 @@ import { assertBoundedJsonStructure } from '../packages/analysis/bounded-json.mt
 import { canonicalRegistrableDomain } from '../packages/analysis/registrable-domain.mts';
 import { validLookupObservationScope } from '../packages/evidence/lookup-target.mts';
 import { isWebCollectionQuality } from '../packages/evidence/collection-quality.mts';
+import { parseLookupCollectionReceipt } from '../packages/evidence/lookup-collection-receipt.mts';
 import {
   MAX_LOOKUP_DNS_RECORDS_PER_TYPE,
   MAX_LOOKUP_REVERSE_DNS_PTR_RECORDS,
@@ -1046,6 +1047,10 @@ function parseLookupHttpResponse(value: unknown): LookupResponseParseResult {
     if (section !== undefined && !isJsonObject(section)) return invalidLookupResponse();
   }
   const lookupResponse = sanitizeLookupChildProfiles(value as LookupHttpResponse);
+  try {
+    const receipt = parseLookupCollectionReceipt(lookupResponse.collectionReceipt);
+    if (receipt && receipt.targetClass !== lookupResponse.type) return invalidLookupResponse();
+  } catch { return invalidLookupResponse(); }
   if (lookupResponse.registrarStanding !== undefined
     && (!validRegistrarStanding(lookupResponse.registrarStanding)
       || lookupResponse.registrarStanding.ianaId !== resolveRegistrarIanaId(

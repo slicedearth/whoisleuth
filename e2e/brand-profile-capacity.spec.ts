@@ -75,7 +75,7 @@ test('rich Brand histories import, render and export without dropping captured r
   expect(isDeepStrictEqual(stored.records.map((record) => record.value), profiles)).toBe(true);
   await page.getByRole('radio', { name: 'Set Capacity profile 0 active', exact: true }).check();
   await openBrandWorkbench(page, 'portfolio');
-  const matrix = page.getByRole('region', { name: 'Owned-domain comparison', exact: true });
+  const matrix = page.getByRole('region', { name: 'Official-domain settings comparison', exact: true });
   await expect(matrix.locator('tbody tr')).toHaveCount(20);
   const history = matrix.locator('[id="retained-posture-observation-domain-0-0.example"]');
   await history.locator(':scope > summary').focus();

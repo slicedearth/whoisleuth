@@ -113,7 +113,7 @@ test('edited PNGs preserve originals and source context, verify every output pix
   expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await review.getByRole('button', { name: 'Retain edited PNG', exact: true }).focus(); await page.keyboard.press('Enter');
-  await expect(page.getByRole('status').filter({ hasText: 'The change was saved, but Cases could not be reread' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'The change was saved, but cases could not be reread' })).toBeVisible();
   await expect(review.getByRole('button', { name: 'Retain edited PNG', exact: true })).toHaveCount(0);
   await expect(review).toBeFocused();
   const after = await readBrowserLocalCollection(page, 'cases');
@@ -123,6 +123,10 @@ test('edited PNGs preserve originals and source context, verify every output pix
   expect(derivative.id).not.toBe(original.id); expect(derivative.digestSha256).not.toBe(original.digestSha256);
   expect(derivative.source).toBe(original.source); expect(derivative.observedAt).toBe(original.observedAt);
   expect(derivative.derivation).toMatchObject({ method: 'png-regions-v1', sourceAttachmentId: original.id, source: { digestSha256: original.digestSha256, byteLength: original.byteLength } });
+  const derivation = files.locator('.derivation');
+  await derivation.getByText('Derived image details', { exact: true }).click();
+  await expect(derivation).toContainText('This declared history is not an independent check');
+  await expect(derivation).toContainText(original.digestSha256);
   for (const [label, name] of [[`Download original ${IMAGE_NAME}`, IMAGE_NAME], [`Download derivative ${derivative.fileName}`, derivative.fileName]] as const) {
     const download = page.waitForEvent('download'); await files.getByRole('button', { name: label, exact: true }).click();
     const saved = await download, output = await readFile((await saved.path())!);

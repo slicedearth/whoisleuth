@@ -32,7 +32,7 @@ import {
   CAPABILITY_MANIFEST_VERSION,
   MAX_CAPABILITY_MANIFEST_BYTES,
 } from '../packages/contracts/capability-manifest.mts';
-import { DOCTOR_SCHEMA, DOCTOR_VERSION } from '../cli/doctor.mts';
+import { DOCTOR_SCHEMA, DOCTOR_VERSION, DOCTOR_SUMMARY_SCHEMA, DOCTOR_SUMMARY_VERSION } from '../packages/contracts/cli-doctor.mts';
 import {
   CLI_COMMAND_CATALOGUE_SCHEMA,
   CLI_COMMAND_CATALOGUE_VERSION,
@@ -567,6 +567,7 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   entry(LOOKUP_EVIDENCE_COMPATIBILITY),
   ...SCHEMA_LIFECYCLE_REGISTRY.flatMap((family) => family.compatibility.map(lifecycleEntry)),
   outputEntry({ id: 'cli.doctor', schema: DOCTOR_SCHEMA, currentVersion: DOCTOR_VERSION, byteBudget: null, owner: 'cli/doctor.mts', note: 'Bounded runtime and optional explicitly approved network-diagnostic report; normal operation remains offline.' }),
+  outputEntry({ id: 'cli.doctor-summary', schema: DOCTOR_SUMMARY_SCHEMA, currentVersion: DOCTOR_SUMMARY_VERSION, byteBudget: null, owner: 'cli/doctor.mts', note: 'Output-only allowlisted troubleshooting summary; numeric versions, public format declarations and fixed check codes omit private context and free-form diagnostics.' }),
   outputEntry({ id: 'cli.command-catalogue', schema: CLI_COMMAND_CATALOGUE_SCHEMA, currentVersion: CLI_COMMAND_CATALOGUE_VERSION, byteBudget: null, owner: 'packages/contracts/cli-command-catalogue.mts', note: 'Dependency-neutral identity for the installed command, usage, collection-mode, and boundary catalogue without target or evidence values.' }),
   outputEntry({ id: 'cli.lookup-plan', schema: CLI_LOOKUP_PLAN_SCHEMA, currentVersion: CLI_LOOKUP_PLAN_VERSION, byteBudget: null, owner: 'cli/lookup-plan.mts', note: 'Request-free preview of the sources and disclosures associated with an analyst-selected lookup mode.' }),
   outputEntry({ id: 'cli.lookup-timeline', schema: CLI_LOOKUP_TIMELINE_SCHEMA, currentVersion: CLI_LOOKUP_TIMELINE_VERSION, byteBudget: MAX_LOOKUP_TIMELINE_INPUT_BYTES, owner: 'cli/lookup-timeline.mts', note: 'Offline chronological comparison of bounded same-domain saved observations; missing fields and unavailable evidence remain explicit.' }),
@@ -650,7 +651,7 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   outputEntry({ id: 'cli.posture', schema: CLI_POSTURE_SCHEMA, currentVersion: CLI_POSTURE_SCHEMA_VERSION, byteBudget: null, owner: 'cli/formatters/json.mts', note: 'Owned-domain posture output.' }),
   outputEntry({ id: 'cli.http', schema: CLI_HTTP_SCHEMA, currentVersion: CLI_HTTP_SCHEMA_VERSION, byteBudget: null, owner: 'cli/formatters/json.mts', note: 'Current bounded HTTP evidence output includes fixed selected-response delivery metadata and keeps inconclusive activity separate from negative reachability.' }),
   outputEntry({ id: 'cli.tls', schema: CLI_TLS_SCHEMA, currentVersion: CLI_TLS_SCHEMA_VERSION, byteBudget: null, owner: 'cli/formatters/json.mts', note: 'Bounded TLS evidence output.' }),
-  outputEntry({ id: 'cli.compare', schema: CLI_COMPARE_SCHEMA, currentVersion: CLI_COMPARE_SCHEMA_VERSION, byteBudget: MAX_SAVED_LOOKUP_INPUT_BYTES, owner: 'cli/formatters/json.mts', note: 'Comparison output reads supported saved Lookup versions 1 and 2 through the shared bounded parser.' }),
+  outputEntry({ id: 'cli.compare', schema: CLI_COMPARE_SCHEMA, currentVersion: CLI_COMPARE_SCHEMA_VERSION, byteBudget: MAX_SAVED_LOOKUP_INPUT_BYTES, owner: 'cli/formatters/json.mts', note: 'Comparison output reads supported saved Lookup documents through the shared bounded parser.' }),
   outputEntry({ id: 'cli.registry-support', schema: REGISTRY_SUPPORT_SCHEMA, currentVersion: REGISTRY_SUPPORT_SCHEMA_VERSION, byteBudget: null, owner: 'cli/registry-support.mts', note: 'Current catalogue coverage report; optional official lookup links require deliberate browser navigation and do not test live reachability.' }),
   outputEntry({ id: 'cli.registry-standards-coverage', schema: REGISTRY_STANDARDS_COVERAGE_SCHEMA, currentVersion: standardsCoverage.version, byteBudget: null, owner: 'cli/registry-support.mts', note: 'Immutable official-source coverage snapshot embedded in registry-support output.' }),
   outputEntry({ id: 'cli.deployment-self-check', schema: DEPLOYMENT_SELF_CHECK_SCHEMA, currentVersion: DEPLOYMENT_SELF_CHECK_VERSION, byteBudget: null, owner: 'tools/deployment-self-check.mts', note: 'Redacted operator-run public-boundary report; response bodies and credentialed posture are excluded.' }),

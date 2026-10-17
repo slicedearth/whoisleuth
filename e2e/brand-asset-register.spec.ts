@@ -238,9 +238,14 @@ test('renders the deterministic register as a desktop table and mobile cards in 
   const officialRow = register.getByRole('row', { name: /official\.example/u });
   await expect(officialRow).toContainText('Official');
   await expect(officialRow).toContainText('Observed lead');
-  await expect(register.getByRole('row', { name: /case\.example/u }).getByRole('link', { name: /Open Case asset-case/u })).toHaveAttribute('href', '/cases?case=asset-case');
-  const relationshipLink = officialRow.getByRole('link', { name: /Open retained relationship/u });
+  const caseLink = register.getByRole('row', { name: /case\.example/u }).getByRole('link');
+  await expect(caseLink).toHaveAccessibleName('Case · Manual Case — asset-case for case.example');
+  await expect(caseLink).toHaveAttribute('href', '/cases?case=asset-case');
+  const relationshipLink = officialRow.getByRole('link', { name: /^Shared nameserver set/u });
   await expect(relationshipLink).toHaveAttribute('href', /\/monitor\?view=relationships&observation=relationship-/u);
+  await expect(relationshipLink).toHaveAccessibleName(/^Shared nameserver set — relationship-.+ for official\.example$/u);
+  const relationshipHref = await relationshipLink.getAttribute('href');
+  if (!relationshipHref) throw new Error('Expected the retained relationship destination.');
   await expect(register).not.toContainText('ns1.shared.example');
 
   for (const width of [390, 320]) {
@@ -249,6 +254,11 @@ test('renders the deterministic register as a desktop table and mobile cards in 
     await expect(registerTable).toBeHidden();
     await expect(register.locator('.asset-cards')).toBeVisible();
     await expect(register.locator('.asset-cards article', { hasText: 'official.example' })).toBeVisible();
+    const caseCard = register.getByRole('article').filter({ has: page.getByRole('heading', { name: 'case.example', exact: true }) });
+    await expect(caseCard.getByRole('link')).toHaveAccessibleName('Case · Manual Case — asset-case for case.example');
+    await expect(caseCard.getByRole('link')).toHaveAttribute('href', '/cases?case=asset-case');
+    const officialCard = register.getByRole('article').filter({ has: page.getByRole('heading', { name: 'official.example', exact: true }) });
+    await expect(officialCard.getByRole('link', { name: /^Shared nameserver set/u })).toHaveAttribute('href', relationshipHref);
     await expectNoHorizontalOverflow(page);
   }
 });

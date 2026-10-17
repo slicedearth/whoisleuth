@@ -155,7 +155,7 @@
   </header>
 
   {#if overlapDomains.length}
-    <p class="overlap" role="status">{overlapDomains.length} existing allowlisted domain{overlapDomains.length === 1 ? '' : 's'} also appear as official or trusted. Remove the duplicate allowlist entries when convenient.</p>
+    <p class="overlap" role="status">{overlapDomains.length} existing allowlisted domain{overlapDomains.length === 1 ? '' : 's'} also appear as declared official or approved partner domains. Remove the duplicate allowlist entries when convenient.</p>
   {/if}
 
   <div class="columns">

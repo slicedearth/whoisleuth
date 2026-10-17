@@ -227,6 +227,31 @@ describe('privacy-safe source reliability report', () => {
     }
   });
 
+  test('terminal source groups distinguish missing, zero and merged duration samples', () => {
+    const input = lookupDocument();
+    input.diagnostics.timing.sources[0]!.durationMs = 0;
+    const original = buildSourceReliabilityReport(JSON.stringify(input), '2026-07-16T00:00:00.000Z');
+    const before = structuredClone(original);
+    const text = formatSourceReliabilityReport(original);
+    const rdap = text.split('\nrdap\n')[1]?.split('\n\n')[0];
+    const dns = text.split('\ndns\n')[1]?.split('\n\n')[0];
+    assert.ok(rdap, 'The source must have its own group');
+    assert.ok(dns, 'Observation duration must remain under its own source');
+    assert.match(rdap, /Collection states: success 1/u);
+    assert.match(rdap, /Samples: states 1 · observations 0 · Lookup timings 1/u);
+    assert.match(rdap, /Observation duration: unmeasured/u);
+    assert.match(rdap, /Lookup timing: median 0 ms \/ p95 0 ms/u);
+    assert.match(dns, /Observation duration: median 80 ms \/ p95 80 ms/u);
+    assert.match(dns, /Lookup timing: unmeasured/u);
+    assert.deepEqual(original, before, 'Text formatting must not change the retained report');
+    const later = buildSourceReliabilityReport(JSON.stringify(input), '2026-07-17T00:00:00.000Z');
+    const merged = buildSourceReliabilityReport(JSON.stringify([original, later]), '2026-07-18T00:00:00.000Z');
+    const mergedText = formatSourceReliabilityReport(merged);
+    assert.match(mergedText, /Merged observation-median distribution: median 80 ms/u);
+    assert.match(mergedText, /Merged Lookup-median distribution: median 0 ms/u);
+    assert.match(mergedText, /Retained report timeline: 2 points/u);
+  });
+
   test('merges target-free reports into exact state counts and report-level duration trends', () => {
     const first = buildSourceReliabilityReport(
       JSON.stringify(lookupDocument()),
@@ -421,18 +446,27 @@ describe('privacy-safe source reliability report', () => {
     assert.doesNotMatch(JSON.stringify(unknown), /private_source_label/u);
   });
 
-  test('runs through the CLI without retaining target-bearing input fields', async () => {
-    let stdout = '';
-    let stderr = '';
-    const code = await runCli(['source-report', '--json'], {
-      stdout: { write(value) { stdout += value; } },
-      stderr: { write(value) { stderr += value; } },
-      readSourceReliabilityInput: async () => JSON.stringify(lookupDocument()),
-      now: () => '2026-07-16T00:00:00.000Z',
-    });
-    assert.equal(code, EXIT_CODES.SUCCESS);
-    assert.equal(stderr, '');
-    assert.equal(JSON.parse(stdout).schema, 'whoisleuth.source-reliability-report');
-    assert.doesNotMatch(stdout, /private-target\.example|registry\.invalid|secret provider note/u);
+  test('runs text, JSON and quiet modes offline without retaining target-bearing input fields', async () => {
+    const raw = JSON.stringify(lookupDocument()), now = '2026-07-16T00:00:00.000Z';
+    const expected = buildSourceReliabilityReport(raw, now);
+    for (const mode of ['--no-color', '--json', '--quiet']) {
+      let stdout = '', stderr = '', requests = 0, reads = 0;
+      const denied = () => { requests += 1; throw new Error('Source review attempted collection.'); };
+      const code = await runCli(['source-report', mode], {
+        stdout: { write(value) { stdout += value; } },
+        stderr: { write(value) { stderr += value; } },
+        readSourceReliabilityInput: async () => { reads += 1; return raw; }, now: () => now,
+        runUnifiedLookup: denied, safeFetch: denied, resolvePublicAddresses: denied,
+        whoisQuery: denied, fetchHomepage: denied, collectTlsIntelligence: denied,
+      });
+      assert.equal(code, EXIT_CODES.SUCCESS);
+      assert.equal(stderr, '');
+      assert.equal(reads, 1);
+      assert.equal(requests, 0);
+      if (mode === '--json') assert.deepEqual(JSON.parse(stdout), expected);
+      else if (mode === '--quiet') assert.equal(stdout, '');
+      else assert.equal(stdout, formatSourceReliabilityReport(expected));
+      assert.doesNotMatch(stdout, /private-target\.example|registry\.invalid|secret provider note/u);
+    }
   });
 });

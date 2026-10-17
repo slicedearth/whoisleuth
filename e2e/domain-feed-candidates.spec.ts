@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
 import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoHorizontalOverflow, migrateLegacyBrowserData, openBrandProfileList, readBrowserLocalCollection, useTheme } from './helpers';
 import { normalizeBrandProfile } from '../packages/workspace/brand-profile-model.mts';
@@ -29,6 +30,9 @@ test('manual streamed import stages selected exact nominations and retains prove
   const unexpected: string[] = [];
   page.on('request', (request) => { if (/\/api\/(domain-feed|lookup|bulk|discover|scheduled-monitor)(?:[/?]|$)/u.test(request.url())) unexpected.push(request.url()); });
   const { workspace, intake } = await seed(page);
+  await intake.getByText('Local file: data and recipients', { exact: true }).click();
+  await expect(intake.getByText('Local file: data and recipients', { exact: true }).locator('..')).toContainText('Offline file matching in this browser');
+  expect(unexpected).toEqual([]);
   await intake.getByLabel('Literal Brand terms').fill('product');
   await intake.getByLabel('Local domain-only feed file').setInputFiles({ name: 'example-feed.txt', mimeType: 'text/plain', buffer: Buffer.from(raw) });
   await expect(intake.getByLabel('Local domain-only feed file')).toHaveValue('');
@@ -91,7 +95,7 @@ test('optional service status is explicit and disabled configuration does not ga
   await expect(intake.getByRole('button', { name: 'Retain selected feed candidates' })).toHaveCount(0);
 });
 
-test('feed selection, metadata and controls remain usable at supported widths and both themes', async ({ page }) => {
+test('feed selection, metadata and controls remain usable at supported widths and both themes', async ({ page }, testInfo) => {
   const { intake } = await seed(page);
   await intake.getByLabel('Exact hostnames').fill('login.product.example');
   await intake.getByLabel('Local domain-only feed file').setInputFiles({ name: 'example-feed.txt', mimeType: 'text/plain', buffer: Buffer.from(raw) });
@@ -99,6 +103,9 @@ test('feed selection, metadata and controls remain usable at supported widths an
   await expect(intake.getByRole('heading', { name: 'Staged feed nominations' })).toBeVisible();
   await intake.getByText('Source details and coverage', { exact: true }).click();
   await expect(intake.getByText(digest, { exact: true })).toBeVisible();
+  const disclosure = intake.getByText('Local file: data and recipients', { exact: true }).locator('..');
+  await disclosure.locator(':scope > summary').click();
+  await expect(disclosure.getByText('Request origin and first boundary', { exact: true })).toBeVisible();
   for (const theme of ['light', 'dark'] as const) {
     await useTheme(page, theme);
     for (const width of [320, 390, 1280]) {
@@ -107,6 +114,10 @@ test('feed selection, metadata and controls remain usable at supported widths an
       await expect(intake.getByRole('checkbox', { name: /^login\.product\.example/u })).toBeVisible();
       await expect(intake.getByRole('button', { name: 'Retain selected feed candidates' })).toBeVisible();
       await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) {
+        await disclosure.scrollIntoViewIfNeeded();
+        await page.screenshot({ path: testInfo.outputPath(`feed-disclosure-${theme}-${width}.png`) });
+      }
     }
   }
 });
@@ -167,6 +178,11 @@ test('explicit hosted cache query retains locally attributed nominations without
   await intake.getByLabel('Exact hostnames').fill('login.product.example');
   await intake.getByText('Optional hosted feed cache', { exact: true }).click();
   await expect(intake.getByRole('button', { name: 'Query selected feed cache' })).toBeEnabled();
+  await intake.getByText('Feed query: data and recipients', { exact: true }).click();
+  const disclosure = intake.locator('.optional-service .collection-disclosure');
+  await expect(disclosure).toContainText('exact hostnames, positive and negative literal search terms');
+  await expect(disclosure).toContainText('Configured intelligence or feed service');
+  await expect(disclosure).toContainText('current application server');
   await expect(intake).toContainText('The latest refresh could not be confirmed. A retained snapshot, if available, can still be reviewed.');
   await expect(intake).not.toContainText('The latest refresh failed.');
   expect(requests).toEqual([{ operation: 'status' }]);

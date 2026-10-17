@@ -3,7 +3,10 @@ import { expect, test } from './fixtures';
 import { openCaseMetadata, openCaseSection } from './console-navigation';
 import { caseRecord, snapshot } from './case-test-fixtures';
 import { productionChunkPath } from './production-build';
-import { currentBrowserLocalDocument, expectNoHorizontalOverflow, failNextBrowserLocalCollectionReadAfterWrite, failNextBrowserLocalManifestWrite, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
+import { createCase as createCaseRecord } from '../packages/cases/case-record-operations.mts';
+import AxeBuilder from '@axe-core/playwright';
+import { THEME_STORAGE_KEY } from '../frontend/src/lib/theme.ts';
+import { currentBrowserLocalDocument, expectFocusedResultsVisible, expectNoHorizontalOverflow, failNextBrowserLocalCollectionReadAfterWrite, failNextBrowserLocalManifestWrite, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
 
 async function seedCases(page: import('@playwright/test').Page, destination = '/cases') {
   await page.goto('/cases');
@@ -14,6 +17,119 @@ async function seedCases(page: import('@playwright/test').Page, destination = '/
     ] }),
   }, { destination });
 }
+
+test('temporary Caseboard keeps authored reasoning local, protects cancelled exits and preserves exact references', async ({ page }, testInfo) => {
+  const collectionRequests: string[] = [];
+  page.on('request', request => { const path = new URL(request.url()).pathname; if (/^\/api\/(lookup|dns|whois|rdap|scan|collect)/u.test(path)) collectionRequests.push(path); });
+  const at = '2026-10-01T00:00:00.000Z';
+  const record = createCaseRecord({ domain: 'board.example', note: 'Retained source note',
+    evidencePin: { label: 'Retained page observation', field: 'http.status', value: '200', category: 'http', source: 'Separate fixture', observedAt: at, completeness: 'complete' } }, at);
+  record.assertions = [{ id: 'board-assertion', kind: 'hypothesis', statement: 'An existing analyst question', rationale: 'Retained reasoning', state: 'open',
+    evidencePinIds: [record.evidencePins[0]!.id], createdAt: at, updatedAt: at }];
+  const other = createCaseRecord({ domain: 'other-board.example' }, at);
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': currentBrowserLocalDocument('cases', { cases: [record, other] }) }, { clearStorage: true, destination: `/cases?case=${record.id}` });
+  await expect(page.getByRole('heading', { name: 'board.example', exact: true })).toBeVisible();
+  await openCaseSection(page, 'Summary');
+  const disclosure = page.locator('.temporary-caseboard');
+  await disclosure.locator(':scope > summary').click();
+  const board = page.getByRole('region', { name: 'Arrange this Case review', exact: true });
+  await expect(board).toBeVisible();
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
+  const draftsBefore = await readBrowserLocalCollection(page, 'case_drafts');
+  const preferences = () => page.evaluate(theme => ({ local: Object.entries(localStorage).filter(([key]) => key !== theme).sort(), session: Object.entries(sessionStorage).sort() }), THEME_STORAGE_KEY);
+  const preferencesBefore = await preferences();
+  for (const name of [/^Pin 1:/u,/^Assertion 1:/u,/^Note 1:/u]) {
+    const chooser = board.getByRole('combobox', { name: 'Retained reference', exact: true });
+    const value = await chooser.locator('option').filter({ hasText: name }).getAttribute('value');
+    if (value === null) throw new Error('Expected the current retained source choice.');
+    await chooser.selectOption(value);
+    await board.getByRole('button', { name: 'Add reference card', exact: true }).click();
+  }
+  const cards = board.getByRole('list', { name: 'Temporary ordered cards', exact: true }).getByRole('listitem');
+  await expect(cards).toHaveCount(3);
+  await expect(cards.nth(0)).toContainText('Separate fixture');
+  await expect(cards.nth(1)).toContainText('An existing analyst question');
+  await expect(cards.nth(2)).toContainText('Retained source note');
+  for (const type of ['question','hypothesis','note']) {
+    await board.getByRole('combobox', { name: 'Temporary card type', exact: true }).selectOption(type);
+    await board.getByRole('textbox', { name: 'Temporary card text', exact: true }).fill(`Unpublished board ${type}`);
+    await board.getByRole('button', { name: 'Add temporary card', exact: true }).click();
+  }
+  await expect(cards).toHaveCount(6);
+  await board.getByRole('combobox', { name: 'From card', exact: true }).selectOption({ label: 'Card 4 · question' });
+  await board.getByRole('combobox', { name: 'To card', exact: true }).selectOption({ label: 'Card 1 · reference' });
+  for (const kind of ['supports','contradicts','investigate_next','analyst_grouping']) {
+    await board.getByRole('combobox', { name: 'Authored relationship', exact: true }).selectOption(kind);
+    await board.getByRole('textbox', { name: 'Relationship reasoning', exact: true }).fill(`Unpublished ${kind} reasoning`);
+    await board.getByRole('button', { name: 'Add authored relationship', exact: true }).click();
+  }
+  const links = board.getByRole('list', { name: 'Temporary analyst-declared relationships', exact: true }).getByRole('listitem');
+  await expect(links).toHaveCount(4);
+  const earlier = board.getByRole('button', { name: 'Move temporary card 6 earlier', exact: true });
+  await earlier.focus(); await earlier.press('Enter');
+  await expect(cards.nth(4)).toContainText('Unpublished board note');
+  await expect(board.getByRole('button', { name: 'Move temporary card 5 earlier', exact: true })).toBeFocused();
+  await board.getByRole('button', { name: 'Move temporary card 1 later', exact: true }).click();
+  await expect(board.getByRole('button', { name: 'Move temporary card 2 later', exact: true })).toBeFocused();
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+  expect(await readBrowserLocalCollection(page, 'case_drafts')).toEqual(draftsBefore);
+  expect(await preferences()).toEqual(preferencesBefore);
+  await openCaseSection(page, 'Evidence'); await openCaseSection(page, 'Summary');
+  await expect(cards).toHaveCount(6);
+  await openCaseMetadata(page); await page.getByRole('textbox', { name: /^Additional tags/u }).fill('board-context');
+  await page.getByRole('button', { name: 'Save tags', exact: true }).click();
+  await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('Updated tags');
+  await expect(cards.nth(4)).toContainText('Unpublished board note');
+  const unfinished = board.getByRole('textbox', { name: 'Temporary card text', exact: true });
+  await unfinished.fill('Unfinished temporary card');
+  await expect(unfinished).toBeFocused();
+  let allowDiscard = false; const prompts: string[] = [];
+  page.on('dialog', async dialog => { prompts.push(dialog.message()); await (allowDiscard ? dialog.accept() : dialog.dismiss()); });
+  await disclosure.locator(':scope > summary').click();
+  await expect(disclosure).toHaveAttribute('open', ''); await expect(cards).toHaveCount(6);
+  await page.getByRole('link', { name: 'All Cases', exact: true }).click();
+  await expect(board).toBeVisible(); await expect(cards).toHaveCount(6);
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(board).toBeVisible(); await expect(cards).toHaveCount(6);
+  await expect(board.getByRole('textbox', { name: 'Temporary card text', exact: true })).toHaveValue('Unfinished temporary card');
+  expect(prompts.length).toBeGreaterThanOrEqual(3);
+  const dismissUndo = page.getByRole('button', { name: 'Dismiss undo', exact: true });
+  if (await dismissUndo.isVisible()) await dismissUndo.click();
+  for (const width of [320, 1280]) for (const theme of ['light','dark'] as const) {
+    await page.setViewportSize({ width, height: width === 320 ? 700 : 720 }); await useTheme(page, theme);
+    for (const control of await board.getByRole('button').all()) {
+      if (!await control.isEnabled()) continue;
+      await control.focus(); await expect(control).toBeFocused();
+      await expect.poll(async () => {
+        const target = await control.boundingBox(), navigation = await page.getByRole('navigation', { name: 'Case sections', exact: true }).boundingBox();
+        const viewport = page.viewportSize();
+        if (!target || !navigation || !viewport) throw new Error('Expected current focused control, navigation and viewport geometry.');
+        // CSS geometry may differ by a fractional pixel from the viewport intersection.
+        return target.y >= navigation.y + navigation.height - 1 && target.y + target.height <= viewport.height + 1
+          && target.x >= -1 && target.x + target.width <= viewport.width + 1;
+      }).toBe(true);
+    }
+    const heading = board.getByRole('heading', { name: 'Arrange this Case review', exact: true });
+    await heading.focus(); await expectFocusedResultsVisible(page, heading, heading);
+    await expectNoHorizontalOverflow(page);
+    expect((await new AxeBuilder({ page }).include('.temporary-caseboard').withTags(['wcag2a','wcag2aa','wcag21aa','wcag22aa']).analyze()).violations).toEqual([]);
+    if (captureVisualEvidenceEnabled()) await board.screenshot({ path: testInfo.outputPath(`temporary-board-${width}-${theme}.png`) });
+  }
+  await page.emulateMedia({ media: 'print' }); await expect(disclosure).toBeHidden(); await page.emulateMedia({ media: 'screen' });
+  await openCaseSection(page, 'Response');
+  const download = page.waitForEvent('download'); await page.locator('.export-controls').getByRole('button', { name: 'Export report JSON', exact: true }).click();
+  const file = await download; const exported = Buffer.concat(await (await file.createReadStream()).toArray()).toString('utf8');
+  expect(exported).not.toContain('Unpublished board'); expect(exported).not.toContain('Unpublished supports reasoning'); expect(exported).not.toContain('Unfinished temporary card');
+  expect(await readBrowserLocalCollection(page, 'case_drafts')).toEqual(draftsBefore);
+  allowDiscard = true;
+  await openCaseSection(page, 'Summary');
+  await board.getByRole('button', { name: 'Clear temporary board', exact: true }).click();
+  await expect(cards).toHaveCount(0); await expect(disclosure.locator(':scope > summary')).toBeFocused();
+  await page.getByRole('link', { name: 'All Cases', exact: true }).click();
+  await page.locator(`#case-head-${other.id}`).click(); await openCaseSection(page, 'Summary');
+  await disclosure.locator(':scope > summary').click(); await expect(cards).toHaveCount(0);
+  expect(collectionRequests).toEqual([]);
+});
 
 for (const kind of ['note', 'tags'] as const) {
   test(`ordinary Case ${kind} drafts protect exits, survive failed saves and clear only after save or discard`, async ({ page }) => {
@@ -168,13 +284,13 @@ for (const [section, preserveLaterFocus] of [
         ? '/cases?case=delayed-case&response=1#case-response-preflight-delayed-case'
         : '/cases?case=delayed-case&section=evidence';
       await page.goto(destination, { waitUntil: 'domcontentloaded' });
-      await expect(page.getByText('Opening Case…', { exact: true })).toBeVisible();
+      await expect(page.getByText('Opening case…', { exact: true })).toBeVisible();
       await expect(page.locator('#case-head-delayed-case')).toHaveCount(0);
       const laterControl = page.getByRole('button', { name: 'Sign out', exact: true });
       if (preserveLaterFocus) await laterControl.focus();
       release();
       await expect(page.getByRole('heading', { name: 'delayed-review.example', exact: true })).toBeVisible();
-      await expect(page.getByText('Opening Case…', { exact: true })).toHaveCount(0);
+      await expect(page.getByText('Opening case…', { exact: true })).toHaveCount(0);
       const target = section === 'response'
         ? page.locator('#case-response-preflight-delayed-case > summary')
         : page.locator('#case-head-delayed-case');
@@ -183,8 +299,27 @@ for (const [section, preserveLaterFocus] of [
   });
 }
 
-test('Case detail replaces the list and returns to its retained filters and focus', async ({ page }) => {
-  await seedCases(page);
+test('Case detail replaces the list and returns to its retained filters and focus', async ({ page }, testInfo) => {
+  const copied: string[] = [];
+  let refuseCopy = false;
+  await page.exposeFunction('recordFixtureCaseTimeCopy', (value: string) => {
+    if (refuseCopy) throw new Error('Private clipboard failure');
+    copied.push(value);
+  });
+  await page.addInitScript(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+    writeText: (value: string) => (window as unknown as { recordFixtureCaseTimeCopy(value: string): Promise<void> }).recordFixtureCaseTimeCopy(value),
+  } }));
+  const openedAt = '2026-06-01T02:03:04.123Z';
+  const updatedAt = '2026-06-03T04:05:06.789Z';
+  const noteAt = '2026-06-02T03:04:05.456Z';
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': currentBrowserLocalDocument('cases', { cases: [
+      caseRecord({ id: 'workspace-first', domain: 'first-work.example', evidenceHistory: [snapshot()],
+        createdAt: openedAt, updatedAt, notes: [{ createdAt: noteAt, body: 'Retained review note.' }] }),
+      caseRecord({ id: 'workspace-second', domain: 'second-work.example' }),
+    ] }),
+  }, { destination: '/cases' });
+  const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
   const search = page.getByRole('textbox', { name: 'Search', exact: true });
   await search.fill('first-work');
   const row = page.locator('#case-head-workspace-first');
@@ -192,11 +327,52 @@ test('Case detail replaces the list and returns to its retained filters and focu
   await expect(page).toHaveURL('/cases?case=workspace-first');
   await expect(page.getByRole('heading', { name: 'first-work.example', exact: true })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Saved Cases', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('textbox', { name: 'Track a domain', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('textbox', { name: 'Open a Case for a domain', exact: true })).toHaveCount(0);
   await expect(page.getByRole('navigation', { name: 'Case sections' }).getByRole('link')).toHaveText(['Summary', 'Evidence', 'Assessment', 'Response', 'History']);
   await expect(page.getByRole('group', { name: 'Case response presentation', includeHidden: true })).toBeHidden();
   await expect(page.getByRole('textbox', { name: /^Additional tags/, includeHidden: true })).toBeHidden();
   await expect(page.getByRole('group', { name: 'Retained Case records' })).toContainText('1 snapshot');
+  const detail = page.locator('[data-case-detail="workspace-first"]');
+  await detail.getByText('Case options', { exact: true }).click();
+  await openCaseSection(page, 'History');
+  for (const [label, value] of [['Case update time', updatedAt], ['Case opening time', openedAt], ['note time', noteAt]] as const) {
+    const control = detail.getByRole('button', { name: new RegExp(`Copy exact ${label}:`, 'u') });
+    await expect(control).toHaveAttribute('title', value);
+    await expect(control.locator('time')).toHaveAttribute('datetime', value);
+    await expect(control.locator('time')).toContainText('UTC');
+    await expect(control).toHaveAccessibleName(`${await control.locator('time').innerText()} Copy exact ${label}: ${value}`);
+    await control.focus();
+    await control.press('Enter');
+    await expect.poll(() => copied.at(-1)).toBe(value);
+    await expect(control).toBeFocused();
+    await expect(detail.getByText(`Exact ${label} copied.`, { exact: true })).toHaveCount(1);
+  }
+  expect(copied).toEqual([updatedAt, openedAt, noteAt]);
+  refuseCopy = true;
+  await detail.getByRole('button', { name: /Copy exact note time:/u }).click();
+  await expect(detail.locator('.notes .evidence-timestamp code')).toHaveText(noteAt);
+  await expect(detail.getByText('Clipboard unavailable. Select the exact timestamp below.', { exact: true })).toBeVisible();
+  await expect(detail).not.toContainText('Private clipboard failure');
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 1024, 1280]) {
+      await page.setViewportSize({ width, height: 844 });
+      await expectNoHorizontalOverflow(page);
+      await expect(detail.getByRole('button', { name: /Copy exact Case update time:/u })).toBeVisible();
+      await expect(detail.getByRole('button', { name: /Copy exact Case opening time:/u })).toBeVisible();
+      await expect(detail.locator('.notes .evidence-timestamp code')).toBeVisible();
+      for (const name of [/Copy exact Case update time:/u, /Copy exact Case opening time:/u, /Copy exact note time:/u]) {
+        const control = detail.getByRole('button', { name });
+        await control.focus();
+        await expectFocusedResultsVisible(page, control, control);
+      }
+      if (captureVisualEvidenceEnabled()) {
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await page.screenshot({ path: testInfo.outputPath(`case-times-${theme}-${width}.png`), fullPage: true });
+      }
+    }
+  }
+  expect(await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 })).toEqual(before);
   await page.getByRole('link', { name: 'All Cases', exact: true }).click();
   await expect(search).toHaveValue('first-work');
   await expect(page.locator('.case-head')).toHaveCount(1);
@@ -328,7 +504,7 @@ test('a committed Case history write with a failed reread is not offered as a fa
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await page.getByRole('textbox', { name: 'What did you do or decide?', exact: true }).fill('Reviewed the retained evidence');
   await page.getByRole('button', { name: 'Record manual step', exact: true }).click();
-  await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('The change was saved, but Cases could not be reread.');
+  await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('The change was saved, but cases could not be reread.');
   await expect(page.getByRole('textbox', { name: 'What did you do or decide?', exact: true })).toHaveValue('');
   await expect(page.getByRole('button', { name: 'Record manual step', exact: true })).toBeFocused();
   const saved = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
@@ -348,8 +524,17 @@ test('legacy response deep links still open the packet and Case follow-up keeps 
   await expect(page.locator('#case-response-preflight-workspace-first > summary')).toBeInViewport({ ratio: 1 });
   await page.goForward();
   await expect(page.getByRole('textbox', { name: 'Add note', exact: true })).toHaveValue('Keep this draft through response navigation');
-  page.once('dialog', async dialog => { expect(dialog.message()).toContain('Case edits are not saved'); await dialog.accept(); });
-  await page.getByRole('link', { name: 'Review follow-up', exact: true }).click();
+  await Promise.all([
+    page.waitForEvent('dialog').then(async dialog => {
+      try {
+        expect(dialog.type()).toBe('confirm');
+        expect(dialog.message()).toMatch(/\b(?:unsaved|not saved)\b/iu);
+        expect(dialog.message()).toMatch(/\b(?:lose|discard)\b/iu);
+      }
+      finally { await dialog.accept(); }
+    }),
+    page.getByRole('link', { name: 'Review follow-up', exact: true }).click(),
+  ]);
   await expect(page).toHaveURL('/monitor?view=inbox&queue=all&case-review=workspace-first');
   const inbox = page.getByRole('region', { name: 'Review inbox', exact: true });
   const clearCaseScope = inbox.getByRole('link', { name: 'Show all Cases', exact: true });

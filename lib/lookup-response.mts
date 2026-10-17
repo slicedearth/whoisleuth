@@ -43,6 +43,7 @@ import type { buildWhoisChain } from './whois.mts';
 
 type RegistrarRdap = Awaited<ReturnType<typeof fetchRegistrarRdapRecord>>;
 type WhoisEnvelope = {
+  status?: string;
   skipped?: boolean;
   detail?: string;
   error?: string;
@@ -171,12 +172,17 @@ async function buildUnifiedLookupResponse(context: LookupResponseContext) {
     ? { skipped: true, detail: 'RDAP is disabled by deployment policy.' }
     : rdapRecord
     ? { ...rdapRecord, ...(registrarRdap ? { registrarRdap } : {}) }
-    : {
-        error: rdapResult.status === 'rejected'
-          ? boundedSourceDetail(rdapResult.reason, 'RDAP lookup failed')
-          : 'No RDAP registry found for this query via IANA bootstrap',
-        attempts: rdapAttempts,
-      };
+    : rdapResult.status === 'rejected'
+      ? { error: boundedSourceDetail(rdapResult.reason, 'RDAP lookup failed'), attempts: rdapAttempts }
+      : { status: 'unsupported', detail: 'No RDAP service is listed for this target in the IANA bootstrap.', attempts: rdapAttempts };
+
+  const whoisStatus = !whoisEnabled
+    ? 'disabled'
+    : skipWhois
+    ? 'skipped'
+    : whoisResult.status === 'rejected'
+      ? 'error'
+      : whoisCollectionStatus(whoisChain, classified.type === 'domain' ? classified.registrableDomain ?? classified.value : undefined);
 
   let whois: WhoisEnvelope;
   if (!whoisEnabled) {
@@ -184,7 +190,11 @@ async function buildUnifiedLookupResponse(context: LookupResponseContext) {
   } else if (skipWhois) {
     whois = { skipped: true, detail: 'WHOIS is omitted in fast RDAP-only mode.' };
   } else if (Array.isArray(whoisChain)) {
-    whois = { chain: whoisChain, parsed: parseWhoisChain(whoisChain, classified.type === 'domain' ? classified.registrableDomain ?? classified.value : undefined) };
+    whois = whoisStatus === 'unsupported' || whoisStatus === 'skipped'
+      ? { status: whoisStatus, chain: whoisChain,
+          detail: whoisChain[0]?.detail ?? 'IANA did not publish a domain WHOIS referral for this target.' }
+      : { chain: whoisChain, parsed: parseWhoisChain(whoisChain, classified.type === 'domain' ? classified.registrableDomain ?? classified.value : undefined),
+          ...(whoisStatus === 'error' ? { error: boundedSourceDetail({ message: whoisChain[0]?.error }, 'WHOIS lookup failed') } : {}) };
   } else {
     whois = {
       error: whoisResult.status === 'rejected'
@@ -231,13 +241,6 @@ async function buildUnifiedLookupResponse(context: LookupResponseContext) {
     : !rdapRecord
       ? 'unsupported'
       : rdapRecord.upstreamStatus === 404 ? 'not_found' : 'success';
-  const whoisStatus = !whoisEnabled
-    ? 'disabled'
-    : skipWhois
-    ? 'skipped'
-    : whoisResult.status === 'rejected'
-      ? 'error'
-      : whoisCollectionStatus(whoisChain, classified.type === 'domain' ? classified.registrableDomain ?? classified.value : undefined);
   const availabilityStatus = classified.type !== 'domain'
     ? 'not_applicable'
     : !availabilityEnabled ? 'disabled'

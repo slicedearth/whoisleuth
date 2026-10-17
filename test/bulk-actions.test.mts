@@ -65,7 +65,7 @@ test('committed pruning receipts survive aggregate summaries, later rejection an
   await h.actions.createSelected([row(), row('two.example'), row('three.example')]);
   assert.match(h.actions.state.status, /2 committed, 1 rejected/u);
   assert.match(h.actions.state.status, /Removed 3 older evidence snapshots/u);
-  assert.match(h.actions.state.status, /change was saved, but Cases could not be reread/u);
+  assert.match(h.actions.state.status, /change was saved, but cases could not be reread/u);
   h.context.api.openCase = async () => ({ cases: [h.record], record: h.record, created: true, pruned: 0 });
   await h.actions.open(row());
   assert.doesNotMatch(h.actions.state.status, /Removed/u);
@@ -88,7 +88,7 @@ test('Case actions preserve the selected incident and publish the committed snap
   await h.actions.open(row());
   assert.equal(writes, 1);
   assert.deepEqual(h.published(), [h.record]);
-  assert.match(h.actions.state.status, /change was saved, but Cases could not be reread/u);
+  assert.match(h.actions.state.status, /change was saved, but cases could not be reread/u);
   assert.equal(h.actions.state.busy, false);
 });
 

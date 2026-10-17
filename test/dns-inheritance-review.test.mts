@@ -84,6 +84,9 @@ describe('inherited DMARC publication', () => {
     assert.deepEqual(calls, []); assert.equal(result.status, 'info'); assert.match(result.summary, /Exact-name/);
     assert.match(result.detail, /Published policy: reject\. Test mode: yes/);
     assert.doesNotMatch(JSON.stringify(result), /private@|rua=/);
+    assert.deepEqual(result.dmarcPolicyContext, { version: 1, source: 'recursive_dns_txt', relation: 'exact', complete: true,
+      owner: 'mail.example.test', observedAt: TIME, policy: 'reject', subdomainPolicy: 'reject', nonexistentPolicy: 'reject', psd: 'u', testMode: true,
+      discovery: [{ owner: 'mail.example.test', state: 'observed', observedAt: TIME }] });
   });
   test('keeps existing and nonexistent-name policies distinct at an explicit organisational boundary', async () => {
     const { result, calls } = await dmarc('mail.example.test', empty, {
@@ -92,6 +95,9 @@ describe('inherited DMARC publication', () => {
     assert.deepEqual(calls, ['_dmarc.example.test']); assert.match(result.summary, /Inherited.*_dmarc.example.test/);
     assert.match(result.detail, /existing name: quarantine.*nonexistent name: reject.*existence is not inferred/);
     assert.equal(result.status, 'info');
+    assert.deepEqual(result.dmarcPolicyContext, { version: 1, source: 'recursive_dns_txt', relation: 'inherited', complete: true,
+      owner: 'example.test', observedAt: TIME, policy: 'none', subdomainPolicy: 'quarantine', nonexistentPolicy: 'reject', psd: 'n', testMode: false,
+      discovery: [{ owner: 'mail.example.test', state: 'not_found', observedAt: TIME }, { owner: 'example.test', state: 'observed', observedAt: TIME }] });
   });
   test('chooses the shortest valid owner without an explicit boundary', async () => {
     const { result, calls } = await dmarc('a.mail.example.test', empty, {
@@ -125,6 +131,8 @@ describe('inherited DMARC publication', () => {
     const calls: string[] = [];
     const result = await reviewInheritedDmarc('mail.example.test', { ...empty, error: 'private resolver detail' }, async owner => { calls.push(owner); return empty; });
     assert.deepEqual(calls, []); assert.match(result.summary, /could not be determined/); assert.doesNotMatch(JSON.stringify(result), /private resolver/);
+    assert.equal(result.dmarcPolicyContext?.relation, 'undetermined'); assert.equal(result.dmarcPolicyContext?.complete, false);
+    assert.equal(result.dmarcPolicyContext?.owner, null); assert.equal(result.dmarcPolicyContext?.policy, null);
     const parent = await dmarc('a.example.test', empty, { '_dmarc.example.test': { ...empty, error: 'timeout' } });
     assert.deepEqual(parent.calls, ['_dmarc.example.test']); assert.match(parent.result.summary, /could not be determined/);
   });

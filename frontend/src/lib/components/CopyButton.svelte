@@ -2,6 +2,9 @@
   import { onDestroy } from 'svelte';
   let { value, label = 'Copy', description = label }: { value: string; label?: string; description?: string } = $props();
   let state = $state<'idle' | 'copied' | 'failed'>('idle');
+  const visibleLabel = $derived(state === 'copied' ? 'Copied' : label);
+  const context = $derived(description === label ? '' : description.startsWith(`${label} `)
+    ? description.slice(label.length) : ` — ${description}`);
   let generation = 0;
   $effect(() => { value; generation++; state = 'idle'; });
   onDestroy(() => { generation++; });
@@ -17,14 +20,14 @@
 </script>
 
 <span class="copy-control">
-  <button class="btn" type="button" aria-label={description} onclick={() => void copy()}>{state === 'copied' ? 'Copied' : label}</button>
+  <button class="btn" type="button" onclick={() => void copy()}>{visibleLabel}<span class="sr-only">{context}</span></button>
   <span class:sr-only={state !== 'failed'} aria-live="polite">{state === 'copied' ? `${description}: copied.` : state === 'failed' ? 'Clipboard unavailable. Select the value below to copy it.' : ''}</span>
   {#if state === 'failed'}<code class="copy-fallback">{value}</code>{/if}
 </span>
 
 <style>
-  .copy-control{display:inline-grid;min-width:0;max-width:100%;align-items:stretch;vertical-align:middle}
-  button{min-height:44px;padding:7px 11px;font:600 var(--text-xs)/1.4 var(--font-sans);white-space:normal}
+  .copy-control{display:inline-grid;min-width:0;max-width:100%;justify-self:start;justify-items:start;vertical-align:middle}
+  button{min-height:44px;max-width:100%;padding:7px 6px;border-color:transparent;background:transparent;color:var(--accent);font:600 var(--text-xs)/1.4 var(--font-sans);white-space:normal;overflow-wrap:anywhere}
   .copy-fallback{display:block;min-width:0;max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap;user-select:all;font-size:var(--text-xs)}
   .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
   @media print{.copy-control{display:none}}

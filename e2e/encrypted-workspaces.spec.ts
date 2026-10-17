@@ -2,15 +2,93 @@ import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-cont
 import type { Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
-import { DEFAULT_DATABASE, directoryRows, indicator, namedDatabase, openArchive, openManager, SELECTION } from './browser-workspace-fixtures';
+import { DEFAULT_DATABASE, directoryRows, indicator, namedDatabase, openArchive, openManager, SELECTION, switchWorkspace } from './browser-workspace-fixtures';
 import { expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, useTheme } from './helpers';
 import { downloadEncryptedWorkspaceArchive } from './workspace-backup';
 import { createCase } from '../packages/cases/case-record-operations.mts';
 import { buildWorkspaceArchive, readWorkspaceArchive } from '../packages/workspace/workspace-archive.mts';
 import { decryptWorkspaceArchive, encryptWorkspaceArchive } from '../packages/workspace/workspace-archive-crypto.mts';
 import { createCase as createCaseThroughForm, openCaseResponseWorkspace } from './case-test-fixtures';
-import { openCaseSection, openInboxReview } from './console-navigation';
+import { openCaseSection, openInboxReview, inboxReviewControls } from './console-navigation';
 import { FILE_BYTES, FILE_NAME, openRetainedFiles, selectOriginal, storedFiles } from './case-attachment-fixtures';
+
+const cancelledLockDiagnostics = new WeakMap<Page, { events: unknown[]; omitted: number }>();
+test.afterEach(async ({ page }, testInfo) => {
+  const capture = cancelledLockDiagnostics.get(page);
+  if (capture) await testInfo.attach('cancelled-lock-interactions', { body: JSON.stringify(capture), contentType: 'application/json' });
+});
+
+/** Observe synthetic interaction metadata; never change recovery, storage or input behaviour. */
+async function observeCancelledLock(page: Page) {
+  const capture = { events: [] as unknown[], omitted: 0 };
+  cancelledLockDiagnostics.set(page, capture);
+  await page.exposeFunction('__recordCancelledLockInteraction', (event: unknown) => {
+    if (capture.events.length < 80) capture.events.push(event); else capture.omitted++;
+  });
+  await page.addInitScript(() => {
+    let active = false;
+    let remaining = 64;
+    let observer: MutationObserver | null = null;
+    const rectangle = (element: Element | null) => {
+      if (!element) return null;
+      const box = element.getBoundingClientRect();
+      return { x: box.x, y: box.y, width: box.width, height: box.height };
+    };
+    const snapshot = () => {
+      const retries = [...document.querySelectorAll('.draft-recovery button')].filter(button => button.textContent?.trim() === 'Retry recovery save');
+      const states = { idle: 0, pending: 0, saved: 0, error: 0, unknown: 0 };
+      for (const element of document.querySelectorAll('[data-recovery-status]')) {
+        const state = element.getAttribute('data-recovery-status');
+        if (state && Object.hasOwn(states, state)) states[state as keyof typeof states]++;
+      }
+      return { notice: rectangle(document.querySelector('.workspace-lock [role="status"]')), retryCount: retries.length,
+        retry: rectangle(retries.length === 1 ? retries[0]! : null), states };
+    };
+    const measure = () => {
+      if (remaining === 0) return null;
+      remaining--;
+      const current = snapshot();
+      if (remaining === 0) {
+        observer?.disconnect();
+        const record = Reflect.get(window, '__recordCancelledLockInteraction');
+        if (typeof record === 'function') void Promise.resolve(record({ phase: 'diagnostic-limit-reached', time: performance.now(), limit: 64 })).catch(() => {});
+      }
+      return current;
+    };
+    const emit = (phase: string, extra: Record<string, unknown> = {}) => {
+      const current = measure();
+      if (!current) return;
+      const record = Reflect.get(window, '__recordCancelledLockInteraction');
+      if (typeof record === 'function') void Promise.resolve(record({ phase, time: performance.now(), ...current, ...extra })).catch(() => {});
+    };
+    Reflect.set(window, '__markCancelledLockInteraction', (phase: string) => { active = true; emit(phase); });
+    for (const phase of ['beforeunload', 'pagehide', 'pageshow'] as const) window.addEventListener(phase, () => emit(phase));
+    for (const phase of ['pointerdown', 'click'] as const) window.addEventListener(phase, event => {
+      if (!active || remaining === 0) return;
+      const target = event.target instanceof Element ? event.target.closest('button') : null;
+      const retry = [...document.querySelectorAll('.draft-recovery button')].filter(button => button.textContent?.trim() === 'Retry recovery save');
+      const category = target && retry.length === 1 && target === retry[0] ? 'retry-save' : target?.textContent?.trim() === 'Lock workspace' ? 'lock-workspace' : 'other';
+      emit(phase, { target: category, point: { x: event.clientX, y: event.clientY }, trusted: event.isTrusted });
+    }, true);
+    let previous = '';
+    observer = new MutationObserver(() => {
+      if (!active || remaining === 0) return;
+      const current = measure();
+      if (!current) return;
+      const key = JSON.stringify(current);
+      if (key !== previous) {
+        previous = key;
+        const record = Reflect.get(window, '__recordCancelledLockInteraction');
+        if (typeof record === 'function') void Promise.resolve(record({ phase: 'geometry-or-status-change', time: performance.now(), ...current })).catch(() => {});
+      }
+    });
+    observer.observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-recovery-status'] });
+  });
+}
+
+async function markCancelledLock(page: Page, phase: string) {
+  await page.evaluate(value => { Reflect.get(window, '__markCancelledLockInteraction')(value); }, phase);
+}
 
 const WORKSPACE_PASSWORD = '<synthetic workspace fixture>';
 const BACKUP_PASSWORD = '<separate archive fixture>';
@@ -25,8 +103,8 @@ test('saved inbox positions protect review drafts and stay outside encrypted por
   await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true }).click();
   await createCaseThroughForm(page, 'private-review.example');
   await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Review inbox', exact: true }).click();
-  let item = page.locator('.review-inbox .items > li').first();
-  await openInboxReview(item); await item.locator('details.lifecycle-controls > summary').click();
+  let item = await openInboxReview(inboxReviewControls(page).first());
+  await item.locator('details.lifecycle-controls > summary').click();
   await item.getByLabel('Rationale', { exact: true }).fill('This unfinished review must remain in the encrypted working workspace.');
   let position = page.locator('.review-session'); await position.locator('summary').click();
   await position.getByRole('button', { name: 'Save current position', exact: true }).click();
@@ -53,7 +131,7 @@ test('saved inbox positions protect review drafts and stay outside encrypted por
   await expect(item.getByLabel('Rationale', { exact: true })).toHaveValue('This unfinished review must remain in the encrypted working workspace.');
 });
 
-test('retained original bytes use the encrypted workspace keys and remain unavailable while locked', async ({ page }) => {
+test('retained original bytes use encrypted keys and locking cancels an in-flight original export', async ({ page }) => {
   await page.goto('/dashboard');
   const row = await createEncrypted(page, 'Protected original files'); await unlock(page, row.name);
   await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true }).click();
@@ -78,9 +156,41 @@ test('retained original bytes use the encrypted workspace keys and remain unavai
   await unlock(page, row.name); files = await openRetainedFiles(page);
   await files.getByRole('button', { name: `Preview ${FILE_NAME}`, exact: true }).click();
   await expect(files.locator('pre')).toContainText('A deliberately retained original');
-  await page.getByRole('button', { name: 'Lock workspace', exact: true }).click();
-  await expect(page.locator('pre')).toHaveCount(0);
-  expect(await storedFiles(page, namedDatabase(row.id))).toEqual(persisted);
+  await expect(files.getByRole('status').filter({ hasText: 'Size and SHA-256 verified for this preview' })).toBeVisible();
+  await files.getByRole('button', { name: 'Close file preview', exact: true }).click();
+  await files.locator('.file-export-selection > summary').click();
+  const selection = files.locator('.file-export-selection');
+  await selection.getByRole('checkbox', { name: new RegExp(`^${FILE_NAME.replaceAll('.', '\\.')}`) }).check();
+  const downloads: string[] = []; page.on('download', download => downloads.push(download.suggestedFilename()));
+  let entered = false, release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  await page.exposeFunction('holdEncryptedOriginalDigest', async () => { entered = true; await held; });
+  await page.evaluate(exactBytes => {
+    const digest = SubtleCrypto.prototype.digest;
+    SubtleCrypto.prototype.digest = async function(algorithm, input) {
+      const result = await digest.call(this, algorithm, input);
+      if (new TextDecoder().decode(input as ArrayBuffer) === exactBytes) {
+        SubtleCrypto.prototype.digest = digest;
+        await Reflect.get(window, 'holdEncryptedOriginalDigest')();
+      }
+      return result;
+    };
+  }, FILE_BYTES.toString('utf8'));
+  try {
+    await selection.getByRole('button', { name: 'Download private package', exact: true }).click();
+    await expect.poll(() => entered).toBe(true);
+    await Promise.all([page.waitForEvent('load'), page.getByRole('button', { name: 'Lock workspace', exact: true }).click()]);
+    await expect(page.getByRole('heading', { name: `Unlock ${row.name}`, exact: true })).toBeVisible();
+    release();
+    await unlock(page, row.name); files = await openRetainedFiles(page);
+    await expect(files.getByRole('button', { name: `Preview ${FILE_NAME}`, exact: true })).toBeVisible();
+    await expect(files.locator('pre')).toHaveCount(0);
+    await files.locator('.file-export-selection > summary').click();
+    await expect(files.locator('.file-export-selection').getByRole('checkbox').first()).not.toBeChecked();
+    await expect(files.getByRole('status').filter({ hasText: 'Prepared a private package' })).toHaveCount(0);
+    expect(downloads).toEqual([]);
+    expect(await storedFiles(page, namedDatabase(row.id))).toEqual(persisted);
+  } finally { release(); }
 });
 
 async function createEncrypted(page: Page, name: string) {
@@ -185,7 +295,7 @@ for (const encryptedSource of [false, true]) {
     expect(files).toHaveLength(1); expect(files[0]!.codec).toBe('aes-gcm-hmac-v1'); expect(files[0]!.bytes).not.toEqual([...FILE_BYTES]);
     const after = await storedBytes(page, sourceDatabase);
     expect(after.records).toEqual(before.records); expect(after.manifests).toEqual(before.manifests); expect(await storedFiles(page, sourceDatabase)).toEqual(sourceFiles);
-    await copy.getByRole('button', { name: 'Finish verification and keep copy', exact: true }).click();
+    await copy.getByRole('button', { name: 'Keep copy and finish', exact: true }).click();
     await expect(copy.getByRole('status')).toContainText('The original remains available');
     const manager = await openManager(page);
     await manager.getByRole('button', { name: `Open workspace ${replacement!.name}`, exact: true }).click();
@@ -214,25 +324,39 @@ for (const encryptedSource of [false, true]) {
 }
 
 for (const relock of ['manual', 'idle'] as const) test(`workspace lifecycle keeps the active key usable after cancellation and completes a later ${relock} lock`, { tag: '@cross-browser-critical' }, async ({ page }) => {
+  await observeCancelledLock(page);
   await page.goto('/dashboard'); const row = await createEncrypted(page, 'Cancellable lock'); await unlock(page, row.name);
   await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true }).click();
   await createCaseThroughForm(page, 'cancel-lock.example'); const form = await recoveryPinForm(page), url = page.url();
+  await page.getByText('Tab references', { exact: true }).click();
+  await page.getByText('Navigation trail · 1', { exact: true }).click();
+  const visits = page.getByRole('navigation', { name: 'Visited Console contexts', exact: true });
+  await expect(visits.getByRole('link')).toHaveCount(1);
+  await expect(visits.getByRole('link')).toBeVisible();
+  const caseId = new URL(url).searchParams.get('case'); expect(caseId).toBeTruthy();
+  expect(new URL((await visits.getByRole('link').getAttribute('href'))!, url).searchParams.get('case')).toBe(caseId);
   await failNextBrowserLocalManifestWrite(page, 'case_drafts');
+  await markCancelledLock(page, 'before-initial-draft-edit');
   await form.getByLabel('Label', { exact: true }).fill('Keep this draft after cancelling lock');
   await expect(form.getByRole('status')).toContainText('could not be saved for recovery');
+  await markCancelledLock(page, 'before-lock-approach');
   let cancelled = false;
   page.once('dialog', async dialog => { expect(dialog.type()).toBe('beforeunload'); await dialog.dismiss(); cancelled = true; });
   await page.getByRole('button', { name: 'Lock workspace', exact: true }).click();
   await expect.poll(() => cancelled).toBe(true); await expect(page).toHaveURL(url);
+  await expect(visits.getByRole('link')).toBeVisible();
   await expect(form.getByLabel('Label', { exact: true })).toHaveValue('Keep this draft after cancelling lock');
+  await markCancelledLock(page, 'before-retry-approach');
   await form.getByRole('button', { name: 'Retry recovery save', exact: true }).click();
   await expect(form.getByRole('status')).toContainText('Draft saved in this workspace');
+  await markCancelledLock(page, 'after-confirmed-draft-status');
   if (relock === 'idle') {
     await page.clock.install();
     await page.getByRole('combobox', { name: 'Auto-lock', exact: true }).selectOption('5');
     await page.clock.fastForward(300_000);
   } else await page.getByRole('button', { name: 'Lock workspace', exact: true }).click();
   await expect(page.getByRole('heading', { name: `Unlock ${row.name}`, exact: true })).toBeVisible();
+  await expect(visits).toHaveCount(0);
   await unlock(page, row.name); const restored = await recoveryPinForm(page);
   await restored.getByText('1 saved draft for this form', { exact: true }).click();
   await restored.getByRole('button', { name: 'Restore draft', exact: true }).click();
@@ -280,7 +404,7 @@ test('workspace lifecycle preserves an incomplete destination after its metadata
   await copy.getByRole('button', { name: 'Copy missing originals', exact: true }).click();
   await expect(copy.getByRole('alert')).toContainText('Destination records do not match');
   const after = await storedBytes(page, DEFAULT_DATABASE); expect(after.records).toEqual(before.records); expect(after.manifests).toEqual(before.manifests);
-  await copy.getByRole('button', { name: 'Finish verification and keep copy', exact: true }).click();
+  await copy.getByRole('button', { name: 'Keep copy and finish', exact: true }).click();
   expect((await directoryRows(page)).some(item => item.id === created!.id)).toBe(true);
 });
 
@@ -295,8 +419,17 @@ test('unfinished Case forms use the encrypted workspace and remain outside its p
   await details.getByLabel('Label', { exact: true }).fill('Protected unfinished fixture');
   await details.getByLabel('Fact', { exact: true }).fill('This recovery-only sentence must not enter a backup.');
   await expect(details.getByRole('status')).toContainText('Draft saved in this workspace');
+  await page.locator('.draft-inventory-disclosure > summary').click();
+  const inventory = page.getByRole('region', { name: 'Draft inventory', exact: true });
+  await inventory.getByRole('button', { name: 'Read saved drafts', exact: true }).click();
+  await inventory.getByRole('button', { name: 'View saved values', exact: true }).click();
+  await expect(inventory.locator('pre')).toContainText('This recovery-only sentence must not enter a backup.');
   expect(JSON.stringify(await storedBytes(page, namedDatabase(row.id)))).not.toContain('recovery-only sentence');
-  await page.reload(); await unlock(page, row.name);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: `Unlock ${row.name}`, exact: true })).toBeVisible();
+  await expect(inventory).toHaveCount(0);
+  await expect(page.getByText('This recovery-only sentence must not enter a backup.', { exact: false })).toHaveCount(0);
+  await unlock(page, row.name);
   await openCaseResponseWorkspace(page); await openCaseSection(page, 'Evidence');
   details = page.locator('details').filter({ has: page.getByText('Pin an observed fact', { exact: true }) });
   if (await details.getAttribute('open') === null) await details.locator(':scope > summary').click();
@@ -306,6 +439,12 @@ test('unfinished Case forms use the encrypted workspace and remain outside its p
   await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Dashboard', exact: true }).click();
   const { content } = await downloadEncryptedWorkspaceArchive(page, BACKUP_PASSWORD);
   expect(JSON.stringify(await decryptWorkspaceArchive(JSON.parse(content), BACKUP_PASSWORD))).not.toContain('recovery-only sentence');
+  await switchWorkspace(page, 'Default');
+  await page.getByRole('navigation', { name: 'Console', exact: true }).getByRole('link', { name: 'Cases', exact: true }).click();
+  await page.locator('.draft-inventory-disclosure > summary').click();
+  await inventory.getByRole('button', { name: 'Read saved drafts', exact: true }).click();
+  await expect(inventory.getByRole('status')).toContainText('0 saved drafts');
+  await expect(inventory).not.toContainText('recovery-only sentence');
 });
 
 test('encrypted workspace stays locked across reloads and supports a separately encrypted backup round trip', { tag: ['@cross-browser-critical', '@timing-sensitive'] }, async ({ page, context }) => {

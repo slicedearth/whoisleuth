@@ -38,6 +38,31 @@ describe('punycode decoding and dual domain representation', () => {
     assert.equal(fromUnicode.skeleton, fromAscii.skeleton);
   });
 
+  test('retains exact distinct representations through an ASCII and Unicode round trip', () => {
+    for (const unicode of ['bücher.example', 'sаmple.example', '例え.example', 'مثال.example']) {
+      const ascii = domainToASCII(unicode);
+      const result = analysis(ascii);
+      assert.equal(result.asciiDomain, ascii);
+      assert.equal(result.unicodeDomain, unicode);
+      assert.equal(domainToASCII(result.unicodeDomain), ascii);
+      assert.deepEqual(analysis(result.unicodeDomain), result);
+    }
+    const confusable = analysis('xn--smple-4ve.example');
+    assert.equal(confusable.unicodeDomain, 'sаmple.example');
+    assert.equal(confusable.skeleton, 'sample.example');
+    assert.notEqual(confusable.skeleton, confusable.asciiDomain);
+    assert.notEqual(confusable.skeleton, confusable.unicodeDomain);
+  });
+
+  test('does not present malformed ACE labels as an analysed Unicode identity', () => {
+    assert.equal(idn.decodePunycodeLabel('a'), '\u0080', 'Punycode decoding is not domain validity');
+    assert.equal(idn.decodePunycodeLabel('8i7caa'), 'ｗｗｗ', 'mapped characters must not become a different identity');
+    for (const domain of ['xn--.example', 'xn--a.example', 'xn--abc-.example', 'xn--a-ecp.example', 'xn--8i7caa.example', `xn--${'z'.repeat(59)}.example`]) {
+      assert.equal(idn.unicodeDomainFromAscii(domain), null, domain);
+      assert.equal(idn.analyzeDomainIdn(domain), null, domain);
+    }
+  });
+
   test('rejects malformed, oversized, and unsafe inputs', () => {
     assert.equal(idn.decodePunycodeLabel(''), null);
     assert.equal(idn.decodePunycodeLabel('bad!value'), null);

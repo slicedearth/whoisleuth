@@ -33,6 +33,8 @@ import { buildUnifiedLookupResponse } from './lookup-response.mts';
 import { createLookupTimingTracker } from './lookup-diagnostics.mts';
 import type { LookupTimingSource } from './lookup-diagnostics.mts';
 import { prepareSelectedLookupUrl } from '../packages/evidence/lookup-target.mts';
+import { createLookupCollectionReceiptTracker } from './lookup-collection-receipt.mts';
+import type { LookupCollectionReceipt } from '../packages/evidence/lookup-collection-receipt.mts';
 
 type LookupOptions = {
   fetchRdapRecord?: typeof fetchRdapRecord;
@@ -58,6 +60,8 @@ type LookupOptions = {
   featurePolicy?: ReturnType<typeof networkFeaturePolicy>;
   now?: () => number;
   onSourceSettled?: (settlement: LookupSourceSettlement) => void;
+  /** Only explicit full-result consumers request this operation-local receipt. */
+  onCollectionReceipt?: (receipt: LookupCollectionReceipt) => void;
   signal?: AbortSignal;
   /** HTTP operation leases outlive cancelled delivery while started collectors drain. */
   waitForStartedCollectors?: boolean;
@@ -86,19 +90,33 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
   const securityTxtRequested = options.securityTxt === true;
   const featurePolicy = options.featurePolicy || networkFeaturePolicy();
   const timing = createLookupTimingTracker(!fast && !compact, options.now || Date.now);
+  const receipt = !compact && options.onCollectionReceipt
+    ? createLookupCollectionReceiptTracker(classified, options) : null;
   const startedCollectors: Promise<unknown>[] = [];
   const measure = <T,>(source: LookupTimingSource, operation: () => Promise<T> | T) => (
     timing.measure(source, () => abortable(() => {
+      receipt?.started(source);
       const running = Promise.resolve(operation());
       if (options.waitForStartedCollectors) startedCollectors.push(running.catch(() => {}));
       return running;
-    }, options.signal))
+    }, options.signal)).then(value => {
+      receipt?.settled(source, 'fulfilled', value);
+      return value;
+    }, error => {
+      receipt?.settled(source, 'rejected', error);
+      throw error;
+    })
   );
   const rdapEnabled = featureDecision('rdap', featurePolicy).enabled;
   const whoisEnabled = featureDecision('whois', featurePolicy).enabled;
   const availabilityEnabled = featureDecision('availability', featurePolicy).enabled;
   const websiteProbeEnabled = featureDecision('website_probe', featurePolicy).enabled;
   const dnsIntelligenceEnabled = featureDecision('dns_intelligence', featurePolicy).enabled;
+  if (!rdapEnabled) { receipt?.admission('rdap', 'disabled'); receipt?.admission('registrar_rdap', 'disabled'); receipt?.admission('network_context', 'disabled'); }
+  if (!whoisEnabled) receipt?.admission('whois', 'disabled');
+  if (!availabilityEnabled) { receipt?.admission('domain_evidence', 'disabled'); receipt?.admission('network_context', 'disabled'); }
+  if (!dnsIntelligenceEnabled) receipt?.admission('reverse_dns', 'disabled');
+  if (!websiteProbeEnabled) receipt?.admission('security_txt', 'disabled');
   const skipWhois = fast || !whoisEnabled;
   const selectedUrl = options.selectedUrl === undefined ? undefined
     : prepareSelectedLookupUrl(options.selectedUrl, classified.inputHostname ?? classified.value);
@@ -115,6 +133,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
   // Registrar RDAP is a separately attributed deep-lookup enrichment. It may
   // overlap the WHOIS chain, but it never joins the promises used to decide
   // availability and can add up to its own bounded timeout to a deep lookup.
+  if (classified.type === 'domain' && rdapEnabled && !fast && !compact) receipt?.admission('registrar_rdap', 'prerequisite_unavailable');
   const registrarRdapPromise = classified.type === 'domain' && rdapEnabled && !fast && !compact
     ? rdapPromise.then((record) => record && record.upstreamStatus === 200 && record.parsed
         ? measure('registrar_rdap', () => fetchRegistrarRdap(classified.value, record))
@@ -263,7 +282,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     }
   }
 
-  try { return await buildUnifiedLookupResponse({
+  try { const result = await buildUnifiedLookupResponse({
     availabilityEnabled,
     availabilityPromise,
     classified,
@@ -286,7 +305,11 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     urlscanIntelligencePromise,
     whoisEnabled,
     whoisPromise,
-  }); } finally {
+  });
+    options.signal?.throwIfAborted();
+    if (receipt) options.onCollectionReceipt?.(receipt.finish());
+    return result;
+  } finally {
     if (options.waitForStartedCollectors) await Promise.all(startedCollectors);
   }
 }

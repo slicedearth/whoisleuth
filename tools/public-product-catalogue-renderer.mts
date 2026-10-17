@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { buildCliCasePack } from '../cli/case-pack.mts';
 import { applyCliCaseOperation } from '../cli/case-command.mts';
 import { parseCliArguments } from '../cli/arguments.mts';
@@ -151,9 +152,53 @@ function publicCoverage() {
 }
 
 function publicMethodology() {
+  const { observation, contraryObservation, recheck } = publicCaseExampleInputs();
   return Object.freeze({
     topics: METHODOLOGY_TOPICS,
+    examples: [
+      {
+        id: 'conflicting-page-accounts', title: 'Two page accounts disagree',
+        claim: 'A password form appeared in the supplied capture.',
+        conclusion: 'The capture supports that limited statement. It does not establish what every visitor saw, who controlled the page or whether credentials were submitted.',
+        sources: [
+          { id: 'capture', role: 'Supporting observation', ...observation },
+          { id: 'other-review', role: 'Contrary account', ...contraryObservation },
+        ],
+        unknowns: ['The other review has no recorded path or viewport, so the accounts are not directly comparable.', 'The current page, operator and any credential submission remain unestablished.'],
+        rule: { href: '#method-families', label: 'Keep source accounts separate' },
+        example: { href: '/examples#example-case-assess-input', label: 'Inspect the fictional assessment input' },
+      },
+      {
+        id: 'unavailable-page-recheck', title: 'A later recheck did not complete',
+        claim: 'The password form has been removed.',
+        conclusion: 'Not established. An unavailable recheck supplies no later page content. The earlier observation is context, not evidence for or against the current state.',
+        sources: [
+          { id: 'earlier-capture', role: 'Earlier context, not current contrary evidence', ...observation },
+          { id: 'recheck', role: 'Unavailable later observation', label: 'Incomplete page recheck', value: recheck.comparisonSummary,
+            source: recheck.source, observedAt: recheck.observedAt, completeness: recheck.completeness,
+            sourceState: recheck.state, observationHostname: null, limitations: recheck.limitations },
+        ],
+        unknowns: ['No complete later observation supports removal or continued presence.', 'A comparable review of the same page would be needed; this example starts no collection.'],
+        rule: { href: '#method-evidence-state', label: 'Keep unavailable evidence distinct from absence' },
+        example: { href: '/examples#example-case-recheck-input', label: 'Inspect the fictional recheck input' },
+      },
+    ],
   });
+}
+
+function publicCaseExampleInputs() {
+  const observation = { label: 'Selected page observation', value: 'A form asking for a password appears in the supplied fictional capture.', source: 'Analyst supplied fictional capture',
+    observedAt: '2026-08-22T00:00:00.000Z', completeness: 'partial', sourceState: 'partial', observationHostname: 'example.test', limitations: ['One supplied page only. No credentials were submitted.'] };
+  const contraryObservation = { label: 'Separate page review', value: 'A separate supplied review reports that no password form was seen.', source: 'Fictional separate reviewer account',
+    observedAt: '2026-08-22T00:00:00.000Z', completeness: 'partial', sourceState: 'partial', observationHostname: 'example.test', limitations: ['The reviewed path and viewport were not recorded. This cannot resolve the supplied capture.'] };
+  const recheck = { state: 'unavailable', observedAt: EXAMPLE_TIME, completeness: 'partial', source: 'Fictional later capture', comparisonSummary: 'The later capture did not complete.', limitations: ['No later page content is available.'] };
+  const inputs: ReadonlyArray<{ operation: 'pin' | 'assess' | 'recheck'; title: string; summary: string; value: Record<string, unknown> }> = [
+    { operation: 'pin', title: 'Case evidence-pin input', summary: 'An observation with its own source, time and partial coverage.', value: observation },
+    { operation: 'assess', title: 'Case assessment input', summary: 'A reviewed disposition linked to separate supporting and contrary source accounts. Replace every fictional claim before using it.',
+      value: { disposition: 'suspicious', reviewReasonCode: 'other_reviewed', summary: 'Review the apparent credential request', rationale: 'Keep both accounts; the separate review has no recorded path or viewport.', evidence: [{ pin: observation, stance: 'supports' }, { pin: contraryObservation, stance: 'contradicts' }] } },
+    { operation: 'recheck', title: 'Case incomplete-recheck input', summary: 'An unavailable observation, not a removal or takedown conclusion.', value: recheck },
+  ];
+  return { observation, contraryObservation, recheck, inputs };
 }
 
 function publicExamples() {
@@ -170,15 +215,7 @@ function publicExamples() {
   const workflow = buildInvestigationPlan('evidence-handoff', 'Example Review', EXAMPLE_TIME);
   const createdCase = createCase({ domain: 'example.test', source: 'manual', tags: ['synthetic'] }, EXAMPLE_TIME);
   const syntheticCase = Object.freeze({ ...createdCase, id: 'case-synthetic-example' });
-  const observation = { label: 'Selected page observation', value: 'A form was retained in the supplied fictional capture.', source: 'Analyst supplied fictional capture',
-    observedAt: EXAMPLE_TIME, completeness: 'partial', sourceState: 'partial', observationHostname: 'example.test', limitations: ['One supplied page only.'] };
-  const inputs: ReadonlyArray<{ operation: 'pin' | 'assess' | 'recheck'; title: string; summary: string; value: Record<string, unknown> }> = [
-    { operation: 'pin', title: 'Case evidence-pin input', summary: 'An observation with its own source, time and partial coverage.', value: observation },
-    { operation: 'assess', title: 'Case assessment input', summary: 'A reviewed disposition linked to a new source-qualified pin. Replace every fictional claim before using it.',
-      value: { disposition: 'suspicious', reviewReasonCode: 'other_reviewed', summary: 'Review the apparent credential request', rationale: 'The supplied observation needs independent corroboration.', evidence: [{ pin: observation, stance: 'supports' }] } },
-    { operation: 'recheck', title: 'Case incomplete-recheck input', summary: 'An unavailable observation, not a removal or takedown conclusion.',
-      value: { state: 'unavailable', observedAt: EXAMPLE_TIME, completeness: 'partial', source: 'Fictional later capture', comparisonSummary: 'The later capture did not complete.', limitations: ['No later page content is available.'] } },
-  ];
+  const { inputs } = publicCaseExampleInputs();
   const inputExamples = inputs.map(input => {
     const filename = `synthetic-${input.operation}.json`;
     const argv = ['case', input.operation, 'synthetic-cases.json', '--input', filename, '--output', 'reviewed-cases.json'];
@@ -329,7 +366,14 @@ function renderPublicCliIndexModule(): string {
 }
 
 function renderPublicCliGuidanceModule(): string {
-  return moduleSource('PUBLIC_CLI_GUIDANCE', CLI_PUBLIC_GUIDANCE);
+  const operationModes = CLI_PUBLIC_GUIDANCE.operationModes.map(({ packageManifest, ...mode }) => {
+    if (!packageManifest) return { ...mode, nodeRequirement: null };
+    const manifest: unknown = JSON.parse(readFileSync(new URL(`../${packageManifest}`, import.meta.url), 'utf8'));
+    const engines = (manifest as { engines?: { node?: unknown } }).engines;
+    if (typeof engines?.node !== 'string' || !engines.node.trim()) throw new TypeError('Package guidance requires its declared Node.js runtime.');
+    return { ...mode, nodeRequirement: engines.node };
+  });
+  return moduleSource('PUBLIC_CLI_GUIDANCE', { ...CLI_PUBLIC_GUIDANCE, operationModes });
 }
 
 function renderPublicCoverageModule(): string {

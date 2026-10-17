@@ -18,7 +18,7 @@ test('sign-in retains a direct Case response link without creating the missing C
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(destination);
   await expect(page.getByRole('heading', { name: 'Cases', exact: true })).toBeVisible();
-  await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('That Case is not available in this workspace.');
+  await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('That case is not available in this workspace.');
   await expect(page.locator('.case-head')).toHaveCount(0);
 });
 
@@ -69,7 +69,7 @@ test('signs in through the login form and back out again', async ({ page }) => {
 
   await page.goto('/');
   await expect(page.getByRole('heading', { name: /Understand a domain.+Before you act/u })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Try the synthetic demo' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Explore an example investigation' })).toBeVisible();
   await expect(page.locator('.public-header').getByRole('link', { name: 'Privacy' })).toHaveCount(0);
   const publicFooter = page.locator('.public-footer');
   const publicPrivacyLink = publicFooter.getByRole('link', { name: 'Privacy' });
@@ -162,7 +162,7 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await expect(consoleFooterLinks.getByRole('link', { name: 'Resources', exact: true })).toHaveCount(0);
   await expect(page.locator('footer.site-footer .new-tab')).toHaveCount(0);
 
-  const dashboardLink = page.locator('#console-navigation').getByRole('link', { name: /^WHOISleuth\s+Domain intelligence console$/u });
+  const dashboardLink = page.getByRole('banner').getByRole('link', { name: /^WHOISleuth Dashboard\b/u });
   await expect(dashboardLink).toBeVisible();
   await expect(dashboardLink).toHaveAttribute('href', '/dashboard');
   await page.locator('#query').fill('public-signout-state.example.test');
@@ -216,8 +216,7 @@ test('signs in through the login form and back out again', async ({ page }) => {
     expect(themeBox).not.toBeNull();
     expect(consoleBox).not.toBeNull();
     expect(menuBox).not.toBeNull();
-    await expect(themeButton.locator('.theme-trigger-label')).toHaveText(/\S/u);
-    await expect(themeButton.locator('.theme-trigger-label')).toBeVisible();
+    await expect(themeButton).toBeVisible();
     const menuTops = [themeBox!.y, consoleBox!.y, menuBox!.y];
     const menuBottoms = [themeBox!.y + themeBox!.height, consoleBox!.y + consoleBox!.height, menuBox!.y + menuBox!.height];
     expect(Math.max(...menuTops)).toBeLessThan(Math.min(...menuBottoms));

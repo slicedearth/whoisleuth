@@ -96,7 +96,7 @@
               </div>
             {/if}
             <button class="btn small" type="button" disabled={disabled || saving} onclick={() => void onselect(link.hostname)}>Use {link.hostname} in Lookup</button>
-            <CopyButton value={link.hostname} label="Copy domain" description={`Copy domain ${link.hostname}`} /><CopyButton value={defangedIndicator(link.hostname)} label="Copy defanged" description={`Copy defanged indicator for ${link.hostname}`} />
+            <CopyButton value={link.hostname} label="Copy hostname" description={`Copy hostname ${link.hostname}`} /><CopyButton value={defangedIndicator(link.hostname)} label="Copy defanged" description={`Copy defanged indicator for ${link.hostname}`} />
             <details><summary>Review exact URL privately</summary><p>Paths, queries and fragments may contain tokens or personal information. They are excluded from the review download.</p><code class="exact">{result.targets.find(target => target.id === link.id)?.exactUrl}</code><button class="btn small" type="button" disabled={disabled || saving} onclick={() => { const target = result?.targets.find(value => value.id === link.id); if (target) void onselect(target.exactUrl); }}>Use exact URL in Lookup</button></details>
           </li>
         {/each}

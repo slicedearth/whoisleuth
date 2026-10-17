@@ -919,7 +919,7 @@
           label="Advanced evidence"
           description="Open optional external intelligence and the full validated lookup response only when the investigation requires their additional detail."
           metrics={[
-            `${threatIntelligenceProviders.length} usable external providers`,
+            `${threatIntelligenceProviders.length} external provider results`,
             ...(threatIntelligenceWithheld.length ? [withheldProviderCount ? `${withheldProviderCount} provider record${withheldProviderCount === 1 ? '' : 's'} withheld` : 'External data withheld'] : []),
             'Full response available',
           ]}

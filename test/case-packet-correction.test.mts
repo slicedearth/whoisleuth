@@ -178,7 +178,7 @@ test('all previously emitted packet bytes and their independent digests remain u
   const packet = JSON.parse(bytes.toString()), { integrity, ...unsigned } = packet;
   assert.equal(createHash('sha256').update(canonicalArtifactJsonV2(unsigned)).digest('hex'), '4fa4e033ef4cc7943d6ee95e513f27a982f35d0e3da402cda78bc9df28db9e05');
   assert.equal(integrity.digestSha256, '4fa4e033ef4cc7943d6ee95e513f27a982f35d0e3da402cda78bc9df28db9e05');
-  validateOfflineArtifactStructure(CASE_RESPONSE_PACKET_SCHEMA, packet); assert.equal(CASE_SCHEMA_VERSION, 19);
+  validateOfflineArtifactStructure(CASE_RESPONSE_PACKET_SCHEMA, packet); assert.equal(packet.schemaVersion, 12);
 });
 
 test('ordinary offline CLI file authoring retains a working exact-linked correction without changing its input file', async context => {
@@ -200,10 +200,10 @@ test('ordinary offline CLI file authoring retains a working exact-linked correct
   assert.deepEqual(restored.actions.find(action => action.correction)?.correction, s.correctionInput(prior.event.id).correction);
 });
 
-test('unchanged archive10 envelope independently admits Case19 linkage and preserves its old Case18 fixture bytes', async () => {
+test('unchanged archive10 envelope admits current Case linkage and preserves its old Case18 fixture bytes', async () => {
   const s = correctionFixture(), prior = await s.deliver(); append(s, prior.event.id);
   const archive = await buildWorkspaceArchive({ cases: [s.record] }, { generatedAt: s.time() });
-  assert.equal(archive.version, 10); assert.equal(archive.sections.cases.version, 19);
+  assert.equal(archive.version, 10); assert.equal(archive.sections.cases.version, CASE_SCHEMA_VERSION);
   const prepared = await readWorkspaceArchive(JSON.parse(JSON.stringify(archive)));
   const imported = mergeReadyWorkspaceArchiveData({}, prepared.sections.filter(section => section.id === 'cases' && section.status === 'ready'), prepared.generatedAt);
   assert.deepEqual(normalizeCaseStore(imported.find(section => section.id === 'cases')!.document).cases[0]!.actions, s.record.actions);

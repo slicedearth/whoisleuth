@@ -15,7 +15,7 @@ keeps registration, DNS, certificate, website, network and analyst evidence
 separately attributed, including unavailable and partial sources.
 
 Use it to investigate a domain, IP address or ASN; discover possible brand
-lookalikes; compare domain sets; retain reviewed Cases; prepare response
+lookalikes; compare domain sets; retain reviewed cases; prepare response
 material; and compare later observations. Scores are explainable prioritisation
 aids rather than automated verdicts.
 
@@ -25,59 +25,37 @@ aids rather than automated verdicts.
   <a href="https://www.whoisleuth.com/demo"><strong>Explore the synthetic demo</strong></a>
   &nbsp;·&nbsp;
   <a href="https://www.whoisleuth.com/resources"><strong>Browse investigation resources</strong></a>
+  &nbsp;·&nbsp;
+  <a href="docs/cli.md"><strong>CLI guide</strong></a>
 </p>
 
 <p align="center">
-  <a href="https://www.whoisleuth.com/demo"><img src="docs/assets/whoisleuth-homepage.jpg" width="960" alt="WHOISleuth public homepage showing a fictional domain investigation" /></a>
+  <a href="https://www.whoisleuth.com"><img src="docs/assets/whoisleuth-homepage.jpg" width="960" alt="WHOISleuth homepage with a fictional domain investigation preview" /></a>
 </p>
 
 The demo uses fixed fictional evidence on reserved domains. It makes no live
-investigation request, requires no sign-in and writes no Console workspace data.
+investigation request, requires no sign-in and writes no console workspace data.
 
 ## How work is organised
 
-WHOISleuth uses three analyst jobs: **Investigate**, **Respond** and **Assure**.
+Start or resume work from **Dashboard**, then choose an analyst job:
 
-| Tool | Purpose |
+| Job | Tools and purpose |
 | --- | --- |
-| **Dashboard** | Start or resume work across the three jobs. |
-| **Lookup** | Inspect one domain, IP address or ASN. |
-| **Discover** | Generate lookalikes or review certificate and registry observations. |
-| **Bulk** | Triage and compare a selected domain set. |
-| **Brands** | Record official scope, reviewed baselines and owned-domain controls. |
-| **Cases** | Retain evidence, assess findings and prepare response packets. |
-| **Monitor** | Review changes, watchlists, follow-ups and local rules. |
+| **Investigate** | Lookup, Discover and Bulk: inspect targets, review supplied material, find candidates and compare domain sets. |
+| **Respond** | Review inbox and Cases: retain evidence, record decisions, prepare reviewed handoffs and follow up. |
+| **Assure** | Monitoring and Brands: review later observations, watchlists, official scope and owned-domain controls. |
 
-[Candidate review](docs/brand-candidate-review.md) connects explicit Discover
-and feed selections to local Brand review and per-domain Watchlist priorities.
-Save time-bounded keyword campaigns, preview matching rules, and explicitly
-review retained editions from an optional feed service.
+The [Resources hub](https://www.whoisleuth.com/resources) offers worked guides;
+the [application guide](docs/application-guide.md) covers tools and saved work.
+Collection and sharing are deliberate actions. WHOISleuth prepares response
+material; it does not submit reports.
 
-[Offline intake](docs/offline-intake-context.md) extracts source-linked addresses
-and labelled hashes from selected material, with explicit phone selection and
-displayed-destination comparison for supplied text. Cases can compare retained text and
-images, preserve declared registration boundaries, prepare an audience-reviewed
-internal handoff, and print a record summary. These reviews do not collect or
-submit anything automatically.
-
-The public [Resources hub](https://www.whoisleuth.com/resources) is the shortest
-user guide. [Application documentation](docs/application-guide.md) covers the
-browser tools and saved work.
-
-The [infrastructure inventory](docs/infrastructure-observations.md) reviews
-retained hostnames, DNS, certificate names and provider roles, with source-linked
-topology and historical comparison.
-
-Response actions can concern several exact domain, page or platform objects in
-one manually reviewed record. Event scopes, provider claims, independent
-comparisons and deliberate object closures remain separate; one resolved object
-does not close another. Historical missing bindings remain unknown. Console and
-the [offline Case file commands](docs/cli.md#local-case-files) submit no reports.
-
-The optional [local application](packages/local-application/README.md) runs the
-same Console on loopback with an explicitly selected filesystem workspace.
-Saved records, drafts and original files stay in that folder, not IndexedDB.
-Its plaintext workspace and encrypted portable backups are separate.
+The separate [local application](packages/local-application/README.md) can be
+assembled locally as an installable archive; it is not a published npm package.
+It runs the console on loopback, keeping records, drafts and original files in
+a selected plaintext folder instead of IndexedDB. Encrypted portable backups
+remain separate.
 
 ## Privacy and safety
 
@@ -102,13 +80,21 @@ npm ci --include=optional --ignore-scripts --audit=false
 npm run dev
 ```
 
-Build and start the Express host:
+`npm run dev` starts the **frontend only**: public pages and the fictional demo
+work without an API server. For sign-in and collection, follow the
+[full-stack Console setup](docs/getting-started.md#authenticated-console),
+which runs the API and frontend in separate terminals.
+
+For a production-style local host, create the ignored `.env.local` described in
+that guide, then build and start Express:
 
 ```bash
-SITE_PASSWORD=choose-a-password \
-SESSION_SECRET=choose-a-separate-random-secret \
-npm start
+npm run build
+node --env-file=.env.local server.mts
 ```
+
+Keep credentials out of Git. Deployed hosts can use `npm start` with injected
+`SITE_PASSWORD` and `SESSION_SECRET`; it does not load `.env.local`.
 
 The public CLI package runs locally and does not require the hosted application:
 
@@ -132,8 +118,8 @@ backend has no general investigation database. See [architecture](docs/architect
 [current product boundaries](docs/product-boundary.md) and the
 [threat model](docs/threat-model.md).
 
-Supported public formats and current Case and workspace writers are listed
-in the generated [Case portability reference](docs/case-contracts.md). Other
+Supported public formats and current case and workspace writers are listed
+in the generated [case portability reference](docs/case-contracts.md). Other
 current writers and direct migrations are described in the
 [portable compatibility reference](docs/portable-domain-contracts.md).
 
@@ -144,6 +130,9 @@ current writers and direct migrations are described in the
 | [Application guide](docs/application-guide.md) | Browser tools, evidence states, saved work and exports. |
 | [Getting started](docs/getting-started.md) | Local setup, development and verification. |
 | [CLI guide](docs/cli.md) and [reference](docs/cli-reference.md) | Installed commands, output and safety. |
+| [Candidate review](docs/brand-candidate-review.md) | Brand candidates, selected feeds and watchlist priorities. |
+| [Offline intake](docs/offline-intake-context.md) | Selected text, messages, files and source-linked findings. |
+| [Infrastructure inventory](docs/infrastructure-observations.md) | Retained hostnames, topology and historical comparison. |
 | [Operations](docs/operations.md) | Authentication, limits, optional providers, monitoring and deployment. |
 | [Architecture](docs/architecture.md) | Components, request pipeline, persistence and verification. |
 | [Browser-local data](docs/browser-local-data.md) | IndexedDB, migration, backup, encryption and deletion. |

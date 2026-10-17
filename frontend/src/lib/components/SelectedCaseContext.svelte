@@ -10,10 +10,11 @@
   import { subscribeBrowserLocalData } from '#lib/browser-local-data-service.ts';
   import { createSelectedCaseContextReader, type SelectedCaseContextState } from '#lib/controllers/selected-case-context.ts';
   import { monitorViewFromUrl } from '#lib/controllers/monitor-route-controller.ts';
+  import { caseWorkspaceHref } from '#lib/analysis/case-response-stage.ts';
   import CaseEvidenceFact from './CaseEvidenceFact.svelte';
   import CaseLinkedEvidence from './CaseLinkedEvidence.svelte';
 
-  let { caseId }: { caseId: string } = $props();
+  let { caseId, compact = false }: { caseId: string; compact?: boolean } = $props();
   let contextState = $state<SelectedCaseContextState | null>(null);
   let open = $state(false);
   let mounted = false;
@@ -63,7 +64,7 @@
 </script>
 
 {#if !insideCaseEditor}
-<section class="selected-case" aria-label="Selected Case" aria-busy={!contextState || contextState.phase === 'loading'}>
+<section class="selected-case" class:compact aria-label="Selected Case" aria-busy={!contextState || contextState.phase === 'loading'}>
   {#if record && context}
     <div class="context-heading">
       <span><span class="context-label">Selected Case</span><a href={href}>{record.domain}</a></span>
@@ -84,7 +85,7 @@
             {#if context.decisions.length}
               {#if context.decisions.length > 1}<p>Multiple decisions share the latest recorded time or have no usable time. None is selected as authoritative.</p>{/if}
               {#each context.decisions as decision}<article><h3>{decision.summary}</h3><p>{decision.rationale}</p><small>Confidence: {decision.confidence}{#if decision.confidenceBasis} · {decision.confidenceBasis}{/if}</small><CaseLinkedEvidence pins={record.evidencePins} ids={decision.evidencePinIds} /></article>{/each}
-              {#if context.earlierDecisions}<a href={`${href}#case-response-${encodeURIComponent(caseId)}`}>Review all {record.decisions.length} recorded decisions</a>{/if}
+              {#if context.earlierDecisions}<a href={`${caseWorkspaceHref(caseId, 'assessment')}#case-response-assessment-${encodeURIComponent(caseId)}`}>Review all {record.decisions.length} recorded decisions</a>{/if}
             {:else}<p>No evidence-linked decision recorded.</p>{/if}
           </section>
           <section aria-label="Case evidence pins">
@@ -104,18 +105,20 @@
       {/if}
     </details>
     {#if context.followUps[0]}<p class="next-review">Earliest recorded follow-up: <time datetime={context.followUps[0].at}>{date(context.followUps[0].at)}</time></p>{/if}
-    {#if contextState?.phase === 'loading'}<p class="next-review" role="status">Refreshing retained Case context…</p>{/if}
+    {#if contextState?.phase === 'loading'}<p class="next-review" role="status">Refreshing retained case context…</p>{/if}
   {:else}
     <div class="context-heading"><span class="context-label">Selected Case</span><button class="btn" type="button" onclick={clearSelection}>Clear selection</button></div>
-    {#if contextState?.phase === 'missing'}<p role="status">The selected Case is no longer in this workspace.</p><a href="/cases">Choose a Case</a>
-    {:else if contextState?.phase === 'unavailable'}<p role="status">The selected Case could not be read. Its saved state is unknown.</p><button class="btn" type="button" onclick={requestRefresh}>Retry Case read</button>
-    {:else}<p role="status">Reading selected Case…</p>{/if}
+    {#if contextState?.phase === 'missing'}<p role="status">The selected case is no longer in this workspace.</p><a href="/cases">Choose a Case</a>
+    {:else if contextState?.phase === 'unavailable'}<p role="status">The selected case could not be read. Its saved state is unknown.</p><button class="btn" type="button" onclick={requestRefresh}>Retry Case read</button>
+    {:else}<p role="status">Reading selected case…</p>{/if}
   {/if}
 </section>
 {/if}
 
 <style>
   .selected-case{min-width:0;margin:0 0 20px;padding:12px 0;border-bottom:1px solid var(--border);font-size:var(--text-sm);overflow-wrap:anywhere}
+  .selected-case.compact{margin:0;padding-block:8px;border-bottom:0}
+  .selected-case.compact .context-heading{font-size:var(--text-xs)}
   .context-heading{display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap}
   .context-heading>span:first-child{display:flex;gap:6px 12px;flex-wrap:wrap;min-width:0}
   .context-label{color:var(--muted);font-weight:650}

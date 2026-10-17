@@ -11,6 +11,7 @@ import {
   buildComparisonLedgerDetails,
   buildComparisonLedgerIndex,
   comparisonLedgerBulkPairIndexId,
+  comparisonLedgerCasePairIndexId,
   normaliseComparisonLedgerRow,
   safeComparisonLedgerHref,
   stableComparisonLedgerId,
@@ -355,6 +356,90 @@ describe('comparison ledger row contract', () => {
 });
 
 describe('retained comparison adapters', () => {
+  test('compares explicitly selected nonadjacent Case checkpoints without changing history or inventing intermediate observations', () => {
+    const opened = cases.openOrCreateCase([], { domain: 'checkpoint.example', source: 'lookup', evidence: caseEvidence({ registrar: 'Registrar A' }) }, EARLIER);
+    const middle = cases.updateCase(opened.cases, opened.record.id, { evidence: caseEvidence({ registrar: 'Registrar B' }) }, MIDDLE);
+    const latest = cases.updateCase(middle.cases, opened.record.id, { evidence: caseEvidence({ registrar: 'Registrar C' }) }, LATER).record;
+    const before = structuredClone(latest);
+    const byTime = [...latest.evidenceHistory].sort((a, b) => Date.parse(a.capturedAt) - Date.parse(b.capturedAt));
+    assert.equal(byTime.length, 3);
+    const pairs = [[0, 1], [1, 2], [0, 2]].map(([a, b]) => ({ caseId: latest.id,
+      earlierSnapshotId: byTime[a!]!.id, laterSnapshotId: byTime[b!]!.id }));
+    const input = { cases: [latest], casePairs: pairs };
+    const ids = pairs.map(pair => comparisonLedgerCasePairIndexId(pair.caseId, pair.earlierSnapshotId, pair.laterSnapshotId));
+    const details = buildComparisonLedgerDetails(input, { itemIds: ids });
+    assert.equal(details.selectedItems.length, 3);
+    const rows = details.rows.filter(row => row.field === 'Registrar');
+    assert.equal(rows.length, 3);
+    assert.equal(new Set(rows.map(row => row.id)).size, 3);
+    assert.deepEqual(rows.map(row => [row.earlier.value, row.later.value]).sort(), [
+      ['Registrar A', 'Registrar B'], ['Registrar B', 'Registrar C'], ['Registrar A', 'Registrar C'],
+    ].sort());
+    assert.ok(details.selectedItems.every(item => item.limitations.some(value => value.includes('No observation or transition between them is inferred'))));
+    assert.deepEqual(latest, before);
+  });
+
+  test('refuses unknown, equal, reversed, deleted and ambiguous explicit checkpoint references', () => {
+    const record = caseWithSnapshots('checkpoint-boundaries.example', caseEvidence({ registrar: 'A' }), caseEvidence({ registrar: 'B' }));
+    const history = [...record.evidenceHistory].sort((a, b) => Date.parse(a.capturedAt) - Date.parse(b.capturedAt));
+    const pair = { caseId: record.id, earlierSnapshotId: history[0]!.id, laterSnapshotId: history[1]!.id };
+    const id = comparisonLedgerCasePairIndexId(pair.caseId, pair.earlierSnapshotId, pair.laterSnapshotId);
+    assert.equal(buildComparisonLedgerDetails({ cases: [record], casePairs: [pair] }, { itemIds: [id] }).selectedItems.length, 1);
+    const variants = [
+      { ...record, evidenceHistory: history.slice(1) },
+      { ...record, evidenceHistory: [{ ...history[0], capturedAt: null }, history[1]] },
+      { ...record, evidenceHistory: [{ ...history[0], capturedAt: LATER }, history[1]] },
+      { ...record, evidenceHistory: [{ ...history[0], capturedAt: 'not-a-time' }, history[1]] },
+      { ...record, evidenceHistory: [...history, { ...history[0], registrar: 'Ambiguous source' }] },
+    ];
+    for (const variant of variants) {
+      const details = buildComparisonLedgerDetails({ cases: [variant], casePairs: [pair] }, { itemIds: [id] });
+      assert.equal(details.selectedItems.length, 0);
+      assert.equal(details.rows.length, 0);
+      assert.ok(details.omissions.invalidRecords > 0);
+    }
+    const ambiguous = buildComparisonLedgerDetails({ cases: [record, { ...record, title: 'Different same-ID Case' }], casePairs: [pair] }, { itemIds: [id] });
+    assert.equal(ambiguous.selectedItems.length, 0);
+    for (const invalid of [
+      { ...pair, caseId: 'missing-case' }, { ...pair, laterSnapshotId: 'missing-snapshot' },
+      { ...pair, laterSnapshotId: pair.earlierSnapshotId },
+      { ...pair, earlierSnapshotId: pair.laterSnapshotId, laterSnapshotId: pair.earlierSnapshotId },
+    ]) {
+      const requested = comparisonLedgerCasePairIndexId(invalid.caseId, invalid.earlierSnapshotId, invalid.laterSnapshotId);
+      const details = buildComparisonLedgerDetails({ cases: [record], casePairs: [invalid] }, { itemIds: [requested] });
+      assert.equal(details.selectedItems.length, 0);
+      assert.equal(details.rows.length, 0);
+    }
+  });
+
+  test('keeps explicit checkpoint input bounded and repeated requests separate from new observations', () => {
+    const record = caseWithSnapshots('checkpoint-bounds.example', caseEvidence({ registrar: 'A' }), caseEvidence({ registrar: 'B' }));
+    const history = [...record.evidenceHistory].sort((a, b) => Date.parse(a.capturedAt) - Date.parse(b.capturedAt));
+    const pair = { caseId: record.id, earlierSnapshotId: history[0]!.id, laterSnapshotId: history[1]!.id };
+    const input = { cases: [record], casePairs: Array.from({ length: MAX_COMPARISON_LEDGER_ENTITIES_PER_REQUEST + 1 }, () => pair) };
+    const index = buildComparisonLedgerIndex(input);
+    assert.equal(index.omissions.inputRecords, 1);
+    assert.equal(index.omissions.duplicateRecords, MAX_COMPARISON_LEDGER_ENTITIES_PER_REQUEST - 1);
+    const details = buildComparisonLedgerDetails(input, { itemIds: [comparisonLedgerCasePairIndexId(pair.caseId, pair.earlierSnapshotId, pair.laterSnapshotId)] });
+    assert.equal(details.selectedItems.length, 1);
+    assert.equal(details.rows.filter(row => row.field === 'Registrar').length, 1);
+  });
+
+  test('preserves selected-page, collection-depth and model eligibility in explicit checkpoint comparisons', () => {
+    const record = caseWithSnapshots('checkpoint-scope.example',
+      caseEvidence({ scanDepth: 'deep', riskModelVersion: 1, riskScore: 20, webObservationMode: 'selected_url', pageTitle: 'Earlier' }),
+      caseEvidence({ scanDepth: 'fast', riskModelVersion: 2, riskScore: 80, pageTitle: null }));
+    const history = [...record.evidenceHistory].sort((a, b) => Date.parse(a.capturedAt) - Date.parse(b.capturedAt));
+    const pair = { caseId: record.id, earlierSnapshotId: history[0]!.id, laterSnapshotId: history[1]!.id };
+    const details = buildComparisonLedgerDetails({ cases: [record], casePairs: [pair] }, {
+      itemIds: [comparisonLedgerCasePairIndexId(pair.caseId, pair.earlierSnapshotId, pair.laterSnapshotId)],
+    });
+    assert.ok(details.rows.some(row => row.state === 'collection_changed' && row.field === 'Collection depth'));
+    assert.ok(details.rows.some(row => row.state === 'model_changed' && row.field === 'Risk model version'));
+    assert.ok(details.rows.some(row => row.state === 'not_compared' && row.field === 'Submitted hostname context'));
+    assert.equal(details.rows.some(row => row.field === 'Page title' || row.field === 'Risk score'), false);
+  });
+
   test('keeps separate incident histories for the same domain and deduplicates only the same incident', () => {
     const first = caseWithSnapshots('same.reservation.invalid', caseEvidence({ registrar: 'First A' }), caseEvidence({ registrar: 'First B' }));
     const second = caseWithSnapshots('same.reservation.invalid', caseEvidence({ registrar: 'Second A' }), caseEvidence({ registrar: 'Second B' }));

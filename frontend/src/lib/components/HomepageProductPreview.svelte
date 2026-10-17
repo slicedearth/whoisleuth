@@ -146,11 +146,10 @@
           class:selected={candidate.id === selected.id}
           class="candidate-row"
           aria-pressed={candidate.id === selected.id}
-          aria-label={`Show ${candidate.domain} in the preview`}
           onclick={() => selectedCandidateId = candidate.id}
         >
           <span><strong>{candidate.domain}</strong><small>{candidate.mutation}</small></span>
-          <b aria-label={`${candidateCompleteSourceCount(candidate)} of ${directSourceCount} direct evidence sources complete`}>{candidateCompleteSourceCount(candidate)}/{directSourceCount}</b>
+          <b>{candidateCompleteSourceCount(candidate)}/{directSourceCount}<span class="sr-only"> direct evidence sources complete</span></b>
         </button>
       {/each}
     </div>

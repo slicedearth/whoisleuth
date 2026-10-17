@@ -67,7 +67,7 @@ describe('browser-local source reliability dashboard', () => {
     assert.equal(whois?.eligibleStateSamples, 0);
     assert.equal(whois?.failureRate, null);
     assert.equal(whois?.tone, 'limited');
-    assert.match(whois?.sampleLabel ?? '', /No collected samples.*6 skipped or unsupported/u);
+    assert.equal(whois?.sampleLabel, 'No samples eligible for rates · 6 excluded states');
   });
 
   test('rejects retained targets, inconsistent state counts, and oversized input', () => {

@@ -217,9 +217,8 @@
 
 <style>
   .replay{margin-top:12px;padding:0;overflow:clip}
-  .replay>summary{padding:13px var(--card-pad);cursor:pointer;list-style:none}
-  .replay>summary::-webkit-details-marker{display:none}
-  .replay>summary span{display:grid;gap:3px}
+  .replay>summary{padding:13px var(--card-pad);cursor:pointer}
+  .replay>summary span{display:inline-grid;width:calc(100% - 24px);gap:3px;vertical-align:top}
   .replay>summary strong{font:700 var(--text-sm) var(--mono)}
   .replay>summary small,.note{color:var(--muted);font-size:var(--text-xs);line-height:1.45}
   .body{padding:0 var(--card-pad) var(--card-pad);border-top:1px solid var(--border)}

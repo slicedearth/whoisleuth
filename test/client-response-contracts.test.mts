@@ -180,6 +180,25 @@ describe('official-domain posture response contract', () => {
       });
     }
   });
+
+  test('typed current policy scope is bound to the queried owner and does not fill missing legacy context', () => {
+    const context = { version: 1, source: 'recursive_dns_txt', relation: 'exact', complete: true,
+      owner: 'example.test', observedAt: CHECKED_AT, policy: 'reject', subdomainPolicy: 'quarantine', nonexistentPolicy: 'none', psd: 'u', testMode: false,
+      discovery: [{ owner: 'example.test', state: 'observed', observedAt: CHECKED_AT }] };
+    const check = postureCheck({ id: 'dmarc_inheritance', dmarcPolicyContext: context });
+    const raw = posture({ checks: [check] });
+    assert.equal(parseDomainPostureHttpResponse(raw, 'example.test').ok, true);
+    for (const invalid of [
+      { ...check, id: 'spf' },
+      { ...check, dmarcPolicyContext: { ...context, version: 2 } },
+      { ...check, dmarcPolicyContext: { ...context, rua: 'private@example.test' } },
+      { ...check, dmarcPolicyContext: { ...context, discovery: [{ ...context.discovery[0]!, owner: 'other.test' }] } },
+    ]) assert.equal(parseDomainPostureHttpResponse(posture({ checks: [invalid] }), 'example.test').ok, false);
+    const legacy = posture({ checks: [postureCheck({ id: 'dmarc_inheritance' })] });
+    const parsed = parseDomainPostureHttpResponse(legacy, 'example.test');
+    assert.equal(parsed.ok, true);
+    assert.equal('dmarcPolicyContext' in legacy.checks[0]!, false);
+  });
 });
 
 test('client HTTP errors are sanitized and bounded', () => {

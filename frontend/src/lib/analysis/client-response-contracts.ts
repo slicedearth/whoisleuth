@@ -3,6 +3,7 @@ import { PAGE_FINGERPRINT_PARSERS, PAGE_IDENTITY_VERSION } from './page-baseline
 import { validPagePublicationMetadata } from '../../../../lib/homepage-metadata-contract.mts';
 import { isRecord as isUnknownRecord } from '../../../../lib/json-record.mts';
 import { MAX_POSTURE_CHECKS, MAX_POSTURE_CHECK_RECORDS, MAX_POSTURE_RECORD_LENGTH, normalizeDomainPostureSourceContext, type DomainPostureCheck } from '../../../../packages/evidence/domain-posture-context.mts';
+import { normalizeDmarcPolicyContext } from '../../../../packages/evidence/dmarc-policy-context.mts';
 
 type JsonRecord = Record<string, unknown>;
 type CaptureAvailabilityState = 'available' | 'expiring' | 'for_sale' | 'registered' | 'unknown';
@@ -79,7 +80,7 @@ const MAX_AVAILABILITY_KEYS = 128;
 const MAX_PAGE_IDENTITY_KEYS = 32;
 const MAX_PAGE_FINGERPRINT_KEYS = 16;
 const MAX_POSTURE_TOP_LEVEL_KEYS = 10;
-const MAX_POSTURE_CHECK_KEYS = 8;
+const MAX_POSTURE_CHECK_KEYS = 9;
 const MAX_POSTURE_DETAIL_LENGTH = 2000;
 const MAX_POSTURE_ANALYSIS_TEXT_LENGTH = 512;
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
@@ -176,9 +177,13 @@ function parseAvailabilityCaptureResponse(
   return { ok: true, value: value as AvailabilityCaptureResponse };
 }
 
-function validPostureCheck(value: unknown): value is DomainPostureCheck {
+function validPostureCheck(value: unknown, domain: string): value is DomainPostureCheck {
   if (!isRecord(value) || Object.keys(value).length > MAX_POSTURE_CHECK_KEYS) return false;
-  try { normalizeDomainPostureSourceContext(value.sourceContext); } catch { return false; }
+  try {
+    normalizeDomainPostureSourceContext(value.sourceContext);
+    if (value.dmarcPolicyContext !== undefined && value.id !== 'dmarc_inheritance') return false;
+    normalizeDmarcPolicyContext(value.dmarcPolicyContext, domain);
+  } catch { return false; }
   return boundedText(value.id, 64)
     && boundedText(value.label, 120)
     && typeof value.status === 'string'
@@ -288,7 +293,7 @@ function parseDomainPostureHttpResponse(
     || !Array.isArray(value.checks)
     || value.checks.length === 0
     || value.checks.length > MAX_POSTURE_CHECKS
-    || !value.checks.every(validPostureCheck)
+    || !value.checks.every(check => validPostureCheck(check, normalizeDomain(value.domain)))
     || !validSpfExpansion(value.spfExpansion)
     || !validDmarcAuthorizations(value.dmarcAuthorizations)
     || !validExternalDependencies(value.externalDependencies)

@@ -17,6 +17,15 @@ type BoundedJsonParseOptions = Readonly<{
   label?: string;
   maximumBytes: number;
   limits?: BoundedJsonLimits;
+  observeStringLocation?: (entry: BoundedJsonStringLocation) => void;
+}>;
+
+export type BoundedJsonStringLocation = Readonly<{
+  value: string;
+  /** Zero-based UTF-16 range, including the JSON string's quotes. */
+  offset: number;
+  end: number;
+  path: readonly (string | number)[];
 }>;
 
 type BoundedJsonStringToken = Readonly<{
@@ -156,6 +165,7 @@ export function scanBoundedJson(
   raw: string,
   limits: BoundedJsonLimits = {},
   observeString?: BoundedJsonStringObserver,
+  observeStringLocation?: (entry: BoundedJsonStringLocation) => void,
 ): void {
   const maximumDepth = limits.maximumDepth ?? MAX_BOUNDED_JSON_DEPTH;
   const maximumKeys = limits.maximumKeys ?? MAX_BOUNDED_JSON_KEYS;
@@ -165,6 +175,7 @@ export function scanBoundedJson(
   let keys = 0;
   let values = 0;
   let stringCodeUnits = 0;
+  const path: (string | number)[] = [];
 
   const whitespace = () => {
     while (index < raw.length) {
@@ -232,6 +243,7 @@ export function scanBoundedJson(
     if (character === '"') {
       const parsedString = stringToken();
       observeString?.({ ...parsedString, kind: 'value', ...(propertyKey === undefined ? {} : { propertyKey }) });
+      observeStringLocation?.({ ...parsedString, end: index, path: [...path] });
       return;
     }
     if (character === '{') {
@@ -257,7 +269,9 @@ export function scanBoundedJson(
         whitespace();
         if (raw[index] !== ':') syntaxError();
         index += 1;
+        if (observeStringLocation) path.push(key);
         value(depth + 1, key);
+        if (observeStringLocation) path.pop();
         whitespace();
         if (raw[index] === '}') { index += 1; return; }
         if (raw[index] !== ',') syntaxError();
@@ -276,7 +290,9 @@ export function scanBoundedJson(
         if (items > maximumContainerItems) {
           throw new TypeError(`Artefact JSON contains a container with more than ${maximumContainerItems} items.`);
         }
+        if (observeStringLocation) path.push(items - 1);
         value(depth + 1);
+        if (observeStringLocation) path.pop();
         whitespace();
         if (raw[index] === ']') { index += 1; return; }
         if (raw[index] !== ',') syntaxError();
@@ -314,7 +330,7 @@ export function parseBoundedJson(
   if (bytes < 1 || bytes > options.maximumBytes) {
     throw new TypeError(`${label} must be between 1 byte and ${options.maximumBytes} bytes.`);
   }
-  scanBoundedJson(raw, options.limits);
+  scanBoundedJson(raw, options.limits, undefined, options.observeStringLocation);
   try { return JSON.parse(raw) as unknown; } catch { return syntaxError(); }
 }
 

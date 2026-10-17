@@ -139,13 +139,22 @@
       </div>
       <label class="field">{mode === 'quick' ? 'Conclusion summary' : 'Decision summary'}<input bind:value={decisionDraft.value.decisionSummary} maxlength="80" required></label>
       <label class="field">{mode === 'quick' ? 'Evidence-based rationale' : 'Rationale'}<textarea bind:value={decisionDraft.value.decisionRationale} maxlength="2000" rows="3" required></textarea></label>
+      <details class="decision-review-prompts">
+        <summary>Consider another explanation</summary>
+        <ul>
+          <li>Which retained observations weaken this conclusion, or support a different explanation?</li>
+          <li>Do those observations concern the same object, time and collection conditions?</li>
+          <li>What remains unresolved, and what evidence would help distinguish the explanations?</li>
+        </ul>
+        <p>Include relevant contrary observations in Evidence considered and explain their effect in your rationale. Hypotheses and unknowns can remain in structured assertions. These optional prompts do not select evidence or change your conclusion.</p>
+      </details>
       <div class="two-columns">
         <label class="field">Analyst confidence<select bind:value={decisionDraft.value.decisionConfidence}>{#each CASE_DECISION_CONFIDENCE_LEVELS as value}<option {value}>{value[0]?.toUpperCase()}{value.slice(1)}</option>{/each}</select><small>Separate from Risk, source health and evidence completeness.</small></label>
         <label class="field">Confidence basis<textarea bind:value={decisionDraft.value.decisionConfidenceBasis} maxlength="2000" rows="2" required={decisionDraft.value.decisionConfidence !== 'unknown'}></textarea></label>
       </div>
       </div>
       {#if record.evidencePins.length}
-        <fieldset class="pin-references"><legend>{mode === 'quick' ? 'Evidence considered' : 'Supporting evidence pins'}</legend>{#each record.evidencePins as pin, index}<label class="choice"><input type="checkbox" aria-label={caseEvidenceChoiceName(pin, index)} checked={decisionDraft.value.decisionPinIds.includes(pin.id)} onchange={(event) => decisionDraft.value.decisionPinIds = event.currentTarget.checked ? [...decisionDraft.value.decisionPinIds, pin.id] : decisionDraft.value.decisionPinIds.filter((id) => id !== pin.id)}><CaseEvidenceFact {pin} /></label>{/each}</fieldset>
+        <fieldset class="pin-references"><legend>Evidence considered</legend>{#each record.evidencePins as pin, index}<label class="choice"><input type="checkbox" aria-label={caseEvidenceChoiceName(pin, index)} checked={decisionDraft.value.decisionPinIds.includes(pin.id)} onchange={(event) => decisionDraft.value.decisionPinIds = event.currentTarget.checked ? [...decisionDraft.value.decisionPinIds, pin.id] : decisionDraft.value.decisionPinIds.filter((id) => id !== pin.id)}><CaseEvidenceFact {pin} /></label>{/each}</fieldset>
       {:else}
         <p class="notice">Pin an observation in Evidence before recording a conclusion. An unsupported hypothesis can be retained separately as an assertion.</p>
       {/if}
@@ -203,6 +212,11 @@
 <style>
   .assessment-review { display: grid; align-items: start; gap: 24px; min-width: 0; }
   .assessment-draft { display: grid; gap: 14px; min-width: 0; }
+  .decision-review-prompts { min-width: 0; line-height: 1.6; overflow-wrap: anywhere; }
+  .decision-review-prompts summary { min-height: 44px; padding-block: 10px; cursor: pointer; }
+  .decision-review-prompts ul { padding-inline-start: 22px; }
+  .decision-review-prompts li + li { margin-top: 8px; }
+  .decision-review-prompts p { margin: 12px 0 0; }
   .assessment-review > :global(.pin-references) { border: 0; border-inline-start: 1px solid var(--border); padding: 0 0 0 20px; }
   .assessment-review > :global(.pin-references legend) { padding: 0 0 12px; font-weight: 650; }
   @media(min-width: 1200px) { .assessment-review { grid-template-columns: minmax(0, 1.2fr) minmax(19rem, 1fr); } }

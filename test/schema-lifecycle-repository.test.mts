@@ -481,6 +481,28 @@ describe('schema lifecycle repository closure', () => {
       'An internal forwarding helper does not need a compatibility-register entry.',
     );
 
+    for (const source of [
+      '// const CASE_SCHEMA_VERSION = 13;\n',
+      '/* let MAX_CASE_IMPORT_BYTES = 2097152; */\n',
+      'export const explanation = "var CASE_SCHEMA_VERSION = 13;";\n',
+      'export const explanation = `const MAX_CASE_IMPORT_BYTES = 2097152;`;\n',
+    ]) {
+      assert.doesNotThrow(() => validateCasePortabilitySourceSnapshot([
+        ...sources,
+        { file: 'lib/case-source-explanation.mts', source },
+      ]));
+    }
+    for (const source of [
+      'const /* retained identity */ CASE_SCHEMA_VERSION = 13;\n',
+      'const ordinary = 1, MAX_CASE_IMPORT_BYTES = 2097152;\n',
+      'function example() { let CASE_SCHEMA_VERSION = 13; }\n',
+    ]) {
+      assert.throws(() => validateCasePortabilitySourceSnapshot([
+        ...sources,
+        { file: 'lib/competing-case-constant.mts', source },
+      ]), /constant is declared outside its canonical owner/u);
+    }
+
     assert.throws(
       () => validateCasePortabilitySourceSnapshot([
         ...sources,

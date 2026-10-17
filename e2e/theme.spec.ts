@@ -4,16 +4,26 @@ import { expectNoHorizontalOverflow, useTheme } from './helpers';
 const STORAGE_KEY = 'whoisleuth:theme:v1';
 
 test('theme preparation switches the current document and preserves that choice after navigation', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const inheritedTextMatchesTheme = () => page.locator('main').evaluate(element => {
+    const reference = document.createElement('span');
+    reference.style.color = 'var(--text)';
+    document.body.append(reference);
+    try { return getComputedStyle(element).color === getComputedStyle(reference).color; }
+    finally { reference.remove(); }
+  });
   await useTheme(page, 'dark');
   await page.goto('/methodology');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   const navigationStart = await page.evaluate(() => performance.timeOrigin);
   await useTheme(page, 'light');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  expect(await inheritedTextMatchesTheme()).toBe(true);
   expect(await page.evaluate(() => performance.timeOrigin)).toBe(navigationStart);
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await useTheme(page, 'dark');
+  expect(await inheritedTextMatchesTheme()).toBe(true);
   await page.goto('/resources');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 
@@ -119,7 +129,7 @@ test('the default system preference follows the operating-system colour scheme',
   await expect(trigger).toHaveAttribute('title', 'System theme');
   await expect(trigger.locator('.theme-trigger-label')).toHaveText('System');
   await expect(trigger.locator('[data-theme-symbol="system"]')).toBeVisible();
-  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#e7e2d8');
+  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#f3f4f6');
   const lightCanvas = await page.locator('body').evaluate(element => getComputedStyle(element).backgroundColor);
   const lightPanel = await page.locator('.hero-preview .lookup-panel').evaluate(element => getComputedStyle(element).backgroundColor);
 
@@ -191,7 +201,7 @@ test('light preference applies before reload and persists across public pages', 
 
   await chooseTheme(page, 'Light');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#e7e2d8');
+  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#f3f4f6');
   await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY)).toBe('light');
 
   await page.goto('/demo');
@@ -228,7 +238,7 @@ test('relationship-map cluster strokes stay contrast-safe in both themes', async
   }
 });
 
-test('light surfaces avoid pure white and separate layers, structural borders, and controls by role', async ({ page }) => {
+test('light surfaces separate reading layers, structural borders, and controls by role', async ({ page }) => {
   await clearThemePreference(page);
   await page.goto('/');
   await chooseTheme(page, 'Light');
@@ -272,7 +282,6 @@ test('light surfaces avoid pure white and separate layers, structural borders, a
     };
   });
 
-  expect(palette.panel).not.toBe('rgb(255, 255, 255)');
   expect(palette.panel).not.toBe(palette.background);
   expect(palette.raised).not.toBe(palette.panel);
   expect(palette.contrast['--text']).toBeGreaterThanOrEqual(7);
@@ -287,9 +296,13 @@ test('light surfaces avoid pure white and separate layers, structural borders, a
   expect(palette.contrast['--control-border']).toBeGreaterThanOrEqual(3);
 });
 
-test('dark chrome restores the deployed secondary accent while light chrome stays blue', async ({ page }) => {
+test('decorative chrome follows the theme accent independently of navigation selection', async ({ page }) => {
   await clearThemePreference(page);
   await page.goto('/lookup');
+  await page.getByRole('button', { name: /^Colour theme,/ }).click();
+  await page.getByRole('checkbox', { name: 'Terminal-style headers', exact: true }).check();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.terminal-strip')).toBeVisible();
 
   for (const theme of ['Dark', 'Light'] as const) {
     await chooseTheme(page, theme);
@@ -308,7 +321,6 @@ test('dark chrome restores the deployed secondary accent while light chrome stay
       probe.style.color = '';
       const selected = getComputedStyle(probe);
       const heading = document.querySelector<HTMLElement>('.heading')!;
-      const navigation = document.querySelector<HTMLElement>('nav a.active')!;
       const prompt = document.querySelector<HTMLElement>('.terminal-strip .prompt-sigil')!;
       const eyebrow = document.querySelector<HTMLElement>('.heading .eyebrow')!;
       const field = document.querySelector<HTMLElement>('#query')!;
@@ -320,8 +332,6 @@ test('dark chrome restores the deployed secondary accent while light chrome stay
         selectedBorder: selected.borderTopColor,
         eyebrow: getComputedStyle(eyebrow).color,
         prompt: getComputedStyle(prompt).color,
-        navArrow: getComputedStyle(navigation, '::before').color,
-        navBorder: getComputedStyle(navigation).borderLeftColor,
         headingRule: getComputedStyle(heading, '::after').backgroundImage,
         caret: getComputedStyle(field).caretColor,
       };
@@ -332,17 +342,12 @@ test('dark chrome restores the deployed secondary accent while light chrome stay
     expect(roles.selectedColour).toBe(roles.interfaceAccent);
     expect(roles.eyebrow).toBe(roles.interfaceAccent);
     expect(roles.prompt).toBe(roles.interfaceAccent);
-    expect(roles.navArrow).toBe(roles.interfaceAccent);
-    expect(roles.navBorder).toBe(roles.interfaceAccent);
     expect(roles.caret).toBe(roles.interfaceAccent);
     expect(roles.headingRule).toContain(roles.interfaceAccent);
     expect(roles.headingRule).toContain(roles.accent);
 
-    if (theme === 'Dark') {
-      expect(roles.interfaceAccent).toBe(roles.accent2);
-    } else {
-      expect(roles.interfaceAccent).toBe(roles.accent);
-    }
+    expect(roles.interfaceAccent).toBe(roles.accent);
+    expect(roles.interfaceAccent).not.toBe(roles.accent2);
   }
 });
 
@@ -468,7 +473,72 @@ test('the theme trigger identifies its rendered appearance panel', async ({ page
   await expect(panel).toHaveCount(0);
 });
 
-test('the public theme control inherits its canvas and keeps an opaque option surface', async ({ page }) => {
+test('terminal headers are optional, reversible and independent of other appearance choices', async ({ page }) => {
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto('/dashboard');
+    await page.evaluate(() => localStorage.setItem('whoisleuth:appearance:v1', 'compact:minimal'));
+    await page.reload();
+    const mobile = width === 390;
+    const toggle = page.getByRole('button', { name: 'Toggle navigation', exact: true });
+    const trigger = page.getByRole('button', { name: /^Colour theme,/ });
+    if (mobile) await toggle.click();
+    const strip = page.locator('.terminal-strip');
+    await expect(strip).toHaveCount(1);
+    await expect(strip).toBeHidden();
+    await expect(page.locator('html')).toHaveAttribute('data-density', 'compact');
+    await expect(page.locator('html')).toHaveAttribute('data-effects', 'minimal');
+    const terminal = page.getByRole('checkbox', { name: 'Terminal-style headers', exact: true });
+    const effects = page.getByRole('checkbox', { name: 'Decorative effects', exact: true });
+    const tabToTerminal = async () => {
+      await trigger.click();
+      await expect(trigger).toBeFocused();
+      for (const theme of ['Dark', 'Light', 'System']) {
+        await page.keyboard.press('Tab');
+        await expect(page.getByRole('option', { name: `${theme} theme`, exact: true })).toBeFocused();
+      }
+      for (const control of [page.getByLabel('Reading density'), effects, terminal]) {
+        await page.keyboard.press('Tab');
+        await expect(control).toBeFocused();
+        await expect(control).toBeInViewport();
+      }
+    };
+    await tabToTerminal();
+    await expect(terminal).not.toBeChecked();
+    await page.keyboard.press('Shift+Tab');
+    await expect(effects).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(terminal).toBeFocused();
+    await page.keyboard.press('Space');
+    await expect(terminal).toBeChecked();
+    await expect(strip).toBeVisible();
+    if (mobile) {
+      await page.keyboard.press('Tab');
+      await expect(page.getByRole('banner').getByRole('link', { name: /^WHOISleuth Dashboard\b/u })).toBeFocused();
+      await page.keyboard.press('Shift+Tab');
+      await expect(trigger).toBeFocused();
+    }
+    await page.keyboard.press('Escape');
+    await expect(mobile ? toggle : trigger).toBeFocused();
+    await page.reload();
+    if (mobile) await toggle.click();
+    await expect(strip).toBeVisible();
+    await expect(page.locator('html')).toHaveAttribute('data-density', 'compact');
+    await expect(page.locator('html')).toHaveAttribute('data-effects', 'minimal');
+    await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
+    await tabToTerminal();
+    await page.keyboard.press('Space');
+    await expect(terminal).not.toBeChecked();
+    await expect(strip).toBeHidden();
+    await page.keyboard.press('Escape');
+    await page.reload();
+    if (mobile) await toggle.click();
+    await expect(strip).toBeHidden();
+    expect(await page.evaluate(() => localStorage.getItem('whoisleuth:appearance:v1'))).toBe('compact:minimal');
+  }
+});
+
+test('the public theme control inherits its header and keeps an opaque option surface', async ({ page }) => {
   await clearThemePreference(page);
   await page.goto('/resources');
 
@@ -489,7 +559,7 @@ test('the public theme control inherits its canvas and keeps an opaque option su
       const colours = await page.evaluate(() => {
         const probe = document.createElement('span');
         probe.style.cssText = 'position:fixed;background:var(--panel)';
-        document.body.append(probe);
+        document.querySelector('.public-header')!.append(probe);
         const result = {
           trigger: getComputedStyle(document.querySelector('.theme-trigger')!).backgroundColor,
           options: getComputedStyle(document.querySelector('.theme-options')!).backgroundColor,
@@ -499,6 +569,7 @@ test('the public theme control inherits its canvas and keeps an opaque option su
         return result;
       });
       expect(colours.trigger).toBe('rgba(0, 0, 0, 0)');
+      expect(colours.options).not.toBe('rgba(0, 0, 0, 0)');
       expect(colours.options).toBe(colours.panel);
 
       await trigger.click();
@@ -598,16 +669,15 @@ test('theme controls fit beside authenticated public navigation across common ph
     const overlapsBrand = Math.min(brandRight, navigationRight) - Math.max(brandBox!.x, navigationBox!.x) > 0
       && Math.min(brandBottom, navigationBottom) - Math.max(brandBox!.y, navigationBox!.y) > 0;
     expect(overlapsBrand).toBe(false);
-    if (navigationBox!.y >= brandBottom) {
-      expect(navigationBox!.y - brandBottom).toBeGreaterThanOrEqual(2);
-    } else {
-      expect(navigationBox!.x - brandRight).toBeGreaterThanOrEqual(2);
-    }
+    expect(Math.min(brandBottom, navigationBottom) - Math.max(brandBox!.y, navigationBox!.y)).toBeGreaterThan(0);
+    expect(navigationBox!.x - brandRight).toBeGreaterThanOrEqual(2);
     expect(navigationRight).toBeLessThanOrEqual(width);
     expect(menuTriggerBox!.x).toBeGreaterThanOrEqual(navigationBox!.x);
     expect(consoleBox!.x).toBeGreaterThan(menuTriggerBox!.x + menuTriggerBox!.width);
     expect(themeBox!.x).toBeGreaterThan(consoleBox!.x + consoleBox!.width);
     expect(themeTriggerBox!.x).toBeGreaterThanOrEqual(themeBox!.x);
+    expect(themeTriggerBox!.width).toBeGreaterThanOrEqual(44);
+    expect(themeTriggerBox!.height).toBeGreaterThanOrEqual(44);
     const themeSymbolSize = await themeTrigger.locator('.theme-symbol').evaluate(
       (element) => parseFloat(getComputedStyle(element).width),
     );
@@ -642,9 +712,16 @@ test('the mobile appearance panel stays connected to its trigger and within the 
 
   const trigger = page.getByRole('button', { name: /^Colour theme,/ });
   await expect(trigger.locator('.theme-trigger-label')).toHaveText(/\S/u);
-  await expect(trigger.locator('.theme-trigger-label')).toBeVisible();
+  await expect(trigger.locator('.theme-trigger-label')).toBeHidden();
+  await expect(trigger.locator('.theme-symbol')).toBeVisible();
   await trigger.click();
   const options = page.getByRole('listbox', { name: 'Colour theme options' });
+  for (const theme of ['Light', 'Dark', 'System']) {
+    const option = options.getByRole('option', { name: `${theme} theme`, exact: true });
+    await expect(option).toBeVisible();
+    await expect(option).toHaveText(theme);
+    await expect(option.locator('.theme-symbol')).toBeVisible();
+  }
   const triggerBox = await trigger.boundingBox();
   const optionsBox = await options.boundingBox();
 

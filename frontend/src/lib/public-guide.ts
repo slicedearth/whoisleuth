@@ -1,3 +1,9 @@
+import {
+  LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS,
+  V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION,
+} from '../../../packages/contracts/lookup-evidence.mts';
+
 export type PublicGuideStep = {
   id: string;
   label: string;
@@ -8,6 +14,8 @@ export type PublicGuideGoal = {
   id: string;
   title: string;
   summary: string;
+  requirements: string;
+  example: { label: string; href: string };
   steps: readonly PublicGuideStep[];
 };
 
@@ -33,8 +41,10 @@ export type GuideFaq = {
 export const publicGuideGoals: readonly PublicGuideGoal[] = Object.freeze([
   Object.freeze({
     id: 'inspect-one-domain',
-    title: 'Inspect one domain',
+    title: 'Investigate a domain',
     summary: 'Check registration first, then review DNS, certificate and website context.',
+    requirements: 'Console access and a domain to investigate. Choose collection explicitly in Lookup.',
+    example: Object.freeze({ label: 'Fictional domain demo', href: '/demo' }),
     steps: Object.freeze([
       Object.freeze({ id: 'lookup', label: 'Lookup', href: '#tool-lookup' }),
       Object.freeze({ id: 'review-sources', label: 'Review sources', href: '#results' }),
@@ -42,9 +52,23 @@ export const publicGuideGoals: readonly PublicGuideGoal[] = Object.freeze([
     ]),
   }),
   Object.freeze({
+    id: 'review-a-message',
+    title: 'Review a suspicious message',
+    summary: 'Inspect supplied text or a message file locally. Compare displayed links with their destinations before choosing any lookup.',
+    requirements: 'Console access and text or a selected file. Open Review a message, link or selected file in Lookup; review does not open its links.',
+    example: Object.freeze({ label: 'Fictional case practice', href: '/demo#case-practice' }),
+    steps: Object.freeze([
+      Object.freeze({ id: 'supply', label: 'Supply material', href: '#tool-lookup-input' }),
+      Object.freeze({ id: 'review', label: 'Review indicators', href: '#tool-lookup-result' }),
+      Object.freeze({ id: 'retain', label: 'Retain selected evidence', href: '#tool-cases' }),
+    ]),
+  }),
+  Object.freeze({
     id: 'find-brand-lookalikes',
-    title: 'Find brand lookalikes',
-    summary: 'Define the official brand, find candidates and focus deeper checks on the most useful leads.',
+    title: 'Examine a brand candidate',
+    summary: 'For brand lookalikes, compare the candidate with the official identity, review its source and decide which evidence needs a closer look.',
+    requirements: 'Console access, a brand profile and a candidate. Discover can help prepare a shortlist; similarity is a lead, not a verdict.',
+    example: Object.freeze({ label: 'Fictional candidate demo', href: '/demo' }),
     steps: Object.freeze([
       Object.freeze({ id: 'brands', label: 'Brands', href: '#tool-brands' }),
       Object.freeze({ id: 'discover', label: 'Discover', href: '#tool-discover' }),
@@ -54,12 +78,14 @@ export const publicGuideGoals: readonly PublicGuideGoal[] = Object.freeze([
   }),
   Object.freeze({
     id: 'track-important-findings',
-    title: 'Track important findings',
-    summary: 'Keep a case or watchlist and compare later observations without treating a failed check as absence.',
+    title: 'Continue a saved case',
+    summary: 'Reopen retained evidence, review changes and decide the next follow-up without losing the earlier record.',
+    requirements: 'Console access and the browser or local-application filesystem workspace containing the case, or a compatible backup to import. Unlock first if the browser workspace is encrypted.',
+    example: Object.freeze({ label: 'Fictional case practice', href: '/demo#case-practice' }),
     steps: Object.freeze([
-      Object.freeze({ id: 'save', label: 'Save', href: '#tool-monitor-input' }),
-      Object.freeze({ id: 'monitor', label: 'Monitor', href: '#tool-monitor-result' }),
-      Object.freeze({ id: 'review-changes', label: 'Review changes', href: '#tool-monitor-next' }),
+      Object.freeze({ id: 'reopen', label: 'Reopen the case', href: '#tool-cases-input' }),
+      Object.freeze({ id: 'review-changes', label: 'Review changes', href: '#tool-monitor-result' }),
+      Object.freeze({ id: 'follow-up', label: 'Choose a follow-up', href: '#tool-monitor-next' }),
     ]),
   }),
 ]);
@@ -67,10 +93,10 @@ export const publicGuideGoals: readonly PublicGuideGoal[] = Object.freeze([
 export const toolGuides: readonly GuideEntry[] = Object.freeze([
   Object.freeze({ id: 'lookup', name: 'Lookup', useWhen: 'You have one domain, IP address or ASN to investigate, or supplied material to review locally.', input: 'Enter a target and choose Fast or Deep, or open Review a message, link or selected file for offline intake. Optional security.txt and external intelligence sources run only when selected.', result: 'At a glance summarises source completeness and disagreements before the detailed evidence. Partial and unavailable sources remain visible.', next: 'Choose a Focus and retain useful facts. Reopen an acquisition review JSON to inspect earlier manual fields, then explicitly accept and reconfirm them against current evidence. Risk aids triage; Opportunity describes readiness, not price or availability.' }),
   Object.freeze({ id: 'brands', name: 'Brands', useWhen: 'You want a reviewed baseline for an official brand or owned domains.', input: 'Add official domains, product names, preferred domain endings, trusted infrastructure and any reviewed defensive-mail or domain-control context.', result: 'The browser-local profile supports candidate comparison, posture and owned-domain controls. Time-bounded keyword campaigns retain positive and negative literals, pause state, review windows and revision history.', next: 'Review the baseline, then select a campaign or manual selectors for an explicit candidate review. Saving a campaign does not query feeds, retain candidates or start monitoring.' }),
-  Object.freeze({ id: 'discover', name: 'Discover', useWhen: 'You want possible lookalikes, names from public certificate logs or a registry-scoped nameserver search.', input: 'Choose a Brand Profile or enter a focused keyword. Select a preset or exact mutation families; the separate Nameservers action accepts one hostname and one registry suffix.', result: 'Every candidate keeps its source and limits. Internationalised names show both DNS-safe ASCII and readable Unicode forms.', next: 'Review the cues, then send a focused shortlist to Bulk.' }),
+  Object.freeze({ id: 'discover', name: 'Discover', useWhen: 'You want possible lookalikes, names from public certificate logs or a registry-scoped nameserver search.', input: 'Choose a brand profile or enter a focused keyword. Select a preset or exact mutation families; the separate Nameservers action accepts one hostname and one registry suffix.', result: 'Every candidate keeps its source and limits. Internationalised names show both DNS-safe ASCII and readable Unicode forms.', next: 'Review the cues, then send a focused shortlist to Bulk.' }),
   Object.freeze({ id: 'bulk', name: 'Bulk', useWhen: 'You need to compare several candidate domains consistently.', input: 'Paste domains or accept a Discover shortlist. A job accepts up to 500 Fast or 50 Deep targets, with explicit request pacing.', result: 'Bulk presents per-domain source states, Risk triage, relationships and two-domain comparison. Bulk Deep is compact and does not contain every single-domain field.', next: 'Act on an explicit selection, or open the strongest and most uncertain leads in Lookup.' }),
-  Object.freeze({ id: 'cases', name: 'Cases', useWhen: 'You want to retain evidence, document a decision or prepare a response.', input: 'Open a Case from Lookup, Bulk or a domain entered on the Cases page. Import JSON restores retained Cases.', result: 'Each Case holds evidence, retained files, assessment, action history and closure review. Compare retained text or PNGs and declare source-linked registration boundaries without replacing earlier evidence.', next: 'Record a decision, print the Case, or prepare a manually submitted response. For internal containment, select existing next-step assertions and linked pins, choose the audience and review the exact disclosure before export.' }),
-  Object.freeze({ id: 'monitor', name: 'Review inbox', useWhen: 'You need to review a change, an evidence gap or a due follow-up.', input: 'Review Items come from retained Cases, watchlists and other saved evidence.', result: 'The inbox groups work requiring review, with campaigns and relationships alongside it. Monitoring has watchlists, timelines, certificates and custom rules. Evidence gaps keep unavailable and partial sources visible.', next: 'Open the relevant Case to record a decision or prepare a response. Collection, response submission and control changes remain separate actions.' }),
+  Object.freeze({ id: 'cases', name: 'Cases', useWhen: 'You want to retain evidence, document a decision or prepare a response.', input: 'Open a case from Lookup, Bulk or a domain entered on the Cases page. Import JSON restores retained cases.', result: 'Each case holds evidence, retained files, assessment, action history and closure review. Compare retained text or PNGs and declare source-linked registration boundaries without replacing earlier evidence.', next: 'Record a decision, print the case, or prepare a manually submitted response. For internal containment, select existing next-step assertions and linked pins, choose the audience and review the exact disclosure before export.' }),
+  Object.freeze({ id: 'monitor', name: 'Review inbox', useWhen: 'You need to review a change, an evidence gap or a due follow-up.', input: 'Review Items come from retained cases, watchlists and other saved evidence.', result: 'The inbox groups work requiring review. Waiting on explains current evidence, provider, review-time and decision dependencies without hiding work from Needs action. Evidence gaps keep unavailable and partial sources visible. Monitoring has watchlists, timelines, certificates and custom rules.', next: 'Open the underlying record to review evidence, record a decision or prepare a response. Collection, response submission and control changes remain separate actions.' }),
 ]);
 
 export const referenceGuides: readonly GuideEntry[] = Object.freeze([
@@ -97,7 +123,7 @@ export const glossaryTerms: readonly GuideDefinition[] = Object.freeze([
   Object.freeze({ term: 'Browser-library advisory match', definition: 'A passive match between an already-observed script indicator and a pinned local advisory catalogue. It is a review lead, not proof that a component is reachable, vulnerable in context, or exploitable.' }),
   Object.freeze({ term: 'Browser-local', definition: 'Saved data remains in this browser profile unless you deliberately export or configure a hosted feature.' }),
   Object.freeze({ term: 'CAA', definition: 'A DNS record that states which certificate authorities may issue certificates for a domain.' }),
-  Object.freeze({ term: 'Case', definition: 'A browser-local analyst record containing compact collected evidence, notes, evidence pins, decisions, reviewed actions, status and observation history.' }),
+  Object.freeze({ term: 'Case', definition: 'An analyst record in the selected local workspace containing compact collected evidence, notes, evidence pins, decisions, reviewed actions, status and observation history.' }),
   Object.freeze({ term: 'Certificate Transparency', definition: 'Public logs of issued TLS certificates. A log timestamp records certificate observation, not website activation or maliciousness.' }),
   Object.freeze({ term: 'Confusable', definition: 'A character or label that can look similar to another, including internationalised domain characters.' }),
   Object.freeze({ term: 'Console', definition: 'The complete signed-in area containing the Dashboard, investigation tools, and reference pages.' }),
@@ -151,21 +177,30 @@ export const glossaryTerms: readonly GuideDefinition[] = Object.freeze([
   Object.freeze({ term: 'Workspace archive', definition: 'A versioned local backup that combines supported browser-saved records. Dashboard recommends a passphrase-encrypted download, while a separately labelled unencrypted download remains available for compatibility. It is a file format, not a separate area of the interface.' }),
 ]);
 
+const lookupEvidenceVersionLabel = SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS.length > 1
+  && SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS.every((version, index, versions) => index === 0 || version === versions[index - 1]! + 1)
+  ? `${SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS[0]}–${SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS.at(-1)}`
+  : SUPPORTED_LOOKUP_EVIDENCE_SCHEMA_VERSIONS.join(', ');
+
 export const guideFaqs: readonly GuideFaq[] = Object.freeze([
-  Object.freeze({ question: 'Can I review a Lookup evidence export without scanning again?', answer: 'Yes. Lookup validates and replays exact v1 schema 26, published v2 schemas 27 and 28, or current schema 29 evidence locally without contacting the target. Older captures keep their original observation scope. Schema 26 may contain public contact fields, so review it before sharing.' }),
+  Object.freeze({ question: 'Can I review a Lookup evidence export without scanning again?', answer: `Yes. Lookup validates and replays schemas ${lookupEvidenceVersionLabel} (current: ${LOOKUP_EVIDENCE_SCHEMA_VERSION}) locally without contacting the target. Older captures keep their original observation scope. Schema ${V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION} may contain public contact fields, so review it before sharing.` }),
   Object.freeze({ question: 'Does WHOISleuth decide whether a domain is malicious?', answer: 'No. It organises observed evidence and provides an explainable Risk score for prioritisation. An analyst must review the sources and context.' }),
   Object.freeze({ question: 'Should I use Fast or Deep lookup?', answer: 'Use Fast for registration-first triage. Deep adds DNS, website, certificate and network context, including SOA, HTTPS service bindings, effective CAA and separately attributed PTR names where relevant.' }),
   Object.freeze({ question: 'Does a lookup contact the website?', answer: 'A Deep domain lookup can make bounded requests to public registration, DNS, homepage, favicon, certificate, and IP RDAP endpoints. security.txt and external intelligence sources run only when selected. Fast collection avoids website and certificate checks.' }),
   Object.freeze({ question: 'Does WHOISleuth scan for vulnerabilities?', answer: 'No. It interprets already-collected public evidence and can compare observed script indicators with a pinned advisory catalogue. It does not fetch those scripts, exploit the target or authenticate to it.' }),
   Object.freeze({ question: 'Can I review indicators without a lookup?', answer: 'Yes. Selected text, email bodies, calendar fields and extracted document text can yield source-linked literal IPs and labelled hashes. Plain text also offers phone candidates for deliberate selection, and you can compare a displayed destination with a separately supplied one. Source labels and times remain attributed declarations. Review the selected content before saving or sharing; none of these operations opens a link or contacts a target.' }),
   Object.freeze({ question: 'What if I discover a mistake after recording delivery?', answer: 'Prepare a correction or withdrawal request linked to that exact delivery and its retained packet receipt. Review the assertion, affected objects, evidence, recipient and authority again. The original record stays unchanged. A digest-only historical delivery cannot supply missing receipt details, and preparing a request does not record that it was sent or accepted.' }),
-  Object.freeze({ question: 'How do I compare supplied text or images?', answer: 'In Case Retained files, choose Compare retained text and select two UTF-8 files. The review finds shared runs of at least five words after NFC Unicode normalisation and lowercasing, with source locations. PNG comparison is separate. Review correspondence and source context; neither result establishes authorship, common control or infringement.' }),
+  Object.freeze({ question: 'Can I inspect retained evidence without collecting again?', answer: 'Yes. Use Inspect in Cases, Brand candidate review, Bulk or the Review inbox. When that button has keyboard focus, P opens its retained evidence; Enter and Space still work normally. Inspection does not select an action, change the record or request new evidence. Use the exact file or source reference when a short preview is not enough.' }),
+  Object.freeze({ question: 'Can I keep frequently used destinations nearby?', answer: 'Open Favourites in this tab in console navigation. Add a selected case section, tool or reference page. These are exact links, not copies of evidence or saved preferences; they clear on reload, lock, sign-out or leaving the console. Missing cases are shown explicitly rather than replaced with another record.' }),
+  Object.freeze({ question: 'Can I preview a different presentation without changing saved work?', answer: 'Preview Case covers in the case list to see the retained domain and review recording date. The Workspace marker menu adds a temporary colour beside the workspace name; it is not a protection or risk indicator. Both choices reset on reload. The fictional demo also offers a label-free decorative source-map cover, separate from its attributed evidence map; it is not an anonymised export.' }),
+  Object.freeze({ question: 'Can I sketch a review before recording conclusions?', answer: 'Open Temporary Caseboard in a case’s Summary section. Arrange exact retained references and temporary questions, hypotheses or notes using Earlier and Later. Links describe your reasoning, not observed relationships or scheduled collection. References resolve current content and disclose changes or missing sources. Nothing enters the case, recovery drafts or exports; accepted closing or leaving discards the board.' }),
+  Object.freeze({ question: 'How do I compare supplied text or images?', answer: 'In a case’s Retained files section, choose Compare retained text and select two UTF-8 files. The review finds shared runs of at least five words after NFC Unicode normalisation and lowercasing, with source locations. PNG comparison is separate. Each source keeps its own observation time, context and digest, and source columns stack when their pane is narrow. Review correspondence and source context; neither result establishes authorship, common control or infringement.' }),
   Object.freeze({ question: 'How do I continue a feed review?', answer: 'Open Retained editions and catch-up and start or resume explicitly. Each request reads a bounded page from the configured feed service, not candidate targets. Review source dates and gaps, select any candidates to retain, then advance. A campaign pause, expiry or later revision does not rewrite earlier candidate attribution.' }),
   Object.freeze({ question: 'What changes when I reopen an acquisition review?', answer: 'After validation and preview, Accept historical manual fields replaces only the decision, rationale and selected checklist fields. Historical evidence does not replace the current Lookup. Reconfirm those statements against current evidence before exporting a new review; keep the original packet for its original dates and provenance.' }),
   Object.freeze({ question: 'What if saved records exist but original files or workspace controls are unavailable?', answer: 'Use the missing-original checklist to identify file references without their bytes; a reference is not a recovered file. Dashboard Support diagnostics reports browser capabilities, including Web Locks. Named workspaces require IndexedDB and Web Locks. Do not clear site data to repair a missing capability; preserve an existing backup and review the limitation first.' }),
-  Object.freeze({ question: 'Where are cases and watchlists saved?', answer: 'They are plaintext records in the current browser profile by default. A passphrase-encrypted workspace archive can move supported records; optional hosted monitoring is separate.' }),
+  Object.freeze({ question: 'Where are cases and watchlists saved?', answer: 'By default, cases and watchlists are plaintext records in this browser profile. Encrypted browser workspaces are optional. The local application instead uses a selected filesystem folder. Workspace archives provide backup and transfer; hosted monitoring is separate.' }),
   Object.freeze({ question: 'Can another person using the shared login see my saved browser work?', answer: 'Browser-local cases, profiles, and watchlists remain in the browser profile where they were saved. If optional hosted monitoring is configured, its encrypted compact watchlist is deployment-wide and available to signed-in users.' }),
-  Object.freeze({ question: 'How do I export or delete saved work?', answer: 'Cases exports Case records and response packets; Dashboard exports workspace archives. Delete records in the relevant tool or clear WHOISleuth site data. Downloaded files must be deleted separately.' }),
+  Object.freeze({ question: 'How do I export or delete saved work?', answer: 'Cases exports case records and response packets; Dashboard exports workspace archives. Delete saved records in the relevant tool. Clearing site data removes browser workspaces, not a local application’s filesystem workspace or downloaded files. Stop every application instance using a filesystem workspace before moving or deleting its folder.' }),
 ]);
 
 export const commonMistakes: readonly string[] = Object.freeze([

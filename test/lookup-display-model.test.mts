@@ -7,7 +7,7 @@ import {
   buildLookupPageDisplay,
   buildLookupRegistryDisplay,
 } from '../frontend/src/lib/analysis/lookup-display-model.ts';
-import { registrationTraceState } from '../frontend/src/lib/analysis/lookup-registry-display.ts';
+import { registrationSourceNotice, registrationTraceState } from '../frontend/src/lib/analysis/lookup-registry-display.ts';
 import { buildLookupPageProfileDisplay } from '../frontend/src/lib/analysis/lookup-page-profile-display.ts';
 import {
   deliveryMetadataDisplay,
@@ -18,12 +18,13 @@ import {
   pagePublicationMetadataFixture,
 } from './homepage-metadata-fixtures.mts';
 import { extractHtmlSignals } from '../lib/html-signals.mts';
-import { buildHttpObservation } from '../lib/http-intelligence.mts';
+import { buildHttpObservation, failedHttpObservation, skippedHttpObservation } from '../lib/http-intelligence.mts';
 import {
   MAX_LOOKUP_DISPLAY_ARRAY_ITEMS,
   MAX_LOOKUP_DISPLAY_RECORDS,
   MAX_LOOKUP_DISPLAY_STRING_ITEMS,
   MAX_LOOKUP_DISPLAY_TEXT_LENGTH,
+  rec,
   records,
   show,
   stringList,
@@ -58,6 +59,20 @@ test('derives registration authority trace state from source health rather than 
   assert.equal(registrationTraceState('unsupported', { hasPublication: true }), 'unsupported');
   assert.equal(registrationTraceState('success', { hasPublication: false }), 'partial');
   assert.equal(registrationTraceState('success', { hasPublication: true }), 'complete');
+});
+
+test('explains absent registration services without replacing errors or not-found evidence', () => {
+  assert.match(registrationSourceNotice('WHOIS', 'unsupported'), /No WHOIS service.*not a failed lookup/u);
+  assert.match(registrationSourceNotice('RDAP', 'unsupported'), /No RDAP service.*domain-absence/u);
+  assert.match(registrationSourceNotice('WHOIS', 'skipped'), /not queried/u);
+  assert.match(registrationSourceNotice('RDAP', 'disabled'), /disabled/u);
+  assert.equal(registrationSourceNotice('WHOIS', 'skipped', 'Requires permission.'), 'Requires permission.');
+  for (const status of ['error', 'partial', 'not_found', 'success', 'complete', 'unknown']) {
+    assert.equal(registrationSourceNotice('WHOIS', status, 'Not a replacement for the real source state'), '');
+  }
+  const bounded = registrationSourceNotice('WHOIS', 'skipped', `not queried\u0000${'x'.repeat(400)}`);
+  assert.ok(bounded.length <= 300);
+  assert.doesNotMatch(bounded, /\u0000/u);
 });
 
 test('projects fixed homepage metadata without retaining source values or inventing absence', () => {
@@ -319,6 +334,67 @@ function emptyNetworkDisplayInput() {
     tlsDiagnostics: {},
   };
 }
+
+test('HTTP display keeps requested and final provenance separate without recovering omitted URL data', () => {
+  const failed = failedHttpObservation([{ url: 'https://portal.example.test/selected?token=private-sentinel', error: 'Fixture timeout' }]);
+  const successful = buildHttpObservation({
+    requestedUrl: 'https://portal.example.test/selected?token=private-sentinel',
+    finalUrl: 'https://destination.example.test/final?token=other-private-sentinel',
+    response: new Response('', { status: 200 }),
+  });
+  for (const [observation, requested, final] of [
+    [failed, 'https://portal.example.test/selected', 'Not retained'],
+    [successful, 'https://portal.example.test/selected', 'https://destination.example.test/final'],
+    [skippedHttpObservation(), 'Not retained', 'Not retained'],
+  ] as const) {
+    const retained: JsonRecord = JSON.parse(JSON.stringify(observation));
+    const original = structuredClone(retained);
+    const model = buildLookupNetworkDisplay({
+      ...emptyNetworkDisplayInput(), httpEvidence: retained,
+      httpResponse: rec(retained.response),
+    });
+    assert.equal(model.httpRows.find(row => row.label === 'Requested URL')?.value, requested);
+    assert.equal(model.httpRows.find(row => row.label === 'Final URL')?.value, final);
+    assert.doesNotMatch(JSON.stringify(model), /private-sentinel|token=/u);
+    assert.deepEqual(retained, original);
+  }
+  const historical = buildLookupNetworkDisplay({ ...emptyNetworkDisplayInput(), httpEvidence: { requestUrl: 'https://example.test/' } });
+  assert.equal(historical.httpRows.find(row => row.label === 'Final URL')?.value, 'Not retained');
+});
+
+test('unknown DNS collection states do not imply a completed non-observation', () => {
+  for (const status of [undefined, 'unknown', 'unrecognised', 'unsupported']) {
+    const diagnostic: { status?: string } = {};
+    if (status !== undefined) diagnostic.status = status;
+    const input = {
+      ...emptyNetworkDisplayInput(),
+      reverseDns: { ...diagnostic, diagnostics: { ptr: diagnostic } },
+      dnsEvidence: { ...diagnostic, diagnostics: { a: diagnostic, mx: diagnostic } },
+      dnsRecords: { a: [], mx: [] },
+    };
+    const original = structuredClone(input);
+    const display = buildLookupNetworkDisplay(input);
+    for (const label of ['A', 'MX']) {
+      assert.equal(display.dnsRows.find(row => row.label === label)?.value,
+        'Not established (source state unavailable)');
+    }
+    assert.equal(display.reverseDnsRows[0]?.value, status === 'unsupported'
+      ? 'Not established (source unavailable or incomplete)'
+      : 'Not established (source state unavailable)');
+    assert.deepEqual(input, original);
+  }
+  for (const [status, expected] of [
+    ['success', 'Not observed'], ['not_found', 'Not observed'], ['skipped', 'Not evaluated'],
+  ] as const) {
+    const display = buildLookupNetworkDisplay({
+      ...emptyNetworkDisplayInput(),
+      reverseDns: { status, diagnostics: { ptr: { status } } },
+      dnsEvidence: { status, diagnostics: { mx: { status } } },
+    });
+    assert.equal(display.reverseDnsRows[0]?.value, expected);
+    assert.equal(display.dnsRows.find(row => row.label === 'MX')?.value, expected);
+  }
+});
 
 test('projects malformed, partial, incompatible, and conflicting network evidence without inventing absence', () => {
   const malformed = buildLookupNetworkDisplay({

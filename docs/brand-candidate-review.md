@@ -6,11 +6,28 @@ In Brands, **Candidate review** shows matching reasons, full observed hostnames,
 source intervals, unknown revisions and coverage gaps. Pattern groups disclose
 their contributing rows; they do not establish common ownership.
 
+Use **Inspect** to read a candidate's source evidence beside the filtered queue.
+Inspection and checked batch selections are separate: opening one candidate does
+not add it to a Watchlist preview. Search, order and page stay in place when you
+choose **Back to queue**. Focus an Inspect button and press P to open it by
+keyboard; the shortcut is not active while editing a field. On narrow screens,
+the inspector replaces the queue until you return.
+
 Select individual candidates to shortlist, dismiss with a reason and expiry,
 defer until review, or preview an exact Watchlist destination. Selections across
 filters remain explicit in the preview. Duplicate and rejected domains are
 reported separately. Adding a candidate-only watch makes zero requests and
 does not invent availability, a score, a successful check or a baseline.
+
+**Reuse an earlier reason** shows saved wording from this Brand's retained
+candidates, with the original domain and review time. Choose a reason and
+explicitly copy it into the editable draft; replacing existing wording is a
+separate, labelled action. Only the text moves: the selected domains, prior
+decision, evidence, dates, priority and destination do not. Edit it for the
+current selection, then use the ordinary review or Watchlist action. Reasons
+longer than the current field remain readable without a shortened substitute.
+This reuses saved review state, not a separate template store or a global
+decision rule. Changing Brand clears the source choice and draft.
 
 Watch priorities are analyst urgency: P1 immediate, P2 prompt, P3 routine,
 P4 background or unassigned. They are not Risk, confidence, Case severity,
@@ -66,6 +83,37 @@ The optional example-host preview reuses the exact Brand domain preview, shows
 canonical hostname text, positive/negative outcomes and separate official,
 partner or allowlist declarations. It makes no request and keeps examples only
 in page memory. A literal match or declaration is not a safety finding.
+
+Select **Compare this Brand’s retained candidates** before previewing to try the
+proposed revision against the Brand's current local candidate corpus. The
+comparison shows new, removed and unchanged literal matches, with positive
+matches, missing positive literals and negative vetoes explained separately.
+Review windows and exact Brand declarations do not alter these literal counts.
+When creating a campaign there is no saved baseline, so no added/removed claim
+is made. An empty corpus is not evidence that a rule has no matches in a feed.
+
+The preview identifies the Brand, saved update time, comparison time and a
+fingerprint of the retained corpus, declarations and earlier reviews. It compares
+every retained candidate, with filters and pagination, not the entire original
+feed. Unretained/deleted candidates and earlier source omissions are unknown.
+Each candidate keeps its source edition, observation interval and coverage.
+Earlier analyst decisions retain their exact rule, reason, revision, expiry and
+applicability at preview time; they are not reused as labels for the proposed revision
+or counted as general benign/malicious ground truth.
+
+Changing the draft, selected corpus, saved revision or retained context invalidates
+the preview. Closing the draft or changing Brand clears it. Examples and
+comparisons stay in page memory; only **Save reviewed campaign revision** persists
+the validated campaign intent. It does not rewrite candidate attribution or
+reviews, add Watchlist entries or perform collection.
+
+When a retained-candidate comparison is selected, saving also checks its
+fingerprint against current browser storage, including after a concurrent-write
+retry. If another tab changes that context, nothing is saved: the draft stays
+open, the Brand is refreshed and a fresh preview is required. A failed refresh
+keeps saving disabled until reload. Editing without a retained-candidate
+comparison still checks the campaign revision and preserves unrelated current
+Brand data, but does not freeze a corpus that was never selected.
 
 The start is inclusive and the end exclusive. The dates describe the analyst's
 review window, not a domain's registration or source-observation time. Scheduled,

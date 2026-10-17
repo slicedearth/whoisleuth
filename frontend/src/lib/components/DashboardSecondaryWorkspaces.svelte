@@ -113,7 +113,7 @@
       <h3 id="guide-launcher-title">Follow a guided investigation</h3>
       <p>Choose a guide and a domain. WHOISleuth saves progress in this tab so you can work through one clearly explained step at a time.</p>
       <nav class="help-links" aria-label="Investigation help">
-        {#if publicResource}<a href={`${publicResource.href}#start`} target="_blank" rel="noopener noreferrer" aria-label="Open resources. Learn the tools, result states, common mistakes, and source boundaries. Opens in a new tab."><strong>Open resources</strong><span>Learn the tools, result states, common mistakes, and source boundaries.</span></a>{/if}
+        {#if publicResource}<a href={`${publicResource.href}#start`} target="_blank" rel="noopener noreferrer"><strong>Open resources</strong> <span>Learn the tools, result states, common mistakes, and source boundaries.</span><span class="sr-only"> Opens in a new tab.</span></a>{/if}
         <a href="/registry-support"><strong>Check domain-ending support</strong><span>See which domain endings have tested lookup support and known limits.</span></a>
       </nav>
     </div>

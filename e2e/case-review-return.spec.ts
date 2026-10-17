@@ -1,8 +1,13 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import path from 'node:path';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { buildCaseExport } from '../packages/cases/case-storage-model.mts';
+import { buildCaseResponsePacket } from '../packages/cases/case-response-packet.mts';
+import { holdPacketFileDigest } from './held-packet-digest';
+import { canonicalArtifactJsonV2 } from '../packages/evidence/artifact-integrity.mts';
 import { createCase, updateCase } from '../packages/cases/case-record-operations.mts';
 import type { CaseRecord } from '../packages/cases/case-model.mts';
 import { currentBrowserLocalDocument, migrateLegacyBrowserData, readBrowserLocalCollection, failNextBrowserLocalManifestWrite, failNextBrowserLocalCollectionReadAfterWrite, expectNoHorizontalOverflow, useTheme } from './helpers';
@@ -41,6 +46,185 @@ function reviewed(current: CaseRecord) {
 }
 function upload(value: unknown) { return { name: 'review-return.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(value)) }; }
 
+test('selected Case exports compare read-only with exact records, replacement and disposal', async ({ page }, testInfo) => {
+  const { section, current } = await seed(page);
+  let lookupRequests = 0;
+  await page.route('**/api/lookup**', async route => { lookupRequests++; await route.abort(); });
+  const saved = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
+  let baseline = current;
+  for (let index = 0; index < 12; index++) baseline = updateCase([baseline], baseline.id, { note: `Baseline note ${index}` }, AFTER).record;
+  const left = buildCaseExport([baseline], AFTER), right = structuredClone(left);
+  right.cases[0]!.notes = right.cases[0]!.notes.slice(1).map((note, index) => ({ ...note, body: `Comparison note ${index}` }));
+  right.cases[0]!.notes.push({ id: 'comparison-only-note', body: 'Deliberately selected new note', createdAt: AFTER });
+  const disclosure = section.getByText('Compare Case exports or response packets', { exact: true });
+  await disclosure.click();
+  const comparison = section.getByRole('region', { name: 'Read-only Case export comparison', exact: true });
+  const status = comparison.getByRole('status', { name: 'Case export comparison status', exact: true });
+  const first = comparison.getByLabel('Baseline export (JSON)', { exact: true });
+  const second = comparison.getByLabel('Comparison export (JSON)', { exact: true });
+  await expect(status).toContainText('Comparison unavailable');
+  await second.setInputFiles(upload(right));
+  await expect(status).toContainText('Comparison unavailable');
+  await first.setInputFiles(upload(left));
+  await expect(status).toContainText('12 changed · 1 only in comparison · 1 only in baseline');
+  await expect(comparison.getByRole('button', { name: /Save|Import|Add|Download/u })).toHaveCount(0);
+  await expect(comparison.getByText('Only in baseline export', { exact: true })).toBeVisible();
+  const baselineRow = comparison.getByRole('listitem').filter({ has: page.getByText(baseline.notes[0]!.id, { exact: true }) });
+  await expect(baselineRow).toHaveCount(1);
+  const inspect = baselineRow.getByRole('button');
+  await expect(inspect).toHaveCount(1);
+  await expect(inspect).toHaveAccessibleName(`Inspect values for Notes ${baseline.notes[0]!.id}`);
+  await inspect.focus(); await inspect.press('Enter');
+  const values = comparison.getByRole('region', { name: 'Selected comparison values', exact: true });
+  await expect(values.getByRole('heading', { level: 4 })).toBeFocused();
+  await expect(values.getByRole('region', { name: 'Baseline export text', exact: true })).toContainText('Keep the original note');
+  await expect(values.getByText('Not present in this selected copy.', { exact: true })).toBeVisible();
+  await comparison.getByRole('button', { name: 'Next differences', exact: true }).click();
+  await expect(values).toHaveCount(0);
+  const comparisonRow = comparison.getByRole('listitem').filter({ has: page.getByText('comparison-only-note', { exact: true }) });
+  await expect(comparisonRow).toHaveCount(1);
+  await comparisonRow.getByRole('button').click();
+  await expect(values.getByRole('region', { name: 'Comparison export text', exact: true })).toContainText('Deliberately selected new note');
+  for (const [width, height] of [[320, 700], [1280, 720]] as const) for (const theme of ['light', 'dark'] as const) {
+    await page.setViewportSize({ width, height }); await useTheme(page, theme);
+    await values.getByRole('heading', { level: 4 }).scrollIntoViewIfNeeded();
+    await expectNoHorizontalOverflow(page);
+    expect((await new AxeBuilder({ page }).include('.handoff-comparison').analyze()).violations).toEqual([]);
+    if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`handoff-comparison-${theme}-${width}.png`) });
+  }
+  await second.setInputFiles(upload(left));
+  await expect(status).toContainText('0 changed · 0 only in comparison · 0 only in baseline');
+  await expect(values).toHaveCount(0);
+  await comparison.getByRole('button', { name: 'Clear comparison', exact: true }).click();
+  await expect(status).toContainText('Comparison unavailable');
+  await expect(comparison.locator('code')).toHaveCount(0);
+
+  // A deliberately held native file read must not repopulate a cleared view.
+  await page.evaluate(() => {
+    const original = Blob.prototype.arrayBuffer;
+    let release!: () => void, finished!: () => void;
+    const held = new Promise<void>(resolve => release = resolve);
+    const completed = new Promise<void>(resolve => finished = resolve);
+    (window as unknown as { releaseHandoffRead: () => Promise<void> }).releaseHandoffRead = async () => {
+      Blob.prototype.arrayBuffer = original; release(); await completed;
+      // Drain continuations from the now-completed read, not a timing delay.
+      await Promise.resolve(); await Promise.resolve();
+    };
+    Blob.prototype.arrayBuffer = async function() {
+      if (this instanceof File && this.name === 'held-comparison.json') {
+        await held;
+        try { return await original.call(this); } finally { finished(); }
+      }
+      return original.call(this);
+    };
+  });
+  await first.setInputFiles({ ...upload({ ...left, version: 0 }), name: 'held-comparison.json' });
+  await expect(comparison.getByText('Reading baseline export…', { exact: true })).toBeVisible();
+  await comparison.getByRole('button', { name: 'Clear comparison', exact: true }).click();
+  await first.setInputFiles(upload(right));
+  await second.setInputFiles(upload(right));
+  await expect(status).toContainText('0 changed · 0 only in comparison · 0 only in baseline');
+  await page.evaluate(() => (window as unknown as { releaseHandoffRead: () => Promise<void> }).releaseHandoffRead());
+  await expect(status).toContainText('0 changed · 0 only in comparison · 0 only in baseline');
+  await expect(comparison.getByRole('alert')).toHaveCount(0);
+  await disclosure.click();
+  await expect(comparison).toHaveCount(0);
+  await disclosure.click();
+  await expect(status).toContainText('Comparison unavailable');
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(saved);
+  expect(lookupRequests).toBe(0);
+});
+
+test('selected response packets require full admission and retain read-only scope through delayed hashing', async ({ page }, testInfo) => {
+  const { section, current } = await seed(page);
+  const saved = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
+  let lookupRequests = 0;
+  await page.route('**/api/lookup**', async route => { lookupRequests++; await route.abort(); });
+  let record = updateCase([current], current.id, { incidentTarget: 'https://review.example/first',
+    evidencePin: { label: 'Original selected observation', value: 'A synthetic page observation', source: 'Fixture capture', observedAt: BEFORE, completeness: 'complete' },
+  }, AFTER).record;
+  const firstTarget = record.workflowMetadata!.incidentTargets[0]!;
+  record = updateCase([record], record.id, { action: { type: 'internal_review', recipient: 'Initial review desk', contactSource: 'Fixture route',
+    routeObservedAt: AFTER, responseObjects: [{ kind: 'page', identifier: firstTarget.url, incidentTargetId: firstTarget.id }],
+  } }, AFTER).record;
+  const actionId = record.actions[0]!.id, originalPin = record.evidencePins[0]!.id;
+  const input = { profile: 'internal_soc', actionId, category: 'Synthetic observation review', affectedParty: 'Example service',
+    abusiveUrls: ['https://review.example/first'], observedHarm: 'A supplied fictional observation needs review.', observedAt: BEFORE };
+  const left = (await buildCaseResponsePacket(record, { ...input, selectedEvidencePinIds: [originalPin] }, AFTER)).json;
+  record = updateCase([record], record.id, { incidentTarget: 'https://review.example/second',
+    evidencePin: { label: 'Later selected observation', value: 'A second synthetic page observation', source: 'Fixture capture', observedAt: AFTER,
+      completeness: 'partial', limitations: ['Only the selected page was observed.'] },
+  }, AFTER).record;
+  const secondTarget = record.workflowMetadata!.incidentTargets.find(target => target.url.endsWith('/second'))!;
+  record = updateCase([record], record.id, { actionUpdate: { id: actionId, recipient: 'Later review desk',
+    responseObjects: [{ kind: 'page', identifier: secondTarget.url, incidentTargetId: secondTarget.id }],
+  } }, AFTER).record;
+  const right = (await buildCaseResponsePacket(record, { ...input, selectedEvidencePinIds: record.evidencePins.filter(pin => pin.id !== originalPin).map(pin => pin.id) }, AFTER)).json;
+  const disclosure = section.getByText('Compare Case exports or response packets', { exact: true });
+  await disclosure.click();
+  const comparison = section.getByRole('region', { name: 'Read-only Case export comparison', exact: true });
+  const status = comparison.getByRole('status', { name: 'Case export comparison status', exact: true });
+  const first = comparison.getByLabel('Baseline export (JSON)', { exact: true }), second = comparison.getByLabel('Comparison export (JSON)', { exact: true });
+  await first.setInputFiles(upload(left));
+  await expect(status).toContainText('Comparison unavailable');
+  await expect(comparison.getByText(/Response packet schema/u)).toHaveCount(1);
+  await second.setInputFiles(upload(right));
+  await expect(status).toContainText('1 only in comparison · 1 only in baseline');
+  await expect(comparison.getByRole('button', { name: /Save|Import|Add|Download/u })).toHaveCount(0);
+  const actionRow = comparison.getByRole('listitem').filter({ has: page.getByText(actionId, { exact: true }) });
+  await expect(actionRow).toHaveCount(1);
+  const inspect = actionRow.getByRole('button');
+  await expect(inspect).toHaveCount(1);
+  await inspect.focus(); await inspect.press('Enter');
+  const values = comparison.getByRole('region', { name: 'Selected comparison values', exact: true });
+  await expect(values.getByRole('heading', { level: 4 })).toBeFocused();
+  await expect(values.getByRole('region', { name: 'Baseline export text', exact: true })).toContainText('Initial review desk');
+  await expect(values.getByRole('region', { name: 'Comparison export text', exact: true })).toContainText('Later review desk');
+  await expect(values.getByRole('region', { name: 'Comparison export text', exact: true })).toContainText('https://review.example/second');
+  for (const [width, height] of [[320, 700], [1280, 720]] as const) for (const theme of ['light', 'dark'] as const) {
+    await page.setViewportSize({ width, height }); await useTheme(page, theme);
+    await values.getByRole('heading', { level: 4 }).scrollIntoViewIfNeeded();
+    await expectNoHorizontalOverflow(page);
+    expect((await new AxeBuilder({ page }).include('.handoff-comparison').analyze()).violations).toEqual([]);
+    if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`packet-comparison-${theme}-${width}.png`) });
+  }
+  await second.setInputFiles(upload(buildCaseExport([record], AFTER)));
+  await expect(comparison.getByRole('alert')).toContainText('not one of each');
+  await expect(status).toContainText('Comparison unavailable');
+  const { integrity, ...unsigned } = { ...right, authorisation: { ...right.authorisation, reviewedInputDigestSha256: 'f'.repeat(64) } };
+  const invalid = { ...unsigned, integrity: { ...integrity, digestSha256: createHash('sha256').update(canonicalArtifactJsonV2(unsigned)).digest('hex') } };
+  await second.setInputFiles(upload(invalid));
+  await expect(comparison.getByRole('alert')).toContainText('reviewed-input digest');
+  await expect(status).toContainText('Comparison unavailable');
+  const unrelated = JSON.parse(await readFile(path.join(__dirname, '../test/fixtures/case-lifecycle/case-response-packet-v13.json'), 'utf8'));
+  await second.setInputFiles(upload(unrelated));
+  await expect(comparison.getByRole('alert')).toContainText('exact Case ID and domain');
+  await comparison.getByRole('button', { name: 'Clear comparison', exact: true }).click();
+
+  // Hold only the final raw-file digest, after semantic and packet integrity
+  // validation. Clearing/replacement must invalidate its eventual completion.
+  for (const disposal of ['clear', 'close'] as const) {
+    await comparison.getByRole('button', { name: 'Clear comparison', exact: true }).click();
+    await holdPacketFileDigest(page);
+    await first.setInputFiles(upload(left));
+    await expect.poll(() => page.evaluate(() => (window as unknown as { packetDigestHeld: boolean }).packetDigestHeld)).toBe(true);
+    await expect(comparison.getByText('Reading baseline export…', { exact: true })).toBeVisible();
+    await expect(comparison.getByText(/Response packet schema/u)).toHaveCount(0);
+    if (disposal === 'close') {
+      await disclosure.click(); await expect(comparison).toHaveCount(0); await disclosure.click();
+    } else await comparison.getByRole('button', { name: 'Clear comparison', exact: true }).click();
+    await first.setInputFiles(upload(right)); await second.setInputFiles(upload(right));
+    await expect(status).toContainText('0 changed · 0 only in comparison · 0 only in baseline');
+    await page.evaluate(() => (window as unknown as { releasePacketDigest: () => Promise<void> }).releasePacketDigest());
+    await expect(status).toContainText('0 changed · 0 only in comparison · 0 only in baseline');
+    await expect(comparison.getByRole('alert')).toHaveCount(0);
+  }
+  await disclosure.click(); await expect(comparison).toHaveCount(0);
+  await disclosure.click(); await expect(status).toContainText('Comparison unavailable');
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(saved);
+  expect(lookupRequests).toBe(0);
+});
+
 test('encrypted Case handoff includes selected originals, excludes recovery drafts and verifies returned entries', async ({ page }, testInfo) => {
   test.slow();
   const { section } = await seed(page);
@@ -62,6 +246,15 @@ test('encrypted Case handoff includes selected originals, excludes recovery draf
   await handoff.getByRole('button', { name: 'Check handoff contents', exact: true }).click();
   await expect(handoff.getByRole('heading', { name: 'Handoff contents checked', exact: true })).toBeFocused();
   await expect(handoff).toContainText('All referenced originals included');
+  const checks = handoff.getByRole('definition');
+  await expect(checks).toHaveCount(5);
+  await expect(handoff).toContainText('1 selected file body is available. 0 retained references have no selected bytes.');
+  await expect(handoff).toContainText('Selected originals match their retained SHA-256 digests and byte counts.');
+  await expect(handoff).toContainText('The recipient’s version has not been checked.');
+  await expect(handoff).toContainText('a digest match does not authenticate their source');
+  await expect(handoff).toContainText('Not checked. Downloading does not establish delivery, passphrase access or complete recovery.');
+  await handoff.getByText('Recipient verification steps', { exact: true }).click();
+  await expect(handoff).toContainText('check the case and original-file matches, not only whether the file opens');
   const passphrase = 'Encrypted handoff fixture phrase';
   await handoff.getByLabel('Package passphrase', { exact: true }).fill(passphrase);
   await handoff.getByLabel('Confirm package passphrase', { exact: true }).fill('Different fixture phrase');
@@ -82,11 +275,14 @@ test('encrypted Case handoff includes selected originals, excludes recovery draf
   const decoded = (await decryptInvestigationPackage(encrypted, passphrase)).review;
   expect(decoded.identityVerified).toBe(true); expect(decoded.contents.size).toBe(2);
   const copy = new TextDecoder().decode(decoded.contents.get('artifact-1')!);
+  await expect(handoff).toContainText(`Case JSON v${JSON.parse(copy).version} is accepted by this build.`);
+  await expect(handoff).toContainText(`investigation manifest v${decoded.manifest.version}`);
   expect(JSON.parse(copy).cases).toEqual([current]); expect(copy).not.toContain('Recovery-only handoff canary');
   expect(Buffer.from(decoded.contents.get('artifact-2')!)).toEqual(FILE_BYTES);
   await expect(handoff.getByRole('status')).toContainText('read-back verification');
   await expect(handoff.getByLabel('Package passphrase', { exact: true })).toHaveValue('');
   await expect(download).toBeFocused();
+  await expect(handoff).toContainText('Not checked. Downloading does not establish delivery, passphrase access or complete recovery.');
   expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
   expect(await storedFiles(page)).toEqual(originalsBefore);
   const originalUrl = page.url();
@@ -166,8 +362,12 @@ test('missing originals and changed selections require an explicit new handoff c
   await handoff.getByRole('checkbox', { name: new RegExp(FILE_NAME.replaceAll('.', '\\.')) }).uncheck();
   await handoff.getByRole('button', { name: 'Check handoff contents', exact: true }).click();
   await expect(handoff).toContainText('Partial file selection');
+  await expect(handoff).toContainText('0 selected file bodies are available. 1 retained reference has no selected bytes.');
+  await expect(handoff).toContainText('No original bytes selected; no original digests checked.');
   await handoff.getByRole('checkbox', { name: new RegExp(FILE_NAME.replaceAll('.', '\\.')) }).check();
-  await expect(handoff.getByRole('alert')).toContainText('Case or selection changed');
+  await expect(handoff.getByRole('alert')).toContainText(/(?:case|selection) changed/iu);
+  await expect(handoff.getByRole('alert')).toContainText(/check .* again before downloading/iu);
+  await expect(handoff.locator('.handoff-checks')).toHaveCount(0);
   await expect(handoff.getByRole('button', { name: 'Download encrypted Case handoff', exact: true })).toBeDisabled();
   expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
 });
@@ -204,7 +404,7 @@ test('full review copy and selective return preserve write failure, dependency a
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await apply.click();
   await expect(section.getByRole('status', { name: 'Case review return status' })).toContainText('Selected review entries were saved.');
-  await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('The change was saved, but Cases could not be reread.');
+  await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('The change was saved, but cases could not be reread.');
   await expect(section.getByRole('heading', { name: 'Review with another analyst', exact: true })).toBeFocused();
   const saved = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
   const result = saved.records.find(item => item.value.id === current.id)!.value;

@@ -15,7 +15,7 @@ import {
 import { buildFixtureRegistrarStanding as buildRegistrarStanding } from './registrar-standing-fixture.mts';
 
 describe('saved Lookup compatibility', () => {
-  test('accepts the frozen v1 document and a current v2 document without rewriting either version', async () => {
+  test('accepts the frozen v1 document and a current document without rewriting either version', async () => {
     const legacyRaw = await loadCliLookupV1Fixture();
     const legacy = parseSavedLookupDocument(legacyRaw);
     assert.equal(legacy.version, PUBLIC_SAVED_LOOKUP_SCHEMA_VERSION);
@@ -37,7 +37,7 @@ describe('saved Lookup compatibility', () => {
     const parsed = parseSavedLookupDocument(JSON.stringify(current));
     assert.equal(parsed.version, SAVED_LOOKUP_SCHEMA_VERSION);
     assert.equal((parsed.registrarStanding as { ianaId: string }).ianaId, '900003');
-    assert.deepEqual(SUPPORTED_SAVED_LOOKUP_SCHEMA_VERSIONS, [1, 2]);
+    assert.deepEqual(SUPPORTED_SAVED_LOOKUP_SCHEMA_VERSIONS, [1, 2, 3]);
 
     current.generatedAt = '2026-09-03T08:00:00.000Z';
     assert.throws(
@@ -72,8 +72,8 @@ describe('saved Lookup compatibility', () => {
 
   test('rejects future versions, malformed current metadata, and new fields in a legacy envelope', async () => {
     const base = JSON.parse(await loadCliLookupV1Fixture()) as Record<string, unknown>;
-    for (const version of [0, 3, 99, '1', true, [1]]) {
-      assert.throws(() => parseSavedLookupDocument(JSON.stringify({ ...base, version })), /version 1 or 2/iu);
+    for (const version of [0, 4, 99, '1', true, [1]]) {
+      assert.throws(() => parseSavedLookupDocument(JSON.stringify({ ...base, version })), /version 1 or 2 or 3/iu);
     }
     const legacyWithCurrent = structuredClone(base);
     legacyWithCurrent.availability = {

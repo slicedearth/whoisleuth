@@ -17,7 +17,7 @@ type Dependencies = Readonly<{
 
 // Case creation is a sequence of individually committed writes, not one transaction.
 const MAX_CASE_CREATIONS = 50;
-const REFRESH_WARNING = ' The change was saved, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the workspace read.';
+const REFRESH_WARNING = ' The change was saved, but cases could not be reread. The complete committed case snapshot is shown locally; reload to retry the workspace read.';
 
 /** The explicit Bulk-to-Case projection excludes contacts and unreviewed response fields. */
 export function bulkCaseInput(row: ScanResult) {
@@ -62,10 +62,10 @@ export class BulkCaseActions {
     this.#set('', true);
     try {
       const context = await this.dependencies.context();
-      if (!context) { this.#set('Cases are unavailable. Reload before changing Cases.'); return; }
+      if (!context) { this.#set('Cases are unavailable. Reload before changing cases.'); return; }
       await operation(context);
     } catch (cause) {
-      this.#set(cause instanceof Error ? cause.message : 'Could not update the selected Cases.');
+      this.#set(cause instanceof Error ? cause.message : 'Could not update the selected cases.');
     } finally {
       this.#set(this.state.status + casePruningNotice(this.#pruned) + (this.#refreshFailed ? REFRESH_WARNING : ''), false);
     }
@@ -86,7 +86,7 @@ export class BulkCaseActions {
       const committed = opened.created ? opened : await context.api.editCase(opened.record.id, { source: 'bulk', evidence: input.evidence });
       this.#pruned += committed.pruned;
       await this.#reconcile(context.api, committed);
-      this.#set(opened.created ? `Opened a case for ${committed.record.domain}.` : `Refreshed the retained Case evidence for ${committed.record.domain}.`);
+      this.#set(opened.created ? `Opened a case for ${committed.record.domain}.` : `Refreshed the retained case evidence for ${committed.record.domain}.`);
       return 'committed';
     } catch (cause) {
       this.#set(cause instanceof Error ? cause.message : 'Could not open the case.');
@@ -99,7 +99,7 @@ export class BulkCaseActions {
   setDisposition(row: ScanResult, disposition: string) {
     return this.#run(async context => {
       const record = context.selected.get(row.domain);
-      if (!record) { this.#set('Select an incident Case for this target before changing its disposition.'); return; }
+      if (!record) { this.#set('Select an incident case for this target before changing its disposition.'); return; }
       const committed = await context.api.editCase(record.id, { disposition });
       this.#pruned += committed.pruned;
       await this.#reconcile(context.api, committed);

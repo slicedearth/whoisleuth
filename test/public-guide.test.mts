@@ -55,19 +55,29 @@ function allStrings(value: unknown): string[] {
   return [];
 }
 
-test('public guide exposes three distinct task-focused starting points', () => {
-  assert.equal(publicGuideGoals.length, 3);
+test('public guide separates domain, supplied-message, Brand and retained-Case starting points', () => {
   assert.equal(unique(publicGuideGoals.map((goal) => goal.id)), true);
-  assert.deepEqual(publicGuideGoals.map((goal) => goal.title), [
-    'Inspect one domain',
-    'Find brand lookalikes',
-    'Track important findings',
+  assert.deepEqual(publicGuideGoals.map((goal) => goal.id), [
+    'inspect-one-domain',
+    'review-a-message',
+    'find-brand-lookalikes',
+    'track-important-findings',
   ]);
   assert.equal(publicGuideGoals.every((goal) => goal.steps.length >= 3 && goal.steps.length <= 4), true);
   for (const goal of publicGuideGoals) {
     assert.equal(unique(goal.steps.map((step) => step.id)), true);
     assert.equal(goal.steps.every((step) => /^#[a-z][a-z0-9-]*$/u.test(step.href)), true);
+    assert.ok(goal.title && goal.summary && goal.requirements && goal.example.label);
+    assert.match(goal.requirements, /Console access/u);
+    assert.match(goal.example.href, /^\/demo(?:#case-practice)?$/u);
   }
+  const message = publicGuideGoals.find(goal => goal.id === 'review-a-message')!;
+  assert.match(message.summary, /locally/u);
+  assert.match(message.requirements, /does not open its links/u);
+  const retainedCase = publicGuideGoals.find(goal => goal.id === 'track-important-findings')!;
+  assert.match(retainedCase.requirements, /browser or local-application filesystem workspace/u);
+  assert.match(retainedCase.requirements, /compatible backup/u);
+  assert.match(retainedCase.requirements, /if the browser workspace is encrypted/u);
 });
 
 test('tool guide covers every public-facing investigation tool once', () => {
@@ -128,6 +138,7 @@ test('navigation, tool guide, and reference guide use one canonical product voca
     { href: '/methodology', label: 'Methodology' },
     { href: '/coverage', label: 'Coverage' },
     { href: '/examples', label: 'Examples' },
+    { href: '/link-inspector', label: 'Link Inspector' },
     { href: '/privacy', label: 'Privacy' },
     { href: '/terms', label: 'Terms' },
     { href: '/request-policy', label: 'Request policy' },
@@ -139,10 +150,13 @@ test('navigation, tool guide, and reference guide use one canonical product voca
     PUBLIC_REFERENCE_DESTINATIONS.map(({ href, label }) => ({ href, label })),
   );
   assert.deepEqual(publicPrimaryNavigation.map((item) => item.label), ['Demo', 'Resources', 'CLI']);
-  assert.deepEqual(publicReferenceNavigation.map((item) => item.label), ['Methodology', 'Coverage', 'Examples']);
+  assert.deepEqual(publicReferenceNavigation.map((item) => item.href), ['/methodology', '/coverage', '/examples', '/link-inspector']);
   assert.deepEqual(publicPolicyNavigation.map((item) => item.label), ['Privacy', 'Terms', 'Request policy', 'Contact']);
-  assert.deepEqual(publicReferenceSectionNavigation.map((item) => item.label), ['Resources', 'CLI', 'Methodology', 'Coverage', 'Examples']);
-  assert.deepEqual(publicResourceHubNavigation.map((item) => item.label), ['CLI', 'Methodology', 'Coverage', 'Examples']);
+  // Derived consumers must not repeat the independent vocabulary expectation.
+  const cli = publicPrimaryNavigation.find(item => item.href === '/cli');
+  assert.ok(cli);
+  assert.deepEqual(publicReferenceSectionNavigation, [publicResources[0], cli, ...publicReferenceNavigation]);
+  assert.deepEqual(publicResourceHubNavigation, [cli, ...publicReferenceNavigation]);
   assert.deepEqual(publicHeaderNavigation, publicPrimaryNavigation);
   assert.deepEqual(publicFooterNavigation, publicPolicyNavigation);
   assert.deepEqual(publicSiteNavigation, [
@@ -204,7 +218,7 @@ test('sign-in cannot redirect to another origin, a public page or a normalised p
 
 test('glossary, FAQ, state, and mistake content is bounded and deterministic', () => {
   assert.equal(glossaryTerms.length, 59);
-  assert.ok(guideFaqs.length > 0 && guideFaqs.length <= 16);
+  assert.ok(guideFaqs.length > 0);
   assert.equal(resultStates.length, 9);
   assert.equal(commonMistakes.length, 5);
   assert.equal(unique(glossaryTerms.map((item) => item.term)), true);

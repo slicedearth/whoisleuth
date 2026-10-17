@@ -73,7 +73,7 @@
       <a class="btn secondary" href={`/monitor?view=certificates&profile=${encodeURIComponent(inbox.activeProfile.id)}`}>Open central certificate inbox</a>
     </div>
     {#if inbox.items.length}
-      <p class="display-bound">Showing {firstVisible}–{lastVisible} of {inbox.items.length} retained local review rows; at most {PAGE_SIZE} rows are rendered per page.</p>
+      <p class="display-bound">Showing {firstVisible}–{lastVisible} of {inbox.items.length} retained local review rows.</p>
       <ol class="review-items">
         {#each visibleItems as item (item.id)}
           <li class:urgent={item.priority === 'urgent'} class:high={item.priority === 'high'}>

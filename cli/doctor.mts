@@ -1,22 +1,24 @@
 import { withTimeout } from '../lib/abort.mts';
 import type { TerminalPresentation } from './terminal-presentation.mts';
+import { CLI_COMMAND_REGISTRY } from './command-reference.mts';
+import { DOCTOR_SCHEMA, DOCTOR_VERSION, DOCTOR_SUMMARY_SCHEMA, DOCTOR_SUMMARY_VERSION } from '../packages/contracts/cli-doctor.mts';
 
 type ResolvePublicAddresses = typeof import('../lib/safe-fetch.mts').resolvePublicAddresses;
 type SafeFetch = typeof import('../lib/safe-fetch.mts').safeFetch;
 type WhoisQuery = typeof import('../lib/whois-transport.mts').whoisQuery;
 
-export const DOCTOR_SCHEMA = 'whoisleuth.cli.doctor';
-export const DOCTOR_VERSION = 1;
+export { DOCTOR_SCHEMA, DOCTOR_VERSION, DOCTOR_SUMMARY_SCHEMA, DOCTOR_SUMMARY_VERSION };
 const MINIMUM_NODE_MAJOR = 24;
 const NETWORK_HOST = 'whois.iana.org';
 const NETWORK_QUERY = 'example.com';
 const NETWORK_HTTPS_URL = 'https://data.iana.org/rdap/dns.json';
 const NETWORK_TIMEOUT_MS = 6_000;
 const MAX_DOCTOR_DETAIL_LENGTH = 180;
+const DOCTOR_CHECK_IDS = ['runtime', 'platform', 'terminal', 'offline_features', 'network', 'public_dns', 'https_transport', 'whois_transport'] as const;
 
 type DoctorState = 'pass' | 'partial' | 'skipped';
 type DoctorCheck = Readonly<{
-  id: string;
+  id: typeof DOCTOR_CHECK_IDS[number];
   label: string;
   state: DoctorState;
   detail: string;
@@ -211,6 +213,39 @@ async function buildDoctorReport(options: DoctorOptions): Promise<DoctorReport> 
   });
 }
 
+function diagnosticVersion(value: string): string | null {
+  return /^(\d{1,6}\.\d{1,6}\.\d{1,6})(?:[-+].*)?$/u.exec(value)?.[1] ?? null;
+}
+
+function buildDoctorSummary(report: DoctorReport, nodeVersion = process.versions.node) {
+  const checkCodes = DOCTOR_CHECK_IDS.flatMap(id => {
+    const check = report.checks.find(item => item.id === id);
+    if (!check) return [];
+    const state = check.state === 'pass' || check.state === 'partial' || check.state === 'skipped' ? check.state : 'unknown';
+    return [`${id}_${state}`];
+  });
+  const omittedCheckCount = report.checks.length - checkCodes.length;
+  return Object.freeze({
+    schema: DOCTOR_SUMMARY_SCHEMA,
+    version: DOCTOR_SUMMARY_VERSION,
+    cliVersion: diagnosticVersion(report.cliVersion),
+    nodeVersion: diagnosticVersion(nodeVersion),
+    state: report.state === 'pass' && omittedCheckCount === 0 ? 'pass' : 'partial',
+    networkRequested: report.networkRequested === true,
+    checkCodes: Object.freeze(checkCodes),
+    omittedCheckCount,
+    declaredFormatIdentifiers: Object.freeze([...new Set(CLI_COMMAND_REGISTRY.flatMap(command => command.documentation.supportedSchemaIdentifiers))].sort()),
+    formatScope: 'Public command declarations only; not an installed-package or input-compatibility test.',
+    omissions: Object.freeze([
+      'Targets, URLs, queries and fragments',
+      'File paths, folder names and user names',
+      'Launch tokens, cookies, credentials and headers',
+      'Input files, response content and free-form diagnostic details',
+      'Timestamps, platform details and version prerelease/build metadata',
+    ]),
+  });
+}
+
 function formatDoctorReport(report: DoctorReport): string {
   const lines = [
     'Runtime:',
@@ -227,6 +262,7 @@ function formatDoctorReport(report: DoctorReport): string {
 
 export {
   buildDoctorReport,
+  buildDoctorSummary,
   formatDoctorReport,
 };
 export type { DoctorCheck, DoctorOptions, DoctorReport, DoctorState };

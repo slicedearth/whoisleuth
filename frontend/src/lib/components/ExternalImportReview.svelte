@@ -9,14 +9,17 @@
 
 <script lang="ts">
   import Pagination from './Pagination.svelte';
+  import ImportedFindingExplanation from './ImportedFindingExplanation.svelte';
+  import type { SelectedFindingOriginal } from '#lib/analysis/selected-finding-original.ts';
   import { externalFindingCaseProjection } from '#lib/analysis/external-findings-import.ts';
   import { externalIntelligenceAssertionContent } from '#lib/analysis/external-intelligence-import.ts';
   import type { ExternalFindingConversionReport } from '#lib/analysis/external-findings-converters.ts';
   import type { CaseRecord } from '#lib/analysis/case-model.ts';
   import { caseNumber } from '../../../../packages/cases/case-workflow-metadata.mts';
 
-  let { preview, conversionReport, cases, applying, onimport, oncancel }: {
+  let { preview, selectedOriginal = null, conversionReport, cases, applying, onimport, oncancel }: {
     preview: ExternalImportPreview;
+    selectedOriginal?: SelectedFindingOriginal | null;
     conversionReport: ExternalFindingConversionReport | null;
     cases: readonly CaseRecord[];
     applying: boolean;
@@ -60,9 +63,9 @@
   function countLabel(count: number, singular: string) { return `${count} ${singular}${count === 1 ? '' : 's'}`; }
 </script>
 
-<section class="import-review" aria-label="Validated import review" aria-busy={applying}>
+<section class="import-review" aria-label="Import content review" aria-busy={applying}>
   <header>
-    <div><p class="eyebrow">Validated {findings ? 'findings' : intelligence?.format.toUpperCase()} preview</p><h3>{findings?.source.name ?? intelligence?.sourceName}</h3></div>
+    <div><p class="eyebrow">Format-checked {findings ? 'findings' : intelligence?.format.toUpperCase()} preview</p><h3>{findings?.source.name ?? intelligence?.sourceName}</h3></div>
     <span>{countLabel(total, noun)}{findings ? ` · ${countLabel(domains, 'domain')}` : ` · ${countLabel(intelligence?.exclusions.length ?? 0, 'exclusion')}`}</span>
   </header>
   {#if conversionReport}
@@ -100,7 +103,7 @@
     <button type="button" class="btn small" disabled={applying || selectedCount === total} onclick={() => { excluded = []; }}>Select all {noun}s</button>
     <button type="button" class="btn small" disabled={applying || !selectedCount} onclick={() => { excluded = Array.from({ length: total }, (_, index) => index); }}>Clear selection</button>
   </div>
-  <p class="note">Retained fields show the Case content after normalisation. Record IDs, import timestamps and evidence links are assigned when saved. Duplicate and capacity checks run against the latest stored Cases.</p>
+  <p class="note">Review the normalised Case fields to save. IDs, import times and evidence links are assigned on save; duplicate and capacity checks use the latest stored Cases.</p>
   <ul class="records">
     {#if findings}
       {#each findings.findings.slice(offset, offset + PAGE_SIZE) as finding, localIndex (offset + localIndex)}
@@ -114,6 +117,7 @@
           <p class="metadata">Retained observation hostname: {projection.evidencePin.observationHostname ?? 'Unknown'} · Retained completeness: {projection.evidencePin.completeness} · Storage truncation: {projection.evidencePin.truncated === true ? 'yes' : projection.evidencePin.truncated === false ? 'no' : 'unknown'}</p>
           {#if projection.evidencePin.limitations.length}<details><summary>Retained caveats for finding {index + 1}</summary><ul class="limitations">{#each projection.evidencePin.limitations as limitation}<li>{limitation}</li>{/each}</ul></details>{/if}
           {#if projection.shortenedFields.length || projection.omittedLimitations}<p class="warning">{projection.shortenedFields.length ? `Shortened Case fields: ${projection.shortenedFields.join(', ')}. ` : ''}{projection.omittedLimitations ? `${projection.omittedLimitations} supplied limitations are omitted with a retained notice. ` : ''}Review the retained fields.</p>{/if}
+          <ImportedFindingExplanation {finding} document={findings} {selectedOriginal} source={findings.source} {projection} number={index + 1} />
           <details>
             <summary>Retained fields for finding {index + 1}</summary>
             <!-- svelte-ignore a11y_no_noninteractive_tabindex -- the named scroll region provides keyboard access to every retained field -->

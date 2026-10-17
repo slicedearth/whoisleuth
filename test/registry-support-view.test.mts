@@ -228,6 +228,10 @@ test('renders stable human-readable labels for known and unknown catalogue value
   assert.equal(registryServiceCoverageLabel('whois_only'), 'WHOIS path only');
   assert.equal(registryServiceCoverageLabel('unexpected'), 'Unknown');
   assert.equal(registrySupportLabel('jprs-domain-english'), 'Jprs Domain English');
+  assert.equal(registrySupportLabel('icann-style-colon'), 'ICANN Style Colon');
+  assert.equal(registrySupportLabel('iana_rdap-whois_dns_dnssec'), 'IANA RDAP WHOIS DNS DNSSEC');
+  assert.equal(registrySupportLabel('ICANN-Iana-rDaP-WHOIS-Dns-DnSsEc'), 'ICANN IANA RDAP WHOIS DNS DNSSEC');
+  assert.equal(registrySupportLabel('nonicann rdapish dnssecextra'), 'Nonicann Rdapish Dnssecextra');
   assert.equal(registrySupportLabel('\u0000'), 'Unknown');
 });
 

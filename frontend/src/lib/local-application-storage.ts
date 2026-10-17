@@ -9,10 +9,12 @@ import {
   LOCAL_APPLICATION_READ_REQUEST_BYTES, localApplicationOperationId, parseLocalApplicationJson,
 } from '../../../packages/workspace/local-application-protocol.mts';
 import type { LocalDataStorage } from '../../../packages/workspace/local-data-storage.mts';
-import { array, exact } from '../../../packages/evidence/artifact-structure.mts';
+import { array, exact, exactOptional } from '../../../packages/evidence/artifact-structure.mts';
+import { LOCAL_WORKSPACE_FORMAT_VERSION, LOCAL_WORKSPACE_MAX_DIRECTORY_CHARACTERS } from '../../../packages/contracts/local-application.mts';
 
 export type LocalApplicationInfo = Readonly<{
   version: number; workspaceId: string; directory: string; storage: 'filesystem'; encryptedAtRest: false; offline: boolean;
+  workspaceFormatVersionAtLaunch?: number;
 }>;
 const TIMEOUT_MS = 60_000;
 type Fetch = typeof globalThis.fetch;
@@ -50,17 +52,22 @@ function localOrigin(value: string): string {
   return origin.origin;
 }
 
+export function readLocalApplicationInfo(input: unknown, workspaceId: string | null): LocalApplicationInfo {
+  const value = exactOptional(input,
+    ['version', 'workspaceId', 'directory', 'storage', 'encryptedAtRest', 'offline'], ['workspaceFormatVersionAtLaunch'], 'Local workspace information');
+  if (value.version !== LOCAL_APPLICATION_PROTOCOL_VERSION || value.storage !== 'filesystem' || value.encryptedAtRest !== false
+    || typeof value.offline !== 'boolean' || localApplicationOperationId(value.workspaceId) !== workspaceId
+    || Object.hasOwn(value, 'workspaceFormatVersionAtLaunch') && value.workspaceFormatVersionAtLaunch !== LOCAL_WORKSPACE_FORMAT_VERSION
+    || typeof value.directory !== 'string' || !value.directory || value.directory.length > LOCAL_WORKSPACE_MAX_DIRECTORY_CHARACTERS || /[\u0000-\u001f\u007f]/u.test(value.directory)) {
+    throw new BrowserLocalDataError('LOCAL_DATA_WORKSPACE_CHANGED', 'The local workspace does not match this page. Reload before continuing.');
+  }
+  return value as LocalApplicationInfo;
+}
+
 export async function localApplicationInfo(): Promise<LocalApplicationInfo> {
   if (!isLocalApplication()) throw new BrowserLocalDataError('LOCAL_DATA_UNSUPPORTED', 'This page does not use the local application.');
   information ??= (async () => {
-    const value = exact(parseLocalApplicationJson(await request(localOrigin(location.origin), '/api/local-workspace/info', LOCAL_APPLICATION_READ_REQUEST_BYTES)),
-      ['version', 'workspaceId', 'directory', 'storage', 'encryptedAtRest', 'offline'], 'Local workspace information');
-    if (value.version !== LOCAL_APPLICATION_PROTOCOL_VERSION || value.storage !== 'filesystem' || value.encryptedAtRest !== false
-      || typeof value.offline !== 'boolean' || localApplicationOperationId(value.workspaceId) !== localApplicationWorkspaceId()
-      || typeof value.directory !== 'string' || !value.directory || value.directory.length > 4_096 || /[\u0000-\u001f\u007f]/u.test(value.directory)) {
-      throw new BrowserLocalDataError('LOCAL_DATA_WORKSPACE_CHANGED', 'The local workspace does not match this page. Reload before continuing.');
-    }
-    return value as LocalApplicationInfo;
+    return readLocalApplicationInfo(parseLocalApplicationJson(await request(localOrigin(location.origin), '/api/local-workspace/info', LOCAL_APPLICATION_READ_REQUEST_BYTES)), localApplicationWorkspaceId());
   })().catch(cause => { information = undefined; throw cause; });
   return information;
 }

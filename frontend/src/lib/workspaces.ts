@@ -197,6 +197,15 @@ const publicExamples = {
   opensInNewTab: true,
 } satisfies NavigationItem;
 
+const publicLinkInspector = {
+  href: '/link-inspector',
+  label: 'Link Inspector',
+  detail: 'Review pasted links locally without opening their destinations',
+  icon: 'page',
+  keywords: ['public', 'offline', 'link', 'message', 'hostname', 'no login'],
+  opensInNewTab: true,
+} satisfies NavigationItem;
+
 const publicPrivacy = {
   href: '/privacy',
   label: 'Privacy',
@@ -234,7 +243,7 @@ const publicContact = {
 } satisfies NavigationItem;
 
 export const publicPrimaryNavigation = [publicDemo, publicResourcesPage, publicCli] as const;
-export const publicReferenceNavigation = [publicMethodology, publicCoverage, publicExamples] as const;
+export const publicReferenceNavigation = [publicMethodology, publicCoverage, publicExamples, publicLinkInspector] as const;
 export const publicPolicyNavigation = [publicPrivacy, publicTerms, publicRequestPolicy, publicContact] as const;
 export const publicSiteNavigation = [
   publicHomepage,

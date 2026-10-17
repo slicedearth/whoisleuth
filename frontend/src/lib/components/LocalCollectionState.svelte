@@ -3,17 +3,21 @@
     state,
     title,
     detail,
+    loadingTitle = 'Loading saved work',
+    loadingDetail = 'Reading saved data.',
   }: {
     state: 'loading' | 'unavailable';
     title: string;
     detail: string;
+    loadingTitle?: string;
+    loadingDetail?: string;
   } = $props();
 </script>
 
 <section class="local-collection-state card {state}" aria-live="polite" aria-busy={state === 'loading'}>
   <p class="eyebrow">Saved evidence</p>
-  <h2>{state === 'loading' ? 'Loading saved work' : title}</h2>
-  <p>{state === 'loading' ? 'Reading saved data.' : detail}</p>
+  <h2>{state === 'loading' ? loadingTitle : title}</h2>
+  <p>{state === 'loading' ? loadingDetail : detail}</p>
 </section>
 
 <style>

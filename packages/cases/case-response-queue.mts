@@ -16,7 +16,7 @@ export function caseRequestedEvidenceQueue(record: CaseRecord, now: string) {
       const deadline = normalizeExplicitIsoTimestamp(request.dueAt);
       const concurrent = requests.filter(other => other.evidenceRequest.id === request.id).length > 1;
       const editable = ['submitted', 'acknowledged'].includes(action.state);
-      return { actionId: action.id, recipient: action.recipient, eventId: event.id, request,
+      return { owner: action, event, actionId: action.id, recipient: action.recipient, eventId: event.id, request,
         deliveries, concurrent, editable, deadline,
         due: deadline && clock ? Date.parse(deadline) <= Date.parse(clock) : null,
         label: deliveries.length ? 'Delivery recorded' : concurrent ? 'Concurrent preparations need review'
@@ -30,16 +30,20 @@ export function caseRequestedEvidenceQueue(record: CaseRecord, now: string) {
 }
 
 /** View-only work ordering. Provider replies never supply independent observations. */
-export function caseResponseQueue(record: CaseRecord, now: string) {
+export function caseActionSchedule(action: Pick<CaseRecord['actions'][number], 'dueAt' | 'followUpAt'>, now: string) {
   const nowAt = normalizeExplicitIsoTimestamp(now);
   function schedule(value: unknown) {
     const at = normalizeExplicitIsoTimestamp(value);
     return { at, due: at && nowAt ? Date.parse(at) <= Date.parse(nowAt) : null };
   }
+  const due = schedule(action.dueAt), followUp = schedule(action.followUpAt);
+  const nextAt = [due.at, followUp.at].filter((at): at is string => at !== null).sort((a, b) => Date.parse(a) - Date.parse(b))[0] ?? null;
+  return { due, followUp, nextAt };
+}
+
+export function caseResponseQueue(record: CaseRecord, now: string) {
   const actions = record.actions.map(action => {
-    const due = schedule(action.dueAt), followUp = schedule(action.followUpAt);
-    const nextAt = [due.at, followUp.at].filter((at): at is string => at !== null).sort((a, b) => Date.parse(a) - Date.parse(b))[0] ?? null;
-    return { action, due, followUp, nextAt,
+    return { action, ...caseActionSchedule(action, now),
       routeFreshness: responseRouteFreshness(action.routeObservedAt, action.routeReviewAfter, now),
       latestEvent: latestObservationCohort(action.history.filter(event => event.applied), event => event.occurredAt),
     };

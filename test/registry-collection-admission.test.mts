@@ -5,6 +5,8 @@ import { registryCapabilityFor, registryServiceAdmissionFor } from '../lib/regis
 import { clearRdapBootstrapCache, fetchRdapRecord, rdapUnavailableResponse } from '../lib/rdap.mts';
 import { fetchRdapRecordWithParser } from '../lib/rdap-client.mts';
 import { buildWhoisChainUncached } from '../lib/whois.mts';
+import { whoisCollectionStatus } from '../lib/whois-authority.mts';
+import { normalizeWhoisChain } from '../lib/whois-normalization.mts';
 
 describe('registry collection admission', () => {
   beforeEach(clearRdapBootstrapCache);
@@ -32,7 +34,10 @@ describe('registry collection admission', () => {
     assert.equal(chain.length, 1);
     assert.equal(chain[0]?.server, 'registry capability policy');
     assert.equal(chain[0]?.queryProfile, 'not-issued');
-    assert.match(chain[0]?.error ?? '', /no socket was opened/u);
+    assert.equal(chain[0]?.status, 'unsupported');
+    assert.equal(chain[0]?.error, undefined);
+    assert.match(chain[0]?.detail ?? '', /no socket was opened/u);
+    assert.equal(whoisCollectionStatus(normalizeWhoisChain(chain)), 'unsupported');
   });
 
   test('blocks permission-gated WHOIS before opening a socket', async () => {
@@ -46,7 +51,10 @@ describe('registry collection admission', () => {
 
     assert.equal(calls, 0);
     assert.equal(registryServiceAdmissionFor('example.es', 'whois')?.state, 'permission_required');
-    assert.match(chain[0]?.error ?? '', /requires registry permission/u);
+    assert.equal(chain[0]?.status, 'skipped');
+    assert.equal(chain[0]?.error, undefined);
+    assert.match(chain[0]?.detail ?? '', /requires registry permission/u);
+    assert.equal(whoisCollectionStatus(normalizeWhoisChain(chain)), 'skipped');
   });
 
   test('a retained absent RDAP hint does not suppress current bootstrap discovery', async () => {

@@ -38,22 +38,21 @@
   </header>
 
   <p class="timing-note">
-    Reported after the final response. Source branches overlap, so their durations do not add up to the total.
-    A settled branch can still report partial, unavailable, or not-found evidence in its source card.
-    Timing identifies elapsed branches, not why a source took that long.
+    Durations overlap and do not add up to the total. + times are measured from the start of this Lookup,
+    not the source’s observation time. A finished branch may still return partial, unavailable or not-found evidence.
   </p>
 
   {#if chart.longestSource && chart.lastSettledSource}
     <dl class="timing-summary" aria-label="Collection timing summary">
       <div>
-        <dt>Longest branch</dt>
+        <dt>Longest-running branch</dt>
         <dd>
           {displaySourceLabel(chart.longestSource.label)}
           <strong>{formatCollectionDuration(chart.longestSource.durationMs)}</strong>
         </dd>
       </div>
       <div>
-        <dt>Last settled</dt>
+        <dt>Last branch finished</dt>
         <dd>
           {displaySourceLabel(chart.lastSettledSource.label)}
           <strong>+{formatCollectionDuration(chart.lastSettledSource.completedAfterMs)}</strong>
@@ -80,7 +79,7 @@
           <g class:rejected={source.outcome === 'rejected'} class="timing-source">
             <text x="8" y={source.y + 13}>{displaySourceLabel(source.label)}</text>
             <rect x={source.x} y={source.y} width={source.width} height="17" rx="4">
-              <title>{formatCollectionDuration(source.durationMs)} duration, settled at +{formatCollectionDuration(source.completedAfterMs)}</title>
+              <title>{formatCollectionDuration(source.durationMs)} duration, finished at +{formatCollectionDuration(source.completedAfterMs)}</title>
             </rect>
             <circle cx={source.x + source.width} cy={source.y + 8.5} r="4" />
           </g>
@@ -104,7 +103,7 @@
       <li>
         <span class="source">{sourceLabels[source.source]}</span>
         <span class:rejected={source.outcome === 'rejected'} class="outcome">
-          {source.outcome === 'rejected' ? 'request error' : 'settled'}
+          {source.outcome === 'rejected' ? 'request error' : 'finished'}
         </span>
         <span class="duration">{formatCollectionDuration(source.durationMs)}</span>
         <span class="settled">at +{formatCollectionDuration(source.completedAfterMs)}</span>

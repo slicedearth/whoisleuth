@@ -3,12 +3,14 @@
   import { beforeNavigate, goto } from '$app/navigation';
   import { tick } from 'svelte';
   import PageHeading from '#lib/components/PageHeading.svelte';
+  import EvidenceTimestamp from '#lib/components/EvidenceTimestamp.svelte';
   import CaseRelationships from '#lib/components/CaseRelationships.svelte';
   import EvidenceTimeline from '#lib/components/EvidenceTimeline.svelte';
   import CaseReportExport from '#lib/components/CaseReportExport.svelte';
   import CaseResponseWorkspace from '#lib/components/CaseResponseWorkspace.svelte';
   import CaseBrandAssociations from '#lib/components/CaseBrandAssociations.svelte';
-  import { readCaseNavigationContext } from '#lib/console-workflow-state.ts';
+  import TemporaryCaseboard from '#lib/components/TemporaryCaseboard.svelte';
+  import { readCaseNavigationContext, pinConsoleCaseCheckpoint } from '#lib/console-workflow-state.ts';
   import { loadReviewSession } from '#lib/review-session.ts';
   import { handlesLocalLink } from '#lib/link-activation.ts';
   import { keepFocusBelow } from '#lib/visible-focus.ts';
@@ -31,7 +33,7 @@
     record, allRecords, tagDraft, setTagDraft, noteDraft, setNoteDraft, pendingNoteCaseIds,
     selectCase, returnToList, setStatus, setDisposition, setReviewReason,
     addBrandProfileAssociation, removeBrandProfileAssociation, saveTags, addNote, removeCase,
-    refreshCases, installCommittedCaseSnapshot, setMessage, formatDate, brandProfiles, brandProfilesUnavailable,
+    refreshCases, installCommittedCaseSnapshot, setMessage, brandProfiles, brandProfilesUnavailable,
   }: {
     record: CaseRecord;
     allRecords: CaseRecord[];
@@ -53,11 +55,17 @@
     refreshCases: () => void | Promise<void>;
     installCommittedCaseSnapshot: (cases: CaseRecord[]) => void;
     setMessage: (value: string) => void;
-    formatDate: (value: string) => string;
     brandProfiles: BrandProfile[];
     brandProfilesUnavailable: boolean;
   } = $props();
   const activeSection = $derived(caseWorkspaceSection(new URL(page.url.href)));
+  function pinCheckpoint(snapshotId: string) {
+    const result = pinConsoleCaseCheckpoint({ caseId: record.id, snapshotId });
+    setMessage(result === 'added' ? 'Checkpoint pinned in this tab. Open Pinned checkpoints in the console context.'
+      : result === 'already-pinned' ? 'This checkpoint is already pinned.'
+      : result === 'full' ? 'Four checkpoints are already pinned. Remove one before adding another.'
+      : 'The current workspace is unavailable. No reference was pinned.');
+  }
   const returnContext = $derived(readCaseNavigationContext(record.id));
   let hasSavedReviewReturn = $state(false);
   $effect(() => {
@@ -112,7 +120,7 @@
       const start = navigation && startMarker ? startMarker.getBoundingClientRect().top + window.scrollY - (Number.parseFloat(getComputedStyle(navigation).top) || 0) : 0;
       window.scrollTo({ top: readingPositions.get(section) ?? Math.max(0, start), behavior: 'instant' });
     } catch {
-      setMessage('The Case section could not be opened. Your drafts are unchanged.');
+      setMessage('The case section could not be opened. Your drafts are unchanged.');
     }
   }
 
@@ -175,7 +183,7 @@
       <span class={`badge status-${record.status}`}>{statusLabel(record.status)}</span>
       <span class={`badge disposition-${record.disposition}`}>{dispositionLabel(record.disposition)}</span>
       <span title={`Complete Case number: ${caseNumber(record.id)}`}>Case …{caseNumber(record.id).slice(-8)}</span>
-      <span>Updated <time datetime={record.updatedAt}>{formatDate(record.updatedAt)}</time></span>
+      <span>Case record updated <EvidenceTimestamp value={record.updatedAt} label="Case update time" /></span>
     </div>
   </div>
   <div class="case-actions">
@@ -183,7 +191,7 @@
     <a class="btn" href={`/monitor?view=inbox&queue=all&case-review=${encodeURIComponent(record.id)}`}>Review follow-up</a>
     <details class="case-more">
       <summary>Case options</summary>
-      <div><span>Source: {sourceLabel(record.source)}</span><span>Opened {formatDate(record.createdAt)}</span><span class="complete-id">{caseNumber(record.id)}</span><button id={`case-delete-${record.id}`} class="btn danger" onclick={() => void removeCase(record)}>Delete case</button></div>
+      <div><span>Source: {sourceLabel(record.source)}</span><span>Opened <EvidenceTimestamp value={record.createdAt} label="Case opening time" /></span><span class="complete-id">{caseNumber(record.id)}</span><button id={`case-delete-${record.id}`} class="btn danger" onclick={() => void removeCase(record)}>Delete case</button></div>
     </details>
   </div>
   <div aria-hidden="true"></div>
@@ -212,9 +220,10 @@
       </form>
       </div>
       </details>
+      <TemporaryCaseboard {record} />
     {/snippet}
     {#snippet evidence()}
-      <EvidenceTimeline {record} />
+      <EvidenceTimeline {record} onpincheckpoint={pinCheckpoint} />
       <CaseRelationships {record} records={allRecords} onselect={selectCase} />
     {/snippet}
     {#snippet history()}
@@ -223,7 +232,7 @@
         <textarea id={`note-${record.id}`} value={noteDraft} oninput={(event) => setNoteDraft(event.currentTarget.value)} rows="3" placeholder="Observations, evidence or decisions"></textarea>
         <button class="btn" type="submit" disabled={!noteDraft.trim() || pendingNoteCaseIds.includes(record.id)}>{pendingNoteCaseIds.includes(record.id) ? 'Adding…' : 'Add note'}</button>
       </form>
-      {#if record.notes.length}<ol class="notes">{#each [...record.notes].reverse() as note}<li><time datetime={note.createdAt}>{formatDate(note.createdAt)}</time><p>{note.body}</p></li>{/each}</ol>{/if}
+      {#if record.notes.length}<ol class="notes">{#each [...record.notes].reverse() as note}<li><div class="note-time"><EvidenceTimestamp value={note.createdAt} label="note time" /></div><p>{note.body}</p></li>{/each}</ol>{/if}
     {/snippet}
     {#snippet exports()}<CaseReportExport {record} onmessage={setMessage} />{/snippet}
   </CaseResponseWorkspace>
@@ -253,7 +262,7 @@
   .note-edit textarea { width: 100%; margin-block: 6px 8px; }
   .notes { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
   .notes li { padding: 12px; border-bottom: 1px solid var(--border); }
-  .notes time { color: var(--muted); font-size: var(--text-xs); }
+  .note-time { color: var(--muted); font-size: var(--text-xs); }
   .notes p { margin: 6px 0 0; font-size: var(--text-sm); line-height: 1.55; overflow-wrap: anywhere; white-space: pre-wrap; }
   @media(max-width: 720px) { .field-grid { grid-template-columns: minmax(0,1fr); } }
   .mobile-section{display:none}

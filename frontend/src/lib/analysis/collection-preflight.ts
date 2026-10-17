@@ -2,6 +2,7 @@ import { plannedLookupSources } from '../../../../lib/lookup-progress.mts';
 import { capabilityForSourceId } from '../../../../packages/contracts/capability-manifest.mts';
 import type { Capability } from '../capabilities.ts';
 import type { LookupTargetType } from './lookup-page-actions.ts';
+import { describeCollectionDisclosure, type CollectionDisclosure } from './collection-disclosure.ts';
 
 export const COLLECTION_PREFLIGHT_VERSION = 1 as const;
 export const MAX_COLLECTION_PREFLIGHT_SOURCES = 12;
@@ -14,6 +15,7 @@ export interface CollectionPreflightSource {
   label: string;
   state: CollectionPreflightSourceState;
   disclosure: string;
+  inspection: CollectionDisclosure;
 }
 
 export interface CollectionPreflight {
@@ -67,12 +69,15 @@ function source(
   disclosure: string,
   disabledIds: Set<string>,
   state: CollectionPreflightSourceState = 'included',
+  options: { capabilityId?: string; selectedUrl?: boolean; targetType?: LookupTargetType } = {},
 ): CollectionPreflightSource {
+  const selectedState = disabledIds.has(id) ? 'disabled' : state;
   return {
     id,
     label,
-    state: disabledIds.has(id) ? 'disabled' : state,
+    state: selectedState,
     disclosure: disabledIds.has(id) ? 'Disabled by deployment policy and not evaluated.' : disclosure,
+    inspection: describeCollectionDisclosure(options.capabilityId ?? id, { targetType: 'domain', ...options, state: selectedState }),
   };
 }
 
@@ -88,18 +93,19 @@ export function buildLookupCollectionPreflight(input: LookupPreflightInput): Col
   const domain = planned.has('domain_evidence');
   function lookupSource(id: string, label: string, disclosure: string, state: CollectionPreflightSourceState = 'included', dependencies: readonly string[] = [], capabilityId?: string): CollectionPreflightSource {
     const definition = capabilityForSourceId(capabilityId ?? id);
+    const options = { capabilityId: capabilityId ?? id, selectedUrl: input.selectedUrl === true, targetType };
     const policyIds = [...new Set(['lookup', ...dependencies, ...(definition?.legacyCapability ? [definition.id] : definition?.featurePolicyId ? [definition.featurePolicyId] : [])])];
-    if (policyIds.some(value => disabledIds.has(value))) return source(id, label, disclosure, new Set([id]), state);
+    if (policyIds.some(value => disabledIds.has(value))) return source(id, label, disclosure, new Set([id]), state, options);
     if (input.capabilities !== undefined) {
       const features = policyIds.map(value => input.capabilities?.find(item => item.id === value));
       const disabled = features.find(item => item?.status === 'disabled');
-      if (disabled) return { id, label, state: 'disabled', disclosure: disabled.reason || 'Disabled by deployment policy and not evaluated.' };
+      if (disabled) return source(id, label, disabled.reason || 'Disabled by deployment policy and not evaluated.', new Set(), 'disabled', options);
       if (features.some(item => !item || item.status !== 'supported' || !item.scanModes.includes(input.mode))) {
         const unavailable = features.find(item => item && item.status !== 'supported');
-        return { id, label, state: 'unavailable', disclosure: unavailable?.reason || 'Source configuration or eligibility is unavailable. This plan does not test it or authorise collection.' };
+        return source(id, label, unavailable?.reason || 'Source configuration or eligibility is unavailable. This plan does not test it or authorise collection.', new Set(), 'unavailable', options);
       }
     }
-    return source(id, label, disclosure, disabledIds, state);
+    return source(id, label, disclosure, disabledIds, state, options);
   }
   const sources = targetType === 'unknown' || targetCount !== 1 ? [] : input.mode === 'fast'
     ? [
@@ -139,6 +145,7 @@ export function buildLookupCollectionPreflight(input: LookupPreflightInput): Col
       'Cancel stops this browser from waiting; server work already admitted may finish within existing limits.',
       'Optional third-party sources remain off unless selected.',
       'Use existing investigation templates or CLI configuration profiles to repeat supported choices. Website-only optional selections do not transfer to a CLI Lookup command.',
+      'Starting Lookup requests collection. Saved Case and guide context are not replayed as its result.',
     ]),
     cautions: boundedNotes([
       'Redirects, referrals, source eligibility, and retries mean the exact request count cannot be known in advance.',
@@ -175,6 +182,7 @@ export function buildBulkCollectionPreflight(input: BulkPreflightInput): Collect
     controls: boundedNotes([
       `${input.pacingLabel}; at most ${concurrency} ${concurrency === 1 ? 'lookup runs' : 'lookups run'} in parallel.`,
       'Pause stops admitting new work. Cancel stops the queue after requests already in flight settle.',
+      'Start and Retry failed request collection. Loading a saved session does not; Resume keeps recorded rows and collects only unstarted domains.',
     ]),
     cautions: boundedNotes([
       'Referrals, redirects, eligibility, caching and retries can change the number of requests; target and concurrency limits are not request quotas.',
@@ -197,6 +205,7 @@ export function buildGuidedCollectionPreflight(input: GuidedPreflightInput): Col
       input.requiresApproval
         ? input.approved ? 'Collection was approved for this guide step.' : 'Collection does not start until you approve and open this step.'
         : 'This step can open without an additional collection approval.',
+      'Guide progress and retained Case context do not replay collection. Select any saved input explicitly in the opened tool.',
     ]),
     cautions: boundedNotes([
       input.prerequisite.trim() || 'Confirm the target and collection authority before continuing.',

@@ -76,8 +76,11 @@ for (const outcome of ['unknown-first', 'unknown-later', 'success'] as const) {
     // The real filesystem transaction was committed in the unknown cases. Reload
     // reveals it exactly once, while the unattempted suffix remains untouched.
     const saved = outcome === 'success' ? 3 : failAt;
-    await expect(workspace.locator('.candidate-grid > article > p').filter({ hasText: /^deferred$/u })).toHaveCount(saved);
-    await expect(workspace.locator('.candidate-grid > article > p').filter({ hasText: /^new$/u })).toHaveCount(3 - saved);
+    for (const [index, domain] of domains.entries()) {
+      const entry = workspace.getByRole('article').filter({ has: page.getByRole('checkbox', { name: domain, exact: true }) });
+      await expect(entry).toHaveCount(1);
+      await expect(entry.getByText(index < saved ? 'deferred' : 'new', { exact: true })).toBeVisible();
+    }
     await expect(save).toBeDisabled(); // Selection is deliberately reset by reload.
   });
 }

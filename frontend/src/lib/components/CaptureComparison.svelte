@@ -7,9 +7,12 @@
   import ArtifactPreview from './ArtifactPreview.svelte';
   import ImageChangeReview from './ImageChangeReview.svelte';
   import PageBehaviourComparison from './PageBehaviourComparison.svelte';
+  import CaptureConditionMatrix from './CaptureConditionMatrix.svelte';
+  import ComparisonFrame from './ComparisonFrame.svelte';
   import type { PersistCaseResponse } from '#lib/analysis/case-response-stage.ts';
 
-  let { left, caseDomain, persist, mutationBusy }: { left: BrowserCaptureAttachmentReview; caseDomain: string; persist: PersistCaseResponse; mutationBusy: boolean } = $props();
+  let { left, caseDomain, persist, mutationBusy, active = true }: { left: BrowserCaptureAttachmentReview; caseDomain: string; persist: PersistCaseResponse; mutationBusy: boolean; active?: boolean } = $props();
+  let open = $state(false);
   let right = $state.raw<BrowserCaptureAttachmentReview | null>(null), manifest = $state.raw<Blob | null>(null);
   let busy = $state(false), error = $state(''), leftKey = $state(''), rightKey = $state('');
   let leftObservation = $state(''), rightObservation = $state('');
@@ -25,8 +28,8 @@
   $effect(() => { left; untrack(() => { controller?.abort(); controller = null; busy = false; right = null; manifest = null; leftKey = ''; rightKey = ''; error = ''; }); });
   $effect(() => { if (leftChoices.length === 1) leftKey = leftChoices[0]!.key; });
   $effect(() => { if (rightChoices.length === 1) rightKey = rightChoices[0]!.key; });
-  $effect(() => { leftObservation = left.captures.length === 1 ? '0' : ''; });
-  $effect(() => { rightObservation = right?.captures.length === 1 ? '0' : ''; });
+  $effect(() => { leftObservation = left.captures.length === 1 && left.captures[0]?.pageBehaviour ? '0' : ''; });
+  $effect(() => { rightObservation = right?.captures.length === 1 && right.captures[0]?.pageBehaviour ? '0' : ''; });
   onDestroy(() => controller?.abort());
 
   async function select(event: Event, isManifest: boolean) {
@@ -50,7 +53,7 @@
   }
 </script>
 
-<details class="capture-comparison">
+<details class="capture-comparison" bind:open>
   <summary>Compare another capture</summary>
   <div class="body">
     <p>Choose a second manifest to compare dependencies. Add matching PNG files for an image comparison. The other capture is not imported automatically.</p>
@@ -59,8 +62,10 @@
     {#if busy}<p role="status">Checking comparison capture…</p><button class="btn" type="button" onclick={cancel}>Cancel comparison capture</button>{/if}
     {#if error}<p role="alert">{error}</p>{/if}
     {#if right}
-      <div class="choices"><label>First page observation<select bind:value={leftObservation}><option value="">Select observation</option>{#each left.captures as item, index}<option value={String(index)}>{item.domain} · {item.observedAt ?? 'time unknown'} · {index + 1}</option>{/each}</select></label>
-        <label>Second page observation<select bind:value={rightObservation}><option value="">Select observation</option>{#each right.captures as item, index}<option value={String(index)}>{item.domain} · {item.observedAt ?? 'time unknown'} · {index + 1}</option>{/each}</select></label></div>
+      <CaptureConditionMatrix active={active && open} first={left.captures} second={right.captures} firstPage={leftObservation} secondPage={rightObservation}
+        choosePage={(side, index) => { if (side === 'first') leftObservation = String(index); else rightObservation = String(index); }} />
+      <div class="choices"><label>First page observation<select bind:value={leftObservation}><option value="">Select observation</option>{#each left.captures as item, index}<option value={String(index)} disabled={!item.pageBehaviour}>{item.domain} · {item.observedAt ?? 'time unknown'} · {index + 1}{item.pageBehaviour ? '' : ' · Page observations not retained'}</option>{/each}</select></label>
+        <label>Second page observation<select bind:value={rightObservation}><option value="">Select observation</option>{#each right.captures as item, index}<option value={String(index)} disabled={!item.pageBehaviour}>{item.domain} · {item.observedAt ?? 'time unknown'} · {index + 1}{item.pageBehaviour ? '' : ' · Page observations not retained'}</option>{/each}</select></label></div>
       {#if leftObservation !== '' && rightObservation !== ''}
         {#key `${leftObservation}:${rightObservation}:${right.captures[Number(rightObservation)]?.observedAt}`}
           <PageBehaviourComparison left={left.captures[Number(leftObservation)]!} right={right.captures[Number(rightObservation)]!} {caseDomain} {persist} {mutationBusy} />
@@ -73,10 +78,12 @@
       <div class="choices"><label>First screenshot<select bind:value={leftKey}><option value="">Select screenshot</option>{#each leftChoices as item}<option value={item.key}>{item.context.domain} · {item.context.observedAt ?? 'time unknown'} · {item.id}</option>{/each}</select></label>
         <label>Second screenshot<select bind:value={rightKey}><option value="">Select screenshot</option>{#each rightChoices as item}<option value={item.key}>{item.context.domain} · {item.context.observedAt ?? 'time unknown'} · {item.id}</option>{/each}</select></label></div>
       {#if selectedLeft && selectedRight}
-        <p>Both selected files match their declared SHA-256 and byte count. The manifest declarations themselves are not authenticated.</p>
-        <div class="images"><section aria-label="First capture image"><h5>{selectedLeft.context.domain}</h5><ArtifactPreview file={selectedLeft.file} mediaType="image/png" label="First capture" focusOnReady={false} /></section>
-          <section aria-label="Second capture image"><h5>{selectedRight.context.domain}</h5><ArtifactPreview file={selectedRight.file} mediaType="image/png" label="Second capture" focusOnReady={false} /></section></div>
-        <ImageChangeReview left={selectedLeft.file} right={selectedRight.file} contexts={[selectedLeft.context, selectedRight.context]} />
+        <ComparisonFrame>
+          {#snippet header()}<p>Both selected files match their declared SHA-256 and byte count. The manifest declarations themselves are not authenticated.</p>{/snippet}
+          {#snippet left()}<section aria-label="First capture image"><h5>{selectedLeft.context.domain}</h5><p>Observed {selectedLeft.context.observedAt ?? 'at an unknown time'} · selected file {selectedLeft.id}</p><ArtifactPreview file={selectedLeft.file} mediaType="image/png" label="First capture" focusOnReady={false} /></section>{/snippet}
+          {#snippet right()}<section aria-label="Second capture image"><h5>{selectedRight.context.domain}</h5><p>Observed {selectedRight.context.observedAt ?? 'at an unknown time'} · selected file {selectedRight.id}</p><ArtifactPreview file={selectedRight.file} mediaType="image/png" label="Second capture" focusOnReady={false} /></section>{/snippet}
+          {#snippet children()}<ImageChangeReview left={selectedLeft.file} right={selectedRight.file} contexts={[selectedLeft.context, selectedRight.context]} />{/snippet}
+        </ComparisonFrame>
       {/if}
     {/if}
   </div>
@@ -86,7 +93,7 @@
   .capture-comparison { min-width: 0; border-top: 1px solid var(--border); }
   summary { cursor: pointer; padding-block: 12px; font-weight: 650; }
   .body { display: grid; gap: 12px; min-width: 0; padding-bottom: 12px; }
-  .choices, .images { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
   section, label { min-width: 0; }
   label { display: grid; gap: 5px; font-size: var(--text-xs); }
   input, select { max-width: 100%; min-width: 0; width: 100%; }
@@ -94,5 +101,5 @@
   h5 { margin: 0 0 8px; font-size: var(--text-sm); overflow-wrap: anywhere; }
   button { justify-self: start; max-width: 100%; white-space: normal; }
   [role=alert] { color: var(--danger); }
-  @media (max-width: 900px) { .choices, .images { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 900px) { .choices { grid-template-columns: minmax(0, 1fr); } }
 </style>

@@ -9,6 +9,7 @@
   import BrandAllowlistManager from '#lib/components/BrandAllowlistManager.svelte';
   import BrandReviewInbox from '#lib/components/BrandReviewInbox.svelte';
   import BrandAssetRegisterSummary from '#lib/components/BrandAssetRegisterSummary.svelte';
+  import BrandReferenceReview from '#lib/components/BrandReferenceReview.svelte';
   import DeferredSurface from '#lib/components/DeferredSurface.svelte';
   import {
     activeProfileId,
@@ -1138,7 +1139,7 @@
       {#if brandWorkbench==='control'}
         <DeferredSurface load={brandWorkbenches.control.load} props={{active}} loadingLabel="Loading domain controls." unavailableLabel="Domain controls could not be loaded." placeholder="workspace" />
       {:else if brandWorkbench==='portfolio'&&active}
-        <DeferredSurface load={brandWorkbenches.portfolio.load} props={{active}} loadingLabel="Loading the owned-domain comparison." unavailableLabel="The owned-domain comparison could not be loaded." placeholder="workspace" />
+        <DeferredSurface load={brandWorkbenches.portfolio.load} props={{active}} loadingLabel="Loading the official-domain settings comparison." unavailableLabel="The official-domain settings comparison could not be loaded." placeholder="workspace" />
       {:else if brandWorkbench==='posture'&&active}
         <DeferredSurface load={brandWorkbenches.posture.load} props={{active,disabledReason:postureReason,auditing,results:auditResults,audit,retainObservation}} loadingLabel="Loading the current-settings review." unavailableLabel="The current-settings review could not be loaded." placeholder="workspace" />
       {:else if brandWorkbench==='certificates'&&active}
@@ -1167,6 +1168,7 @@
     <BrandReviewInbox inbox={brandReviewInbox} />
     {#if candidateReviewProfile}<DeferredSurface load={()=>import('#lib/components/BrandCandidateReviewWorkspace.svelte')} props={{active:candidateReviewProfile,onrefresh:refreshProfiles,disabled:profileWriteDisabled||active?.id!==candidateReviewProfile.id||activePreferenceSourceState!=='ready'}} loadingLabel="Loading retained candidate review…" unavailableLabel="Retained candidate review could not be loaded. No candidate state was changed." placeholder="workspace" />{/if}
     <BrandAssetRegisterSummary projection={brandAssetRegister} />
+    {#if brandsView === 'overview' && active}<BrandReferenceReview profile={active} {cases} casesState={caseSourceState} />{/if}
     </div>
   </div>
   {#if brandsView==='assets'}

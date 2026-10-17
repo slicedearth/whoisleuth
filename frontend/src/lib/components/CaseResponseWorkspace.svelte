@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick, type ComponentProps, type Snippet } from 'svelte';
   import { caseInvestigationContext } from '../../../../packages/cases/case-incident-context.mts';
-  import { caseTypeSummary } from '../../../../packages/cases/case-workflow-metadata.mts';
+  import { caseTypeSummary } from '../../../../packages/cases/case-type-presentation.mts';
   import { dispositionLabel } from '../../../../packages/cases/case-record-decisions.mts';
   import { editCase, importCaseReviewReturn, type CaseRecord } from '../cases.ts';
   import { handlesLocalLink } from '#lib/link-activation.ts';
@@ -21,6 +21,7 @@
   import CaseWorkflowDetails from '#lib/components/CaseWorkflowDetails.svelte';
   import CaseTitleForm from '#lib/components/CaseTitleForm.svelte';
   import CaseDecisionOverview from '#lib/components/CaseDecisionOverview.svelte';
+  import CaseCompletionReview from '#lib/components/CaseCompletionReview.svelte';
   import CaseResponseQueue from '#lib/components/CaseResponseQueue.svelte';
   import CaseReviewReturn from '#lib/components/CaseReviewReturn.svelte';
   import type { CaseReviewReturn as ReviewReturn } from '../../../../packages/cases/case-review-return.mts';
@@ -107,10 +108,10 @@
       try {
         oncommitted(committed.cases);
       } catch {
-        onmessage(`${success} The change was saved, but Cases could not be reread or reconciled in the current view. Reload before recording another response.${prunedNote(committed.pruned)}`);
+        onmessage(`${success} The change was saved, but cases could not be reread or reconciled in the current view. Reload before recording another response.${prunedNote(committed.pruned)}`);
         return;
       }
-      onmessage(`${success} The change was saved, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the workspace read.${prunedNote(committed.pruned)}`);
+      onmessage(`${success} The change was saved, but cases could not be reread. The complete committed case snapshot is shown locally; reload to retry the workspace read.${prunedNote(committed.pruned)}`);
       return;
     }
     onmessage(`${success}${prunedNote(committed.pruned)}`);
@@ -254,6 +255,7 @@
     </dl>
   {/if}
   <CaseDecisionOverview {record} {selectSection} onrequest={openRequestedEvidence} />
+  <CaseCompletionReview {record} {selectSection} visible={activeSection === 'summary'} />
   {#if actionSummary.total}
     <div class="action-summary" role="group" aria-label="Case action outcome summary">
       <span><strong>{actionSummary.active}</strong> active</span>
@@ -307,6 +309,7 @@
       <CaseContextReviewEntry {record} {mutationBusy} {persistOperation} />
       <CaseRenderedCapture
         {record}
+        visible={activeSection === 'evidence'}
         {persist}
         exactIncidentUrl={investigationContext?.urlRetention === 'exact' ? investigationContext.incidentUrl : null}
         {persistOperation}
@@ -323,7 +326,7 @@
       <CaseActionStage bind:this={actionStage} {record} {mutationBusy} {persist} mode={presentationMode} onadvanced={() => void openAdvancedStage('response_decision')} />
       <CaseResponsePacketWorkspace
         {record}
-        visible
+        visible={activeSection === 'response'}
         {onmessage}
         onstagechange={updateEvidenceHandoffStage}
         onpacketexported={preparePacketDeliveryRecord}

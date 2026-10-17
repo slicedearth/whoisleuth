@@ -51,7 +51,7 @@ async function runPreparation<Result>(
   }
 }
 
-/** Only explicit bulk/import operations request background preparation. */
+/** Explicit imports and larger verified plaintext collections share preparation. */
 export async function prepareBrowserLocalDataContent(
   definition: AnyLocalDataCollectionDefinition, input: unknown, codec: BrowserLocalDataCodec,
   options: LocalWorkerOptions = {},

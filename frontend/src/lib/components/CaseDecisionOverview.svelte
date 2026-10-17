@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { CaseRecord } from '../../../../packages/cases/case-record-contracts.mts';
-  import { buildCaseDecisionOverview } from '../../../../packages/cases/case-decision-overview.mts';
+  import { buildCaseDecisionOverview, caseQuestionNextActions } from '../../../../packages/cases/case-decision-overview.mts';
   import { caseRequestedEvidenceQueue } from '../../../../packages/cases/case-response-queue.mts';
   import { evidenceTime } from '#lib/analysis/evidence-time.ts';
   import { caseEvidenceChoiceName, caseRecheckEvidence } from '#lib/analysis/case-evidence-presentation.ts';
@@ -11,12 +11,24 @@
   const overview = $derived(buildCaseDecisionOverview(record, new Date($reviewClock).toISOString()));
   let selectedId = $state('');
   const selected = $derived(overview.claims.find(item => item.assertion.id === selectedId) ?? overview.claims[0]);
+  const questionActions = $derived(caseQuestionNextActions(overview, selected?.assertion.id));
   let showGaps = $state(false);
   const next = $derived(overview.reviews[0]);
   const requests = $derived(caseRequestedEvidenceQueue(record, new Date($reviewClock).toISOString()).filter(item => item.editable && !item.deliveries.length));
   const request = $derived(requests[0]);
   const labels = { action: 'Action due', follow_up: 'Response follow-up', recheck: 'Independent recheck' };
 </script>
+
+{#snippet nextAction(action: ReturnType<typeof caseQuestionNextActions>['actions'][number])}
+  <li>
+    <button class="btn small" type="button" onclick={() => void selectSection(action.section)}>{action.label}</button>
+    <p>{action.reason}</p>
+    <p>{action.expectedOutcome}</p>
+    <details><summary>Before you continue<span class="sr-only">: {action.label}</span></summary>
+      <p>{action.prerequisite}</p><p>{action.limitation}</p>
+    </details>
+  </li>
+{/snippet}
 
 <section class="decision-overview" aria-labelledby={`decision-overview-${record.id}`}>
   <h3 id={`decision-overview-${record.id}`}>Decision overview</h3>
@@ -59,6 +71,17 @@
     </label>
     <p>{selected.assertion.statement}</p>
     {#if selected.assertion.rationale}<p>{selected.assertion.rationale}</p>{/if}
+    {#if questionActions.actions.length}
+      <section aria-label="Next reviews for the selected assessment">
+        <h4>Next reviews for this assessment</h4>
+        <ol class="next-steps">{#each questionActions.actions as action (action.id)}{@render nextAction(action)}{/each}</ol>
+        {#if questionActions.further.length}
+          <details><summary>More reviews for this assessment · {questionActions.further.length}</summary>
+            <ol class="next-steps" start={questionActions.actions.length + 1}>{#each questionActions.further as action (action.id)}{@render nextAction(action)}{/each}</ol>
+          </details>
+        {/if}
+      </section>
+    {/if}
     <div class="evidence-groups">
       {#each [{ stance: 'supports', label: 'Supporting' }, { stance: 'contradicts', label: 'Contrary' }, { stance: 'unresolved', label: 'Unresolved' }, { stance: null, label: 'Unclassified links' }] as group}
         {@const refs = selected.references.filter(reference => reference.stance === group.stance)}
@@ -84,5 +107,6 @@
   .overview-grid,.evidence-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
   section,article{min-width:0;display:grid;gap:8px}.claim-select{display:grid;gap:6px;font-size:var(--text-xs)}select{width:100%;min-width:0;max-width:100%}
   ul{display:grid;gap:10px;padding-inline-start:20px;margin:8px 0}summary{cursor:pointer;min-height:32px;align-content:center;font-size:var(--text-xs);overflow-wrap:anywhere}.btn{justify-self:start}.review-note{color:var(--amber)}
+  .next-steps{display:grid;gap:14px;padding-inline-start:22px;margin:4px 0}.next-steps li{min-width:0}.next-steps p{margin-top:5px}
   @media(max-width:700px){.overview-grid,.evidence-groups{grid-template-columns:1fr}}
 </style>

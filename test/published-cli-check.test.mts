@@ -65,7 +65,7 @@ function publishedManifest(overrides: Record<string, unknown> = {}, archive = AR
     contentPolicy: { class: 'dual-use' },
     publishConfig: { access: 'public', provenance: true },
     repository: { type: 'git', url: 'git+https://github.com/slicedearth/whoisleuth.git' },
-    homepage: 'https://www.whoisleuth.com/',
+    homepage: 'https://www.whoisleuth.com',
     bugs: { url: 'https://github.com/slicedearth/whoisleuth/issues' },
     dependencies: candidateReport().runtimeDependencies,
     dist: {
@@ -228,6 +228,7 @@ describe('published CLI verification', () => {
     assert.throws(() => validatePublishedManifest(publishedManifest({ author: 'different-publisher' }), VERSION), /author, licence, or module type/u);
     assert.throws(() => validatePublishedManifest(publishedManifest({ author: { name: 'slicedearth', email: 'unexpected@example.test' } }), VERSION), /author, licence, or module type/u);
     assert.throws(() => validatePublishedManifest(publishedManifest({ homepage: 'https://invalid.example/' }), VERSION), /source and support links/u);
+    assert.throws(() => validatePublishedManifest(publishedManifest({ homepage: 'https://www.whoisleuth.com/' }), VERSION), /source and support links/u);
     assert.throws(() => validatePublishedManifest(publishedManifest({ dependencies: { ...candidateReport().runtimeDependencies, parse5: '^8.0.1' } }), VERSION), /major, minor, and patch/u);
     assert.throws(() => validatePublishedManifest(publishedManifest({
       dist: { ...(publishedManifest().dist as object), attestations: { url: 'https://registry.npmjs.org/fixture', provenance: {} } },

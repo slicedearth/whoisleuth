@@ -82,7 +82,7 @@
       {/each}
     </ol>
   {:else}
-    <p class="empty">No source-qualified pins or sightings are retained for these campaign members yet. Save a relevant Lookup fact or reviewed sighting to a case before using this sequence.</p>
+    <p class="empty">Save a source-qualified Lookup fact or reviewed sighting to a member Case to build this sequence. None are retained for these campaign members yet.</p>
   {/if}
 
   <details>

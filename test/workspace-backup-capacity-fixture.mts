@@ -8,11 +8,12 @@ import { MAX_PROFILE_STORE_BYTES } from '../packages/contracts/workspace-portabi
 
 const NOW = '2026-09-09T00:00:00.000Z';
 
-export function caseStoreAtCapacity() {
+export function caseStoreAtCapacity(initialize?: (cases: ReturnType<typeof normalizeCaseStore>['cases']) => void) {
   const store = normalizeCaseStore(Array.from({ length: MAX_CASES }, (_, index) => ({
     id: `capacity-case-${index}`, domain: `case-${index}.example`, status: 'new',
     disposition: 'unreviewed', source: 'manual', createdAt: NOW, updatedAt: NOW,
   })));
+  initialize?.(store.cases);
   let remaining = MAX_CASE_STORE_BYTES - Buffer.byteLength(serializeCaseStore(store.cases));
   for (const record of store.cases) {
     for (let index = 0; index < MAX_NOTES_PER_CASE && remaining > 0; index++) {

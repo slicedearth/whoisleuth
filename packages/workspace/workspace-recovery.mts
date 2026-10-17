@@ -1,39 +1,147 @@
-import { MAX_CASES } from '../contracts/case-portability.mts';
+import { ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA, ENCRYPTED_WORKSPACE_ARCHIVE_VERSION, MAX_CASES, MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES, MAX_WORKSPACE_ARCHIVE_BYTES, WORKSPACE_ARCHIVE_SCHEMA } from '../contracts/case-portability.mts';
 import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../contracts/selected-file-limits.mts';
+import { MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES } from '../contracts/investigation-package-limits.mts';
 import { readCaseAttachments, type CaseAttachment } from '../cases/case-attachment-model.mts';
 import { sha256ArtifactBytes } from '../evidence/artifact-integrity.mts';
-import { retainedFileGroups, type RetainedFileInput } from '../evidence/retained-file.mts';
+import { digest, integer } from '../evidence/artifact-structure.mts';
+import { retainedFileGroups, type RetainedFileInput, type RetainedFileReference } from '../evidence/retained-file.mts';
+import { INVESTIGATION_MANIFEST_SCHEMA } from '../investigation/investigation-manifest.mts';
 import type { readWorkspaceArchive } from './workspace-archive.mts';
+import type { CaseRecord } from '../cases/case-record-contracts.mts';
+import { BROWSER_LOCAL_COLLECTION_MANIFEST, WORKSPACE_ARCHIVE_COLLECTIONS } from '../contracts/browser-local-collection-manifest.mts';
 
 export type ReviewedWorkspaceArchive = Awaited<ReturnType<typeof readWorkspaceArchive>>;
+
+/** Describe reviewed metadata only; neither source bytes nor destination writes are inspected. */
+export function workspaceBackupCoverage(archive: ReviewedWorkspaceArchive) {
+  const portableCollections = new Set<string>(WORKSPACE_ARCHIVE_COLLECTIONS.map(([, id]) => id));
+  let originals: Readonly<{ state: 'known'; references: number; files: number; byteLength: number }> | Readonly<{ state: 'unknown' }> = { state: 'unknown' };
+  try {
+    const references = archiveCaseRecords(archive).flatMap(row => readCaseAttachments(row.attachments) ?? []);
+    const files = retainedFileGroups(references).flat();
+    originals = { state: 'known', references: references.length, files: files.length,
+      byteLength: files.reduce((sum, file) => sum + file.byteLength, 0) };
+  } catch { /* An unsupported or inconsistent reference list cannot establish zero required originals. */ }
+  return Object.freeze({
+    sourceVersion: archive.sourceVersion,
+    sections: Object.freeze(archive.sections.map(({ id, label, status, recordCount, reason }) =>
+      Object.freeze({ id, label, status, recordCount, reason }))),
+    originals: Object.freeze(originals),
+    localOnly: Object.freeze(BROWSER_LOCAL_COLLECTION_MANIFEST.filter(item => !portableCollections.has(item.id)).map(item => item.label)),
+  });
+}
+
+export type RecoveryPackageIdentity = RetainedFileReference & Readonly<{
+  manifestSchema: string; manifestVersion: number; encryptionVersion: number | null;
+}>;
+
+/** One latest matched source per original bounds this index by the reviewed archive. */
+export function recoverySourceIndex(sources: ReadonlyMap<string, RecoveryPackageIdentity | null>) {
+  const packages = new Map<string, RecoveryPackageIdentity & { matchedFiles: number }>();
+  let originalFiles = 0;
+  for (const source of sources.values()) {
+    if (!source) { originalFiles++; continue; }
+    const existing = packages.get(source.digestSha256);
+    if (existing) existing.matchedFiles++;
+    else packages.set(source.digestSha256, { ...source, matchedFiles: 1 });
+  }
+  return Object.freeze({ originalFiles, packages: Object.freeze([...packages.values()].map(item => Object.freeze(item))) });
+}
+
+/** Readable selection inventory only, not a portable format or a recovery result. */
+export function formatRecoverySetInventory(backup: RetainedFileReference & Readonly<{
+  schema: string; version: number; encrypted: boolean;
+}>, index: ReturnType<typeof recoverySourceIndex>): string {
+  const maximumOriginals = MAX_CASES * MAX_SELECTED_FILES;
+  if (backup.schema !== WORKSPACE_ARCHIVE_SCHEMA || typeof backup.encrypted !== 'boolean') throw new TypeError('Recovery backup format is unavailable.');
+  digest(backup.digestSha256, 'Recovery backup digest');
+  integer(backup.byteLength, 'Recovery backup bytes', 1, backup.encrypted ? MAX_ENCRYPTED_WORKSPACE_ARCHIVE_BYTES : MAX_WORKSPACE_ARCHIVE_BYTES);
+  integer(backup.version, 'Recovery backup version', 1);
+  integer(index.originalFiles, 'Direct original count', 0, maximumOriginals);
+  if (!Array.isArray(index.packages) || index.packages.length > maximumOriginals) throw new TypeError('Recovery package index exceeds the workspace file allowance.');
+  let matchedOriginals = index.originalFiles;
+  const packages = index.packages.flatMap((item, position) => {
+    if (item.manifestSchema !== INVESTIGATION_MANIFEST_SCHEMA) throw new TypeError('Recovery package format is unavailable.');
+    if (item.encryptionVersion !== null) integer(item.encryptionVersion, 'Recovery encryption version', 1);
+    digest(item.digestSha256, 'Recovery package digest');
+    integer(item.byteLength, 'Recovery package bytes', 1, MAX_ENCRYPTED_INVESTIGATION_PACKAGE_BYTES);
+    integer(item.manifestVersion, 'Recovery manifest version', 1);
+    matchedOriginals += integer(item.matchedFiles, 'Matched original count', 1, maximumOriginals);
+    integer(matchedOriginals, 'Matched original total', 0, maximumOriginals);
+    return [
+      '', `Package ${position + 1}`, `Format: ${item.manifestSchema} v${item.manifestVersion}`,
+      `Container: ${item.encryptionVersion === null ? 'ZIP' : `Encrypted package v${item.encryptionVersion}`}`,
+      `Full selected-file SHA-256: ${item.digestSha256}`, `Bytes: ${item.byteLength}`,
+      `Matched originals: ${item.matchedFiles}`,
+    ];
+  });
+  return [
+    'WHOISleuth recovery set inventory',
+    'Unencrypted local text export. Digests can correlate private files; review before sharing.',
+    'This records selected/matched bytes, not download completion, destination writes, delivery or complete recovery.',
+    '', 'Selected workspace backup', `Format: ${backup.schema} v${backup.version}`,
+    `Container: ${backup.encrypted ? `${ENCRYPTED_WORKSPACE_ARCHIVE_SCHEMA} v${ENCRYPTED_WORKSPACE_ARCHIVE_VERSION}` : 'JSON'}`,
+    `Full selected-file SHA-256: ${backup.digestSha256}`, `Bytes: ${backup.byteLength}`,
+    '', `Matching packages: ${index.packages.length}`, `Original files supplied directly: ${index.originalFiles}`,
+    ...packages,
+    '', 'Coverage and verification',
+    'Each original uses its latest matching selection. Re-selecting it can replace a package in this inventory without changing saved provenance.',
+    'Unmatched or unreadable selections are not listed; their identities and counts are not retained.',
+    'Expected package groups: unknown. The backup records original-file references, not package membership.',
+    'Destination verification is not included. Review the separately labelled last result; it does not verify later selections.',
+    'Keep the actual backup and original-file packages. This readable inventory cannot restore data or authenticate sources.',
+    '',
+  ].join('\n');
+}
 
 export type RecoveryFile = Readonly<{
   digestSha256: string; byteLength: number;
   references: readonly Readonly<{ caseId: string; attachment: CaseAttachment }>[];
   state: 'missing' | 'unverified';
+  /** Group-level read failure, not proof that this individual file is damaged. */
+  failure?: OriginalFileReadFailure;
 }>;
+
+export type OriginalFileReadFailure = 'unavailable' | 'integrity' | 'unsupported';
 
 /** Inspect each bounded storage group; an unreadable group is not absence. */
 export async function inspectRecoveryFiles(archive: ReviewedWorkspaceArchive,
-  read: (group: readonly CaseAttachment[]) => Promise<ReadonlyMap<string, Blob | null>>) {
-  const groups = workspaceAttachmentGroups(archive);
-  const rows = (archive.sections.find(item => item.id === 'cases')!.data as { cases: { id: string; attachments?: unknown }[] }).cases;
+  read: (group: readonly CaseAttachment[]) => Promise<ReadonlyMap<string, Blob | null>>,
+  classifyFailure?: (cause: unknown) => OriginalFileReadFailure) {
+  return inspectCaseOriginalFiles(archiveCaseRecords(archive), read, undefined, classifyFailure);
+}
+
+/** A Case review and a recovery rehearsal inspect the same bounded file groups. */
+export async function inspectCaseOriginalFiles(rows: readonly Pick<CaseRecord, 'id' | 'attachments'>[],
+  read: (group: readonly CaseAttachment[]) => Promise<ReadonlyMap<string, Blob | null>>,
+  signal?: AbortSignal, classifyFailure?: (cause: unknown) => OriginalFileReadFailure) {
+  if (!Array.isArray(rows) || rows.length > MAX_CASES) throw new Error('Case records cannot be inspected for required files.');
+  signal?.throwIfAborted();
   const references = new Map<string, { caseId: string; attachment: CaseAttachment }[]>();
   for (const row of rows) for (const attachment of readCaseAttachments(row.attachments) ?? []) {
     const existing = references.get(attachment.digestSha256) ?? [];
     existing.push({ caseId: row.id, attachment }); references.set(attachment.digestSha256, existing);
   }
+  const groups = retainedFileGroups([...references.values()].flatMap(items => items.map(item => item.attachment)));
   let verified = 0, missing = 0, unverified = 0, bytes = 0;
   const checklist: RecoveryFile[] = [];
   for (const group of groups) {
+    signal?.throwIfAborted();
     let files: ReadonlyMap<string, Blob | null> | null = null;
-    try { files = await read(group); } catch { /* Keep failed reads distinct from missing bytes. */ }
+    let failure: OriginalFileReadFailure = 'unavailable';
+    try { files = await read(group); } catch (cause) {
+      // Retain a closed diagnostic category only, never a provider's raw error.
+      const classified = classifyFailure?.(cause);
+      if (classified === 'integrity' || classified === 'unsupported') failure = classified;
+    }
+    signal?.throwIfAborted();
     for (const item of group) {
       if (files?.get(item.digestSha256)) { verified++; bytes += item.byteLength; continue; }
       const state = files === null ? 'unverified' as const : 'missing' as const;
       if (state === 'missing') missing++; else unverified++;
       checklist.push(Object.freeze({ digestSha256: item.digestSha256, byteLength: item.byteLength,
-        references: Object.freeze(references.get(item.digestSha256)!), state }));
+        references: Object.freeze(references.get(item.digestSha256)!), state,
+        ...(state === 'unverified' ? { failure } : {}) }));
     }
   }
   return Object.freeze({ expected: verified + missing + unverified, verified, missing, unverified, bytes,
@@ -42,11 +150,15 @@ export async function inspectRecoveryFiles(archive: ReviewedWorkspaceArchive,
 
 /** Partition content, not provenance: duplicate references remain in Case data. */
 export function workspaceAttachmentGroups(archive: ReviewedWorkspaceArchive): readonly (readonly CaseAttachment[])[] {
+  return retainedFileGroups(archiveCaseRecords(archive).flatMap(row => readCaseAttachments(row?.attachments) ?? []));
+}
+
+function archiveCaseRecords(archive: ReviewedWorkspaceArchive): Pick<CaseRecord, 'id' | 'attachments'>[] {
   const section = archive.sections.find(item => item.id === 'cases');
   if (!section || section.status !== 'ready') throw new Error('Required file coverage cannot be determined from an unsupported Case section.');
   const rows = (section.data as { cases?: unknown })?.cases;
   if (!Array.isArray(rows) || rows.length > MAX_CASES) throw new Error('Backup Case records cannot be inspected for required files.');
-  return retainedFileGroups(rows.flatMap(row => readCaseAttachments(row?.attachments) ?? []));
+  return rows;
 }
 
 /** Match complete selected bytes to the downloaded backup, never filenames. */

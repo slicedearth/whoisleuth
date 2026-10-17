@@ -1,6 +1,7 @@
 import { parseIncidentUrlContext } from '../../../../packages/cases/case-incident-context.mts';
 import { hasLookupUrlScheme, prepareSelectedLookupUrl } from '../../../../packages/evidence/lookup-target.mts';
 import { MAX_HANDOFF_CANDIDATES } from '../../../../packages/investigation/candidate-handoff.mts';
+import { bindLookupCollectionChoices, lookupCollectionChoices } from '../../../../packages/evidence/lookup-collection-receipt.mts';
 import type { CaseRecord } from '../cases.ts';
 import type { saveCandidateHandoff } from '../candidate-handoff.ts';
 import {
@@ -121,6 +122,12 @@ export class LookupCollectionWorkflow {
     state.error = '';
     state.sourceProgress = null;
     const mode = state.request.lookupMode;
+    const originalChoices = lookupCollectionChoices({
+      securityTxt: state.request.includeSecurityTxt,
+      externalIntelligence: state.request.includeExternalIntelligence,
+      malwareHostIntelligence: state.request.includeMalwareHostIntelligence,
+      malwareIocIntelligence: state.request.includeMalwareIocIntelligence,
+    });
     const reveal = this.effects.captureReveal();
     const operation = this.requests.begin(
       () =>
@@ -156,10 +163,16 @@ export class LookupCollectionWorkflow {
         state.error = outcome.message;
         return;
       }
+      phase = 'publication';
+      const receipt = bindLookupCollectionChoices(outcome.value.collectionReceipt, originalChoices);
+      if (receipt && (receipt.requestedDepth !== mode || receipt.targetClass !== outcome.value.type
+        || (receipt.webSelection === 'selected_url') !== Boolean(selectedUrl))) {
+        throw new TypeError('Collection receipt does not match this Lookup operation.');
+      }
       const published = await publishLookupResult(operation, {
         publish: () => {
           phase = 'publication';
-          state.observation.response = outcome.value;
+          state.observation.response = receipt ? { ...outcome.value, collectionReceipt: receipt } : outcome.value;
           state.observation.target = target;
           state.observation.incidentUrl = incident?.exactUrl ?? '';
           state.observation.depth = mode;

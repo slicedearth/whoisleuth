@@ -136,7 +136,7 @@
               {#if workspace.id !== currentId}<button class="btn" type="button" aria-label={`Open workspace ${workspace.name}`} disabled={busy || !supported} onclick={event => choose({ kind: 'switch', id: workspace.id, name: workspace.name }, event.currentTarget)}>Open</button>{/if}
               <button class="btn" type="button" aria-label={`Rename workspace ${workspace.name}`} disabled={busy} onclick={event => choose({ kind: 'rename', workspace }, event.currentTarget)}>Rename</button>
             {/if}
-            {#if workspace.id !== currentId}<button class="btn" type="button" aria-label={`Delete workspace ${workspace.name}`} disabled={busy || !supported} onclick={event => choose({ kind: 'delete', workspace }, event.currentTarget)}>{workspace.state === 'deleting' ? 'Retry deletion' : 'Delete'}</button>{/if}
+            {#if workspace.id !== currentId}<button class="btn" type="button" disabled={busy || !supported} onclick={event => choose({ kind: 'delete', workspace }, event.currentTarget)}>{workspace.state === 'deleting' ? 'Retry deletion' : 'Delete'}<span class="sr-only"> workspace {workspace.name}</span></button>{/if}
           </div>
         </li>
       {/each}

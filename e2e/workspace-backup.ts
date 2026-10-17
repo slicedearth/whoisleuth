@@ -10,6 +10,10 @@ export function workspaceArchivePreview(page: Page) {
   return workspaceArchiveRegion(page).getByRole('group', { name: 'Choose saved data to add', exact: true });
 }
 
+export function workspaceArchiveSections(page: Page) {
+  return workspaceArchivePreview(page).getByRole('list', { name: 'Backup sections to import', exact: true }).getByRole('listitem');
+}
+
 export async function downloadWorkspaceArchive(page: Page) {
   await openDashboardSecondaryWorkspaces(page);
   const archive = workspaceArchiveRegion(page);

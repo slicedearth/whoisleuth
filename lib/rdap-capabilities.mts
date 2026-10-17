@@ -6,7 +6,7 @@
 type UnknownRecord = Record<string, unknown>;
 
 export const RDAP_CAPABILITY_INSPECTION_VERSION = 1;
-export const RDAP_EXTENSION_CATALOG_REVIEWED_AT = '2026-07-31';
+export const RDAP_EXTENSION_CATALOG_REVIEWED_AT = '2026-10-14';
 export const MAX_RDAP_CAPABILITY_DECLARATIONS = 50;
 export const MAX_RDAP_UNKNOWN_CAPABILITIES = 20;
 
@@ -40,7 +40,7 @@ export interface RdapReverseSearchCapability {
 
 export interface RdapCapabilityInspection {
   version: typeof RDAP_CAPABILITY_INSPECTION_VERSION;
-  catalogReviewedAt: typeof RDAP_EXTENSION_CATALOG_REVIEWED_AT;
+  catalogReviewedAt: string;
   state: RdapCapabilityState;
   declarations: RdapExtensionDeclaration[];
   unknownIdentifiers: string[];
@@ -61,10 +61,9 @@ export interface ReviewedRdapExtensionCatalogEntry {
   status: 'current' | 'obsolete';
 }
 
-// Reviewed against the protocol registry on 2026-07-31. The registry-drift
-// audit owns freshness checks; runtime lookup behavior never depends on this
-// catalogue being exhaustive.
-const EXTENSION_CATALOG: Readonly<Record<string, CatalogEntry>> = Object.freeze({
+// Published interpretation snapshot. Saved evidence selects this exact revision;
+// later catalogue revisions extend or replace entries without changing it.
+const JULY_2026_EXTENSION_CATALOG: Readonly<Record<string, CatalogEntry>> = Object.freeze({
   rdap_level_0: {
     label: 'Core RDAP response',
     category: 'core',
@@ -219,8 +218,39 @@ const EXTENSION_CATALOG: Readonly<Record<string, CatalogEntry>> = Object.freeze(
   },
 });
 
+const RDAP_EXTENSION_CATALOGS = Object.freeze({
+  '2026-07-31': JULY_2026_EXTENSION_CATALOG,
+  '2026-10-14': Object.freeze({
+    ...JULY_2026_EXTENSION_CATALOG,
+    reliabilityassessment: {
+      label: 'Reliability assessment metadata',
+      category: 'operator',
+      capability: 'Operator-declared assessment metadata; no assessment is retrieved or verified.',
+    },
+  } satisfies Readonly<Record<string, CatalogEntry>>),
+});
+
+export type RdapExtensionCatalogRevision = keyof typeof RDAP_EXTENSION_CATALOGS;
+const CATALOG_EPOCHS = Object.keys(RDAP_EXTENSION_CATALOGS).sort() as RdapExtensionCatalogRevision[];
+
+export function resolveRdapCapabilityCatalogRevision(value: unknown): RdapExtensionCatalogRevision | null {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/u.test(value)
+    || value < CATALOG_EPOCHS[0]! || value > RDAP_EXTENSION_CATALOG_REVIEWED_AT) return null;
+  const time = Date.parse(`${value}T00:00:00.000Z`);
+  if (!Number.isFinite(time) || new Date(time).toISOString().slice(0, 10) !== value) return null;
+  // Review-only renewals retain the same semantic epoch and the recorded date.
+  for (let index = CATALOG_EPOCHS.length - 1; index >= 0; index -= 1) {
+    const epoch = CATALOG_EPOCHS[index]!;
+    if (epoch <= value) return epoch;
+  }
+  return null;
+}
+
 export function reviewedRdapExtensionCatalog(): ReviewedRdapExtensionCatalogEntry[] {
-  return Object.entries(EXTENSION_CATALOG)
+  const revision = resolveRdapCapabilityCatalogRevision(RDAP_EXTENSION_CATALOG_REVIEWED_AT);
+  if (revision === null) throw new TypeError('Unsupported RDAP capability catalogue revision.');
+  const catalog: Readonly<Record<string, CatalogEntry>> = RDAP_EXTENSION_CATALOGS[revision];
+  return Object.entries(catalog)
     .filter(([, entry]) => entry.category !== 'core')
     .map(([identifier, entry]) => Object.freeze({
       identifier,
@@ -297,7 +327,11 @@ function reverseSearchCapability(
 export function inspectRdapCapabilities(
   parsedValue: unknown,
   status: unknown,
+  catalogReviewedAt: string = RDAP_EXTENSION_CATALOG_REVIEWED_AT,
 ): RdapCapabilityInspection {
+  const revision = resolveRdapCapabilityCatalogRevision(catalogReviewedAt);
+  if (revision === null) throw new TypeError('Unsupported RDAP capability catalogue revision.');
+  const catalog: Readonly<Record<string, CatalogEntry>> = RDAP_EXTENSION_CATALOGS[revision];
   const parsed = record(parsedValue);
   const state = sourceState(parsed, status);
   const rawDeclarations = Array.isArray(parsed?.conformance) ? parsed.conformance : [];
@@ -308,7 +342,7 @@ export function inspectRdapCapabilities(
     if (unique.size >= MAX_RDAP_CAPABILITY_DECLARATIONS) break;
   }
   const declarations = [...unique].sort().map((value): RdapExtensionDeclaration => {
-    const entry = Object.hasOwn(EXTENSION_CATALOG, value) ? EXTENSION_CATALOG[value] : undefined;
+    const entry = Object.hasOwn(catalog, value) ? catalog[value] : undefined;
     return entry
       ? {
           identifier: value,
@@ -344,7 +378,7 @@ export function inspectRdapCapabilities(
 
   return {
     version: RDAP_CAPABILITY_INSPECTION_VERSION,
-    catalogReviewedAt: RDAP_EXTENSION_CATALOG_REVIEWED_AT,
+    catalogReviewedAt,
     state,
     declarations,
     unknownIdentifiers,

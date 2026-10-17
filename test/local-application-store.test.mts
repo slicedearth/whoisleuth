@@ -15,6 +15,8 @@ import { CURRENT_CASE_TIME, currentCaseFixture } from './support/current-case.mt
 import { caseStoreAtCapacity } from './workspace-backup-capacity-fixture.mts';
 import { MAX_CASE_STORE_BYTES } from '../packages/contracts/case-portability.mts';
 import { serializeCaseStore } from '../packages/cases/case-storage-model.mts';
+import { createCase } from '../packages/cases/case-record-operations.mts';
+import { parseLookupCollectionReceipt } from '../packages/evidence/lookup-collection-receipt.mts';
 import { MAX_SELECTED_FILE_TOTAL_BYTES } from '../packages/contracts/selected-file-limits.mts';
 
 const sha = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
@@ -159,12 +161,17 @@ test('replaying a confirmed transaction is idempotent and changing its content u
   const provider = providerFor(store, (_change, bytes) => { packet = bytes; });
   try {
     await provider.initialize(BROWSER_LOCAL_COLLECTIONS);
-    await provider.update(CASES_COLLECTION, () => ({ document: [currentCaseFixture()], result: null }));
+    const receipt = parseLookupCollectionReceipt(JSON.parse(await readFile(new URL('./fixtures/cli-lookup-v3.json', import.meta.url), 'utf8')).collectionReceipt)!;
+    const record = createCase({domain: 'example.test', evidence: {registrar: 'Example registrar', scanDepth: 'deep', collectionReceipt: receipt},
+      evidencePin: {label: 'Selected registrar', value: 'Example registrar', checkpointId: 'retained-checkpoint', collectionDepth: 'deep', observedAt: CURRENT_CASE_TIME},
+      checkpointCollectionReceipts: [{checkpointId: 'retained-checkpoint', collectionReceipt: receipt}],
+    }, CURRENT_CASE_TIME);
+    await provider.update(CASES_COLLECTION, () => ({ document: [record], result: null }));
     const bytes = packet!, decoded = await decodeLocalApplicationCommit(bytes);
     await store.commit(decoded, decoded.operationId, sha(bytes));
     assert.equal(await store.receipt(decoded.operationId), sha(bytes));
     assert.equal((await store.manifests(['cases']))[0]?.revision, 2);
-    assert.equal((await provider.read(CASES_COLLECTION)).length, 1);
+    assert.deepEqual(await provider.read(CASES_COLLECTION), [record]);
     await assert.rejects(store.commit(decoded, decoded.operationId, 'a'.repeat(64)), { code: 'LOCAL_DATA_INTEGRITY' });
     const database = new DatabaseSync(path.join(directory, LOCAL_WORKSPACE_FILE));
     try { database.prepare('UPDATE receipts SET digest=? WHERE id=?').run('a'.repeat(4_096), decoded.operationId); }

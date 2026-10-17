@@ -1,8 +1,9 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, failBrowserLocalReads, holdBrowserLocalTransaction, lookupDomainIdentity, migrateLegacyBrowserData, openDashboardGuidedInvestigation, openDashboardSecondaryWorkspaces, selectBulkResultView, useTheme } from './helpers';
+import { expectNoHorizontalOverflow, failBrowserLocalReads, holdBrowserLocalTransaction, lookupDomainIdentity, migrateLegacyBrowserData, openDashboardGuidedInvestigation, openDashboardSecondaryWorkspaces, readBrowserLocalCollection, selectBulkResultView, useTheme } from './helpers';
 import { BASE_URL } from './constants.ts';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
+import { formattedCaseNumber } from '../packages/cases/case-workflow-metadata.mts';
 import { INVESTIGATION_GUIDE_KEY as GUIDE_KEY } from '../frontend/src/lib/investigation-guide-storage';
 
 type RecipeLabel =
@@ -80,7 +81,7 @@ async function markReviewed(page: import('@playwright/test').Page, step: string)
 async function useGuideReturn(page: import('@playwright/test').Page, step: string) {
   await openWorkPlan(page);
   const action = currentAction(page);
-  const control = page.getByRole('button', { name: `Return to guided investigation: ${step}` });
+  const control = page.getByRole('button', { name: /^Guided investigation /u }).filter({ has: page.getByText(step, { exact: true }) });
   const hasStableUsefulExposure = () => action.evaluate(async (element) => {
     const exposed = () => {
       const rect = element.getBoundingClientRect();
@@ -293,14 +294,20 @@ async function retainCases(page: import('@playwright/test').Page, label: string,
     await chooseCase.focus();
     await chooseCase.press('Enter');
     await expect(caseSelector).toBeFocused();
-    await caseSelector.selectOption({ label: firstDomain });
+    const choice = caseSelector.getByRole('option').filter({ hasText: `${firstDomain} ·` });
+    await expect(choice).toHaveCount(1);
+    await caseSelector.selectOption((await choice.getAttribute('value'))!);
     await expect(caseSelector).toBeFocused();
   } else {
     await expect(completedGuide.getByRole('button', { name: 'Choose Case for handoff' })).toHaveCount(0);
-    await expect(caseSelector.locator('option:checked')).toHaveText(firstDomain);
   }
+  const expectedCases = (await readBrowserLocalCollection(page, 'cases')).records.filter(row => row.value.domain === firstDomain);
+  expect(expectedCases).toHaveLength(1);
+  const expectedCase = expectedCases[0]!.value;
+  await expect(caseSelector).toHaveValue(expectedCase.id);
+  await expect(caseSelector.locator('option:checked')).toHaveText(`${firstDomain} · ${formattedCaseNumber(expectedCase.id)}`);
   await expect(completedGuide).toContainText('Case needs a reviewed disposition or decision');
-  await expect(completedGuide.getByRole('link', { name: 'Review case decision workspace' })).toHaveAttribute('href', /\/cases\?case=.+&section=response$/u);
+  await expect(completedGuide.getByRole('link', { name: 'Review case decision workspace' })).toHaveAttribute('href', /\/cases\?case=.+&section=assessment$/u);
 }
 
 test('the dashboard starts a selected tab-scoped recipe without navigation or analysis', async ({ page }) => {
@@ -412,7 +419,9 @@ test('a response playbook reaches focused local packet preflight without a reque
   const preflight = page.locator('details[id^="case-response-preflight-"]');
   await expect(preflight).toHaveAttribute('open', '');
   await expect(preflight.getByText('Prepare a reviewed abuse evidence packet', { exact: true })).toBeFocused();
-  await expect(preflight).toContainText('This prepares local drafts only; nothing is sent.');
+  await expect(preflight).toContainText('Nothing is sent here.');
+  await preflight.getByRole('button', { name: 'View full readiness matrix', exact: true }).click();
+  await expect(preflight.locator('[id^="packet-readiness-matrix-"]')).toBeFocused();
   await expect(preflight).toContainText('Lookup Decision Facts are transient and are not copied into saved Cases');
   const allowedStartupReads = new Set(['/api/session', '/api/capabilities']);
   for (const request of observedRequests) {
@@ -660,9 +669,10 @@ test('return control follows every visibility change in a delivered batch', { ta
   });
   await startRecipe(page);
   const action = currentAction(page);
-  const control = page.getByRole('button', { name: 'Return to guided investigation: Collect domain evidence' });
+  const control = page.getByRole('button', { name: /^Guided investigation /u }).filter({ has: page.getByText('Collect domain evidence', { exact: true }) });
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
   await expect(control).toBeVisible();
+  await expect(control).toHaveAccessibleName(/^Guided investigation Collect domain evidence Review step/u);
   await page.evaluate(() => (window as typeof window & { __guideIntersectionBatch: BatchControl }).__guideIntersectionBatch.hold());
   await action.evaluate(element => element.scrollIntoView({ block: 'center' }));
   const ratios = () => page.evaluate(() => (window as typeof window & { __guideIntersectionBatch: BatchControl }).__guideIntersectionBatch.ratios());
@@ -683,7 +693,7 @@ test('return control recovers when the first action-panel scroll is displaced', 
   await startRecipe(page);
   const action = currentAction(page);
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-  const control = page.getByRole('button', { name: 'Return to guided investigation: Collect domain evidence' });
+  const control = page.getByRole('button', { name: /^Guided investigation /u }).filter({ has: page.getByText('Collect domain evidence', { exact: true }) });
   await expect(control).toBeVisible();
 
   await action.evaluate((element) => {
@@ -861,10 +871,18 @@ test('failed guide progress and clear operations retain the draft and visible co
   }, GUIDE_KEY);
   await currentAction(page).getByRole('button', { name: 'Confirm partial', exact: true }).click();
   await expect(page.locator('.guide').getByRole('alert')).toContainText('Could not retain');
+  const plan = page.locator('.guide > .work-plan');
+  await plan.locator(':scope > summary').click();
+  await expect(plan).not.toHaveAttribute('open');
+  await expect(page.locator('.guide').getByRole('alert')).toBeVisible();
+  await plan.locator(':scope > summary').click();
   await expect(rationale).toHaveValue('The selected source needs a later review.');
   await expect(page.locator('.guide')).toContainText('0 of 3 steps reviewed');
   await page.getByRole('button', { name: 'Clear context', exact: true }).click();
   await expect(page.locator('.guide').getByRole('alert')).toContainText('Could not clear');
+  await plan.locator(':scope > summary').click();
+  await expect(page.locator('.guide').getByRole('alert')).toBeVisible();
+  await plan.locator(':scope > summary').click();
   await expect(rationale).toHaveValue('The selected source needs a later review.');
   await page.evaluate(() => { (window as typeof window & { failGuideWrites?: boolean }).failGuideWrites = false; });
   await currentAction(page).getByRole('button', { name: 'Confirm partial', exact: true }).click();
@@ -958,21 +976,26 @@ test('shows retained Case context without treating a record update as evidence o
   await expect(page.locator('.guide')).toContainText('0 of 3 steps reviewed');
 });
 
-test('the guide does not arbitrarily choose between retained hostname and parent Cases', async ({ page }) => {
+test('the guide distinguishes same-domain Cases without choosing between hostname and parent records', async ({ page }) => {
   await migrateLegacyBrowserData(page, {
-    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: ['example.test', 'login.example.test'].map((domain, index) => ({
+    'whois-rdap-cases-v1': { version: CASE_SCHEMA_VERSION, cases: ['example.test', 'login.example.test', 'login.example.test'].map((domain, index) => ({
       id: `guide-case-${index}`, domain, status: 'new', disposition: 'unreviewed', tags: [], notes: [], source: 'manual', evidenceHistory: [], createdAt: '2026-07-20T00:00:00.000Z', updatedAt: '2026-07-20T00:00:00.000Z',
     })) },
   }, { destination: '/dashboard' });
   await startRecipe(page, 'New-domain triage', 'login.example.test');
-  await expect(page.locator('.context-tray')).toContainText('Choose a Case (2 match this target)');
+  await expect(page.locator('.context-tray')).toContainText('Choose a Case (3 match this target)');
   await expect(page.locator('.guide').getByRole('link', { name: 'Review case decision workspace' })).toHaveCount(0);
   const caseSelector = page.getByRole('combobox', { name: 'Case for this guide' });
   await expect(caseSelector).toHaveValue('');
-  await expect(caseSelector.getByRole('option')).toHaveCount(3);
+  await expect(caseSelector.getByRole('option')).toHaveCount(4);
+  const firstLabel = `login.example.test · ${formattedCaseNumber('guide-case-1')}`;
+  const secondLabel = `login.example.test · ${formattedCaseNumber('guide-case-2')}`;
+  expect(firstLabel).not.toBe(secondLabel);
+  await expect(caseSelector.getByRole('option', { name: firstLabel, exact: true })).toHaveCount(1);
+  await expect(caseSelector.getByRole('option', { name: secondLabel, exact: true })).toHaveCount(1);
   await caseSelector.focus();
-  await caseSelector.selectOption({ label: 'login.example.test' });
-  await expect(caseSelector).toHaveValue('guide-case-1');
+  await caseSelector.selectOption({ label: secondLabel });
+  await expect(caseSelector).toHaveValue('guide-case-2');
   await expect(caseSelector).toBeFocused();
   await expect(page.locator('.context-tray')).toContainText('new · unreviewed');
   await page.setViewportSize({ width: 320, height: 760 });

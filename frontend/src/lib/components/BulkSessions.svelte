@@ -3,6 +3,7 @@
   import { tick } from 'svelte';
   import { compareSavedBulkSessions, type BulkSession, type BulkSessionSavePreview } from '#lib/bulk-sessions.ts';
   import { classifyBulkSourceCoverage } from '#lib/analysis/bulk-source-coverage.ts';
+  import { planBulkSessionResume } from '#lib/analysis/bulk-session-model.ts';
   import type { BrowserLocalCollectionLoadState } from '#lib/browser-local-data-service.ts';
 
   let {
@@ -71,10 +72,6 @@
 
   function failedCount(session: BulkSession): number {
     return session.results.filter((result) => result.status === 'error').length;
-  }
-
-  function unstartedCount(session: BulkSession): number {
-    return Math.max(0, session.domains.length - session.results.length);
   }
 
   function sourceSummary(session: BulkSession): string {
@@ -155,23 +152,26 @@
   {/if}
 
   {#if sessions.length}
+    <p>Load restores recorded results without collection. Failed rows are kept until you deliberately retry them.</p>
     <div class="session-list">
       {#each sessions as session (session.id)}
+        {@const resume = planBulkSessionResume(session)}
         <article class:current={session.id === currentSessionId}>
           <div>
             <h3>{session.name}</h3>
-            <p>{session.mode === 'deep' ? 'Deep' : 'Fast'} · {session.results.length}/{session.domains.length} settled · {sourceSummary(session)}</p>
+            <p>{session.mode === 'deep' ? 'Deep' : 'Fast'} · {session.results.length}/{session.domains.length} processed · {sourceSummary(session)}</p>
             <p>Profile context: {session.profileContext.sourceState.replace('_', ' ')}{session.profileContext.limitation ? ` — ${session.profileContext.limitation}` : ''}</p>
             <dl>
               <div><dt>Complete</dt><dd>{completedCount(session)}</dd></div>
               <div><dt>Failed</dt><dd>{failedCount(session)}</dd></div>
-              <div><dt>Unstarted</dt><dd>{unstartedCount(session)}</dd></div>
+              <div><dt>Unstarted</dt><dd>{resume.pendingDomains.length}</dd></div>
               <div><dt>Saved</dt><dd>{formatEvidenceDate(session.updatedAt)}</dd></div>
             </dl>
+            {#if resume.pendingDomains.length}<p>Resume keeps {resume.retainedRows} recorded row{resume.retainedRows === 1 ? '' : 's'} and collects only the {resume.pendingDomains.length} unstarted domain{resume.pendingDomains.length === 1 ? '' : 's'}.</p>{/if}
           </div>
           <div class="session-actions">
             <button type="button" class="btn small" disabled={profileContextLoading || running || Boolean(retention)} onclick={() => loadSession(session)}>Load</button>
-            {#if unstartedCount(session) > 0}
+            {#if resume.pendingDomains.length > 0}
               <button type="button" class="btn small" disabled={profileContextLoading || running || Boolean(retention)} onclick={() => resumeSession(session)}>Resume unstarted</button>
             {/if}
             <button id={`bulk-session-delete-${session.id}`} type="button" class="btn small danger" disabled={running || Boolean(retention)} onclick={() => void deleteAndFocus(session)}>Delete</button>
@@ -200,7 +200,7 @@
         {#if baselineId && currentId && baselineId === currentId}
           <p class="session-status">Choose two different sessions.</p>
         {:else if comparison}
-          <p><strong>{comparison.changed}</strong> changed, <strong>{comparison.added}</strong> added, <strong>{comparison.removed}</strong> absent from the later settled set, and <strong>{comparison.unchanged}</strong> unchanged.</p>
+          <p><strong>{comparison.changed}</strong> changed, <strong>{comparison.added}</strong> added, <strong>{comparison.removed}</strong> absent from the later processed results, and <strong>{comparison.unchanged}</strong> unchanged.</p>
           {#if comparison.rows.length}
             <div class="table-wrap">
               <table>
@@ -239,8 +239,8 @@
   article p{color:var(--muted);font-size:var(--text-sm);margin-top:4px}
   dl{display:flex;flex-wrap:wrap;gap:8px 16px;margin:12px 0 0}
   dl div{display:flex;gap:6px}
-  dt{color:var(--muted);font-size:var(--text-xs)}
-  dd{margin:0;font-weight:700;font-size:var(--text-xs)}
+  dt{color:var(--muted);font-size:var(--text-xs);flex-shrink:0}
+  dd{min-width:0;margin:0;font-weight:700;font-size:var(--text-xs)}
   .session-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
   .retention-review{margin-top:16px;padding:14px;border:1px solid var(--border);border-radius:var(--radius-sm);overflow-wrap:anywhere}
   .retention-review h3{margin:0}.retention-review .session-actions{justify-content:flex-start}

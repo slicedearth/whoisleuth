@@ -191,6 +191,26 @@ and totals in the commit and pull-request evidence.
 
 ## Merge, tag, and roll back
 
+### Fictional feature walkthroughs
+
+Release notes can link to an existing fictional example and its isolated practice:
+
+| Example | Reading view | Interactive practice |
+| --- | --- | --- |
+| Conflicting source accounts | `/examples#source-disagreement` | `/demo?practice=contradictory-sources#case-practice` |
+| Separate page and advertisement outcomes | `/examples#separate-response-scopes` | `/demo?practice=credential-form#case-practice` |
+| Related hosts with different affected identities | `/examples#related-hosts` | `/demo?practice=related-hosts#case-practice` |
+| A requested handoff amendment | `/examples#amended-handoff` | `/demo?practice=requested-amendment#case-practice` |
+
+Use a public link only after the corresponding website revision is deployed,
+and describe the feature's actual availability in that release and deployment
+mode. These links identify fixed examples, not real targets or saved Cases.
+Opening them performs no collection, submission or publication. A subsequent
+tour choice cannot replace an open practice's drafts without confirmation;
+an unavailable scenario is labelled rather than treated as an available feature.
+
+### Accepted revision and rollback
+
 Merge releases through a reviewed pull request after protected-branch checks
 pass. Do not tag an unverified feature-branch commit. Once the protected
 `main` commit and its production deployment are verified, create the matching

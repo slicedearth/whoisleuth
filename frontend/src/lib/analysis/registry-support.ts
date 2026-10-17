@@ -49,7 +49,8 @@ export function registrySupportLabel(value: unknown): string {
     ? value.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, 128)
     : '';
   if (!text) return 'Unknown';
-  return text.replaceAll('_', ' ').replaceAll('-', ' ').replace(/\b\w/g, (character) => character.toUpperCase());
+  return text.replaceAll('_', ' ').replaceAll('-', ' ')
+    .replace(/\b(?:icann|iana|rdap|whois|dnssec|dns)\b|\b\w/gi, (word) => word.toUpperCase());
 }
 
 export function registryAccessLabel(value: unknown): string {

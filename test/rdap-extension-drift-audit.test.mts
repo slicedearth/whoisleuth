@@ -29,11 +29,11 @@ beta,Any,[RFC0001],[IETF],COMMON\r
   });
 
   test('keeps the committed fixture aligned with the reviewed runtime catalogue', () => {
-    const report = auditRdapExtensionRegistry({ now: () => new Date('2026-07-31T00:00:00.000Z') });
+    const report = auditRdapExtensionRegistry({ now: () => new Date('2026-10-14T15:00:00.000Z') });
     assert.equal(report.schema, RDAP_EXTENSION_DRIFT_AUDIT_SCHEMA);
     assert.equal(report.mode, 'fixture');
     assert.equal(report.status, 'current');
-    assert.equal(report.source.entries, 29);
+    assert.equal(report.source.entries, 30);
     assert.deepEqual(report.changes, {
       added: [],
       removed: [],

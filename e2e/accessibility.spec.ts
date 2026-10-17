@@ -5,6 +5,7 @@ import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, lookupDom
 import { caseRecord, snapshot } from './case-test-fixtures';
 import { openCaseSection } from './console-navigation';
 import { PUBLIC_REFERENCE_DESTINATIONS } from '../frontend/src/lib/public-reference-navigation.ts';
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'];
 const REQUIRED_MANUAL_RULES = new Set([
@@ -241,7 +242,7 @@ test('scans representative public initial, error, populated, and expanded states
   await useTheme(page, 'light');
   await page.goto('/demo');
   await page.getByRole('button', { name: 'Begin with Brands' }).click();
-  await page.getByRole('button', { name: 'Use synthetic profile' }).click();
+  await page.getByRole('button', { name: 'Use profile' }).click();
   await page.getByRole('button', { name: 'Generate fixed candidates' }).click();
   await page.getByRole('button', { name: 'Review 3 candidates in Bulk' }).click();
   await page.getByRole('button', { name: 'Inspect exampleshop-login.example' }).click();
@@ -252,7 +253,7 @@ test('scans representative public initial, error, populated, and expanded states
   await expect(mobileComparison).toHaveAttribute('open', '');
   await expectNoAccessibilityViolations(page, testInfo, 'public-populated-expanded-light-mobile');
   await expectSequentialHeadingOrder(page, 'public populated demo');
-  await page.getByRole('button', { name: 'Open synthetic Case' }).click();
+  await page.getByRole('button', { name: 'Open case' }).click();
   await expect(page.getByRole('heading', { name: 'Document and revisit exampleshop-login.example' })).toBeVisible();
   await expectSequentialHeadingOrder(page, 'public monitor demo');
 });
@@ -411,6 +412,36 @@ test('scans populated Lookup, Bulk, and guided-investigation states', async ({ p
   await runBulkScan(page, ['portal.test', 'peer.test', 'mail.test']);
   await expect(page.locator('.results-table tbody tr')).toHaveCount(3);
   await expectNoAccessibilityViolations(page, testInfo, 'console-bulk-populated-light-mobile');
+  const shortlist = page.getByRole('button', { name: /^(?:Add portal\.test to|Remove portal\.test from) shortlist$/u });
+  await expect(shortlist).toHaveAccessibleName('Add portal.test to shortlist');
+  await expect(shortlist).toHaveAttribute('aria-pressed', 'false');
+  await shortlist.focus();
+  await shortlist.press('Enter');
+  await expect(shortlist).toHaveAccessibleName('Remove portal.test from shortlist');
+  await expect(shortlist).toHaveAttribute('aria-pressed', 'true');
+  await expect(shortlist).toBeFocused();
+  await expect(shortlist).toBeInViewport({ ratio: 1 });
+  expect(await shortlist.evaluate((button) => {
+    const box = button.getBoundingClientRect();
+    return [[.25, .25], [.75, .25], [.25, .75], [.75, .75], [.5, .5]].every(([x, y]) => {
+      const hit = document.elementFromPoint(box.left + box.width * x!, box.top + box.height * y!);
+      return hit === button || button.contains(hit);
+    });
+  })).toBe(true);
+  if (captureVisualEvidenceEnabled()) {
+    for (const [width, theme] of [[390, 'light'], [1280, 'dark']] as const) {
+      await page.setViewportSize({ width, height: 844 });
+      await useTheme(page, theme);
+      await shortlist.scrollIntoViewIfNeeded();
+      await page.screenshot({ path: testInfo.outputPath(`shortlist-selected-${width}-${theme}.png`) });
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
+    await useTheme(page, 'light');
+  }
+  await shortlist.focus();
+  await shortlist.press('Enter');
+  await expect(shortlist).toHaveAccessibleName('Add portal.test to shortlist');
+  await expect(shortlist).toHaveAttribute('aria-pressed', 'false');
 
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/dashboard');
@@ -420,7 +451,14 @@ test('scans populated Lookup, Bulk, and guided-investigation states', async ({ p
   const currentAction = page.locator('.guide .current-action');
   await currentAction.getByRole('button', { name: 'Review requests' }).click();
   await expect(currentAction.getByRole('region', { name: /Review requests for/ })).toBeVisible();
+  const resources = page.getByRole('navigation', { name: 'Investigation help' }).getByRole('link', { name: /^Open resources\b/u });
+  await expect(resources).toHaveCount(1);
+  await expect(resources).toHaveAccessibleName(/ Opens in a new tab\.$/u);
+  await expect(resources).toHaveAttribute('href', '/resources#start');
+  await expect(resources).toHaveAttribute('target', '_blank');
+  await expect(resources).toHaveAttribute('rel', 'noopener noreferrer');
   await expectNoAccessibilityViolations(page, testInfo, 'console-guided-investigation-request-review-light-desktop');
+  if (captureVisualEvidenceEnabled()) await resources.screenshot({ path: testInfo.outputPath('guided-resources-link.png') });
 });
 
 test.describe('anonymous login accessibility', () => {

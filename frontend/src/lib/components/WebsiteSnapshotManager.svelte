@@ -1,6 +1,7 @@
 <script lang="ts">
   import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import { onMount } from 'svelte';
+  import ComparisonFrame from './ComparisonFrame.svelte';
   import { parseBoundedJson } from '#lib/bounded-json.ts';
   import {
     compareWebsiteSnapshots,
@@ -195,10 +196,34 @@
     <button class="btn" type="button" onclick={() => void refresh(domain)}>Retry snapshot read</button>
   {:else if domainSnapshots.length}
     <div class="comparison-controls">
-      <label class="field">Earlier snapshot<select bind:value={beforeId} disabled={operation !== 'ready'}><option value="">Choose snapshot</option>{#each domainSnapshots as item}<option value={item.id}>{when(item.observedAt)}</option>{/each}</select></label>
-      <label class="field">Later snapshot<select bind:value={afterId} disabled={operation !== 'ready'}><option value="">Choose snapshot</option>{#each domainSnapshots as item}<option value={item.id}>{when(item.observedAt)}</option>{/each}</select></label>
+      <label class="field">Earlier snapshot<select bind:value={beforeId} disabled={operation !== 'ready'}><option value="">Choose snapshot</option>{#each domainSnapshots as item, index}<option value={item.id}>{index + 1} · {when(item.observedAt)} · {item.id}</option>{/each}</select></label>
+      <label class="field">Later snapshot<select bind:value={afterId} disabled={operation !== 'ready'}><option value="">Choose snapshot</option>{#each domainSnapshots as item, index}<option value={item.id}>{index + 1} · {when(item.observedAt)} · {item.id}</option>{/each}</select></label>
     </div>
-    {#if comparison}
+    {#if comparison && before && after}
+      <ComparisonFrame>
+      {#snippet header()}<h4>Selected website observations</h4>{/snippet}
+      {#snippet left()}
+        <section aria-label="Earlier website observation">
+          <h5>Earlier</h5>
+          <dl class="observation-metadata">
+            <dt>Snapshot ID</dt><dd><code>{before.id}</code></dd>
+            <dt>Observed</dt><dd>{when(before.observedAt)}</dd>
+            <dt>Saved locally</dt><dd>{when(before.savedAt)}</dd>
+            <dt>Collection</dt><dd>{before.complete ? 'Complete' : 'Partial'}{before.truncated ? ' · Truncated' : ''}</dd>
+          </dl>
+        </section>
+      {/snippet}
+      {#snippet right()}
+        <section aria-label="Later website observation">
+          <h5>Later</h5>
+          <dl class="observation-metadata">
+            <dt>Snapshot ID</dt><dd><code>{after.id}</code></dd>
+            <dt>Observed</dt><dd>{when(after.observedAt)}</dd>
+            <dt>Saved locally</dt><dd>{when(after.savedAt)}</dd>
+            <dt>Collection</dt><dd>{after.complete ? 'Complete' : 'Partial'}{after.truncated ? ' · Truncated' : ''}</dd>
+          </dl>
+        </section>
+      {/snippet}
       <div class="comparison" class:incomparable={!comparison.compatible}>
         <strong>{comparison.compatible ? `${comparison.changes.length} field difference${comparison.changes.length === 1 ? '' : 's'} to review` : 'Snapshots are not comparable'}</strong>
         {#if before?.webObservationMode || after?.webObservationMode}<p>Selected URL snapshots omit paths and queries. Web differences cannot establish a change at the same page; certificate and DNS evidence retain their separate scope.</p>
@@ -222,6 +247,7 @@
           </ul>
         </section>
       {/if}
+      </ComparisonFrame>
     {/if}
     <details>
       <summary>Manage {domainSnapshots.length} saved snapshot{domainSnapshots.length === 1 ? '' : 's'}</summary>
@@ -284,6 +310,11 @@
   h3,.eyebrow{margin:0}
   .snapshot-manager>p{color:var(--muted);font-size:var(--text-xs);line-height:1.55}
   .comparison-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:12px}
+  h5{margin:0;font-size:var(--text-sm)}
+  .observation-metadata{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 10px;margin:10px 0 0;font-size:var(--text-xs)}
+  .observation-metadata dt{color:var(--muted)}
+  .observation-metadata dd{min-width:0;margin:0;overflow-wrap:anywhere}
+  .observation-metadata code{white-space:normal;overflow-wrap:anywhere}
   .comparison{margin-top:10px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface)}
   .comparison.incomparable{border-color:var(--amber)}
   .comparison ul,.saved-list{display:grid;gap:6px;margin:9px 0 0;padding:0;list-style:none}

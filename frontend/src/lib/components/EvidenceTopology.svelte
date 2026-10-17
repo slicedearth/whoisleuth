@@ -325,7 +325,7 @@
   {#if graph.truncated}
     <p class="topology-note">This overview reached its {graph.nodes.length}-item display limit. Other evidence remains available below.</p>
   {:else if !compact}
-    <p class="topology-note"><span class="solid-sample" aria-hidden="true"></span> Solid paths are collected sources. <span class="derived-sample" aria-hidden="true"></span> Dashed paths are bounded analysis derived from collected evidence.</p>
+    <p class="topology-note"><span class="solid-sample" aria-hidden="true"></span><span class="derived-sample" aria-hidden="true"></span> Lines connect source sections and derived analyses to this result. Read each item’s state for collection status.</p>
   {/if}
 </section>
 

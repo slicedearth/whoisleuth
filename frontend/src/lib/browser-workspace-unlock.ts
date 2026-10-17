@@ -1,6 +1,7 @@
 import { BrowserLocalDataError, type BrowserLocalDataCodec } from './browser-local-data-content.ts';
 import { clearProtectedBrowserWorkspaceSession, currentBrowserWorkspaceId } from './browser-workspace-context.ts';
 import { workspaceEncryptionIdentity, type BrowserWorkspaceEncryption } from './browser-workspace-encryption-model.ts';
+import { clearConsoleReferenceView } from './console-workflow-state.ts';
 
 // Keys belong to this document, never to browser storage or a worker message.
 let unlocked: { id: string; identity: string; codec: BrowserLocalDataCodec; lock: () => void } | null = null;
@@ -9,6 +10,7 @@ export function lockBrowserWorkspace(): void {
   unlocked?.lock();
   unlocked = null;
   clearProtectedBrowserWorkspaceSession();
+  clearConsoleReferenceView();
 }
 
 export function hasUnlockedBrowserWorkspace(): boolean { return unlocked !== null; }

@@ -98,6 +98,7 @@
 
 <section id="tools" class="resource-section" aria-labelledby="tools-title">
   <div class="section-intro"><h2 id="tools-title">Choose the right tool</h2></div>
+  <p><a href="/link-inspector">Open the offline Link Inspector</a> to review pasted links without signing in or opening their destinations.</p>
   <div class="tool-guide">
     {#each toolGuides as tool}
       <details class="tool-entry compact-disclosure" id={`tool-${tool.id}`}>
@@ -145,7 +146,7 @@
     <h3 id="result-layout-title">Find your way around a Lookup result</h3>
     <p>Start with At a glance, then open the evidence relevant to your question.</p>
     <ol>
-      <li><strong>Registration</strong><span>Compare registry, registrar RDAP and WHOIS without merging their authority.</span></li>
+      <li><strong>Registration</strong><span>Compare registry, registrar RDAP and WHOIS. Use Explain a lifecycle date to inspect and copy the retained date values and their conversion.</span></li>
       <li><strong>Web and DNS</strong><span>Review point-in-time DNS, HTTP, TLS, page, technology and posture evidence.</span></li>
       <li><strong>Relationships and history</strong><span>Switch between source coverage, exact relationships and dated lifecycle events.</span></li>
       <li><strong>Source quality</strong><span>Check completeness, freshness, timing, provenance and request diagnostics.</span></li>
@@ -194,7 +195,6 @@
   .tool-guide{display:grid;gap:8px}.tool-entry{border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
   .tool-entry summary{padding:18px;font:400 var(--text-sm)/1.5 var(--font-sans)}.tool-entry summary>span{display:inline-grid;gap:6px;max-width:calc(100% - 28px);vertical-align:top}.tool-entry summary strong{color:var(--accent);font-size:var(--text-md)}.tool-entry summary span span{color:var(--muted)}.tool-entry dl{padding:0 18px 18px}
   .reference-fold{border-inline:0;border-bottom:0;border-radius:0;background:transparent}.reference-fold summary{padding:0 0 16px}.reference-fold h2{display:inline;font:700 clamp(1.45rem,2.5vw,1.9rem)/1.3 var(--font-sans)}.reference-fold>p{color:var(--muted);line-height:1.6}
-  .reference-link{display:inline-flex;align-items:center;gap:10px;min-height:44px;color:var(--accent);font-weight:650}
   .resource-section{padding:32px 0;border-top:1px solid var(--border)}.section-intro{max-width:790px;margin-bottom:24px}.section-intro h2{margin:0 0 .65rem;font:700 clamp(1.45rem,2.5vw,1.9rem)/1.25 var(--font-sans);letter-spacing:-.025em}.section-intro>p:not(.eyebrow){margin:0;color:var(--muted);line-height:1.65}
   .reference-pages{--grid-min:180px;--grid-gap:8px;margin:0 0 12px}.reference-pages a{display:grid;min-width:0;gap:6px;padding:14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.reference-pages a:hover,.reference-pages a:focus-visible{border-color:var(--accent);background:rgb(var(--accent-rgb) / .06)}.reference-pages strong{color:var(--accent);font:700 var(--text-sm) var(--mono)}.reference-pages span{color:var(--muted);font-size:var(--type-supporting-size);line-height:1.45}
   .tool-guide,.reference-guide{--grid-min:330px;--grid-gap:10px}.reference-guide article{padding:20px}.reference-guide article:only-child{grid-column:1 / -1}.reference-guide article:only-child dl{grid-template-columns:repeat(2,minmax(0,1fr))}.reference-guide h3{margin:0 0 16px;color:var(--accent);font:700 1.05rem var(--mono)}.tool-guide dl,.reference-guide dl{display:grid;gap:1px;margin:0;background:var(--border)}.tool-guide dl div,.reference-guide dl div{display:grid;grid-template-columns:128px minmax(0,1fr);gap:12px;padding:10px;background:var(--panel)}.tool-guide dt,.reference-guide dt{color:var(--muted);font:650 var(--type-label-size) var(--mono)}.tool-guide dd,.reference-guide dd{margin:0;font-size:var(--type-supporting-size);line-height:1.5}

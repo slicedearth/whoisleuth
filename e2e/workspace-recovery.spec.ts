@@ -14,6 +14,7 @@ import { encryptWorkspaceArchive } from '../packages/workspace/workspace-archive
 import { createCase } from '../packages/cases/case-record-operations.mts';
 import type { CaseAttachment } from '../packages/cases/case-attachment-model.mts';
 import { decryptInvestigationPackage } from '../packages/investigation/investigation-package-crypto.mts';
+import { buildInvestigationPackage } from '../packages/investigation/investigation-package.mts';
 
 const NOW = '2026-09-01T00:00:00.000Z', PASSWORD = '<synthetic recovery fixture>';
 const panel = (page: Page) => page.locator('details.recovery');
@@ -52,6 +53,12 @@ test('downloaded backup and file packages rehearse independently without switchi
   const before = await readBrowserLocalCollection(page, 'cases');
   const originalSelection = await page.evaluate(key => sessionStorage.getItem(key), SELECTION);
   const { content } = await downloadWorkspaceArchive(page);
+  const preparedCoverage = page.locator('.backup-coverage');
+  await preparedCoverage.locator(':scope > summary').click();
+  await expect(preparedCoverage).toContainText('2 Case file references require 1 distinct original file (');
+  await expect(preparedCoverage).toContainText('Saved review position');
+  await expect(preparedCoverage).toContainText('Unfinished Case forms');
+  await expect(preparedCoverage).toContainText('not confirmation of a completed download or restore');
   const fileBackup = page.locator('.file-backup');
   await expect(fileBackup.locator(':scope > summary')).toContainText('1 referenced file separately');
   await fileBackup.locator(':scope > summary').click();
@@ -66,7 +73,18 @@ test('downloaded backup and file packages rehearse independently without switchi
   expect(independent.identityVerified).toBe(true); expect(independent.contents.size).toBe(1);
   expect(Buffer.from(independent.contents.get('artifact-1')!)).toEqual(bytes);
   expect(independent.manifest.artifacts[0]).toMatchObject({ source: { identity: null, observedAt: null } });
-  await review(page, content); const recovery = await start(page);
+  await review(page, content);
+  const coverage = panel(page).locator('.backup-coverage');
+  await coverage.locator(':scope > summary').click();
+  await expect(coverage).toContainText('2 Case file references require 1 distinct original file (');
+  const recovery = await start(page);
+  await recovery.getByText('Recovery set index', { exact: true }).click();
+  const archiveIndex = recovery.getByRole('region', { name: 'Selected workspace backup', exact: true });
+  const sourceIndex = recovery.getByRole('region', { name: 'Matching recovery sources', exact: true });
+  await expect(archiveIndex).toContainText(`sha256:${createHash('sha256').update(content).digest('hex')}`);
+  await expect(archiveIndex).toContainText(`${Buffer.byteLength(content).toLocaleString()} bytes`);
+  await expect(archiveIndex).toContainText(`whoisleuth.workspace-archive v${JSON.parse(content).version}`);
+  await expect(sourceIndex.locator('ol > li')).toHaveCount(0);
   await expect(recovery.getByRole('status')).toContainText('recovery is not fully verified');
   await expect(recovery.locator('.result')).toContainText('0 of 1 unique files verified · 1 missing');
   const [row] = await directoryRows(page); expect(row).toBeDefined();
@@ -79,13 +97,37 @@ test('downloaded backup and file packages rehearse independently without switchi
   expect(await storedFiles(page, destination)).toHaveLength(0);
   await packagePassword.fill('wrong recovery package passphrase'); await page.keyboard.press('Enter');
   await expect(recovery.getByRole('alert')).toContainText('could not be unlocked and verified');
+  await expect(sourceIndex.locator('ol > li')).toHaveCount(0);
   expect(await storedFiles(page, destination)).toHaveLength(0);
   await expect(packagePassword).toBeFocused(); await expect(packagePassword).toHaveValue('');
   await packagePassword.fill(packagePassphrase); await page.keyboard.press('Enter');
   await expect(recovery.getByRole('status')).toContainText('Recovery verified for the selected backup data and every referenced file.');
+  const packageDigest = `sha256:${createHash('sha256').update(filePackage).digest('hex')}`;
+  await expect(sourceIndex.locator('ol > li')).toHaveCount(1);
+  await expect(sourceIndex).toContainText(packageDigest);
+  await expect(sourceIndex).toContainText(`${filePackage.length.toLocaleString()} bytes`);
+  await expect(sourceIndex).toContainText('whoisleuth.investigation-manifest v4');
+  await expect(sourceIndex).toContainText('Encrypted package v1 · 1 matched original');
+  await expect(sourceIndex).not.toContainText('files.wlep');
+  await page.evaluate(() => { Object.defineProperty(navigator, 'clipboard', { configurable: true,
+    value: { writeText: async (value: string) => { Reflect.set(window, 'recoverySetCopiedDigest', value); } } }); });
+  const packageRow = sourceIndex.getByRole('listitem').filter({ has: page.getByText(packageDigest, { exact: true }) });
+  await expect(packageRow).toHaveCount(1);
+  const copyPackageDigest = packageRow.getByRole('button');
+  await expect(copyPackageDigest).toHaveCount(1);
+  await copyPackageDigest.focus();
+  await page.keyboard.press('Enter');
+  expect(await page.evaluate(() => Reflect.get(window, 'recoverySetCopiedDigest'))).toBe(packageDigest);
   expect((await storedFiles(page, destination))[0]!.bytes).toEqual([...bytes]);
   await recovery.getByLabel('Restore original files', { exact: true }).setInputFiles({ name: 'renamed.png', mimeType: 'image/png', buffer: bytes });
   await expect(recovery.getByRole('status')).toContainText('Recovery verified');
+  await expect(sourceIndex.locator('ol > li')).toHaveCount(0);
+  await expect(sourceIndex).toContainText('1 original file supplied directly');
+  await recovery.getByLabel('Restore evidence package', { exact: true }).setInputFiles({ name: 'renamed-package.wlep', mimeType: 'application/octet-stream', buffer: filePackage });
+  await packagePassword.fill(packagePassphrase); await page.keyboard.press('Enter');
+  await expect(sourceIndex.locator('ol > li')).toHaveCount(1);
+  await expect(sourceIndex).toContainText(packageDigest);
+  await expect(sourceIndex).toContainText('0 original files supplied directly');
   expect(await storedFiles(page, destination)).toHaveLength(1);
   expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
   expect(await page.evaluate(key => sessionStorage.getItem(key), SELECTION)).toBe(originalSelection);
@@ -101,6 +143,10 @@ test('downloaded backup and file packages rehearse independently without switchi
         return rect.width > 0 && rect.left >= parent.left - 1 && rect.right <= parent.right + 1;
       }))).toBe(true);
       if (captureVisualEvidenceEnabled()) { await recovery.screenshot({ path: testInfo.outputPath(`recovery-${theme}-${width}.png`) }); }
+      if (captureVisualEvidenceEnabled() && (width === 320 || width === 1280)) {
+        await sourceIndex.evaluate(element => element.scrollIntoView({ block: 'center' }));
+        await page.screenshot({ path: testInfo.outputPath(`recovery-set-viewport-${theme}-${width}.png`) });
+      }
       if (width === 320 || width === 1280 || width === 3840) {
         const summary = recovery.locator(':scope > summary');
         // Element screenshots reposition the page without changing focus. Make
@@ -116,8 +162,15 @@ test('downloaded backup and file packages rehearse independently without switchi
     }
   }
   await deleteRehearsal(page);
+  await expect(sourceIndex.locator('ol > li')).toHaveCount(0);
   expect(await page.evaluate(name => indexedDB.databases().then(rows => rows.some(item => item.name === name)), destination)).toBe(false);
   expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+  await review(page, `${content}\n`);
+  await panel(page).getByText('Recovery set index', { exact: true }).click();
+  await expect(archiveIndex).toContainText(`sha256:${createHash('sha256').update(`${content}\n`).digest('hex')}`);
+  await expect(archiveIndex).not.toContainText(`sha256:${createHash('sha256').update(content).digest('hex')}`);
+  await expect(sourceIndex.locator('ol > li')).toHaveCount(0);
+  await expect(panel(page).locator('.result')).toHaveCount(0);
 });
 
 test('encrypted backup cannot create a plaintext rehearsal and leaving does not silently delete it', async ({ page }, testInfo) => {
@@ -129,6 +182,10 @@ test('encrypted backup cannot create a plaintext rehearsal and leaving does not 
   await workspaceArchiveRegion(page).getByLabel('Backup passphrase', { exact: true }).fill(PASSWORD);
   await workspaceArchiveRegion(page).getByRole('button', { name: 'Unlock and review', exact: true }).click();
   await panel(page).locator(':scope > summary').click();
+  await panel(page).getByText('Recovery set index', { exact: true }).click();
+  const archiveIndex = panel(page).getByRole('region', { name: 'Selected workspace backup', exact: true });
+  await expect(archiveIndex).toContainText(`sha256:${createHash('sha256').update(JSON.stringify(envelope)).digest('hex')}`);
+  await expect(archiveIndex).toContainText('whoisleuth.encrypted-workspace-archive v1');
   await expect(panel(page).getByRole('checkbox', { name: 'Encrypt rehearsal workspace', exact: true })).toBeChecked();
   await expect(panel(page).getByRole('checkbox', { name: 'Encrypt rehearsal workspace', exact: true })).toBeDisabled();
   for (const theme of ['light', 'dark'] as const) {
@@ -158,6 +215,190 @@ test('encrypted backup cannot create a plaintext rehearsal and leaving does not 
   await page.reload();
   expect(await directoryRows(page)).toHaveLength(1);
   expect(await page.evaluate(id => navigator.locks.request(`whoisleuth-workspace:whoisleuth-workspace-${id}-v1`, { mode: 'shared', ifAvailable: true }, lock => Boolean(lock)), row!.id)).toBe(true);
+});
+
+test('recovery package index keeps distinct matching groups separate from failed destination verification', async ({ page }, testInfo) => {
+  const bodies = [Buffer.from('First recovery group'), Buffer.from('Second recovery group')];
+  const references: CaseAttachment[] = bodies.map((body, index) => ({ id: `group-${index}`, fileName: `private-group-${index}.txt`,
+    mediaType: 'application/octet-stream', source: null, observedAt: null, retainedAt: NOW, byteLength: body.length,
+    digestSha256: `sha256:${createHash('sha256').update(body).digest('hex')}` }));
+  const packages = await Promise.all(bodies.map(content => buildInvestigationPackage({ workflow: 'Recovery fixture', configurationDigestSha256: null,
+    artifacts: [{ content, mediaType: 'application/octet-stream' }] }, NOW, '2.6.0')));
+  const backup = await simpleBackup(references);
+  await page.goto('/dashboard'); await review(page, backup);
+  await page.evaluate(() => {
+    const original = crypto.subtle.digest.bind(crypto.subtle);
+    const scope = window as unknown as { recoveryDigestHeld: boolean; releaseRecoveryDigest: () => void };
+    let release!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    scope.recoveryDigestHeld = false;
+    scope.releaseRecoveryDigest = () => { crypto.subtle.digest = original; release(); };
+    crypto.subtle.digest = async (algorithm, data) => {
+      if (new TextDecoder().decode(data).includes('"id":"recovery-case"')) {
+        crypto.subtle.digest = original;
+        scope.recoveryDigestHeld = true;
+        await held;
+      }
+      return original(algorithm, data);
+    };
+  });
+  const recovery = await start(page);
+  await recovery.getByText('Recovery set index', { exact: true }).click();
+  const index = recovery.getByRole('region', { name: 'Matching recovery sources', exact: true });
+  const packageInput = recovery.getByLabel('Restore evidence package', { exact: true });
+  const inventoryButton = recovery.getByRole('button', { name: 'Download recovery set inventory', exact: true });
+  const downloadInventory = async () => {
+    const pending = page.waitForEvent('download');
+    await inventoryButton.focus(); await page.keyboard.press('Enter');
+    const downloaded = await pending;
+    expect(downloaded.suggestedFilename()).toBe('whoisleuth-recovery-set.txt');
+    return readFile((await downloaded.path())!, 'utf8');
+  };
+  await expect.poll(() => page.evaluate(() => (window as unknown as { recoveryDigestHeld: boolean }).recoveryDigestHeld)).toBe(true);
+  try {
+    await expect(packageInput).toBeDisabled();
+    await expect(inventoryButton).toBeDisabled();
+    // Negative control: the driver can bypass a disabled file picker, but the
+    // application must discard the selection while restoration owns the write.
+    await packageInput.setInputFiles({ name: 'premature.zip', mimeType: 'application/zip', buffer: Buffer.from(packages[0]!.bytes) });
+    expect(await packageInput.evaluate((input: HTMLInputElement) => input.files?.length)).toBe(0);
+    await expect(index.locator('ol > li')).toHaveCount(0);
+    await expect(recovery.locator('.result')).toHaveCount(0);
+  } finally {
+    await page.evaluate(() => (window as unknown as { releaseRecoveryDigest: () => void }).releaseRecoveryDigest());
+  }
+  const add = async (position: number) => {
+    // File injection does not wait for an enabled control. Initial restoration
+    // and each preceding package operation must relinquish it first.
+    await expect(packageInput).toBeEnabled();
+    await packageInput.setInputFiles({ name: `renamed-${position}.zip`, mimeType: 'application/zip', buffer: Buffer.from(packages[position]!.bytes) });
+  };
+  await add(0);
+  await expect(recovery.locator('.result')).toContainText('1 of 2 unique files verified · 1 missing');
+  await expect(index.locator('ol > li')).toHaveCount(1);
+  await page.evaluate(() => {
+    const put = IDBObjectStore.prototype.put, transaction = IDBDatabase.prototype.transaction;
+    let failRead = false, armed = true;
+    IDBObjectStore.prototype.put = function(value: unknown, key?: IDBValidKey) {
+      if (armed && this.transaction.db.name.startsWith('whoisleuth-workspace-') && this.name === 'files') { armed = false; failRead = true; }
+      return key === undefined ? put.call(this, value) : put.call(this, value, key);
+    };
+    IDBDatabase.prototype.transaction = function(...args: Parameters<IDBDatabase['transaction']>) {
+      if (this.name.startsWith('whoisleuth-workspace-') && this.name !== 'whoisleuth-workspace-directory-v1' && (!args[1] || args[1] === 'readonly') && failRead) {
+        failRead = false; throw new DOMException('Synthetic package post-commit read failure', 'UnknownError');
+      }
+      return transaction.apply(this, args);
+    };
+  });
+  await add(1);
+  await expect(recovery.getByRole('alert')).toContainText('The write completed');
+  await expect(index.locator('ol > li')).toHaveCount(2);
+  for (const item of packages) await expect(index).toContainText(`sha256:${createHash('sha256').update(item.bytes).digest('hex')}`);
+  await expect(index).not.toContainText('private-group-');
+  await expect(index).not.toContainText('renamed-');
+  await expect(recovery.locator('.result')).toContainText('Last completed verification:');
+  await expect(recovery.locator('.result')).toContainText('1 of 2 unique files verified');
+  const brief = recovery.getByRole('region', { name: 'Last completed recovery check', exact: true });
+  await expect(brief.getByRole('heading', { name: 'Earlier recovery result', exact: true })).toBeVisible();
+  await expect(brief).toContainText('does not verify later selections or writes');
+  const inventory = await downloadInventory();
+  expect(inventory).toContain(`Full selected-file SHA-256: sha256:${createHash('sha256').update(backup).digest('hex')}\nBytes: ${Buffer.byteLength(backup)}`);
+  for (const item of packages) expect(inventory).toContain(`Full selected-file SHA-256: sha256:${createHash('sha256').update(item.bytes).digest('hex')}\nBytes: ${item.bytes.length}`);
+  expect(inventory).toContain('Matching packages: 2');
+  expect(inventory).toContain('Expected package groups: unknown');
+  expect(inventory).toContain('Unmatched or unreadable selections are not listed');
+  expect(inventory).toContain('Destination verification is not included');
+  expect(inventory).not.toMatch(/private-group-|renamed-|recovery-case|recovery\.example|First recovery group|Second recovery group|1 of 2|Recovery verified/u);
+  await recovery.getByLabel('Restore original files', { exact: true }).setInputFiles({ name: 'unmatched-private.txt', mimeType: 'text/plain', buffer: Buffer.from('Unmatched private content') });
+  await expect(recovery.getByRole('alert')).toContainText('does not match any file reference');
+  expect(await downloadInventory()).toBe(inventory);
+  await recovery.getByRole('button', { name: 'Verify restored data', exact: true }).click();
+  await expect(recovery.getByRole('status')).toContainText('Recovery verified');
+  await expect(recovery.locator('.result')).toContainText('2 of 2 unique files verified');
+  await expect(brief.getByRole('heading', { name: 'Selected backup recovered and verified', exact: true })).toBeVisible();
+  await expect(brief).not.toContainText('does not verify later selections or writes');
+  await add(0);
+  await expect(index.locator('ol > li')).toHaveCount(2);
+  expect((await new AxeBuilder({ page }).include('details.recovery').analyze()).violations).toEqual([]);
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await inventoryButton.scrollIntoViewIfNeeded(); await expectNoHorizontalOverflow(page);
+      await expect(inventoryButton).toBeInViewport();
+      if (captureVisualEvidenceEnabled()) {
+        await page.screenshot({ path: testInfo.outputPath(`recovery-inventory-${theme}-${width}.png`) });
+        await recovery.locator('details.set-index').screenshot({ path: testInfo.outputPath(`recovery-inventory-content-${theme}-${width}.png`) });
+      }
+    }
+  }
+  await deleteRehearsal(page);
+  const cleared = await downloadInventory();
+  expect(cleared).toContain('Matching packages: 0');
+  for (const item of packages) expect(cleared).not.toContain(createHash('sha256').update(item.bytes).digest('hex'));
+  const replacement = `${backup}\n`;
+  await review(page, replacement);
+  await recovery.getByText('Recovery set index', { exact: true }).click();
+  const replaced = await downloadInventory();
+  expect(replaced).toContain(createHash('sha256').update(replacement).digest('hex'));
+  expect(replaced).not.toContain(createHash('sha256').update(backup).digest('hex'));
+  expect(replaced).toContain('Matching packages: 0');
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide')));
+  await expect(inventoryButton).toBeDisabled();
+});
+
+test('recovery separates missing originals from a failed integrity group and verifies exact replacement bytes', async ({ page }, testInfo) => {
+  const bodies = [Buffer.from('First intact original'), Buffer.from('Second intact original')];
+  const references: CaseAttachment[] = bodies.map((body, index) => ({ id: `integrity-${index}`, fileName: `original-${index}.txt`,
+    mediaType: 'application/octet-stream', source: null, observedAt: null, retainedAt: NOW, byteLength: body.length,
+    digestSha256: `sha256:${createHash('sha256').update(body).digest('hex')}` }));
+  await page.goto('/dashboard'); await review(page, await simpleBackup(references));
+  const recovery = await start(page);
+  const brief = recovery.getByRole('region', { name: 'Last completed recovery check', exact: true });
+  await expect(brief).toContainText('0 of 2 unique files verified · 2 missing · 0 unverified');
+  await expect(brief).toContainText('locate exact missing originals');
+  const [row] = await directoryRows(page), destination = namedDatabase(row!.id);
+  const before = await readBrowserLocalCollection(page, 'cases', { databaseName: destination });
+  const restore = async () => recovery.getByLabel('Restore original files', { exact: true }).setInputFiles(bodies.map((buffer, index) => ({ name: `renamed-${index}.txt`, mimeType: 'text/plain', buffer })));
+  await restore();
+  await expect(brief).toContainText('2 of 2 unique files verified · 0 missing · 0 unverified');
+  const restored = await readBrowserLocalCollection(page, 'cases', { databaseName: destination });
+  expect(restored.records).toEqual(before.records);
+  await page.evaluate(async databaseName => {
+    const request = indexedDB.open(databaseName);
+    const database = await new Promise<IDBDatabase>((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+    try {
+      const transaction = database.transaction('files', 'readwrite'), files = transaction.objectStore('files');
+      const rows = files.getAll();
+      rows.onsuccess = () => {
+        if (rows.result.length !== 2) { transaction.abort(); return; }
+        const first = rows.result[0] as { payload: ArrayBuffer };
+        const bytes = new Uint8Array(first.payload);
+        bytes[0] = bytes[0]! ^ 1;
+        files.put(first);
+      };
+      await new Promise<void>((resolve, reject) => { transaction.oncomplete = () => resolve(); transaction.onabort = () => reject(transaction.error); });
+    } finally { database.close(); }
+  }, destination);
+  await recovery.getByRole('button', { name: 'Verify restored data', exact: true }).click();
+  await expect(brief).toContainText('0 of 2 unique files verified · 0 missing · 2 unverified');
+  await expect(brief).toContainText('no individual file is identified as damaged');
+  await expect(brief.getByText('Unverified — integrity check failed in this group', { exact: true })).toHaveCount(2);
+  expect(await readBrowserLocalCollection(page, 'cases', { databaseName: destination })).toEqual(restored);
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await brief.scrollIntoViewIfNeeded(); await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`recovery-brief-${theme}-${width}.png`) });
+    }
+  }
+  expect((await new AxeBuilder({ page }).include('details.recovery').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+  await restore();
+  await expect(brief).toContainText('2 of 2 unique files verified · 0 missing · 0 unverified');
+  await expect(brief.getByText('Unverified — integrity check failed in this group', { exact: true })).toHaveCount(0);
+  expect((await readBrowserLocalCollection(page, 'cases', { databaseName: destination })).records).toEqual(before.records);
+  await deleteRehearsal(page);
 });
 
 test('a committed restore followed by failed reconciliation offers verification, not a second restore', { tag: '@cross-browser-critical' }, async ({ page }) => {
@@ -224,9 +465,12 @@ test('paged recovery checklist retains shared provenance and clears only after e
   await expect(checklist).toContainText(`${bodies[0]!.length} bytes`);
   await page.evaluate(() => { Object.defineProperty(navigator, 'clipboard', { configurable: true,
     value: { writeText: async (value: string) => { Reflect.set(window, 'recoveryCopiedDigest', value); } } }); });
-  const copy = checklist.getByRole('button', { name: `Copy SHA-256 for recovery original ${references[0]!.digestSha256}`, exact: true });
+  const originalRow = checklist.getByRole('listitem').filter({ has: page.getByText(references[0]!.digestSha256, { exact: true }) });
+  await expect(originalRow).toHaveCount(1);
+  const copy = originalRow.getByRole('button', { name: /^Copy\b/u });
+  await expect(copy).toHaveCount(1);
   await copy.focus(); await page.keyboard.press('Enter');
-  await expect(copy).toHaveText('Copied');
+  await expect(originalRow.getByRole('button', { name: /^Copied\b/u })).toHaveCount(1);
   expect(await page.evaluate(() => Reflect.get(window, 'recoveryCopiedDigest'))).toBe(references[0]!.digestSha256);
   const next = checklist.getByRole('button', { name: 'Next originals', exact: true });
   await next.focus(); await page.keyboard.press('Enter');

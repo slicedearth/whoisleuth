@@ -56,6 +56,11 @@ adapters.
 Console routes compose view effects around responsibility-specific controllers.
 Domain models own validation; storage adapters own transactions and conflict
 checks. A committed write and a failed subsequent refresh remain distinct.
+The packet review controller owns transient digest bindings, confirmations and
+authorisation. The packet component owns operation lifetime, view transitions
+and focus; the existing Case mutation coordinator owns persisted actions.
+Original-file checks use full reference identity and retain only the latest
+completed result and a small comparison summary for the open review.
 The static frontend adapter, preprocessing, browser policy and bundler plugins
 are configured in `frontend/vite.config.ts`. Frontend imports use the native
 `#lib/*` package mapping with explicit extensions; its TypeScript project extends
@@ -125,6 +130,9 @@ The Case response workspace coordinates response writes, reconciliation and focu
 Observation, assessment, action and outcome components own their forms and
 temporary drafts; Quick and Advanced use the same form definitions. The
 domain model owns validation, and the browser-store adapter owns persistence.
+Case type summaries live in `case-type-presentation.mts`; reports, calendars
+and response controls import that display owner directly. Typed metadata
+admission and mutations remain in `case-workflow-metadata.mts`.
 Within `packages/cases/`, response records define the vocabulary and types;
 response actions own transitions and history reconciliation; response outcomes
 own independent reviews and linked closures. The original response-model entry
@@ -133,6 +141,10 @@ validation are separate modules, sharing vocabulary but not field projections.
 The packet component owns one transient manual-handoff preview. Its generator
 supplies text and structured output; input identity and the existing
 freshness-bound review digest govern reuse. No preview is stored in the Case.
+The same component owns pending packet operations by generation, Case, phase
+and Console workspace/session scope. Leaving that review invalidates pending
+results; only the current operation can initiate output or update its status.
+Completed downloads and clipboard requests are outside that cancellation boundary.
 
 Lookup's request operation token remains
 current through result publication, storage reconciliation and reveal. Request and
@@ -365,8 +377,12 @@ prepared result, rechecks the collection revision and owns the transaction and
 commit recovery. Cancellation before committing leaves the saved collection
 unchanged; cancellation after committing starts cannot turn a successful write
 into a failed-save retry. Workers do not access storage or make collection
-requests. Ordinary edits keep local preparation; background processing is
-explicit per operation.
+requests. Updates to larger verified plaintext collections use the same worker
+for preparation, including atomic multi-collection updates. Smaller updates stay
+local; imports can request background preparation explicitly. Scheduling uses the
+retained snapshot's verified size, not a new admission limit. Updated documents
+still pass all normalisation, byte, record and integrity checks. Custom and
+encrypted codecs remain local, and encryption keys are never sent to a worker.
 
 Dashboard and Lookup search use a disposable same-origin browser worker. The
 worker builds the shared investigation projection and search index, matches

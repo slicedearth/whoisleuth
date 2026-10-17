@@ -25,6 +25,8 @@ import {
   recordCaseRecheckOutcome as recordCaseRecheckOutcomeModel,
   updateCase,
 } from '../../../packages/cases/case-record-operations.mts';
+import { MAX_CASE_BATCH_MUTATIONS } from '../../../packages/cases/case-batch-limits.mts';
+import { applyCaseTagBatch, captureCaseTagBatch, type CaseTagBatchPreview } from '../../../packages/cases/case-tag-batch.mts';
 import type {
   CaseStoreSavePreview,
   CaseInput,
@@ -101,7 +103,6 @@ export {
   caseResponseIncidentUrls,
   caseTypeIds,
   caseTypeRecords,
-  caseTypeSummary,
   formattedCaseNumber,
   MAX_CASE_INCIDENT_TARGETS,
 } from '../../../packages/cases/case-workflow-metadata.mts';
@@ -193,7 +194,7 @@ export type {
 } from './analysis/external-intelligence-import.ts';
 
 export const CASES_KEY = LEGACY_CASES_KEY;
-export const MAX_CASE_BATCH_MUTATIONS = 100;
+export { MAX_CASE_BATCH_MUTATIONS };
 
 export async function loadCases(): Promise<CaseRecord[]> {
   return readBrowserLocalData('cases');
@@ -277,6 +278,14 @@ export async function editCaseTags(id: string, tags: string[], expectedTags: rea
     const previous = [...(current.find((record) => record.id === id)?.tags ?? [])];
     const change = applyCasePatch(current, id, { tags, expectedTags });
     return { ...change, result: { ...change.result, undo: { id, previous, expected: [...change.result.record.tags] } } };
+  });
+}
+
+export async function editCaseTagBatch(reviewed: CaseTagBatchPreview) {
+  const captured = captureCaseTagBatch(reviewed), now = new Date().toISOString();
+  return updateBrowserLocalData('cases', current => {
+    const result = applyCaseTagBatch(current, captured, now);
+    return { document: result.cases, result };
   });
 }
 

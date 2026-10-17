@@ -2,7 +2,7 @@
 import { readCaseEvidenceRequest, readCasePacketAmendment, assertEvidenceRequestEvent, assertEvidenceRequestHistory, assertPacketAmendmentSelection, type CaseEvidenceRequest, type CaseAmendmentAction } from './case-requested-evidence.mts';
 import { readCaseDeliveryPacketReceipt, readCasePacketCorrection, assertDeliveryPacketReceipt, correctionDelivery } from './case-packet-correction.mts';
 import { CASE_SELECTED_EVIDENCE_SOURCE_LIMITATION } from './case-evidence-links.mts';
-import type { CaseActionRecord, CaseActionTransitionEvent } from './case-response-records.mts';
+import type { CaseActionRecord, CaseActionTransitionEvent, CaseActionType } from './case-response-records.mts';
 
 import {
   CASE_RESPONSE_REVIEW_INPUTS_SCHEMA,
@@ -43,6 +43,7 @@ import {
   RESPONSE_PACKET_PROFILE_IDS,
   RESPONSE_READINESS_ROW_IDS,
   RESPONSE_READINESS_STATES,
+  responseActionContactKind,
   type ResponseReadinessState,
 } from './case-response-packet-vocabulary.mts';
 import { isValidAsciiHostname } from '../contracts/domain-name.mts';
@@ -200,6 +201,25 @@ function recursivelyFreezeReviewValue<T>(value: T): T {
     recursivelyFreezeReviewValue(child);
   }
   return Object.freeze(value);
+}
+
+/** Compare already shape-validated route and action records without rebuilding
+ * or normalising the retained evidence. Older formats omit the review deadline. */
+export function assertCaseResponseRecipientAction(
+  route: Readonly<Record<string, unknown>> | null,
+  actions: readonly Readonly<Record<string, unknown>>[],
+  hasReviewAfter: boolean,
+): void {
+  if (!route) return;
+  const action = actions.find(candidate => candidate.actionId === route.actionId);
+  if (!action
+    || route.kind !== responseActionContactKind(action.type as CaseActionType)
+    || route.contact !== action.recipient
+    || route.source !== (action.contactSource || 'analyst supplied')
+    || route.observedAt !== action.routeObservedAt
+    || (hasReviewAfter && route.reviewAfter !== action.routeReviewAfter)) {
+    throw new TypeError('Case-response recipient route must match its selected action.');
+  }
 }
 
 export function validateCaseResponseReviewInputs(value: unknown): Readonly<Record<string, unknown>> {
@@ -467,6 +487,11 @@ export function validateCaseResponseReviewInputs(value: unknown): Readonly<Recor
       || escalationActionIds.some((id, index) => currentLineageActionIds?.[index] !== id))) {
     throw new TypeError('Case-response escalation history must match the selected action lineage in order.');
   }
+  if (hasActionBinding) assertCaseResponseRecipientAction(
+    source.recipientRoute as Record<string, unknown> | null,
+    source.escalationHistory as Record<string, unknown>[],
+    hasPlatformRoutes,
+  );
   reviewCount(source.escalationHistoryOmitted, MAX_CASE_ACTIONS, 'Case-response omitted action count');
   if (version >= 5) assertPacketAmendmentSelection((source.escalationHistory as Record<string, unknown>[]).map(action => ({
     id: action.actionId, history: action.transitions, originActionId: action.originActionId, amendment: action.amendment,

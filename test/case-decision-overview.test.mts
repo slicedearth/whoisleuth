@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildCaseDecisionOverview } from '../packages/cases/case-decision-overview.mts';
+import { buildCaseCompletionReview, buildCaseDecisionOverview, caseCompletionNextActions, caseQuestionNextActions, latestRetainedCaseReview } from '../packages/cases/case-decision-overview.mts';
 import { createCase } from '../packages/cases/case-model.mts';
 import { caseRecheckComparisonWarnings } from '../packages/cases/case-recheck-model.mts';
 import type { CaseEvidencePin, CaseDecisionRecord, CaseActionRecord } from '../packages/cases/case-response-records.mts';
@@ -11,6 +11,41 @@ const pin: CaseEvidencePin = { id: 'pin-one', checkpointId: null, field: 'http.s
   collectionDepth: 'deep', completeness: 'complete', truncated: false, transitionExpectation: null, limitations: [], createdAt: NOW };
 const decision: CaseDecisionRecord = { id: 'decision-one', summary: 'Continue review', rationale: 'Conflicting observations',
   confidence: 'low', confidenceBasis: 'Limited independent evidence', evidencePinIds: ['pin-one', 'missing'], createdAt: NOW };
+
+test('Case cover review clocks ignore edits, source observations and scheduled follow-ups', () => {
+  const record = createCase({ domain: 'review.example' }, NOW);
+  record.updatedAt = '2026-09-30T00:00:00.000Z';
+  record.decisions = [decision];
+  record.observedEffects.reviews = [{ id: 'review', state: 'unavailable', sourceClass: 'analyst', source: 'Separate review',
+    observedAt: '2026-09-25T00:00:00.000Z', createdAt: '2026-09-11T00:00:00.000Z', completeness: 'partial',
+    limitations: [], evidencePinId: null, sightingId: null, followUpAt: '2026-10-01T00:00:00.000Z' }];
+  const before = structuredClone(record);
+  assert.deepEqual(latestRetainedCaseReview(record), { recordedAt: '2026-09-11T00:00:00.000Z', tiedRecords: 1, undatedRecords: 0, historyLimited: false });
+  assert.deepEqual(record, before);
+});
+
+test('Case cover dates preserve ties, undated records and incomplete retained history', () => {
+  const record = createCase({ domain: 'review.example' }, NOW);
+  assert.ok(record.observedEffects.limitations.length > 0, 'The ordinary canonical independence qualification remains present.');
+  assert.deepEqual(latestRetainedCaseReview(record), { recordedAt: null, tiedRecords: 0, undatedRecords: 0, historyLimited: false });
+  record.decisions = [decision, { ...decision, id: 'undated', createdAt: 'invalid' }];
+  record.observedEffects.reviews = [{ id: 'tied', state: 'still_observed', sourceClass: 'analyst', source: 'Independent review',
+    observedAt: '2026-09-01T00:00:00.000Z', createdAt: NOW, completeness: 'complete', limitations: [],
+    evidencePinId: null, sightingId: null, followUpAt: null }];
+  assert.deepEqual(latestRetainedCaseReview(record), { recordedAt: NOW, tiedRecords: 2, undatedRecords: 1, historyLimited: false });
+  for (const history of [
+    { omitted: 1, preV13HistoryUnavailable: false, limitations: [] },
+    { omitted: 0, preV13HistoryUnavailable: true, limitations: [] },
+  ]) {
+    record.observedEffects = { ...record.observedEffects, ...history };
+    assert.equal(latestRetainedCaseReview(record).historyLimited, true);
+  }
+  record.observedEffects = { ...record.observedEffects, omitted: 0, preV13HistoryUnavailable: false, limitations: ['Independent point-in-time evidence does not prove removal'] };
+  assert.equal(latestRetainedCaseReview(record).historyLimited, false, 'A general qualification is not missing history.');
+  record.decisions = [{ ...decision, createdAt: '' }]; record.observedEffects.reviews = [];
+  assert.equal(latestRetainedCaseReview(record).recordedAt, null);
+  assert.equal(latestRetainedCaseReview(record).undatedRecords, 1);
+});
 
 test('empty overview neither invents a question, judgement nor a scheduled review', () => {
   const record = createCase({ domain: 'review.example' }, NOW);
@@ -84,4 +119,118 @@ test('manual acknowledgement schedules follow-up without implying removal or alt
   assert.equal(buildCaseDecisionOverview(record, '2026-09-10T10:01:00Z').reviews[0]?.due, true);
   assert.equal(buildCaseDecisionOverview(record, 'not a timestamp').reviews[0]?.due, null);
   assert.deepEqual(record, before); assert.equal(record.observedEffects.reviews.length, 0);
+});
+
+test('question reviews are scoped, deterministic and leave further reviews reachable without changing a Case', () => {
+  const record = createCase({ domain: 'review.example' }, NOW);
+  record.evidencePins = [pin, { ...pin, id: 'limited', completeness: 'partial', observedAt: null }, { ...pin, id: 'unrelated', sourceState: 'unavailable' }];
+  record.assertions = [{ id: 'question', kind: 'hypothesis', statement: 'Which observation applies?', rationale: null, state: 'open',
+    evidencePinIds: ['missing', 'pin-one', 'limited', 'limited'], evidenceRelations: [{ evidencePinId: 'limited', stance: 'contradicts' }], createdAt: NOW, updatedAt: NOW },
+  { id: 'other', kind: 'hypothesis', statement: 'A separate question', rationale: null, state: 'open', evidencePinIds: ['pin-one'],
+    evidenceRelations: [{ evidencePinId: 'pin-one', stance: 'supports' }], createdAt: NOW, updatedAt: NOW }];
+  const before = structuredClone(record);
+  const overview = buildCaseDecisionOverview(record, NOW);
+  const next = caseQuestionNextActions(overview, 'question');
+  assert.deepEqual(next.actions.map(action => action.id), ['links', 'relationships', 'observations']);
+  assert.deepEqual(next.further.map(action => action.id), ['classification']);
+  assert.match(next.actions[2]!.reason, /^1 linked observation is/);
+  assert.ok(next.actions.every(action => action.prerequisite && action.limitation && action.expectedOutcome));
+  assert.deepEqual(caseQuestionNextActions(overview, 'other'), { actions: [], further: [] });
+  assert.deepEqual(caseQuestionNextActions(overview, 'missing'), { actions: [], further: [] });
+  assert.deepEqual(record, before);
+  record.assertions[0]!.state = 'resolved';
+  assert.deepEqual(caseQuestionNextActions(buildCaseDecisionOverview(record, NOW), 'question'), { actions: [], further: [] });
+});
+
+test('an unlinked assessment receives a local review, not an invented source or collection instruction', () => {
+  const record = createCase({ domain: 'review.example' }, NOW);
+  record.assertions = [{ id: 'question', kind: 'hypothesis', statement: 'Does the report apply?', rationale: null, state: 'open',
+    evidencePinIds: [], createdAt: NOW, updatedAt: NOW }];
+  const next = caseQuestionNextActions(buildCaseDecisionOverview(record, NOW), 'question');
+  assert.deepEqual(next.actions.map(action => [action.id, action.section]), [['links', 'assessment']]);
+  assert.match(next.actions[0]!.reason, /No evidence is linked/);
+  assert.deepEqual(next.further, []);
+});
+
+test('completion review does not invent closure readiness, open objects or missing files for an empty Case', () => {
+  const record = createCase({ domain: 'review.example' }, NOW);
+  const before = structuredClone(record);
+  assert.deepEqual(buildCaseCompletionReview(record, NOW), {
+    openObjects: [], otherObjects: [], opposingClaims: [], evidenceGaps: [], reviews: [], requests: [],
+  });
+  assert.deepEqual(caseCompletionNextActions(buildCaseCompletionReview(record, NOW), 0), { actions: [], further: [] });
+  assert.deepEqual(record, before);
+});
+
+test('completion review keeps current incident state distinct from resolved, historical and domain scopes', () => {
+  const record = createCase({ domain: 'review.example' }, NOW);
+  record.workflowMetadata = { types: [], investigationContext: null, incidentTargets: [
+    { id: 'open-link', url: 'https://review.example/open', state: 'open', createdAt: NOW, updatedAt: NOW },
+    { id: 'resolved-link', url: 'https://review.example/resolved', state: 'resolved', createdAt: NOW, updatedAt: NOW },
+  ] };
+  record.evidencePins = [
+    { ...pin, id: 'current', responseObject: { kind: 'page', identifier: 'https://review.example/open', incidentTargetId: 'open-link' } },
+    { ...pin, id: 'resolved', responseObject: { kind: 'page', identifier: 'https://review.example/resolved', incidentTargetId: 'resolved-link' } },
+    { ...pin, id: 'historical', responseObject: { kind: 'page', identifier: 'https://review.example/earlier', incidentTargetId: 'old-link' } },
+    { ...pin, id: 'domain', responseObject: { kind: 'domain', identifier: 'review.example', incidentTargetId: null } },
+  ];
+  record.status = 'resolved'; // Whole-Case status does not rewrite current object metadata.
+  const before = structuredClone(record);
+  const review = buildCaseCompletionReview(record, NOW);
+  assert.deepEqual(review.openObjects.map(row => [row.object.identifier, row.target.state]), [['https://review.example/open', 'open']]);
+  assert.deepEqual(review.otherObjects.map(row => [row.object.identifier, row.targetRetained]), [
+    ['https://review.example/earlier', false], ['review.example', false],
+  ]);
+  assert.deepEqual(caseCompletionNextActions(review, 0).actions.map(action => action.id), ['objects']);
+  assert.deepEqual(record, before);
+});
+
+test('completion suggestions retain one category each, three initial reviews and every remaining local review', () => {
+  const record = createCase({ domain: 'review.example' }, NOW);
+  record.evidencePins = [{ ...pin, observedAt: null, responseObject: { kind: 'domain', identifier: 'review.example', incidentTargetId: null } },
+    { ...pin, id: 'failed', sourceState: 'unavailable' }, { ...pin, id: 'skipped', sourceState: 'skipped' }, { ...pin, id: 'cut', truncated: true }];
+  record.assertions = ['first', 'second'].map(id => ({ id, kind: 'hypothesis', statement: 'Retained question', rationale: null,
+    state: 'open', evidencePinIds: ['pin-one'], evidenceRelations: [{ evidencePinId: 'pin-one', stance: 'unresolved' }], createdAt: NOW, updatedAt: NOW }));
+  record.actions = [{ id: 'action', type: 'registrar_report', recipient: 'Fixture desk', contactSource: 'Manual route',
+    routeObservedAt: NOW, routeReviewAfter: null, contactLimitations: [], dueAt: null, state: 'acknowledged', reference: null,
+    followUpAt: NOW, providerOutcome: 'more_information_requested', outcome: null, originActionId: null,
+    history: [{ id: 'request', previousState: 'submitted', nextState: 'acknowledged', occurredAt: NOW, sourceClass: 'provider',
+      provenance: 'Recorded request', reference: null, evidencePinId: null, limitations: [], providerOutcome: 'more_information_requested',
+      outcomeDetail: null, originActionId: null, applied: true, evidenceRequest: { id: 'needed', packetDigestSha256: 'a'.repeat(64),
+        summary: 'Provide the retained page', dueAt: NOW, state: 'unavailable', evidencePinIds: [], rationale: 'Bytes unavailable', previousEventIds: [] } }],
+    historyOmitted: 0, historyLimitations: [], createdAt: NOW, metadataUpdatedAt: NOW, updatedAt: NOW }];
+  const before = structuredClone(record);
+  const review = buildCaseCompletionReview(record, NOW);
+  const next = caseCompletionNextActions(review, 2);
+  assert.deepEqual(next.actions.map(action => action.id), ['claims', 'gaps', 'requests']);
+  assert.deepEqual(next.further.map(action => action.id), ['reviews', 'objects', 'files']);
+  assert.deepEqual(review.evidenceGaps.map(value => value.id), ['pin-one', 'failed', 'skipped', 'cut']);
+  assert.match(next.actions[0]!.reason, /^2 open assessments/);
+  assert.match(next.actions[2]!.limitation, /does not prove.*obtainable or delivered/);
+  assert.match(next.further[2]!.reason, /^2 retained file references/);
+  for (const action of [...next.actions, ...next.further]) {
+    assert.ok(action.label && action.reason && action.expectedOutcome && action.prerequisite && action.limitation);
+  }
+  assert.deepEqual(caseCompletionNextActions(review, 2), next);
+  assert.deepEqual(record, before);
+  record.assertions.forEach(assertion => { assertion.state = 'resolved'; });
+  assert.equal(caseCompletionNextActions(buildCaseCompletionReview(record, NOW), 0).actions.some(action => action.id === 'claims'), false);
+});
+
+test('completion review preserves exact contrary and unavailable links without reopening resolved assessments', () => {
+  const record = createCase({ domain: 'review.example' }, NOW);
+  record.evidencePins = [pin];
+  const assertion = { id: 'open-question', kind: 'hypothesis' as const, statement: 'Which source describes the page?', rationale: null,
+    state: 'open' as const, evidencePinIds: ['pin-one', 'missing'], evidenceRelations: [
+      { evidencePinId: 'pin-one', stance: 'contradicts' as const }, { evidencePinId: 'missing', stance: 'unresolved' as const },
+    ], createdAt: NOW, updatedAt: NOW };
+  record.assertions = [assertion, { ...assertion, id: 'resolved-question', state: 'resolved' },
+    { ...assertion, id: 'supporting-question', evidencePinIds: ['pin-one'], evidenceRelations: [{ evidencePinId: 'pin-one', stance: 'supports' }] }];
+  const before = structuredClone(record);
+  const review = buildCaseCompletionReview(record, NOW);
+  assert.deepEqual(review.opposingClaims.map(claim => claim.assertion.id), ['open-question']);
+  assert.deepEqual(review.opposingClaims[0]!.references.map(reference => [reference.id, reference.stance, reference.pin?.source ?? null]), [
+    ['pin-one', 'contradicts', 'Retained HTTP observation'], ['missing', 'unresolved', null],
+  ]);
+  assert.deepEqual(record, before);
 });

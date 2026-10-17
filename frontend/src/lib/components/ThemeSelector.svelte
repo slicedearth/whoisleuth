@@ -8,14 +8,15 @@
     type ThemePreference,
   } from '#lib/theme.ts';
   import {
-    observeAppearancePreference, readAppearancePreference, setAppearancePreference,
+    observeAppearancePreference, parseAppearancePreference, readAppearancePreference, setAppearancePreference,
     type AppearancePreference,
   } from '#lib/appearance.ts';
 
   let preference = $state<ThemePreference>('system');
-  let appearance = $state<AppearancePreference>({ density: 'comfortable', effects: 'full' });
+  let appearance = $state<AppearancePreference>(parseAppearancePreference(null));
   const id = $props.id();
   let storageWarning = $state('');
+  let ready = $state(false);
   let open = $state(false);
   let trigger: HTMLButtonElement;
   let control: HTMLDivElement;
@@ -32,6 +33,7 @@
     applyThemePreference(preference);
     const stopTheme = observeThemePreference((next) => { preference = next; });
     const stopAppearance = observeAppearancePreference((next) => { appearance = next; });
+    ready = true;
     return () => { stopTheme(); stopAppearance(); };
   });
 
@@ -126,6 +128,7 @@
     <button
       class="theme-trigger"
       type="button"
+      disabled={!ready}
       aria-label={`Colour theme, ${labelFor(preference)} selected`}
       title={`${labelFor(preference)} theme`}
       aria-haspopup="dialog"
@@ -163,6 +166,8 @@
       </label>
       <label class="appearance-effects"><input type="checkbox" checked={appearance.effects === 'full'}
         onchange={(event) => chooseAppearance({ ...appearance, effects: event.currentTarget.checked ? 'full' : 'minimal' })} />Decorative effects</label>
+      <label class="appearance-effects"><input type="checkbox" checked={appearance.consoleStyle === 'terminal'}
+        onchange={(event) => chooseAppearance({ ...appearance, consoleStyle: event.currentTarget.checked ? 'terminal' : 'desk' })} />Terminal-style headers</label>
       </div>
     {/if}
   </div>

@@ -1,8 +1,10 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { onDestroy, onMount, tick } from 'svelte';
+  import { beforeNavigate } from '$app/navigation';
   import { casePruningNotice } from '#lib/analysis/case-mutation-feedback.ts';
   import ExternalImportReview, { type ExternalImportPreview } from './ExternalImportReview.svelte';
-  import { parseBoundedJson } from '#lib/bounded-json.ts';
+  import { parseSelectedFindingJson, parseSelectedFindingCsv, type SelectedFindingOriginal } from '#lib/analysis/selected-finding-original.ts';
+  import { parseSelectedWacz } from '#lib/analysis/selected-wacz-original.ts';
   import {
     EXTERNAL_FINDINGS_SCHEMA,
     MAX_EXTERNAL_FINDINGS_IMPORT_BYTES,
@@ -17,7 +19,6 @@
     MAX_EXTERNAL_INTELLIGENCE_IMPORT_BYTES,
     parseExternalIntelligenceDocument,
   } from '../analysis/external-intelligence-import.ts';
-  import { parseExternalFindingsDocument } from '../../../../packages/interchange/external-findings-import.mts';
   import { INFRASTRUCTURE_OBSERVATION_SCHEMA } from '../../../../packages/investigation/infrastructure-observation.mts';
   import { convertInfrastructureObservation } from '../../../../packages/interchange/external-findings-converters.mts';
   import {
@@ -26,7 +27,6 @@
     DNS_OBSERVATION_ROWS_SCHEMA,
     DOMAIN_OBSERVATION_ROWS_SCHEMA,
     convertExternalFindingRows,
-    convertExternalFindingsCsv,
     convertSupportedExternalFindings,
     type ExternalFindingConversionReport,
   } from '#lib/analysis/external-findings-converters.ts';
@@ -42,7 +42,6 @@
   } from '#lib/analysis/warc-evidence-import.ts';
   import {
     MAX_WACZ_IMPORT_BYTES,
-    parseWaczEvidenceArchive,
   } from '#lib/analysis/wacz-evidence-import.ts';
 
   let {
@@ -57,12 +56,28 @@
     onmessage: (message: string) => void;
   } = $props();
 
-  let preview = $state<ExternalImportPreview | null>(null);
+  let preview = $state.raw<ExternalImportPreview | null>(null);
+  let selectedOriginal = $state.raw<SelectedFindingOriginal | null>(null);
+  let open = $state(false);
+  let disposed = false;
   let conversionReport = $state<ExternalFindingConversionReport | null>(null);
   let applying = $state(false);
   let parsing = $state(false);
   let selectionGeneration = 0;
   let fileInput: HTMLInputElement;
+
+  function clearPreview() {
+    selectionGeneration += 1;
+    selectedOriginal?.dispose(); selectedOriginal = null;
+    preview = null; conversionReport = null; parsing = false;
+    if (fileInput) fileInput.value = '';
+  }
+  beforeNavigate(clearPreview);
+  onDestroy(() => { disposed = true; clearPreview(); });
+  onMount(() => {
+    window.addEventListener('pagehide', clearPreview);
+    return () => window.removeEventListener('pagehide', clearPreview);
+  });
 
   async function reconcileCommitted(cases: CaseRecord[], success: string): Promise<void> {
     try {
@@ -71,9 +86,9 @@
     } catch {
       try {
         oncommitted(cases);
-        onmessage(`${success} The import was saved, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the workspace read.`);
+        onmessage(`${success} The import was saved, but cases could not be reread. The complete committed case snapshot is shown locally; reload to retry the workspace read.`);
       } catch {
-        onmessage(`${success} The import was saved, but Cases could not be reread or reconciled in the current view. Reload before importing another document.`);
+        onmessage(`${success} The import was saved, but cases could not be reread or reconciled in the current view. Reload before importing another document.`);
       }
     }
   }
@@ -88,9 +103,9 @@
   async function selectFile(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
+    clearPreview();
     const generation = ++selectionGeneration;
-    preview = null;
-    conversionReport = null;
+    const owns = () => !disposed && open && generation === selectionGeneration;
     parsing = Boolean(file);
     if (!file) return;
     try {
@@ -99,8 +114,10 @@
         if (file.size > MAX_WACZ_IMPORT_BYTES) {
           throw new Error('Portable WACZ imports are limited to 8 MiB.');
         }
-        const report = await parseWaczEvidenceArchive(await file.arrayBuffer(), file.name);
-        if (generation !== selectionGeneration) return;
+        const parsed = await parseSelectedWacz(await file.arrayBuffer(), file.name);
+        if (!owns()) { parsed.original.dispose(); return; }
+        const { report } = parsed;
+        selectedOriginal = parsed.original;
         preview = { kind: 'findings', document: report.document };
         onmessage(`Validated ${report.accepted} portable WACZ finding${report.accepted === 1 ? '' : 's'} from ${report.warcResources} verified WARC resource${report.warcResources === 1 ? '' : 's'} and ${report.records} bounded record${report.records === 1 ? '' : 's'}; ${report.excluded} excluded. The package stayed local and only normalized page evidence is available for deliberate import.`);
         return;
@@ -111,7 +128,7 @@
           throw new Error('Portable WARC imports are limited to 8 MiB.');
         }
         const report = await parseWarcEvidenceArchive(await file.arrayBuffer(), file.name);
-        if (generation !== selectionGeneration) return;
+        if (!owns()) return;
         preview = { kind: 'findings', document: report.document };
         onmessage(`Validated ${report.accepted} portable WARC finding${report.accepted === 1 ? '' : 's'} from ${report.records} bounded record${report.records === 1 ? '' : 's'}; ${report.excluded} excluded. The archive stayed local and only normalized page evidence is available for deliberate import.`);
         return;
@@ -120,19 +137,14 @@
         throw new Error('External intelligence imports are limited to 512 KiB.');
       }
       const bytes = await file.arrayBuffer();
-      if (generation !== selectionGeneration) return;
-      const decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+      if (!owns()) return;
       const csv = file.name.toLowerCase().endsWith('.csv') || file.type === 'text/csv';
       let value: unknown = null;
+      let directDocument = null;
       if (!csv) {
-        try {
-          value = parseBoundedJson(decoded, {
-            label: 'External intelligence import',
-            maximumBytes: MAX_EXTERNAL_INTELLIGENCE_IMPORT_BYTES,
-          });
-        } catch {
-          throw new Error('The selected file is not valid UTF-8 JSON.');
-        }
+        const parsed = await parseSelectedFindingJson(bytes);
+        if (!owns()) { parsed.original?.dispose(); return; }
+        value = parsed.value; directDocument = parsed.document; selectedOriginal = parsed.original;
       }
       if (value && typeof value === 'object' && !Array.isArray(value) && (value as Record<string, unknown>).schema === INFRASTRUCTURE_OBSERVATION_SCHEMA) {
         const document = convertInfrastructureObservation(value);
@@ -142,10 +154,11 @@
         if (file.size > MAX_EXTERNAL_FINDINGS_IMPORT_BYTES) {
           throw new Error('External finding imports are limited to 384 KiB.');
         }
-        const document = parseExternalFindingsDocument(value);
+        if (!directDocument) throw new Error('The selected findings document could not be validated.');
+        const document = directDocument;
         preview = { kind: 'findings', document };
         const domainCount = new Set(document.findings.map((finding) => finding.domain)).size;
-        onmessage(`Validated ${document.findings.length} local finding${document.findings.length === 1 ? '' : 's'} for ${domainCount} domain${domainCount === 1 ? '' : 's'}. Review the preview before importing.`);
+        onmessage(`Ready to review: ${document.findings.length} finding${document.findings.length === 1 ? '' : 's'} for ${domainCount} domain${domainCount === 1 ? '' : 's'}. Nothing has been imported.`);
       } else if (
         value
         && typeof value === 'object'
@@ -181,9 +194,12 @@
         if (file.size > MAX_EXTERNAL_FINDINGS_IMPORT_BYTES) {
           throw new Error('Converted finding imports are limited to 384 KiB.');
         }
-        const document = csv
-          ? convertExternalFindingsCsv(decoded)
-          : convertExternalFindingRows(value);
+        let document;
+        if (csv) {
+          const parsed = await parseSelectedFindingCsv(bytes);
+          if (!owns()) { parsed.original.dispose(); return; }
+          document = parsed.document; selectedOriginal = parsed.original;
+        } else document = convertExternalFindingRows(value);
         preview = { kind: 'findings', document };
         const domainCount = new Set(document.findings.map((finding) => finding.domain)).size;
         onmessage(`Converted and validated ${document.findings.length} finding${document.findings.length === 1 ? '' : 's'} for ${domainCount} domain${domainCount === 1 ? '' : 's'}. Review the normalized preview before importing.`);
@@ -199,7 +215,7 @@
         const document = parseWebCaptureManifest(value);
         preview = { kind: 'findings', document };
         const domainCount = new Set(document.findings.map((finding) => finding.domain)).size;
-        onmessage(`Validated ${document.findings.length} sanitised web-capture manifest finding${document.findings.length === 1 ? '' : 's'} for ${domainCount} domain${domainCount === 1 ? '' : 's'}. Artifact bytes were not imported. Review before importing.`);
+        onmessage(`Review ${document.findings.length} capture-manifest finding${document.findings.length === 1 ? '' : 's'} for ${domainCount} domain${domainCount === 1 ? '' : 's'}. No original file bytes have been imported.`);
       } else if (
         value
         && typeof value === 'object'
@@ -215,15 +231,16 @@
         onmessage(`Validated ${document.findings.length} sanitised web-capture finding${document.findings.length === 1 ? '' : 's'} for ${domainCount} domain${domainCount === 1 ? '' : 's'}. Review the normalized preview before importing.`);
       } else {
         const document = parseExternalIntelligenceDocument(value, await sourceDigest(bytes));
-        if (generation !== selectionGeneration) return;
+        if (!owns()) return;
         preview = { kind: 'intelligence', document };
         onmessage(`Validated ${document.items.length} ${document.format.toUpperCase()} claim${document.items.length === 1 ? '' : 's'} with ${document.duplicatesSkipped} duplicate${document.duplicatesSkipped === 1 ? '' : 's'}, ${document.conflicts.length} conflict${document.conflicts.length === 1 ? '' : 's'}, and ${document.exclusions.length} exclusion${document.exclusions.length === 1 ? '' : 's'}. Select an existing case before merging.`);
       }
     } catch (cause) {
-      if (generation !== selectionGeneration) return;
+      if (!owns()) return;
+      selectedOriginal?.dispose(); selectedOriginal = null;
       onmessage(cause instanceof Error ? cause.message : 'External findings import could not be validated.');
     } finally {
-      if (generation === selectionGeneration) {
+      if (owns()) {
         parsing = false;
         input.value = '';
       }
@@ -246,15 +263,14 @@
         const result = await importExternalIntelligence(targetCaseId, selected.document);
         await reconcileCommitted(result.cases, `Merged ${result.assertionsAdded} external assertion${result.assertionsAdded === 1 ? '' : 's'} into ${result.record.domain}${result.duplicatesSkipped ? `; skipped ${result.duplicatesSkipped} existing assertion${result.duplicatesSkipped === 1 ? '' : 's'}` : ''}${result.capacitySkipped ? `; skipped ${result.capacitySkipped} at the case assertion limit` : ''}. No collection, scoring, or case creation was started.${casePruningNotice(result.pruned)}`);
       }
-      preview = null;
-      conversionReport = null;
+      clearPreview();
     } catch (cause) {
       onmessage(cause instanceof Error ? cause.message : 'External findings could not be imported.');
     } finally {
       applying = false;
       await tick();
       const active = document.activeElement;
-      if (active === origin || active === null || active === document.body || active === document.documentElement) {
+      if (!disposed && open && (active === origin || active === null || active === document.body || active === document.documentElement)) {
         const target = origin?.isConnected ? origin : fileInput;
         target?.focus({ preventScroll: true });
       }
@@ -264,15 +280,14 @@
   async function cancelReview() {
     if (applying) return;
     const origin = document.activeElement;
-    preview = null;
-    conversionReport = null;
+    clearPreview();
     await tick();
-    if (origin && !origin.isConnected && document.activeElement === document.body) fileInput?.focus();
+    if (!disposed && open && origin && !origin.isConnected && document.activeElement === document.body) fileInput?.focus();
   }
 </script>
 
-<details class="external-import card" aria-busy={parsing}>
-  <summary>Import bounded external findings</summary>
+<details class="external-import card" aria-busy={parsing} bind:open ontoggle={(event) => { if (!event.currentTarget.open) clearPreview(); }}>
+  <summary>Import external observations and claims</summary>
   <div class="import-body">
     <p>Review local evidence before adding it to Cases. Imports do not collect data, change analyst dispositions or submit reports.</p>
     <details class="formats"><summary>Supported files and limits</summary>
@@ -287,7 +302,7 @@
         {/each}
       {/if}
       {#key preview}
-        <ExternalImportReview {preview} {conversionReport} {cases} {applying} onimport={applyImport} oncancel={() => { void cancelReview(); }} />
+        <ExternalImportReview {preview} {selectedOriginal} {conversionReport} {cases} {applying} onimport={applyImport} oncancel={() => { void cancelReview(); }} />
       {/key}
     {/if}
   </div>

@@ -5,6 +5,7 @@
   let localApplication = $state(false);
   onMount(() => { localApplication = isLocalApplication(); });
   import { goto } from '$app/navigation';
+  import { page } from '$app/state';
   import IntelligenceIcon from '#lib/components/IntelligenceIcon.svelte';
   import PageHeading from '#lib/components/PageHeading.svelte';
   import DashboardAttentionSummary from '#lib/components/DashboardAttentionSummary.svelte';
@@ -43,6 +44,9 @@
   let summaryRecovery = $state<'read' | 'reload'>('read');
   let secondaryOpen = $state(false);
   let firstUseTool = $state<'guide' | 'import' | ''>('');
+  $effect(() => {
+    if (page.url.searchParams.has('infrastructure') || page.url.hash === '#retained-infrastructure') { firstUseTool = ''; secondaryOpen = true; }
+  });
   let workspaceState = $state<DashboardWorkspaceState>('loading');
   let attentionSummary = $state<DashboardAttentionSummaryModel | null>(null);
   let attentionUnavailable = $state(false);
@@ -226,7 +230,7 @@
 <section class="dashboard-state card" aria-live="polite" aria-busy="true">
   <p class="eyebrow">Saved workspace</p>
   <h2>Preparing your Dashboard</h2>
-  <p>Waiting for every required local collection before deciding whether this is a first-use or returning workspace.</p>
+  <p>Reading saved work…</p>
 </section>
 {:else if workspaceState === 'first_use'}
 <section class="dashboard-section getting-started" aria-labelledby="getting-started-title">
@@ -248,7 +252,7 @@
 {#if attentionSummary}
   <DashboardAttentionSummary summary={attentionSummary} />
 {:else if attentionUnavailable}
-  <section class="dashboard-state card" role="status"><h2>Attention summary unavailable</h2><p>The combined review summary is unavailable. Available work remains accessible below; no missing source was treated as empty.</p></section>
+  <section class="dashboard-state card" role="status"><h2>Attention summary unavailable</h2><p>The review summary is unavailable. Open the available saved work below.</p></section>
 {/if}
 </div>
 <section class="recent-cases" aria-labelledby="recent-cases-title">

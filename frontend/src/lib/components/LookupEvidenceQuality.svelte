@@ -3,12 +3,15 @@
   import { untrack } from 'svelte';
   import type { DecisionFact } from '../../../../packages/evidence/decision-fact.mts';
   import { buildLookupEvidenceQualityModel, buildLookupCollectionOutcomeReview } from '#lib/analysis/lookup-evidence-quality-model.ts';
+  import { buildLookupEvidenceScope } from '#lib/analysis/lookup-evidence-scope.ts';
   import type { LookupEvidenceQualityMatrix } from '#lib/analysis/lookup-decision-support.ts';
   import { formatCollectionDuration } from '#lib/analysis/lookup-display-shared.ts';
   import type { LookupHttpResponse, LookupTiming } from '#lib/analysis/lookup-response.ts';
   import type { LookupFreshnessThresholds, LookupSourceRefreshPlan, LookupSourceRefreshLedger, SourceRefreshCaseTarget } from '#lib/analysis/lookup-source-refresh.ts';
   import LookupCollectionTiming from '#lib/components/LookupCollectionTiming.svelte';
+  import LookupEvidenceScope from './LookupEvidenceScope.svelte';
   import LookupSourceRefresh from '#lib/components/LookupSourceRefresh.svelte';
+  import CollectionReceiptReview from './CollectionReceiptReview.svelte';
 
   let {
     matrix,
@@ -39,6 +42,7 @@
     facts: lookupDecisionFacts,
   }));
   const collectionReview = $derived(buildLookupCollectionOutcomeReview(original, depth, model.entries));
+  const evidenceScope = $derived(buildLookupEvidenceScope(original));
 
   const initialFreshnessPolicy = untrack(() => refreshPlan.freshnessPolicy);
   let policyMode = $state<'task-default' | 'analyst-custom'>(initialFreshnessPolicy.id === 'analyst-custom' ? 'analyst-custom' : 'task-default');
@@ -80,7 +84,7 @@
       <div>
         <p class="eyebrow">Evidence reliability</p>
         <h4 id="evidence-quality-title">Source quality and freshness</h4>
-        <p>Review endpoint class, source state, age, truncation, request timing, limitations, and downstream uses before relying on a conclusion.</p>
+        <p>See what each source returned, when it was observed, and what may need a fresh check.</p>
       </div>
       <div class="metrics" role="group" aria-label="Evidence coverage summary">
         <span data-summary="complete"><strong>{model.completeCount}</strong> complete</span>
@@ -89,16 +93,24 @@
       </div>
     </header>
 
+    <LookupEvidenceScope scope={evidenceScope} />
+
     {#if collectionReview.groups.length}
     <details class="collection-outcomes">
       <summary>Compare the completed plan and source outcomes</summary>
-      <p>{collectionReview.mode === 'deep' ? 'Deep' : 'Fast'} recipe for {collectionReview.target}. This review uses the completed result, not the editable query or current provider configuration.</p>
-      <p>Recipe eligibility is not proof that a request ran. Original optional selections are not retained; a missing record does not establish that a source was declined, disabled or had no findings. Each source keeps its own state and time. Use the detailed records below for limitations and deliberate refreshes.</p>
+      <p>{collectionReview.mode === 'deep' ? 'Deep' : 'Fast'} Lookup for {collectionReview.target}, using the choices and results from that run.</p>
+      {#if original.collectionReceipt}
+        <CollectionReceiptReview receipt={original.collectionReceipt} />
+      {:else}
+        <p>No original collection receipt was retained. Optional selections and collector starts are unknown.</p>
+      {/if}
+      <p>The recipe below describes source eligibility, not proof that a request ran. Each source keeps its own state and time.</p>
       <ul class="outcome-groups" aria-label="Completed collection source outcomes">
         {#each collectionReview.groups as group (group.id)}
           <li data-planned-source={group.id}>
             <strong>{group.label}</strong>
-            <p>Recipe: {group.expectation === 'selection_unknown' ? 'optional; original selection unknown' : group.expectation}.{group.diagnosticState ? ` Completed diagnostic: ${group.diagnosticState.replaceAll('_', ' ')}.` : ' Completed diagnostic unavailable.'}</p>
+            <p>Recipe: {group.expectation === 'optional' ? (original.collectionReceipt ? 'optional; see the original choices above' : 'optional; original selection unknown') : group.expectation}.{group.diagnosticState ? ` Completed diagnostic: ${group.diagnosticState.replaceAll('_', ' ')}.` : ' Completed diagnostic unavailable.'}</p>
+            {#if !original.collectionReceipt}<p>{group.explanation}</p>{/if}
             {#if group.id === 'domain_evidence'}<p>The domain diagnostic describes the availability branch; DNS, HTTP and TLS outcomes remain separate below.</p>{/if}
             {#if group.records.length}
               <ul>{#each group.records as entry (entry.id)}<li>

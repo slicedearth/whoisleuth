@@ -6,6 +6,7 @@ import { MAX_PROFILE_VALUES } from '../packages/contracts/workspace-portability.
 import { MAX_LOOKUP_ASSET_EDGES, MAX_LOOKUP_ASSET_INPUT_ROWS, MAX_LOOKUP_ASSET_NODES } from '../packages/contracts/investigation-portability.mts';
 import { parseLookupHttpResponse, createLookupViewModel } from '../lib/lookup-response-contract.mts';
 import { lookupGraphCapacityFixture } from './lookup-graph-capacity-fixture.mts';
+import { FORCE_GRAPH_LABEL_LINE_HEIGHT, MAX_FORCE_GRAPH_NODES, projectBoundedForceGraph } from '../frontend/src/lib/analysis/visualization-force-graph.ts';
 
 test('the graph retains every relationship from full admitted source cohorts', () => {
   const response = lookupGraphCapacityFixture();
@@ -23,8 +24,30 @@ test('the graph retains every relationship from full admitted source cohorts', (
   }
   assert.equal(graph.truncated, false);
   assert.ok(graph.edges.length > 400);
-  assert.equal(projectLookupAssetGraph(graph, 'all').edges.length, graph.edges.length);
+  const projection = projectLookupAssetGraph(graph, 'all');
+  assert.equal(projection.edges.length, graph.edges.length);
   assert.ok(graph.edges.every(edge => graph.nodes.some(node => node.id === edge.target)));
+
+  const original = structuredClone(projection);
+  const visual = projectBoundedForceGraph(projection.nodes, projection.links, { focusNodeId: graph.targetId });
+  assert.equal(visual.nodes.length, MAX_FORCE_GRAPH_NODES);
+  assert.ok(visual.nodes.some(node => node.id === graph.targetId), 'The lookup target must survive visual truncation.');
+  assert.ok(visual.links.some(link => link.sourceId === graph.targetId || link.targetId === graph.targetId));
+  assert.deepEqual(projection, original, 'Visual layout must not discard exact relationships.');
+  const boxes = visual.nodes.map(node => ({
+    id: node.id,
+    left: node.x - (node.labelWidth + (node.kind === 'target' ? 20 : 0)) / 2,
+    right: node.x + (node.labelWidth + (node.kind === 'target' ? 20 : 0)) / 2,
+    top: node.kind === 'target' ? node.y - (node.labelLines.length * FORCE_GRAPH_LABEL_LINE_HEIGHT + 17) / 2 : node.y - 22,
+    bottom: node.kind === 'target' ? node.y + (node.labelLines.length * FORCE_GRAPH_LABEL_LINE_HEIGHT + 17) / 2 : node.y + 33 + node.labelLines.length * FORCE_GRAPH_LABEL_LINE_HEIGHT,
+  }));
+  for (const [index, left] of boxes.entries()) {
+    assert.ok(left.left >= 0 && left.right <= visual.width && left.top >= 0 && left.bottom <= visual.height, left.id);
+    for (const right of boxes.slice(index + 1)) {
+      assert.equal(left.left < right.right && left.right > right.left && left.top < right.bottom && left.bottom > right.top,
+        false, `${left.id} overlaps ${right.id}`);
+    }
+  }
 });
 
 test('source inputs count invalid, duplicate, admitted and uninspected values independently', () => {

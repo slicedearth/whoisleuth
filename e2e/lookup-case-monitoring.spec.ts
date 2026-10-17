@@ -299,7 +299,7 @@ test('partial Lookup evidence can be classified, monitored, rechecked, and revie
   await expect.poll(() => lookupRequests).toBe(2);
   await expect(page.getByRole('heading', { name: LOOKUP_TARGET, exact: true })).toBeVisible();
   await expect(page).toHaveURL(/#case-response$/u);
-  await expect(page.locator('.case-card')).toContainText(`Refreshed the retained Case evidence for ${CASE_DOMAIN}.`);
+  await expect(page.locator('.case-card')).toContainText(`Saved this Lookup observation to the Case for ${CASE_DOMAIN}.`);
 
   const refreshedCases = await readBrowserLocalCollection(page, 'cases', {
     minimumRecords: 1,

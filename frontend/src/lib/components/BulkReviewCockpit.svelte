@@ -3,6 +3,9 @@
   import { officialRegistryLookupFor } from '#lib/analysis/registry-support.ts';
   import BulkRiskSummary from '#lib/components/BulkRiskSummary.svelte';
   import CasePicker from './CasePicker.svelte';
+  import AnalystWorkbench from './AnalystWorkbench.svelte';
+  import { openRetainedPeek } from '#lib/controllers/retained-peek-key.ts';
+  import Pagination from './Pagination.svelte';
   import { casesForDomain } from '../../../../packages/cases/case-selection.mts';
   import type { CaseRecord } from '#lib/analysis/case-model.ts';
   import {
@@ -57,21 +60,27 @@
 
   let enabled = $state(false);
   let cockpit: HTMLElement;
-  let cursor = $state(0);
-  const current = $derived(rows[cursor] ?? null);
+  let focusedDomain = $state<string | null>(null);
+  let inspectionOpen = $state(true), queuePage = $state(1);
+  const queuePages = $derived(Math.max(1, Math.ceil(rows.length / 25)));
+  const currentQueuePage = $derived(Math.min(queuePage, queuePages));
+  const queueRows = $derived(rows.slice((currentQueuePage - 1) * 25, currentQueuePage * 25));
+  const current = $derived(rows.find(row => row.domain === focusedDomain) ?? null);
+  const cursor = $derived(current ? rows.indexOf(current) : -1);
   const currentCases = $derived(current ? casesForDomain(caseRecords, current.domain) : []);
   const officialLookupUrl = $derived(current ? officialRegistryLookupFor(current.domain) : null);
   const unresolved = $derived(reviewAvailable?rows.filter((row) => row.reviewState !== 'reviewed' && row.reviewState !== 'deferred').length:0);
   const canMove = $derived(rows.length > 1 && nextBulkReviewIndex(rows, cursor, 1) !== cursor);
 
   $effect(() => {
-    if (!rows.length) cursor = 0;
-    else if (cursor >= rows.length) cursor = rows.length - 1;
+    if (!rows.length) focusedDomain = null;
+    else if (focusedDomain === null) focusedDomain = rows[0]!.domain;
+    else if (!current) inspectionOpen = false;
   });
 
   function move(direction: -1 | 1): void {
     const next = nextBulkReviewIndex(rows, cursor, direction);
-    if (next >= 0) cursor = next;
+    if (next >= 0 && rows[next]) { focusedDomain = rows[next]!.domain; queuePage = Math.floor(next / 25) + 1; inspectionOpen = true; }
   }
 
   function editableTarget(target: EventTarget | null): boolean {
@@ -87,6 +96,7 @@
       || editableTarget(event.target) || !current) return;
     if (event.code === 'ArrowRight' && canMove) move(1);
     else if (event.code === 'ArrowLeft' && canMove) move(-1);
+    else if (!inspectionOpen) return;
     else if (event.code === 'KeyR' && reviewAvailable) setReviewState(current.resultIndex, 'reviewed');
     else if (event.code === 'KeyD' && reviewAvailable) setReviewState(current.resultIndex, 'deferred');
     else if (event.code === 'KeyS' && shortlistAvailable) toggleSaved(current.resultIndex);
@@ -108,7 +118,20 @@
     <button class="btn" class:active={enabled} type="button" aria-pressed={enabled} onclick={() => enabled = !enabled}>{enabled ? 'Disable shortcuts' : 'Enable shortcuts'}</button>
   </header>
 
-  {#if current}
+  <AnalystWorkbench label="Bulk result review" selected={inspectionOpen && current ? String(current.resultIndex) : null} detailTitle="Retained result" onclose={() => inspectionOpen = false}>
+    {#snippet queue()}
+      <ol class="result-queue">
+        {#each queueRows as row (row.resultIndex)}
+          <li class:inspected={inspectionOpen && current?.resultIndex === row.resultIndex}>
+            <strong>{row.domain}</strong><span>{row.availability} · {reviewAvailable ? row.reviewState : 'Review state unavailable'}</span>
+            <button class="btn" type="button" aria-label={`Inspect retained ${row.domain}`} aria-pressed={inspectionOpen && current?.resultIndex === row.resultIndex} aria-keyshortcuts="P" title="Preview retained evidence: P while this button is focused" onclick={() => { focusedDomain = row.domain; inspectionOpen = true; }} onkeydown={event => openRetainedPeek(event, () => { focusedDomain = row.domain; inspectionOpen = true; })}>Inspect</button>
+          </li>
+        {/each}
+      </ol>
+      <Pagination currentPage={currentQueuePage} pageCount={queuePages} setPage={value => queuePage = value} ariaLabel="Bulk review queue pages" />
+    {/snippet}
+    {#snippet children()}
+    {#if current}
     <div class="review-progress"><strong>{cursor + 1} of {rows.length}</strong><span>{reviewAvailable ? `${unresolved} unresolved` : 'Review state unavailable'}</span></div>
     {#if !shortlistAvailable || !caseAvailable || !reviewAvailable}<p class="source-warning">Some workspace actions are unavailable. Review, shortlist, and Case controls are disabled independently while result inspection remains available.</p>{/if}
     <article class="current">
@@ -166,7 +189,7 @@
             value={watchlistName}
             oninput={(event) => setWatchlistName(event.currentTarget.value)}
           >
-          <small>Creates or refreshes a single-domain watchlist. No scan is started.</small>
+          <small>Creates or refreshes a single-domain Watchlist. A name already used for other domains is rejected. No scan is started.</small>
         </label>
         <button class="btn" type="button" disabled={!watchlistName.trim() || !current.profileContextReady || Boolean(current.trusted)} onclick={() => saveToWatchlist(current.resultIndex)}>
           Save current to Monitor
@@ -179,6 +202,8 @@
   {:else}
     <p class="empty">No result matches the current view.</p>
   {/if}
+    {/snippet}
+  </AnalystWorkbench>
 
   <div class="freshness" data-state={retryPlan.freshness.state}>
     <span>Evidence freshness</span>
@@ -206,21 +231,26 @@
 
 <style>
   .cockpit{margin:16px 0;padding:var(--card-pad)}
+  .result-queue { list-style: none; margin: 0; padding: 0; }
+  .result-queue li { display: grid; gap: .5rem; padding: .75rem; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+  .result-queue span { color: var(--muted); font-size: var(--text-xs); }
+  .result-queue button { justify-self: start; min-height: 44px; }
   header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
   h2,p{margin:0}h2{margin-top:4px;font:700 var(--text-lg) var(--mono)}
   header p:not(.eyebrow){max-width:720px;margin-top:7px;color:var(--muted);font-size:var(--text-sm);line-height:1.5}
   header .active{border-color:var(--accent);color:var(--accent)}
   .review-progress{display:flex;gap:9px;margin-top:14px;color:var(--muted);font:var(--text-xs) var(--mono)}
   .review-progress strong{color:var(--accent)}
-  .current{margin-top:8px;padding:14px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}
-  .identity{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+  .current{min-width:0;margin-top:8px;background:var(--panel)}
+  .identity{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:12px}
+  .identity>div{flex:1 1 12rem;min-width:0}
   .identity small{color:var(--muted);font:var(--text-2xs) var(--mono);text-transform:uppercase}
   h3{margin:3px 0 0;font:700 var(--text-lg) var(--mono);overflow-wrap:anywhere}
-  .review-state{padding:4px 7px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:capitalize}
+  .review-state{padding:4px 7px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:capitalize;white-space:nowrap}
   .state-reviewed{border-color:color-mix(in srgb,var(--success) 45%,var(--border));color:var(--success)}
   .state-reviewing{border-color:color-mix(in srgb,var(--amber) 45%,var(--border));color:var(--amber)}
-  dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:13px 0 0}
-  dl div{min-width:0;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
+  dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px;margin:13px 0 0}
+  dl>div{min-width:0;padding:10px 0;border-bottom:1px solid var(--border)}
   dt{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
   dd{margin:3px 0 0;font-size:var(--text-xs);line-height:1.45;overflow-wrap:anywhere}
   .profile-limitation{display:block;margin-top:4px;color:var(--amber);font-weight:400}
@@ -229,7 +259,7 @@
   .navigation,.actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:11px}
   .actions .accent{border-color:color-mix(in srgb,var(--accent) 50%,var(--border));color:var(--accent)}
   .unavailable-action{display:inline-flex;align-items:center;min-height:38px;padding:6px 10px;border:1px dotted var(--muted);border-radius:var(--radius-sm);color:var(--muted);font:600 var(--text-2xs) var(--mono)}
-  .handoffs{display:grid;grid-template-columns:minmax(180px,.75fr) minmax(220px,1fr) auto;gap:8px;align-items:end;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+  .handoffs{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:8px;align-items:end;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
   .handoffs label{display:grid;gap:5px;min-width:0}
   .handoffs label>span{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
   .handoffs input,.handoffs select{width:100%;min-height:38px}

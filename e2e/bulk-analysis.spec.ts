@@ -91,7 +91,7 @@ for (const collected of [true, false]) {
   });
 }
 
-test('single-row Monitor saves preserve another domain and its baseline when a name is reused', async ({ page }) => {
+test('single-row Monitor saves preserve another domain and its baseline when a name is reused', async ({ page }, testInfo) => {
   const requests: string[] = [];
   await page.route('**/api/lookup?*', async route => {
     const domain = new URL(route.request().url()).searchParams.get('q')!;
@@ -108,6 +108,27 @@ test('single-row Monitor saves preserve another domain and its baseline when a n
   const name = cockpit.getByLabel('Monitor list for the current row');
   const save = cockpit.getByRole('button', { name: 'Save current to Monitor' });
   await name.fill('Shared review');
+  await cockpit.getByRole('button', { name: 'Back to queue', exact: true }).click();
+  const inspect = cockpit.getByRole('button', { name: 'Inspect retained first-review.example', exact: true });
+  await inspect.focus(); await inspect.press('p');
+  await expect(name).toHaveValue('Shared review');
+  await cockpit.getByRole('button', { name: 'Back to queue', exact: true }).click();
+  await expect(inspect).toBeFocused();
+  await page.setViewportSize({ width: 320, height: 700 });
+  await inspect.click();
+  await expect(inspect).toBeHidden();
+  await expectNoHorizontalOverflow(page);
+  await expect(name).toHaveValue('Shared review');
+  if (captureVisualEvidenceEnabled()) {
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      for (const width of [320, 1280]) {
+        await page.setViewportSize({ width, height: 844 });
+        await expectNoHorizontalOverflow(page);
+        await page.screenshot({ path: testInfo.outputPath(`bulk-inspector-${theme}-${width}.png`), fullPage: true });
+      }
+    }
+  }
   await save.click();
   await expect(cockpit.getByRole('status')).toContainText('Saved first-review.example to Shared review');
   const before = await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1 });
@@ -820,6 +841,29 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
   await expect(markReviewed).not.toHaveAttribute('aria-keyshortcuts');
   await cockpit.getByRole('button', { name: 'Enable shortcuts' }).click();
   await expect(markReviewed).toHaveAttribute('aria-keyshortcuts', 'Alt+R');
+  const inspectLeft = cockpit.getByRole('button', { name: 'Inspect retained left-review.example', exact: true });
+  const inspectRight = cockpit.getByRole('button', { name: 'Inspect retained right-review.example', exact: true });
+  await inspectLeft.click();
+  await cockpit.getByRole('button', { name: 'Back to queue', exact: true }).click();
+  await inspectRight.focus();
+  const beforeShortcut = await readBrowserLocalCollection(page, 'bulk_review');
+  await page.keyboard.press('Alt+r');
+  await expect(inspectRight).toBeFocused();
+  await expect(cockpit.locator('.result-queue li').filter({ hasText: 'left-review.example' })).toContainText('unreviewed');
+  await expect(cockpit.locator('.result-queue li').filter({ hasText: 'right-review.example' })).toContainText('unreviewed');
+  expect(await readBrowserLocalCollection(page, 'bulk_review')).toEqual(beforeShortcut);
+  await inspectRight.click();
+  await markReviewed.focus();
+  await page.keyboard.press('Alt+r');
+  await expect(cockpit.locator('.review-state')).toHaveText('reviewed');
+  await expect(cockpit.locator('.result-queue li').filter({ hasText: 'left-review.example' })).toContainText('unreviewed');
+  const afterShortcut = await readBrowserLocalCollection(page, 'bulk_review', { minimumRecords: 1 });
+  expect(afterShortcut.records.map(record => record.value)).toMatchObject([
+    { kind: 'row', domain: 'right-review.example', state: 'reviewed' },
+  ]);
+  await cockpit.getByRole('button', { name: 'Previous unresolved' }).focus();
+  await page.keyboard.press('Alt+ArrowLeft');
+  await expect(cockpit.getByRole('heading', { name: 'left-review.example', exact: true })).toBeVisible();
   // Option changes the character on some layouts, but not the physical key.
   expect(await cockpit.evaluate(element => {
     const event = new KeyboardEvent('keydown', { key: '®', code: 'KeyR', altKey: true, bubbles: true, cancelable: true });
@@ -827,9 +871,8 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
     return event.defaultPrevented;
   })).toBe(true);
   await expect(cockpit.locator('.review-state')).toHaveText('reviewed');
-  await cockpit.getByRole('button', { name: 'Next unresolved' }).focus();
-  await page.keyboard.press('Alt+ArrowRight');
-  await expect(cockpit.getByRole('heading', { level: 3 })).toHaveText('right-review.example');
+  await inspectRight.click();
+  await expect(cockpit.getByRole('heading', { name: 'right-review.example', exact: true })).toBeVisible();
   await expect(page).toHaveURL(/\/bulk/u);
   const monitorName = cockpit.getByLabel('Monitor list for the current row');
   await monitorName.focus();
@@ -879,7 +922,7 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
   await expect(issuerRow).toContainText('CN=Fixture Authority Two');
   await expect(comparison.getByRole('row', { name: /Certificate TLS public-key fingerprint/u })).toBeVisible();
   await expect(comparison.getByText('Evidence freshness')).toBeVisible();
-  await expect(comparison.getByRole('link', { name: 'View settled row' })).toHaveCount(56);
+  await expect(comparison.getByRole('link', { name: 'View result row' })).toHaveCount(56);
 
   const downloadPromise = page.waitForEvent('download');
   await comparison.getByRole('button', { name: 'Export comparison' }).click();
@@ -930,7 +973,7 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
   await expectNoHorizontalOverflow(page);
   await expectNoHorizontalScrollContainers(comparison);
   await expectNoHorizontalScrollContainers(mailReview);
-  const mobileEvidenceLink = technologyRow.getByRole('link', { name: 'View settled row' }).first();
+  const mobileEvidenceLink = technologyRow.getByRole('link', { name: 'View result row' }).first();
   await expect(mobileEvidenceLink).toBeVisible();
   await expect(mobileEvidenceLink).toHaveAttribute('href', '#bulk-result-0');
   expect((await boundingBox(mobileEvidenceLink)).height).toBeGreaterThanOrEqual(44);

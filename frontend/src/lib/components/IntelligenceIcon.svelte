@@ -23,8 +23,14 @@
     | 'bulk'
     | 'watchlist'
     | 'brand'
+    | 'menu'
+    | 'close'
     | 'command'
-    | 'search';
+    | 'search'
+    | 'star'
+    | 'star-filled'
+    | 'ellipsis'
+    | 'minus';
 
   let {
     name,
@@ -124,6 +130,16 @@
   {:else if name === 'asset'}
     <path class="icon-wash" d="M8.5 4.5h7l4 4v7l-4 4h-7l-4-4v-7z"/>
     <path d="M8.5 4.5h7l4 4v7l-4 4h-7l-4-4v-7zM8.5 12l2.2 2.2 4.8-5"/>
+  {:else if name === 'menu'}
+    <path d="M4 6h16M4 12h16M4 18h16"/>
+  {:else if name === 'close'}
+    <path d="m6 6 12 12M18 6 6 18"/>
+  {:else if name === 'star' || name === 'star-filled'}
+    <path class:icon-solid={name === 'star-filled'} d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9z"/>
+  {:else if name === 'ellipsis'}
+    <circle class="icon-solid" cx="5" cy="12" r="1"/><circle class="icon-solid" cx="12" cy="12" r="1"/><circle class="icon-solid" cx="19" cy="12" r="1"/>
+  {:else if name === 'minus'}
+    <path d="M5 12h14"/>
   {:else if name === 'lookup' || name === 'search' || name === 'command'}
     <circle class="icon-wash" cx="10.5" cy="10.5" r="6.5"/>
     <circle cx="10.5" cy="10.5" r="6.5"/>
@@ -149,5 +165,6 @@
 <style>
   svg{display:block;flex:none;overflow:visible;color:inherit;fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round}
   .icon-wash{fill:currentColor;fill-opacity:.1}
+  .icon-solid{fill:currentColor}
   .icon-detail{opacity:.72}
 </style>

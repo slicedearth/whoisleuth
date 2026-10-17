@@ -36,8 +36,8 @@
   <section aria-labelledby="web-title">
     <h2 id="web-title">Website observation</h2>
     <ul>
-      <li>Fetches only the homepage origin submitted for a Deep investigation; it does not crawl site paths, follow ordinary page links, submit forms, log in, or execute page scripts.</li>
-      <li>Tries HTTPS first and HTTP only as a fallback. Redirects are revalidated and capped at {MAX_OUTBOUND_REDIRECTS} hops.</li>
+      <li>By default, Deep collection requests the submitted hostname’s homepage. Explicit selected-URL collection instead sends its path and query, without its fragment. Neither mode crawls page links, submits forms, logs in or executes page scripts.</li>
+      <li>Homepage collection tries HTTPS, then HTTP if needed. Selected-URL collection uses the chosen URL without a scheme or path fallback. Redirects are revalidated and capped at {MAX_OUTBOUND_REDIRECTS} hops.</li>
       <li>Uses a {seconds(HOMEPAGE_FETCH_TIMEOUT_MS)}-second homepage deadline and caps the retained homepage body at {bytes(MAX_HOMEPAGE_BYTES)} bytes.</li>
       <li>Checks at most {MAX_FAVICON_CANDIDATES} declared or conventional favicon candidates in priority order, one at a time, with a {seconds(FAVICON_FETCH_TIMEOUT_MS)}-second deadline and {bytes(MAX_FAVICON_BYTES)}-byte cap per candidate.</li>
       <li>Blocks private, loopback, link-local, multicast, reserved, and other non-public destinations and revalidates every redirect against DNS-rebinding controls.</li>
@@ -64,7 +64,6 @@
   header>p:not(.eyebrow),section p,li{color:var(--muted);line-height:1.7}
   section{padding:30px 0;border-bottom:1px solid var(--border)}
   h2{margin:0 0 12px;font:700 clamp(1.35rem,3vw,1.9rem) var(--mono);letter-spacing:-.035em}
-  section a{color:var(--accent);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px}
   pre{max-width:100%;padding:13px;border:1px solid var(--border);border-radius:var(--radius-sm);overflow-wrap:anywhere;white-space:pre-wrap;background:var(--panel)}
   li+li{margin-top:7px}
 </style>

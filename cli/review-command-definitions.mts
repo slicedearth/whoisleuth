@@ -10,7 +10,7 @@ import { CLI_CASE_OPERATIONS, CLI_INDICATOR_OPERATIONS, positional, OPTIONAL_FIL
 export const REVIEW_COMMAND_DEFINITIONS = Object.freeze({
   "verify-artifact": commandSeed({
     reference: {
-      description: 'Validate a supported archive, ordinary Case export, claim passport, packet, manifest, saved Lookup or Lookup-evidence export without printing evidence contents. Use --package for an evidence ZIP or encrypted package, with --passphrase-file to unlock it; use --folder ./evidence for an unencrypted evidence folder. Add --bagit with --package or --folder to verify BagIt 1.0.',
+      description: 'Validate a supported archive, ordinary case export, claim passport, packet, manifest, saved Lookup or Lookup-evidence export without printing evidence contents. Use --package for an evidence ZIP or encrypted package, with --passphrase-file to unlock it; use --folder ./evidence for an unencrypted evidence folder. Add --bagit with --package or --folder to verify BagIt 1.0.',
       example: 'whoisleuth verify-artifact report.json --manifest manifest.json --manifest-entry artifact-2 --json --strict-exit',
       boundary: 'Verification is offline and redacted. ZIP and folder entries are reported separately without importing them. Case exports are checked without repairing content; ordinary package review also counts original references with matching bytes. Ordinary folders allow only the declared layout; BagIt allows bounded nested payloads and checks SHA-256/SHA-512 manifests without interpreting payloads. Symbolic links are refused. BagIt fetch.txt is never fetched; missing files, mismatches and unsupported algorithms remain explicit. Package digests describe bytes, not filesystem metadata or authenticity. In scripts, use --strict-exit: incomplete verification returns 4. Unencrypted workspace archives always return 4 under --strict-exit because section digests do not cover mutable root metadata; structure-only formats can pass their narrower contract. Default exit 0 means the report was produced, not that its checks passed.',
     },
@@ -57,9 +57,9 @@ export const REVIEW_COMMAND_DEFINITIONS = Object.freeze({
   }),
   "source-report": commandSeed({
     reference: {
-      description: 'Create a target-free reliability summary from a saved lookup.',
+      description: 'Summarise source reliability from saved Lookup or Bulk evidence, or merge source-reliability reports.',
       example: 'whoisleuth source-report lookup.json --json',
-      boundary: 'The report retains source states and timings but excludes targets, queries, endpoints, and raw evidence.',
+      boundary: 'Accepts supported Lookup, Bulk or Bulk-item documents, or an unmixed set of source-reliability reports. Retains source states and timings but excludes targets, queries, endpoints and raw evidence.',
     },
     collection: { scope: 'Reads bounded saved evidence and emits target-free source reliability data.' },
     summary: 'Build a target-free source report',
@@ -161,7 +161,7 @@ export const REVIEW_COMMAND_DEFINITIONS = Object.freeze({
       example: 'whoisleuth intake email message.eml --json',
       boundary: 'Offline only: no destination, embedded command, phone number or QR payload is opened, contacted or executed. Output omits original bodies, subjects, address local parts, URL paths, queries and fragments. Literal IPs and labelled hashes are bounded text observations, not lookup targets or verdicts; headers, URL contents, QR, HAR and identity-event fields are not scanned for them. Plain-text phone discovery writes only counts, source digest, ranges and status to stderr; --quiet suppresses it. Optional --intake-context reads one separate file up to 8 KiB, not stdin. Version 1 carries distribution declarations; version 2 can also bind explicit phone selections and a supplied destination pair to the exact input digest. Selected phone strings and source declarations enter output; unselected candidates and exact private URLs do not. Authentication headers remain attributed claims. Selected PDF and DOCX review retains part identities and extraction coverage; embedded raster QR support does not imply complete rendered-page review. HAR retains minimised request order and timings, never replay authority, headers, cookies or bodies. Use --strict-exit to return 4 for partial coverage.',
     },
-    collection: { scope: 'Reads one selected text, MIME email, calendar, PNG, PDF, DOCX, HAR or identity-event JSON file and, only with --intake-context, one bounded declaration/selection file. No collection or automatic Case write.' },
+    collection: { scope: 'Reads one selected text, MIME email, calendar, PNG, PDF, DOCX, HAR or identity-event JSON file and, only with --intake-context, one bounded declaration/selection file. No collection or automatic case write.' },
     summary: 'Review selected files and identity events offline',
     options: ['--json', '--reported-action', '--trusted-auth-header', '--intake-context', '--strict-exit', '--quiet', '--no-color'],
     positionals: Object.freeze([positional('kind', 'enum', 1, 1, MESSAGE_INTAKE_KINDS), positional('source', 'file', 0, 1, [], 'argv_or_stdin')]),
@@ -227,12 +227,12 @@ export const REVIEW_COMMAND_DEFINITIONS = Object.freeze({
   }),
   case: commandSeed({
     reference: {
-      description: 'Show or open a local Case, append a note or evidence pin, link evidence, record an assessment or offline recheck, retain an incident-link, create an action, append an action-event, save a recheck-question, or close-object. JSON mutations use --input; notes use --text or --note-file. Link input contains fromPinId, toPinId, kind and basis. Action-event input contains id and transition. Explicit responseObjects bind an action; a typed objectOutcome requires an explicit affected subset on its event. Object closure never closes other objects or the Case. Mutations require --output and write the complete current Case export.',
+      description: 'Show or open a local case, append a note or evidence pin, link evidence, record an assessment or offline recheck, retain an incident-link, create an action, append an action-event, save a recheck-question, or close-object. JSON mutations use --input; notes use --text or --note-file. Link input contains fromPinId, toPinId, kind and basis. Action-event input contains id and transition. Explicit responseObjects bind an action; a typed objectOutcome requires an explicit affected subset on its event. Object closure never closes other objects or the case. Mutations require --output and write the complete current case export.',
       example: 'whoisleuth case open --domain example.test --output cases.json\n  whoisleuth case show cases.json\n  whoisleuth case note cases.json --text "Review the retained observation" --output cases.json --force',
-      boundary: 'No database, browser launch, request or external report is created. Select --case-id when a file contains multiple Cases. Existing files require --force; --expect-file-digest sha256:<digest> additionally checks the exact file reviewed earlier. Source and output leases reject concurrent changes. Interrupted .workflow.lock files require deliberate inspection. Recheck records supplied observations; it does not collect them. Not reproduced requires an existing saved question, a complete observation and comparable conditions. Working exports include private analyst content and file references, not attached file bytes.',
+      boundary: 'No database, browser launch, request or external report is created. Select --case-id when a file contains multiple cases. Existing files require --force; --expect-file-digest sha256:<digest> additionally checks the exact file reviewed earlier. Source and output leases reject concurrent changes. Interrupted .workflow.lock files require deliberate inspection. Recheck records supplied observations; it does not collect them. Not reproduced requires an existing saved question, a complete observation and comparable conditions. Working exports include private analyst content and file references, not attached file bytes.',
     },
-    collection: { scope: `Reads exact Case schemas ${CLI_CASE_PACK_INPUT_CASE_VERSIONS.join(' or ')}. Input is bounded to ${MAX_EDITABLE_CASE_INPUT_BYTES / 1024 / 1024} MiB including formatting; the complete canonical Case store must fit ${MAX_CASE_STORE_BYTES / 1024 / 1024} MiB without pruning. Writes current schema ${CASE_SCHEMA_VERSION}.` },
-    summary: 'Review and update ordinary local Case files',
+    collection: { scope: `Reads exact case schemas ${CLI_CASE_PACK_INPUT_CASE_VERSIONS.join(' or ')}. Input is bounded to ${MAX_EDITABLE_CASE_INPUT_BYTES / 1024 / 1024} MiB including formatting; the complete canonical case store must fit ${MAX_CASE_STORE_BYTES / 1024 / 1024} MiB without pruning. Writes current schema ${CASE_SCHEMA_VERSION}.` },
+    summary: 'Review and update ordinary local case files',
     options: ['--case-id', '--domain', '--title', '--new-incident', '--text', '--note-file', '--input', '--expect-file-digest', '--json', '--no-color'],
     positionals: Object.freeze([positional('operation', 'enum', 1, 1, CLI_CASE_OPERATIONS), positional('source', 'file', 0, 1)]),
     constraints: Object.freeze([constraint({ kind: 'mutually_exclusive', options: ['--text', '--note-file'] })]),
@@ -257,11 +257,11 @@ export const REVIEW_COMMAND_DEFINITIONS = Object.freeze({
   }),
   "case-pack": commandSeed({
     reference: {
-      description: `Package browser-created Case records from schemas ${CLI_CASE_PACK_INPUT_CASE_VERSIONS.join(' or ')} as a reviewed, audience-specific Case-pack v2 with current schema ${CASE_SCHEMA_VERSION}.`,
+      description: `Package browser-created case records from schemas ${CLI_CASE_PACK_INPUT_CASE_VERSIONS.join(' or ')} as a reviewed, audience-specific Case-pack v2 with current schema ${CASE_SCHEMA_VERSION}.`,
       example: 'whoisleuth case-pack cases.json --audience trusted --reviewed --json',
-      boundary: 'The command creates a separate offline package without changing the source or durable Cases and requires an explicit review acknowledgement. Every audience, including public, retains domain evidence, Case, pin and decision identifiers, tags, decision summaries and rationale. Review that analyst-authored content as well as the exclusions before sharing.',
+      boundary: 'The command creates a separate offline package without changing the source or durable cases and requires an explicit review acknowledgement. Every audience, including public, retains domain evidence, case, pin and decision identifiers, tags, decision summaries and rationale. Review that analyst-authored content as well as the exclusions before sharing.',
     },
-    collection: { scope: `Reads one bounded Case export from schemas ${CLI_CASE_PACK_INPUT_CASE_VERSIONS.join(' or ')} and writes a separate audience-specific Case-pack v2.` },
+    collection: { scope: `Reads one bounded case export from schemas ${CLI_CASE_PACK_INPUT_CASE_VERSIONS.join(' or ')} and writes a separate audience-specific Case-pack v2.` },
     summary: 'Build a reviewed case package',
     options: ['--audience', '--reviewed', '--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,

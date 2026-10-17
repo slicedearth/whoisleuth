@@ -1,6 +1,8 @@
 import type { UnknownRecord } from './saved-lookup.mts';
 import { WHOISLEUTH_REQUEST_POLICY_URL } from '../packages/analysis/project-metadata.mts';
 import { CLI_DOMAIN_CONTROL_MONITOR_SCHEMA } from '../packages/contracts/domain-control-monitor.mts';
+import { lookupDiagnosticEntries } from '../lib/lookup-progress.mts';
+import { lookupStrictExitFindings } from './strict-exit.mts';
 
 function record(value: unknown): UnknownRecord {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : {};
@@ -15,12 +17,21 @@ type JunitCase = Readonly<{ name: string; failure?: string }>;
 function junitCases(document: UnknownRecord): JunitCase[] {
   const schema = String(document.schema || '');
   if (schema === 'whoisleuth.cli.lookup') {
-    const diagnostics = record(document.diagnostics);
-    const cases = Object.entries(diagnostics).slice(0, 64).map(([source, value]) => {
-      const state = String(record(value).status ?? record(value).state ?? 'unavailable').toLowerCase();
-      return ['error', 'failed', 'partial', 'rate_limited', 'timeout', 'unavailable'].includes(state)
-        ? { name: `source ${source}`, failure: `Source state: ${state}` }
+    const sources = lookupDiagnosticEntries(document.diagnostics).filter(source => source.present);
+    const findings = lookupStrictExitFindings(document);
+    const cases: JunitCase[] = sources.map(({ source, path, state }) => {
+      const failure = findings.find(finding => finding.path === path);
+      return failure || state === null
+        ? { name: `source ${source}`, failure: `Source state: ${failure?.state ?? 'unavailable'}` }
         : { name: `source ${source}` };
+    });
+    // Retain nested and historical failure coverage without echoing imported
+    // object keys, endpoints or evidence into CI names or messages.
+    const namedPaths = new Set(sources.map(source => source.path));
+    const additional = findings.filter(finding => !namedPaths.has(finding.path));
+    if (additional.length) cases.push({
+      name: 'additional source diagnostics',
+      failure: `Source states: ${[...new Set(additional.map(finding => finding.state))].sort().join(', ')}`,
     });
     return cases.length ? cases : [{ name: 'lookup diagnostics', failure: 'No source diagnostics were available.' }];
   }

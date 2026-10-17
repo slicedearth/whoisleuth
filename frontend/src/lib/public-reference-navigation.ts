@@ -28,7 +28,7 @@ const evidenceGuides = Object.freeze(PUBLIC_RESOURCES.map((resource) => Object.f
 })));
 
 export const PUBLIC_REFERENCE_GROUPS: readonly PublicReferenceGroup[] = Object.freeze([
-  Object.freeze({ label: 'Get started', items: Object.freeze([destination('/resources'), destination('/cli'), destination('/examples')]) }),
+  Object.freeze({ label: 'Get started', items: Object.freeze([destination('/resources'), destination('/cli'), destination('/examples'), destination('/link-inspector')]) }),
   Object.freeze({ label: 'Investigation guides', items: evidenceGuides }),
   Object.freeze({
     label: 'Reference',

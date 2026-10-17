@@ -1,6 +1,7 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, useTheme } from './helpers';
+import { expectNoHorizontalOverflow, expectFocusedResultsVisible, useTheme } from './helpers';
 import { PUBLIC_RESOURCES } from '../frontend/src/lib/public-resources';
 import { PUBLIC_REFERENCE_DESTINATIONS } from '../frontend/src/lib/public-reference-navigation';
 import { glossaryTerms, guideFaqs, publicGuideGoals, resultStates, toolGuides, referenceGuides } from '../frontend/src/lib/public-guide';
@@ -97,27 +98,98 @@ test('delivered third-party notices include browser framework code independently
   expect(notice).not.toContain('This is the production-package base.');
 });
 
-test('reference section navigation is available before client hydration', async ({ browser }) => {
+test('public task guides and reference sections are available before client hydration', async ({ browser }) => {
   const context = await browser.newContext({ javaScriptEnabled: false });
   const page = await context.newPage();
   try {
+    await page.goto('/');
+    const starts = page.getByRole('region', { name: 'WHOISleuth investigation paths', exact: true });
+    for (const goal of publicGuideGoals) {
+      const card = starts.getByRole('article', { name: goal.title, exact: true });
+      await expect(card.getByRole('link', { name: 'Read the guide' })).toHaveAttribute('href', `/resources#${goal.id}`);
+      await expect(card.getByRole('link', { name: goal.example.label })).toHaveAttribute('href', goal.example.href);
+    }
+    const caseGuide = starts.getByRole('article', { name: 'Continue a saved case', exact: true }).getByRole('link', { name: 'Read the guide' });
+    await caseGuide.focus(); await caseGuide.press('Enter');
+    await expect(page).toHaveURL(/\/resources#track-important-findings$/u);
+    await expect(page.locator('#track-important-findings')).toBeInViewport();
     await page.goto('/cli');
     const sections = page.getByRole('navigation', { name: 'CLI sections' });
     await expect(sections).toBeVisible();
     const commands = sections.getByRole('link', { name: 'Command reference' });
     await expect(commands).toHaveAttribute('href', '#commands');
     await expect(sections.getByRole('link', { name: 'Capture companion' })).toHaveAttribute('href', '#capture-companion');
+    await expect(sections.getByRole('link', { name: 'Choose how to run' })).toHaveAttribute('href', '#choose-mode');
     const targets = await sections.getByRole('link').evaluateAll((links) => links.map((link) => link.getAttribute('href')));
     expect(new Set(targets).size).toBe(targets.length);
     for (const target of targets) {
       expect(target).toMatch(/^#[a-z][a-z0-9-]*$/u);
       await expect(page.locator(target!)).toHaveCount(1);
     }
+    await sections.getByRole('link', { name: 'Choose how to run' }).click();
+    await expect(page).toHaveURL(/\/cli#choose-mode$/u);
+    const modes = page.getByRole('region', { name: 'Choose how to run WHOISleuth', exact: true });
+    for (const name of ['Hosted console', 'Local application', 'Command-line tool', 'Capture companion']) {
+      const mode = modes.getByRole('article', { name, exact: true });
+      await expect(mode).toBeVisible();
+      await expect(mode.getByRole('link')).toHaveCount(1);
+    }
+    await expect(modes.getByRole('article', { name: 'Local application', exact: true })).toContainText('SQLite folder in plaintext');
+    await expect(modes.getByRole('article', { name: 'Local application', exact: true })).toContainText('host-scoped, not isolated by port');
+    await expect(modes.getByRole('article', { name: 'Capture companion', exact: true })).toContainText('Separate local archive only');
+    await modes.getByRole('link', { name: 'CLI installation commands', exact: true }).click();
+    await expect(page).toHaveURL(/\/cli#start$/u);
     await commands.click();
     await expect(page).toHaveURL(/\/cli#commands$/u);
   } finally {
     await context.close();
   }
+});
+
+test('installation modes stay accessible without collecting evidence or opening saved work', async ({ page }, testInfo) => {
+  const collectionRequests: string[] = [];
+  page.on('request', request => {
+    const pathname = new URL(request.url()).pathname;
+    if (pathname.startsWith('/api/') && !['/api/session', '/api/capabilities'].includes(pathname)) collectionRequests.push(pathname);
+  });
+  await page.addInitScript(() => {
+    const scope = window as unknown as { guideStorageAttempts: number };
+    scope.guideStorageAttempts = 0;
+    Object.defineProperty(indexedDB, 'open', { value: () => { scope.guideStorageAttempts++; throw new Error('Public guide must not open saved work'); } });
+  });
+  await page.goto('/cli#choose-mode');
+  await expect(page.getByTestId('public-cli-catalogue')).toHaveAttribute('data-client-ready', 'true');
+  const modes = page.getByRole('region', { name: 'Choose how to run WHOISleuth', exact: true });
+  for (const width of [320, 1280]) for (const theme of ['light', 'dark'] as const) {
+    await page.setViewportSize({ width, height: width === 320 ? 700 : 720 });
+    await useTheme(page, theme);
+    await expectNoHorizontalOverflow(page);
+    expect((await new AxeBuilder({ page }).include('#choose-mode').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+    if (captureVisualEvidenceEnabled()) await modes.screenshot({ path: testInfo.outputPath(`operation-modes-${theme}-${width}.png`) });
+  }
+  const localSetup = modes.getByRole('link', { name: 'Local application setup', exact: true });
+  await localSetup.focus(); await localSetup.press('Enter');
+  await expect(page).toHaveURL(/\/cli#local-application$/u);
+  await expect(page.getByRole('heading', { name: 'Console with a filesystem workspace', exact: true })).toBeInViewport();
+  const local = page.getByRole('region', { name: 'Console with a filesystem workspace', exact: true });
+  for (const label of ['Verify and install a local archive', 'Upgrade without replacing saved work']) {
+    const summary = local.getByText(label, { exact: true });
+    await summary.focus(); await page.keyboard.press('Enter');
+  }
+  await expect(local).toContainText('archiveSha256');
+  await expect(local).toContainText('keep the recovery copy untouched');
+  await expect(local.locator('code').filter({ hasText: 'npm install' })).toContainText('--offline --ignore-scripts --omit=optional');
+  const reopen = local.locator('code').filter({ hasText: 'npx --no-install whoisleuth-local --workspace ./review-workspace --offline' });
+  await expect(reopen).toHaveCount(1);
+  await expect(reopen).not.toContainText('--init');
+  for (const theme of ['light', 'dark'] as const) for (const width of [320, 1280]) {
+    await useTheme(page, theme); await page.setViewportSize({ width, height: 844 });
+    await expectNoHorizontalOverflow(page);
+    expect((await new AxeBuilder({ page }).include('#local-application').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+    if (captureVisualEvidenceEnabled()) await local.screenshot({ path: testInfo.outputPath(`local-upgrade-${theme}-${width}.png`) });
+  }
+  expect(collectionRequests).toEqual([]);
+  expect(await page.evaluate(() => (window as unknown as { guideStorageAttempts: number }).guideStorageAttempts)).toBe(0);
 });
 
 test('homepage presents plain-language goals, restrained branding, and synthetic product previews', async ({ page }) => {
@@ -128,17 +200,17 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   await expect(page.locator('.public-header .mark')).toHaveCount(1);
   await expect(page.locator('.hero .mark')).toHaveCount(0);
   await expect(page.locator('.goal-paths article')).toHaveCount(publicGuideGoals.length);
-  await expect(page.getByRole('heading', { name: 'Inspect one domain' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Inspect one domain guide' })).toHaveAttribute('href', '/resources#inspect-one-domain');
-  await expect(page.getByRole('link', { name: 'Find brand lookalikes guide' })).toHaveAttribute('href', '/resources#find-brand-lookalikes');
-  await expect(page.getByRole('link', { name: 'Track important findings guide' })).toHaveAttribute('href', '/resources#track-important-findings');
+  for (const goal of publicGuideGoals) {
+    const card = page.getByRole('article', { name: goal.title, exact: true });
+    await expect(card).toBeVisible();
+    await expect(card.getByRole('link', { name: 'Read the guide' })).toHaveAttribute('href', `/resources#${goal.id}`);
+    await expect(card.getByRole('link', { name: goal.example.label })).toHaveAttribute('href', goal.example.href);
+  }
   await expect(page.getByRole('link', { name: /Browse the topic library/u })).toHaveAttribute('href', '/resources');
-  await expect(page.getByRole('heading', { name: 'Find brand lookalikes' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Track important findings' })).toBeVisible();
   await expect(page.locator('.product-preview .preview-panel')).toHaveCount(3);
   const candidateButtons = page.locator('.discover-panel .candidate-row');
   await expect(candidateButtons).toHaveCount(3);
-  await expect(page.getByRole('button', { name: 'Show exampleshop-login.example in the preview' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: /^exampleshop-login\.example\b/u })).toHaveAttribute('aria-pressed', 'true');
   const previewTabs = page.getByRole('tablist', { name: 'Lookup result layout preview' });
   await expect(previewTabs.getByRole('tab', { name: 'At a glance' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('tabpanel', { name: 'At a glance' })).toBeVisible();
@@ -149,8 +221,8 @@ test('homepage presents plain-language goals, restrained branding, and synthetic
   const topologyGraphic = topology.getByRole('img', { name: 'Separately attributed evidence flow' });
   await expect(topologyGraphic).toBeVisible();
   await expect(page.locator('.mobile-source-summary > li')).toHaveCount(5);
-  await page.getByRole('button', { name: 'Show examplesh0p.example in the preview' }).click();
-  await expect(page.getByRole('button', { name: 'Show examplesh0p.example in the preview' })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: /^examplesh0p\.example\b/u }).click();
+  await expect(page.getByRole('button', { name: /^examplesh0p\.example\b/u })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.lookup-panel > header small')).toHaveText('examplesh0p.example');
   await expect(topology).toContainText('unavailable');
   await expect(topology).toContainText('Repeat certificate');
@@ -289,17 +361,17 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await expect(page.locator('.page-sections')).toBeVisible();
   const taskPaths = page.getByRole('region', { name: 'Common WHOISleuth tasks' });
   await expect(taskPaths).toBeVisible();
-  await expect(taskPaths.getByRole('heading', { name: 'Inspect one domain' })).toBeVisible();
+  await expect(taskPaths.getByRole('heading', { name: 'Investigate a domain' })).toBeVisible();
   const lookupStep = taskPaths
-    .getByRole('list', { name: 'Inspect one domain steps' })
+    .getByRole('list', { name: 'Investigate a domain steps' })
     .getByRole('link', { name: 'Lookup', exact: true });
   await expect(lookupStep).toHaveAttribute('href', '#tool-lookup');
   await lookupStep.click();
   await expect(page.locator('#tool-lookup')).toBeInViewport();
-  const trackingPath = taskPaths.getByRole('list', { name: 'Track important findings steps' });
+  const trackingPath = taskPaths.getByRole('list', { name: 'Continue a saved case steps' });
   const trackingSteps = trackingPath.getByRole('link');
   await expect(trackingSteps).toHaveCount(3);
-  await expect(trackingSteps.nth(0)).toHaveAttribute('href', '#tool-monitor-input');
+  await expect(trackingSteps.nth(0)).toHaveAttribute('href', '#tool-cases-input');
   await expect(trackingSteps.nth(1)).toHaveAttribute('href', '#tool-monitor-result');
   await expect(trackingSteps.nth(2)).toHaveAttribute('href', '#tool-monitor-next');
   await trackingSteps.nth(2).click();
@@ -319,10 +391,13 @@ test('public guide explains tasks, result states, glossary terms, and common que
   await cases.locator('summary').focus();
   await page.keyboard.press('Enter');
   await expect(cases).toHaveAttribute('open', '');
-  await expect(cases.locator('dl')).toContainText('Each Case holds evidence');
+  await expect(cases.locator('dl')).toContainText('Each case holds evidence');
   await expect(referenceCards).toHaveCount(referenceGuides.length);
   await expect(page.locator('#tool-monitor')).toHaveAttribute('open', '');
-  await expect(page.locator('#tool-monitor-next')).toContainText('Open the relevant Case');
+  const monitorGuide = toolGuides.find(guide => guide.id === 'monitor');
+  expect(monitorGuide).toBeDefined();
+  await expect(page.locator('#tool-monitor-next')).toContainText(monitorGuide!.next);
+  await expect(page.locator('#tool-monitor-next')).toContainText('Collection, response submission and control changes remain separate actions.');
   const resultLayout = page.getByRole('article', { name: 'Find your way around a Lookup result' });
   await expect(resultLayout).toBeVisible();
   await expect(resultLayout.getByText('Relationships and history', { exact: true })).toBeVisible();
@@ -400,6 +475,79 @@ test('homepage and guide remain usable on a narrow mobile viewport', async ({ pa
   await expectNoHorizontalOverflow(page);
 });
 
+test('public starting points keep guide and fictional practice navigation separate from saved work', async ({ page }, testInfo) => {
+  await page.context().clearCookies();
+  const collectionRequests: string[] = [];
+  page.on('request', request => {
+    const pathname = new URL(request.url()).pathname;
+    if (pathname.startsWith('/api/') && !['/api/session', '/api/capabilities'].includes(pathname)) collectionRequests.push(pathname);
+  });
+  await page.addInitScript(() => {
+    const scope = window as unknown as { guideStorageAttempts: number };
+    scope.guideStorageAttempts = 0;
+    Object.defineProperty(indexedDB, 'open', { value: () => { scope.guideStorageAttempts++; throw new Error('Public starting points must not open saved work'); } });
+  });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const pathname of ['/', '/resources']) {
+    await page.goto(pathname);
+    if (pathname === '/') {
+      const example = page.getByRole('link', { name: 'Explore an example investigation', exact: true });
+      await expect(example).toHaveAttribute('href', '/demo');
+      await expect(example).toHaveAccessibleDescription('Fictional evidence. No live collection.');
+      await expect(page.getByText('Fictional evidence. No live collection.', { exact: true })).toBeVisible();
+      await example.focus();
+      await example.press('Enter');
+      await expect(page).toHaveURL('/demo');
+      await expect(page.getByRole('button', { name: 'Inspect suspicious domain', exact: true })).toBeEnabled();
+      expect(await page.evaluate(() => (window as unknown as { guideStorageAttempts: number }).guideStorageAttempts)).toBe(0);
+      await page.goto('/');
+    }
+    const paths = page.getByRole('region', { name: pathname === '/' ? 'WHOISleuth investigation paths' : 'Common WHOISleuth tasks', exact: true });
+    await expect(paths.getByRole('article')).toHaveCount(4);
+    for (const goal of publicGuideGoals) {
+      const card = paths.getByRole('article', { name: goal.title, exact: true });
+      await expect(card).toContainText(goal.requirements);
+      await expect(card.getByRole('link', { name: goal.example.label })).toHaveAttribute('href', goal.example.href);
+    }
+    for (const density of ['comfortable', 'compact'] as const) {
+      await page.setViewportSize({ width: 1280, height: 720 });
+      await page.getByRole('button', { name: /^Colour theme,/u }).click();
+      await page.getByLabel('Reading density').selectOption(density);
+      await page.getByLabel('Reading density').press('Escape');
+      await expect(page.locator('html')).toHaveAttribute('data-density', density);
+      for (const theme of ['light', 'dark'] as const) {
+        await useTheme(page, theme);
+        for (const [width, height] of [[320, 700], [390, 844], [1024, 768], [1280, 720]] as const) {
+          await page.setViewportSize({ width, height });
+          await expectNoHorizontalOverflow(page);
+          const links = paths.getByRole('link');
+          await links.nth(1).focus(); await page.keyboard.press('Shift+Tab');
+          await expectFocusedResultsVisible(page, links.first(), links.first());
+          expect((await new AxeBuilder({ page }).include('.goal-paths').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+          if ((width === 320 || width === 1280) && captureVisualEvidenceEnabled()) {
+            const name = `${pathname === '/' ? 'home' : 'resources'}-${density}-${theme}-${width}`;
+            await page.screenshot({ path: testInfo.outputPath(`starting-points-${name}-viewport.png`) });
+            await paths.screenshot({ path: testInfo.outputPath(`starting-points-${name}.png`) });
+          }
+        }
+      }
+    }
+    expect(await page.evaluate(() => (window as unknown as { guideStorageAttempts: number }).guideStorageAttempts)).toBe(0);
+  }
+  const messageGuide = page.locator('#review-a-message');
+  await messageGuide.getByRole('link', { name: 'Supply material', exact: true }).click();
+  await expect(page.locator('#tool-lookup')).toHaveAttribute('open', '');
+  await expect(page.locator('#tool-lookup-input')).toBeInViewport();
+  await page.goBack();
+  await messageGuide.getByRole('link', { name: 'Fictional case practice', exact: true }).click();
+  await expect(page).toHaveURL(/\/demo#case-practice$/u);
+  const practiceScenario = page.getByRole('combobox', { name: 'Practice scenario', exact: true });
+  await expect(practiceScenario).toBeVisible();
+  await expect(practiceScenario.locator('option[value="email-only"]')).toHaveCount(1);
+  expect(await page.evaluate(() => (window as unknown as { guideStorageAttempts: number }).guideStorageAttempts)).toBe(0);
+  expect(collectionRequests).toEqual([]);
+});
+
 test('public footer links remain reachable without overlap on mobile', async ({ page }) => {
   for (const width of [320, 390, 412]) {
     await page.setViewportSize({ width, height: 844 });
@@ -430,7 +578,7 @@ test('public footer links remain reachable without overlap on mobile', async ({ 
 
 test('authenticated console groups its public reference without duplicating Ctrl+K', async ({ page }) => {
   await page.goto('/lookup');
-  await expect(page.getByText('Domain intelligence console', { exact: true })).toBeVisible();
+  await expect(page.locator('header.site-header').getByText('Domain intelligence console', { exact: true })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Console' })).toBeVisible();
   const reference = page.getByRole('navigation', { name: 'Reference' });
   await expect(reference.getByRole('link')).toHaveCount(2);

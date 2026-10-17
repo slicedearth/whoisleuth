@@ -1,6 +1,11 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { downloadLocalFile } from '#lib/download-local-file.ts';
+  import { selectComparisonReportRows } from '../../../../packages/comparison/comparison-row-report.mts';
   import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import ComparisonLedgerRows from '#lib/components/ComparisonLedgerRows.svelte';
+  import ComparisonFrame from '#lib/components/ComparisonFrame.svelte';
+  import CaseCheckpointStage from '#lib/components/CaseCheckpointStage.svelte';
   import {
     buildComparisonLedgerDetails,
     buildComparisonLedgerIndex,
@@ -71,6 +76,55 @@
   const details = $derived(selectedItem
     ? buildComparisonLedgerDetails(ledgerInput, { itemIds: [selectedItem.id] })
     : EMPTY_DETAILS);
+  let reportSelection = $state.raw<ReturnType<typeof selectComparisonReportRows> | null>(null);
+  let reportDetails = $state.raw<ComparisonLedgerDetails | null>(null);
+  let reportStatus = $state('');
+
+  function clearReport(message = ''): void {
+    reportSelection = null;
+    reportDetails = null;
+    reportStatus = message;
+  }
+  $effect(() => {
+    if (reportDetails && reportDetails !== details) clearReport('The displayed comparison changed. Select the rows again before downloading.');
+  });
+  onMount(() => {
+    const clear = () => clearReport();
+    window.addEventListener('pagehide', clear);
+    return () => { window.removeEventListener('pagehide', clear); clear(); };
+  });
+
+  function selectReportRow(rowId: string, checked: boolean): void {
+    if (reportDetails && reportDetails !== details) {
+      clearReport('The displayed comparison changed. Select the rows again before downloading.');
+      return;
+    }
+    const ids = new Set(reportSelection?.rowIds ?? []);
+    if (checked) ids.add(rowId); else ids.delete(rowId);
+    try {
+      reportSelection = ids.size ? selectComparisonReportRows(details, [...ids]) : null;
+      reportDetails = reportSelection ? details : null;
+      reportStatus = '';
+    } catch {
+      clearReport('These rows could not be prepared. No file was downloaded.');
+    }
+  }
+
+  function downloadReport(): void {
+    if (!reportSelection) return;
+    if (reportDetails !== details) {
+      clearReport('The displayed comparison changed. Select the rows again before downloading.');
+      return;
+    }
+    try {
+      // Revalidate the complete selected content immediately before creating bytes.
+      const content = reportSelection.render(details);
+      downloadLocalFile(new Blob([content], { type: 'text/plain;charset=utf-8' }), 'whoisleuth-comparison.txt');
+      reportStatus = 'Prepared the selected-row text download. No saved record was changed.';
+    } catch {
+      clearReport('The selected rows are no longer available for this report. No file was downloaded; select them again.');
+    }
+  }
 
   const MODE_LABELS: Record<ComparisonLedgerMode, string> = {
     publication: 'Publication comparison',
@@ -83,11 +137,6 @@
 
   function when(value: string | null): string {
     return formatEvidenceDate(value, 'Not retained');
-  }
-
-  function sideSummary(side: ComparisonLedgerIndexSide): string {
-    const time = side.observedAt ?? side.publishedAt ?? side.retainedAt;
-    return `${side.source} · ${side.sourceState} · ${when(time)}`;
   }
 
   function comparisonTimeSummary(item: { earlier: ComparisonLedgerIndexSide; later: ComparisonLedgerIndexSide }): string {
@@ -125,6 +174,9 @@
   <p>
     Compare adjacent case snapshots, website profiles, retained watchlist changes or one selected saved Bulk pair. Exact values load only for the selected record.
   </p>
+  {#if cases.some(record => record.evidenceHistory.length >= 2)}
+    <details class="checkpoint-disclosure"><summary>Choose Case checkpoints</summary><CaseCheckpointStage {cases} /></details>
+  {/if}
 
   {#if orderedBulkSessions.length >= 2}
     <fieldset class="bulk-pair-controls">
@@ -166,12 +218,30 @@
 
   {#if selectedItem}
     <article class="selected-comparison" aria-labelledby="selected-comparison-title">
-      <header><div><p class="eyebrow">Selected retained comparison</p><h3 id="selected-comparison-title">{selectedItem.label}</h3></div><a class="owner-link" href={selectedItem.ownerHref}>Open owning record →</a></header>
+      <ComparisonFrame>
+      {#snippet header()}<div><p class="eyebrow">Selected retained comparison</p><h3 id="selected-comparison-title">{selectedItem.label}</h3></div><a class="owner-link" href={selectedItem.ownerHref}>Open owning record →</a>{/snippet}
+      {#snippet left()}
+        <section aria-label="Earlier comparison source"><h4>Earlier</h4><dl class="comparison-metadata">
+          <div><dt>Source</dt><dd>{selectedItem.earlier.source}</dd></div>
+          <div><dt>State</dt><dd>{selectedItem.earlier.sourceState}</dd></div>
+          <div><dt>Observed</dt><dd>{when(selectedItem.earlier.observedAt)}</dd></div>
+          <div><dt>Published</dt><dd>{when(selectedItem.earlier.publishedAt)}</dd></div>
+          <div><dt>Retained locally</dt><dd>{when(selectedItem.earlier.retainedAt)}</dd></div>
+        </dl></section>
+      {/snippet}
+      {#snippet right()}
+        <section aria-label="Later comparison source"><h4>Later</h4><dl class="comparison-metadata">
+          <div><dt>Source</dt><dd>{selectedItem.later.source}</dd></div>
+          <div><dt>State</dt><dd>{selectedItem.later.sourceState}</dd></div>
+          <div><dt>Observed</dt><dd>{when(selectedItem.later.observedAt)}</dd></div>
+          <div><dt>Published</dt><dd>{when(selectedItem.later.publishedAt)}</dd></div>
+          <div><dt>Retained locally</dt><dd>{when(selectedItem.later.retainedAt)}</dd></div>
+        </dl></section>
+      {/snippet}
+      {#snippet context()}
       <dl class="comparison-metadata">
         <div><dt>Mode</dt><dd>{MODE_LABELS[selectedItem.mode]}</dd></div>
         <div><dt>Completeness</dt><dd>{selectedItem.completeness.replaceAll('_', ' ')}</dd></div>
-        <div><dt>Earlier source, state and time</dt><dd>{sideSummary(selectedItem.earlier)}</dd></div>
-        <div><dt>Later source, state and time</dt><dd>{sideSummary(selectedItem.later)}</dd></div>
         <div><dt>Owner ID</dt><dd><code>{selectedItem.ownerId}</code></dd></div>
         <div><dt>Entity ID</dt><dd><code>{selectedItem.entityId}</code></dd></div>
         <div><dt>Source truncation</dt><dd>{selectedItem.truncated ? 'Yes; review omission counts' : 'No retained source truncation reported'}</dd></div>
@@ -181,20 +251,34 @@
         <ul>{#each selectedItem.limitations as limitation}<li>{limitation}</li>{/each}</ul>
         {#if selectedItem.omittedLimitations}<p>Omitted {selectedItem.omittedLimitations} additional bounded limitation{selectedItem.omittedLimitations === 1 ? '' : 's'}.</p>{/if}
       </section>
+      {/snippet}
+      <section class="row-report" aria-label="Selected-row text report">
+        <h4>Download selected rows</h4>
+        <p>The text file includes selected normalised values, which may be private, with source states, separate clocks, limitations and omission counts. Unselected values and owning records are excluded. It is not an original-evidence package; missing endpoint or algorithm details remain unavailable.</p>
+        <p>Selections stay on this page and clear when the displayed comparison changes. Reload the page to include changes made elsewhere; downloading does not reread saved data, collect evidence or upload anything.</p>
+        <div class="report-actions">
+          <button class="btn" type="button" disabled={!reportSelection} onclick={downloadReport}>Download selected rows ({reportSelection?.rowIds.length ?? 0})</button>
+          <button class="btn small" type="button" disabled={!reportSelection} onclick={() => clearReport('Row selection cleared.')}>Clear row selection</button>
+        </div>
+        <p role="status" aria-live="polite">{reportStatus || `${reportSelection?.rowIds.length ?? 0} selected. Choose rows below.`}</p>
+      </section>
       <ComparisonLedgerRows
         rows={details.rows}
         totalRows={details.totalRows}
         omittedRows={details.omissions.detailRows}
         duplicateRows={details.omissions.duplicateDetailRows}
         sourceOmittedRows={details.omissions.sourceRows}
+        selection={{ rowIds: reportSelection?.rowIds ?? [], toggle: selectReportRow }}
       />
+      </ComparisonFrame>
     </article>
   {/if}
 </section>
 
 <style>
   .change-review{margin-top:16px}
-  .section-head,.selected-comparison>header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+  .checkpoint-disclosure{margin:14px 0}
+  .section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
   .section-head h2,.selected-comparison h3{margin:2px 0 0}
   .bounded-count{flex:0 0 auto;padding:5px 8px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font-size:var(--text-xs)}
   .bulk-pair-controls{min-width:0;margin:16px 0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md)}
@@ -220,12 +304,16 @@
   .comparison-limitations h4{margin:0;font-size:var(--text-sm)}
   .comparison-limitations ul{margin:7px 0 0;padding-left:20px}
   .comparison-limitations p{margin:7px 0 0;color:var(--muted);font-size:var(--text-sm)}
+  .row-report{margin-top:16px;min-width:0}
+  .row-report h4{margin:0}
+  .row-report p{margin:8px 0;font-size:var(--text-sm);color:var(--muted)}
+  .report-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
   @media(max-width:760px){
     .pair-grid,.comparison-metadata{grid-template-columns:1fr}
     .pair-grid .btn{width:100%}
   }
   @media(max-width:520px){
-    .section-head,.selected-comparison>header{display:grid}
+    .section-head{display:grid}
     .bounded-count{width:max-content;max-width:100%}
   }
 </style>

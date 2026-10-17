@@ -18,6 +18,8 @@
   } = $props();
 
   const accessibleLabel = $derived(/evidence$/iu.test(label) ? label : `${label} evidence`);
+  const actionLabel = $derived(expanded ? 'Collapse details' : 'Expand details');
+  const descriptionId = $props.id();
   let pointerIntentHandled = false;
 
   function preloadFromPointerMovement(): void {
@@ -27,41 +29,40 @@
   }
 </script>
 
-<button
+<div
   class="family-summary card"
   class:expanded
-  type="button"
-  aria-label={`${expanded ? 'Collapse details' : 'Expand details'}: ${accessibleLabel}`}
-  aria-expanded={expanded}
-  onpointermove={preloadFromPointerMovement}
-  onpointerleave={() => pointerIntentHandled = false}
-  onfocus={onpreload}
-  onclick={expanded ? onhide : onshow}
 >
   <span class="family-copy">
-    <span class="description">{description}</span>
+    <span class="description" id={descriptionId}>{description}</span>
     {#if metrics.length}
       <span class="metrics">
         {#each metrics as metric}<span class="metric">{metric}</span>{/each}
       </span>
     {/if}
   </span>
-  <span class="section-toggle">
+  <button class="section-toggle" type="button"
+    aria-label={`${actionLabel}: ${accessibleLabel}`} aria-describedby={descriptionId}
+    onpointermove={preloadFromPointerMovement}
+    onpointerleave={() => pointerIntentHandled = false}
+    aria-expanded={expanded} onfocus={onpreload} onclick={expanded ? onhide : onshow}>
     <span class="toggle-icon" class:expanded aria-hidden="true"></span>
-    {expanded ? 'Collapse details' : 'Expand details'}
-  </span>
-</button>
+    {actionLabel}
+  </button>
+</div>
 
 <style>
-  .family-summary{display:flex;width:100%;align-items:center;justify-content:space-between;gap:18px;min-width:0;padding:13px 14px;border-left:2px solid var(--section-accent,var(--accent));color:var(--text);font:inherit;text-align:left;cursor:pointer;appearance:none}
+  .family-summary{position:relative;display:flex;width:100%;align-items:center;justify-content:space-between;gap:18px;min-width:0;padding:13px 14px;border-left:2px solid var(--section-accent,var(--accent));color:var(--text);font:inherit;text-align:left;cursor:pointer}
   .family-summary:hover{border-color:var(--accent);background:var(--panel-raised)}
-  .family-summary:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+  .family-summary:has(.section-toggle:focus-visible){outline:2px solid var(--focus);outline-offset:2px}
   .family-summary.expanded{border-bottom-right-radius:0;border-bottom-left-radius:0;background:var(--panel-raised)}
   .family-copy{display:block;min-width:0}
   .description{display:block;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .metrics{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
   .metric{padding:4px 7px;border:1px solid var(--border);border-radius:999px;background:var(--panel-raised);color:var(--muted);font:650 var(--text-2xs) var(--mono)}
-  .section-toggle{display:inline-flex;flex:0 0 auto;align-items:center;justify-content:center;gap:7px;white-space:nowrap;color:var(--text);font:700 var(--text-2xs) var(--mono)}
+  .section-toggle{display:inline-flex;flex:0 0 auto;align-items:center;justify-content:center;gap:7px;min-height:28px;padding:0;border:0;background:none;white-space:nowrap;color:var(--text);font:700 var(--text-2xs) var(--mono);cursor:pointer}
+  .section-toggle::after{content:"";position:absolute;inset:0;border-radius:inherit}
+  .section-toggle:focus-visible{outline:none}
   .toggle-icon{display:block;position:relative;width:17px;height:17px;border:1px solid currentColor;border-radius:50%}
   .toggle-icon::before,.toggle-icon::after{content:"";position:absolute;top:50%;left:50%;width:7px;height:1.5px;border-radius:999px;background:currentColor;transform:translate(-50%,-50%)}
   .toggle-icon::after{width:1.5px;height:7px}

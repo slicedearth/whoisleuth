@@ -6,19 +6,22 @@ import {
   serialiseAppearancePreference, setAppearancePreference,
 } from '../frontend/src/lib/appearance.ts';
 
-test('appearance accepts four bounded preferences and rejects arbitrary retained values', () => {
+test('appearance preserves legacy choices and admits only explicit terminal variants', () => {
   for (const density of ['comfortable', 'compact'] as const) {
     for (const effects of ['full', 'minimal'] as const) {
-      assert.deepEqual(parseAppearancePreference(`${density}:${effects}`), { density, effects });
-      assert.equal(serialiseAppearancePreference({ density, effects }), `${density}:${effects}`);
+      for (const consoleStyle of ['desk', 'terminal'] as const) {
+        const stored = `${density}:${effects}${consoleStyle === 'terminal' ? ':terminal' : ''}`;
+        assert.deepEqual(parseAppearancePreference(stored), { density, effects, consoleStyle });
+        assert.equal(serialiseAppearancePreference({ density, effects, consoleStyle }), stored);
+      }
     }
   }
-  for (const value of [null, undefined, {}, [], 'compact', 'COMPACT:minimal', 'x'.repeat(100_000)]) {
-    assert.deepEqual(parseAppearancePreference(value), { density: 'comfortable', effects: 'full' });
+  for (const value of [null, undefined, {}, [], 'compact', 'COMPACT:minimal', 'compact:full:unknown', 'compact:full:terminal\n', 'x'.repeat(100_000)]) {
+    assert.deepEqual(parseAppearancePreference(value), { density: 'comfortable', effects: 'full', consoleStyle: 'desk' });
   }
-  assert.deepEqual(readAppearancePreference(), { density: 'comfortable', effects: 'full' });
-  applyAppearancePreference({ density: 'compact', effects: 'minimal' });
-  assert.equal(setAppearancePreference({ density: 'compact', effects: 'minimal' }), false);
+  assert.deepEqual(readAppearancePreference(), { density: 'comfortable', effects: 'full', consoleStyle: 'desk' });
+  applyAppearancePreference({ density: 'compact', effects: 'minimal', consoleStyle: 'terminal' });
+  assert.equal(setAppearancePreference({ density: 'compact', effects: 'minimal', consoleStyle: 'terminal' }), false);
   observeAppearancePreference(() => assert.fail('No browser event is available.'))();
 });
 
@@ -37,29 +40,31 @@ test('appearance synchronises tabs, recovers unavailable storage and removes eve
   try {
     const observed: string[] = [];
     const stop = observeAppearancePreference(value => observed.push(serialiseAppearancePreference(value)));
-    assert.deepEqual(readAppearancePreference(), { density: 'comfortable', effects: 'full' });
-    assert.equal(setAppearancePreference({ density: 'compact', effects: 'minimal' }), true);
-    assert.equal(values.get(APPEARANCE_STORAGE_KEY), 'compact:minimal');
-    assert.deepEqual(dataset, { density: 'compact', effects: 'minimal' });
+    assert.deepEqual(readAppearancePreference(), { density: 'comfortable', effects: 'full', consoleStyle: 'desk' });
+    assert.equal(setAppearancePreference({ density: 'compact', effects: 'minimal', consoleStyle: 'terminal' }), true);
+    assert.equal(values.get(APPEARANCE_STORAGE_KEY), 'compact:minimal:terminal');
+    assert.deepEqual(dataset, { density: 'compact', effects: 'minimal', consoleStyle: 'terminal' });
     assert.deepEqual(readAppearancePreference(), dataset);
     blocked = true;
-    assert.equal(setAppearancePreference({ density: 'comfortable', effects: 'minimal' }), false);
-    assert.deepEqual(readAppearancePreference(), { density: 'comfortable', effects: 'minimal' });
+    assert.equal(setAppearancePreference({ density: 'comfortable', effects: 'minimal', consoleStyle: 'terminal' }), false);
+    assert.deepEqual(readAppearancePreference(), { density: 'comfortable', effects: 'minimal', consoleStyle: 'terminal' });
     const storageEvent = (key: string | null, newValue: string | null) => {
       window.dispatchEvent(Object.assign(new Event('storage'), { key, newValue }));
     };
     storageEvent('unrelated', 'compact:full');
     assert.equal(observed.length, 2);
     storageEvent(APPEARANCE_STORAGE_KEY, 'compact:full');
-    assert.deepEqual(dataset, { density: 'compact', effects: 'full' });
+    assert.deepEqual(dataset, { density: 'compact', effects: 'full', consoleStyle: 'desk' });
+    storageEvent(APPEARANCE_STORAGE_KEY, 'comfortable:full:terminal');
+    assert.deepEqual(dataset, { density: 'comfortable', effects: 'full', consoleStyle: 'terminal' });
     storageEvent(null, null);
-    assert.deepEqual(dataset, { density: 'comfortable', effects: 'full' });
+    assert.deepEqual(dataset, { density: 'comfortable', effects: 'full', consoleStyle: 'desk' });
     stop();
     window.dispatchEvent(new CustomEvent(APPEARANCE_CHANGE_EVENT, { detail: 'compact:minimal' }));
-    assert.equal(observed.length, 4);
+    assert.equal(observed.length, 5);
     blocked = false;
     values.clear();
-    assert.deepEqual(readAppearancePreference(), { density: 'comfortable', effects: 'full' });
+    assert.deepEqual(readAppearancePreference(), { density: 'comfortable', effects: 'full', consoleStyle: 'desk' });
   } finally {
     if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
     else Reflect.deleteProperty(globalThis, 'window');

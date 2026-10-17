@@ -51,13 +51,6 @@ export function caseTypeRecords(record: Pick<CaseRecord, 'workflowMetadata'>) {
   return CASE_TYPES.filter((item) => selected.has(item.id));
 }
 
-export function caseTypeSummary(record: Pick<CaseRecord, 'workflowMetadata'>): string {
-  const labels = caseTypeRecords(record).map((item) => item.label);
-  if (!labels.length) return '';
-  if (labels.length <= 2) return labels.join(' and ');
-  return `${labels.slice(0, 2).join(', ')} and ${labels.length - 2} more`;
-}
-
 function encodeCaseReference(value: bigint, minimumLength: number): string {
   let remainder = value;
   let encoded = '';

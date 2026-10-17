@@ -3,7 +3,7 @@
   import { restoreSubmittedFocus } from '../controllers/submitted-draft.ts';
   import { failedLocalMutationOutcome } from '../local-mutation-outcome.ts';
   import {
-    ANALYST_REVIEW_DISMISSAL_REASONS, ANALYST_REVIEW_QUEUE_OPTIONS, analystReviewQueueMembership,
+    ANALYST_REVIEW_DISMISSAL_REASONS, ANALYST_REVIEW_QUEUE_OPTIONS, analystReviewQueueMembership, analystReviewWaitingReasons, analystReviewTimeLabel,
     type AnalystReviewDismissalReason, type AnalystReviewInboxItem,
   } from '../analysis/analyst-review-inbox.ts';
   import ReviewLifecycleControls from './ReviewLifecycleControls.svelte';
@@ -33,6 +33,9 @@
   let prepared = $state(false);
   $effect(() => { if (expanded) prepared = true; });
   const membership = $derived(analystReviewQueueMembership(item, now));
+  const waiting = $derived(analystReviewWaitingReasons(item, now));
+  const timeLabel = $derived(analystReviewTimeLabel(item.kind));
+  const waitingLabels = { evidence: 'Evidence', provider: 'Provider response', analyst: 'Analyst decision', time: 'Reviewed time' };
 
   async function dismiss() {
     if (!ondismiss || !reason || !item.dismissalTarget || !item.caseId || busy || uncertain) return;
@@ -76,13 +79,19 @@
     <p>{item.detail}</p>
     <dl class="item-facts">
       <div><dt>Source</dt><dd>{item.source}</dd></div>
-      <div><dt>Observed</dt><dd><EvidenceTimestamp value={item.observedAt} label={`observation time for ${item.title}`} unavailable="at an unknown time" /></dd></div>
+      <div><dt>{timeLabel}</dt><dd><EvidenceTimestamp value={item.observedAt} label={`${timeLabel} for ${item.title}`} unavailable="at an unknown time" /></dd></div>
       <div><dt>Evidence</dt><dd>{item.evidenceFamily.replaceAll('_', ' ')} · {item.completeness} · {item.age}</dd></div>
       <div><dt>Item type</dt><dd>{item.kind.replaceAll('_', ' ')}</dd></div>
       {#if item.dueAt}<div class:overdue={Date.parse(item.dueAt) <= Date.parse(now)}><dt>Due</dt><dd><EvidenceTimestamp value={item.dueAt} label={`due time for ${item.title}`} /></dd></div>{/if}
     </dl>
     <p class="reason">{item.rankingReason}</p>
     <p class="reason">{ANALYST_REVIEW_QUEUE_OPTIONS.find(option => option.value === membership.queue)?.label}: {membership.reason}</p>
+    {#if waiting.length}
+      <div class="waiting-on" role="group" aria-label="Waiting on">
+        <strong>Waiting on</strong>
+        <ul>{#each waiting as dependency}<li><strong>{waitingLabels[dependency.kind]}</strong> · {dependency.reason}</li>{/each}</ul>
+      </div>
+    {/if}
     <div class="item-actions">
       <a class="btn" href={item.href} onclick={onopen}>Review</a>
       {#if item.retryHref}<a class="btn secondary" href={item.retryHref}>Refresh evidence</a>{/if}
@@ -114,6 +123,7 @@
   .item-body{min-width:0;padding:0 14px 16px;overflow-wrap:anywhere}
   .item-body>p{margin:8px 0;color:var(--text);font-size:var(--text-sm);line-height:1.5}
   .item-body>.reason{color:var(--muted);font-size:var(--text-xs)}
+  .waiting-on{margin-block:12px;font-size:var(--text-sm);line-height:1.5}.waiting-on ul{margin-block:6px;padding-inline-start:20px}
   .item-facts{display:grid;gap:5px;margin:12px 0;font-size:var(--text-xs);line-height:1.5}
   .item-facts>div{display:grid;grid-template-columns:6rem minmax(0,1fr);gap:8px;align-items:baseline}
   dt{color:var(--muted)}dd{margin:0;min-width:0}.overdue dt{color:var(--danger)}

@@ -39,7 +39,7 @@
         </li>
       {/each}
     </ul>
-    <p role="status">Showing {firstVisible}–{lastVisible} of {report.findings.length} bounded consistency findings; at most {PAGE_SIZE} findings are rendered per page.</p>
+    <p role="status">Showing {firstVisible}–{lastVisible} of {report.findings.length} record-consistency findings.</p>
     <Pagination {currentPage} {pageCount} {setPage} ariaLabel="Case consistency finding pages" />
   {:else}
     <p class="empty">No record-consistency issue was found in the current bounded case collection.</p>

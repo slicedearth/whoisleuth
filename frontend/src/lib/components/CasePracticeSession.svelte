@@ -11,13 +11,23 @@
   import CaseEvidenceFact from './CaseEvidenceFact.svelte';
   import CaseRequestedEvidence from './CaseRequestedEvidence.svelte';
   import CaseAssessmentComparison from './CaseAssessmentComparison.svelte';
+  import CaseIncidentCoverage from './CaseIncidentCoverage.svelte';
+  import CasePracticeInference from './CasePracticeInference.svelte';
+  import CasePracticeWalkthrough from './CasePracticeWalkthrough.svelte';
+  import CaptureConditionMatrix from './CaptureConditionMatrix.svelte';
+  import CaseImageLineage from './CaseImageLineage.svelte';
+  import DeferredSurface from './DeferredSurface.svelte';
+  import { casePracticeCaptureContexts, casePracticeImageLineage } from '#lib/analysis/case-practice.ts';
   import '#lib/components/case-response-stage.css';
 
-  let { onreset, scenario }: { onreset: () => void; scenario: CasePracticeScenario } = $props();
+  let { onreset, scenario, visible = true }: { onreset: () => void; scenario: CasePracticeScenario; visible?: boolean } = $props();
   const session = createCasePracticeSession(untrack(() => scenario));
+  const captureContexts = casePracticeCaptureContexts(untrack(() => scenario));
+  const imageLineage = untrack(() => scenario) === 'requested-amendment' ? casePracticeImageLineage() : null;
   const definition = $derived(casePracticeDefinition(scenario));
   const routes = $derived(casePracticeRoutes(scenario));
-  const initialPinIds = session.read().evidencePins.map(pin => pin.id);
+  const suppliedEvidence = session.read().evidencePins;
+  const initialPinIds = suppliedEvidence.map(pin => pin.id);
   provideDocumentCaseDraftStorage(session.storage);
   // Session operations replace detached records; keep them cloneable for the
   // same audience projections used by the saved-workspace workflow.
@@ -26,6 +36,10 @@
   const identityReview = $derived(scenario === 'identity-actions' ? casePracticeIdentityReview() : null);
   const sourceQualifications = $derived(caseSelectedEvidenceSourceLimitations(record.evidencePins, record.evidenceLinks, record.evidencePins.map(pin => pin.id)));
   let step = $state('evidence');
+  let packetComparisonOpen = $state(false);
+  let inferenceOpen = $state(false);
+  $effect(() => { if (!visible || step !== 'response') packetComparisonOpen = false; });
+  $effect(() => { if (!visible || step !== 'assessment') inferenceOpen = false; });
   let message = $state('');
   let mutationBusy = $state(false);
   let live = true;
@@ -53,7 +67,7 @@
     mutationBusy = true;
     try {
       record = session.edit(patch, receipt);
-      message = `${success} Practice only; nothing was written to your saved workspace.`;
+      message = `Practice: ${success}`;
       return true;
     } catch (cause) { message = cause instanceof Error ? cause.message : 'The practice change was not saved.'; return false; }
     finally {
@@ -74,7 +88,7 @@
       record = session.journey(operation, reviewedSignature);
       message = operation === 'prepare' ? 'Prepared two fictional drafting actions. Review the separate recipient material.'
         : operation === 'deliver' ? 'Recorded separate simulated delivery references and a fictional page acknowledgement. Nothing was exported or submitted.'
-        : 'Closed only the independently reviewed page action and incident link. The advertisement remains unresolved and this practice Case remains open.';
+        : 'Closed only the independently reviewed page action and incident link. The advertisement remains unresolved and this practice case remains open.';
     } catch (cause) { message = cause instanceof Error ? cause.message : 'The practice step could not be recorded.'; }
     finally { mutationBusy = false; await tick(); if (live) restoreSubmittedFocus(origin, document.getElementById('practice-response'), owner); }
   }
@@ -93,21 +107,31 @@
         containment = reviewed;
       }
       reviewedScope = selectedScope;
-      message = 'Reviewed fixed fictional material locally. No saved-work access, collection, export or follow-up state change occurred.';
+      message = kind === 'source' ? 'Reviewed the supplied practice material.' : 'Prepared the practice handoff preview.';
       await tick(); if (live) (kind === 'source' ? sourceHeading : containmentHeading)?.focus();
-    } catch { if (live) message = 'The fictional review could not be prepared. Nothing was collected or saved.'; }
+    } catch { if (live) message = 'The practice review could not be prepared. Your practice edits remain available.'; }
     finally { if (live) localReviewBusy = false; }
   }
 </script>
 
 <section class="case-practice" aria-labelledby="case-practice-title">
-  <header><div><h2 id="case-practice-title" tabindex="-1">Practise a Case review</h2><p>Use Case forms with supplied fictional evidence and simulated response steps. Practice stays on this page and disappears on restart, reload or navigation. Nothing is collected or submitted.</p></div><button class="btn" type="button" onclick={onreset} disabled={mutationBusy}>Discard practice and restart</button></header>
+  <header><div><h2 id="case-practice-title" tabindex="-1">Practise a case review</h2><p>Use real case forms with fictional evidence and simulated responses. Practice does not access saved work, collect live evidence or submit reports. Restarting, reloading or leaving the page discards these drafts.</p></div><button class="btn" type="button" onclick={onreset} disabled={mutationBusy}>Discard practice and restart</button></header>
+  <CasePracticeWalkthrough evidence={suppliedEvidence} {visible} />
   <nav aria-label="Case practice steps">{#each steps as item, index}<button class="btn" type="button" aria-current={step === item.id ? 'step' : undefined} onclick={() => void select(item.id)}>{index + 1}. {item.label}</button>{/each}</nav>
   <p class="practice-status" role="status">{message}</p>
   <div hidden={step !== 'evidence'}>
     <h3 id="practice-evidence" tabindex="-1">Pin a fact with its source</h3>
     <p>{definition.observation} Pin the relevant observation with its source and time <time datetime={CASE_PRACTICE_OBSERVED_AT}>1 September 2026, 12:00 UTC</time>.</p>
     {#each record.evidencePins.filter((_, index) => index !== 1) as pin}<CaseEvidenceFact {pin} />{/each}
+    {#if captureContexts}<section aria-label="Fictional capture conditions">
+      <p>Two fictional manifest summaries describe the mobile capture, the different desktop capture and the incomplete later attempt. The first two explicitly declare example browser settings, viewports and location labels. The later attempt has no recorded conditions. No image bytes or comparable page observations are included.</p>
+      <CaptureConditionMatrix {...captureContexts} active={visible && step === 'evidence'} firstPage="" secondPage="" choosePage={() => {}} />
+    </section>{/if}
+    {#if imageLineage}<details class="practice-local"><summary>Review fictional image history</summary>
+      <p>These supplied metadata records declare an outline over a redacted image, then a parent with no edit declaration. No image bytes are supplied, read or saved. The chain is a declaration, not proof of how the images were created.</p>
+      <CaseImageLineage review={imageLineage} />
+      <p>In a selected-file export, only the selected image's immediate-parent declaration is included; this local review does not add earlier links or parent pixels.</p>
+    </details>{/if}
     {#if identityReview}<details class="practice-local"><summary>Review the supplied action mechanisms</summary>
       <p>{identityReview.review.summary} This uses the existing incident-sequence review. The selected order is not proof of causation, and reported actions are not verified account effects.</p>
       <ol aria-label="Supplied identity action mechanisms">{#each identityReview.stages as stage}<li><strong>{stage.id.replaceAll('-', ' ')} · {stage.basis.replaceAll('_', ' ')}</strong><p>{stage.description}</p><p>{stage.source} · occurrence time {stage.occurredAt ?? 'unknown'}</p></li>{/each}</ol>
@@ -115,6 +139,7 @@
     </details>{/if}
     {#if scenario === 'dependent-sources'}<details class="practice-local"><summary>Review source reuse and disclosure</summary>
       <p>{record.evidencePins.length} retained evidence records are not a count of independent sources. The supplied provider response declares reuse; the other observation and unknown-method result retain their own attribution.</p>
+      <p>In <strong>Record a conclusion</strong>, cite <strong>Provider explicitly reused the report</strong>. Return to this step, open <strong>Evidence relationships and shared sources</strong> and choose your conclusion under <strong>Trace sources for</strong>. Follow the declared link back to the original report; the separately documented observation is not part of that derivation.</p>
       {#each sourceQualifications as limitation}<p>{limitation}</p>{:else}<p>No known shared-source relationship is retained. That does not establish independence.</p>{/each}
       <p>New response and internal-handoff disclosures use a fixed qualification when relevant; private relationship identities and basis text are not automatically included. No export occurs here.</p>
     </details>{/if}
@@ -124,7 +149,7 @@
         <pre>{CASE_PRACTICE_INTAKE_TEXT}</pre>
         <button class="btn" type="button" disabled={localReviewBusy || mutationBusy} onclick={() => void reviewSupplied('source')}>Review supplied text and context</button>
         {#if sourceReview}<section aria-label="Fictional source-linked review"><h4 bind:this={sourceHeading} tabindex="-1">Source-linked review</h4>
-          <p>{sourceReview.intake.indicators.length} literal indicators · {sourceReview.intake.indicatorCoverage.state} · no target request.</p>
+          <p>{sourceReview.intake.indicators.length} literal indicators · {sourceReview.intake.indicatorCoverage.state}.</p>
           <ul>{#each sourceReview.intake.indicators as indicator}<li>{indicator.kind}: <code>{indicator.value}</code> · {indicator.location.partId}</li>{/each}</ul>
           <p>Source bytes: <code>{sourceReview.intake.source.digestSha256}</code></p>
           <p>Declared distribution: {sourceReview.intake.distributionContext?.channel} · {sourceReview.intake.distributionContext?.vantageLabel}. This is a supplied claim, not verified capture conditions.</p>
@@ -140,6 +165,9 @@
   <div hidden={step !== 'assessment'}>
     <h3 id="practice-assessment" tabindex="-1">Explain what the evidence supports</h3>
     <p>Select a reviewed disposition, link the evidence and explain the uncertainty. {definition.assessment}</p>
+    {#if 'inference' in definition}<details class="practice-local" bind:open={inferenceOpen}><summary>Find the weak inference</summary>
+      {#if inferenceOpen && visible && step === 'assessment'}<CasePracticeInference exercise={definition.inference} evidence={suppliedEvidence} />{/if}
+    </details>{/if}
     <details><summary>Compare an adequate and an inadequate report</summary><p><strong>Adequate:</strong> {definition.adequate}</p><p><strong>Inadequate:</strong> {definition.inadequate}</p><p>The exercise supports evidence pins, conclusions and rechecks. Other scenario-specific actions described here are guidance unless an interactive response step is provided.</p>{#each routes as route}<p><strong>{route.platformLabel}: {route.label}</strong> · reviewed {route.reviewedAt}, recheck before {route.reviewAfter}. The official reference is available in Resources reporting guidance. {route.privacyNote}</p>{/each}</details>
     <CaseAssessmentStage {record} mode="quick" {mutationBusy} {persist} onmessage={value => message = value} />
     {#if scenario === 'trust-claim'}<CaseAssessmentComparison record={{ ...record, assertions: record.assertions.filter(assertion => assertion.kind === 'hypothesis') }} />{/if}
@@ -147,16 +175,22 @@
   {#if scenario === 'credential-form'}
     <div hidden={step !== 'response'} class="practice-response">
       <h3 id="practice-response" tabindex="-1">Separate page response from advertisement distribution</h3>
-      <p>The supplied lure leads to a copied offer and credential form. The reference prose has no logo or brand name. Copyright authority is unverified; this exercise makes no rights declaration. No actual packet export or provider submission occurs.</p>
+      <p>The supplied lure leads to a copied offer and credential form. The reference prose has no logo or brand name. Copyright authority is unverified; this exercise makes no rights declaration.</p>
+      <p>Open <strong>Exact incident-object coverage</strong> to inspect the page and advertisement separately as you progress. The shared response-history view distinguishes drafting, simulated delivery, a provider acknowledgement and an independent page review. Those simulated deliveries have no retained packet identity; the optional draft comparison below stays separate.</p>
+      <CaseIncidentCoverage {record} />
+      <details class="practice-local" bind:open={packetComparisonOpen}><summary>Compare fictional response drafts</summary>
+        {#if packetComparisonOpen && visible && step === 'response'}<DeferredSurface load={() => import('./CasePracticePacketComparison.svelte')} props={{}}
+          loadingLabel="Opening fictional packet comparison." unavailableLabel="The fictional packet comparison could not be opened." />{/if}
+      </details>
       <details class="practice-local"><summary>Preview the separate internal follow-up</summary>
-        <p>Use the existing retained question and its linked fictional pin. This preview uses the normal audience projection but cannot save, download, send a task or apply a control.</p>
+        <p>Preview the retained question and its linked pin for the chosen audience. The preview does not carry out the requested action.</p>
         <label>Practice handoff audience<select bind:value={practiceAudience} disabled={localReviewBusy}><option value="internal">Internal</option><option value="trusted">Trusted recipient</option><option value="public">Public preview</option></select></label>
         <label><input type="checkbox" bind:checked={includeSupportingPin} disabled={localReviewBusy}>Include the linked supporting pin</label>
         <button class="btn" type="button" disabled={localReviewBusy || mutationBusy} onclick={() => void reviewSupplied('containment')}>Preview fictional internal handoff</button>
         {#if containment}<section aria-label="Fictional containment disclosure"><h4 bind:this={containmentHeading} tabindex="-1">Fictional containment disclosure</h4>
           <p>{containment.assertions.length} selected request · {containment.evidencePins.length} supporting pin · {containment.state}.</p>
           {#each containment.assertions as request}<p>{request.statement} · recorded state {request.state}. {#each request.evidence as link}{link.stance}: {link.state.replaceAll('_', ' ')}. {/each}</p>{/each}
-          <p>Public preview excludes internal requests and pins. Provider resolution and Case status do not close open requests.</p>
+          <p>Public preview excludes internal requests and pins. Provider resolution and case status do not close open requests.</p>
           <details><summary>Inspect exact fictional containment disclosure</summary><pre>{JSON.stringify(containment, null, 2)}</pre></details>
         </section>{/if}
       </details>
@@ -171,12 +205,12 @@
         {:else}
           <ul aria-label="Practice response records">{#each record.actions as action}<li><strong>{action.recipient}</strong> · {action.state}<ul>{#each action.history.filter(event => event.reference) as event}<li>{event.reference} · {event.sourceClass}</li>{/each}</ul></li>{/each}</ul>
           {#if journeyActions[0]?.state === 'acknowledged'}<p><strong>Supplied independent later observation:</strong> the complete exact offer-page capture, under the same unauthenticated viewport, shows ordinary text and no credential form. The advertisement was not reviewed. This is fictional independent evidence, not the provider acknowledgement.</p><button class="btn" type="button" onclick={() => advanceJourney('close-page')}>Record supplied independent review and close only the page scope</button>
-          {:else}<p>Page scope closed after the supplied complete comparable observation. Advertisement distribution remains unresolved. The Case itself is not closed, and no general safety or removal claim is made.</p>{/if}
+          {:else}<p>Page scope closed after the supplied complete comparable observation. Advertisement distribution remains unresolved. The case itself is not closed, and no general safety or removal claim is made.</p>{/if}
         {/if}
       {/if}
     </div>
   {:else if scenario === 'requested-amendment'}
-    <div hidden={step !== 'response'}><h3 id="practice-response" tabindex="-1">Preserve the original delivery and prepare an amendment</h3><p>The reserved digest identifies synthetic practice history only. Use the actual requested-evidence form to select references and record limitations. Creating a drafting amendment does not deliver it.</p><CaseRequestedEvidence {record} {persist} {mutationBusy} onamendment={() => { message = 'The drafting amendment is retained only in this practice Case. Review and delivery are not rehearsed by this step.'; }} /></div>
+    <div hidden={step !== 'response'}><h3 id="practice-response" tabindex="-1">Preserve the original delivery and prepare an amendment</h3><p>The reserved digest identifies synthetic practice history only. Use the actual requested-evidence form to select references and record limitations. Creating a drafting amendment does not deliver it.</p><CaseRequestedEvidence {record} {persist} {mutationBusy} onamendment={() => { message = 'The drafting amendment is retained only in this practice case. Review and delivery are not rehearsed by this step.'; }} /></div>
   {/if}
   <div hidden={step !== 'recheck'} class="case-response-stage">
     <h3 id="practice-recheck" tabindex="-1">Keep an incomplete recheck inconclusive</h3>

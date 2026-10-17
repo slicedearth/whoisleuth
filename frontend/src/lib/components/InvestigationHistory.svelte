@@ -5,13 +5,13 @@
   import type { InvestigationSearchSession } from '#lib/investigation-search-session.ts';
   import Pagination from './Pagination.svelte';
 
-  let { session, entityId, onopen, onsettled }: {
+  let { session, entityId, onopen, onsettled, page = $bindable(1) }: {
     session: InvestigationSearchSession | null;
     entityId: string;
     onopen: (event: MouseEvent, href: string) => void;
-    onsettled?: () => void;
+    onsettled?: (result: InvestigationHistory | null) => void;
+    page?: number;
   } = $props();
-  let page = $state(1);
   let response = $state.raw<InvestigationHistory | null>(null);
   let error = $state('');
   let pending = $state(false);
@@ -31,7 +31,7 @@
       if (!active) return;
       response = value;
       pending = false;
-      onsettled?.();
+      onsettled?.(value);
       if (focusPage) {
         focusPage = false;
         await tick();
@@ -41,7 +41,7 @@
       if (!active) return;
       pending = false;
       error = 'Saved history could not be read. Close and reopen this section to retry.';
-      onsettled?.();
+      onsettled?.(null);
     });
     return () => { active = false; };
   });

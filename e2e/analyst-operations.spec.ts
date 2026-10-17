@@ -1,5 +1,5 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
-import { openCaseClassification, openConsoleView, openInboxReview } from './console-navigation';
+import { openCaseClassification, openConsoleView, openInboxReview, inboxReviewControls } from './console-navigation';
 import type { Page } from '@playwright/test';
 
 import { expect, test } from './fixtures';
@@ -310,7 +310,7 @@ test('calendar reaches and exports every matching event beyond the former five-h
   expect(new Set(exported.match(/^UID:.+$/gmu)).size).toBe(600);
   expect(exported).not.toMatch(/Private calendar owner|full-calendar-\d+/u);
   await expect(exportButton).toBeFocused();
-  await expect(calendar.getByRole('status').filter({ hasText: /^Exported 600 selected/ })).toHaveText('Exported 600 selected review events.');
+  await expect(calendar.getByRole('status').filter({ hasText: /^Prepared 600 selected/ })).toHaveText('Prepared 600 selected review events for download.');
   await calendar.getByRole('combobox', { name: 'Event type', exact: true }).selectOption('action_due');
   await expect(calendar.getByRole('button', { name: 'Export selected (0)', exact: true })).toBeDisabled();
   await calendar.getByRole('combobox', { name: 'Event type', exact: true }).selectOption('action_follow_up');
@@ -478,26 +478,25 @@ test('focused inbox reviews keep separate drafts, exact times and keyboard-safe 
     })) },
   }, { clearStorage: true, destination: '/monitor?view=inbox&queue=all' });
   const inbox = page.getByRole('region', { name: 'Review inbox', exact: true });
-  const items = inbox.locator('.items > li');
-  const first = items.filter({ has: page.getByRole('heading', { name: 'Complete reviewed handoff for first.inbox.example', exact: true }) });
-  const second = items.filter({ has: page.getByRole('heading', { name: 'Complete reviewed handoff for second.inbox.example', exact: true }) });
-  await expect(items).toHaveCount(6);
+  const firstControl = inboxReviewControls(page, 'Complete reviewed handoff for first.inbox.example');
+  const secondControl = inboxReviewControls(page, 'Complete reviewed handoff for second.inbox.example');
+  await expect(inboxReviewControls(page)).toHaveCount(6);
   await expect(inbox.getByRole('form', { name: /^Review decision for /u, includeHidden: true })).toHaveCount(1);
-  await openInboxReview(first);
+  const first = await openInboxReview(firstControl);
   await expect(inbox.getByRole('form', { name: /^Review decision for /u, includeHidden: true })).toHaveCount(2);
   await expect(inbox.locator('.items > li > details[open]')).toHaveCount(1);
   const form = first.getByRole('form', { name: 'Review decision for Complete reviewed handoff for first.inbox.example', exact: true });
   await first.locator('details.lifecycle-controls > summary').click();
   await form.getByRole('combobox', { name: 'Review outcome', exact: true }).selectOption('open');
   await form.getByLabel('Rationale', { exact: true }).fill('Retained draft for the first independent review.');
-  await openInboxReview(second);
+  await openInboxReview(secondControl);
   await expect(first.locator(':scope > details')).not.toHaveAttribute('open', '');
   await expect(inbox.locator('.items > li > details[open]')).toHaveCount(1);
-  await openInboxReview(first);
+  await openInboxReview(firstControl);
   await expect(form.getByLabel('Rationale', { exact: true })).toHaveValue('Retained draft for the first independent review.');
   await expect(form.getByRole('combobox', { name: 'Review outcome', exact: true })).toHaveValue('open');
 
-  const exact = first.getByRole('button', { name: /Copy exact observation time for Complete reviewed handoff for first\.inbox\.example:/u });
+  const exact = first.getByRole('button', { name: /Copy exact Action updated for Complete reviewed handoff for first\.inbox\.example:/u });
   await expect(exact.locator('time')).toContainText('UTC');
   const timestamp = await exact.getAttribute('title');
   expect(timestamp).toBeTruthy();
@@ -529,11 +528,16 @@ test('focused inbox reviews keep separate drafts, exact times and keyboard-safe 
   expect(saved.records[0]!.value).toMatchObject({ disposition: 'open', rationale: 'Retained draft for the first independent review.' });
 
   const next = first.getByRole('button', { name: 'Next item', exact: true });
-  const firstIndex = await items.evaluateAll((entries) => entries.findIndex(entry => entry.textContent?.includes('Complete reviewed handoff for first.inbox.example')));
+  const detailIds = await inboxReviewControls(page).evaluateAll(controls => controls.map(control => control.getAttribute('aria-controls')));
+  const firstIndex = detailIds.indexOf(await firstControl.getAttribute('aria-controls'));
+  expect(firstIndex).toBeGreaterThanOrEqual(0);
+  const nextId = detailIds[firstIndex + 1];
+  expect(nextId).toBeTruthy();
+  const nextItem = inbox.locator(`[id=${JSON.stringify(nextId)}]`);
   await next.focus(); await page.keyboard.press('Enter');
-  await expect(items.nth(firstIndex + 1).locator(':scope > details > summary')).toBeFocused();
+  await expect(nextItem.locator(':scope > details > summary')).toBeFocused();
   await expect(inbox.locator('.items > li > details[open]')).toHaveCount(1);
-  await items.nth(firstIndex + 1).getByRole('button', { name: 'Previous item', exact: true }).press('Enter');
+  await nextItem.getByRole('button', { name: 'Previous item', exact: true }).press('Enter');
   await expect(first.locator(':scope > details > summary')).toBeFocused();
 
   for (const width of [320, 390, 1024, 1280, 2560]) {
@@ -575,17 +579,18 @@ test('multiple adjacent Case comparisons render independently across review queu
       })),
     })] },
   }, { destination: '/monitor?view=inbox&queue=all' });
-  const items = page.locator('.review-inbox .items > li').filter({
-    has: page.getByRole('heading', { name: `${domain} · adjacent case snapshots`, exact: true }),
-  });
-  await expect(items).toHaveCount(3);
+  const controls = inboxReviewControls(page, `${domain} · adjacent case snapshots`);
+  await expect(controls).toHaveCount(3);
   const queues = page.getByRole('group', { name: 'Review queue' });
   await queues.getByRole('button', { name: /^Changed since review/u }).click();
   await expect(queues.getByRole('button', { name: /^Changed since review/u })).toHaveAttribute('aria-pressed', 'true');
-  await expect(items).toHaveCount(3);
+  await expect(controls).toHaveCount(3);
   await queues.getByRole('button', { name: /^Everything/u }).click();
-  await expect(items).toHaveCount(3);
-  await expect(items.first()).toBeVisible();
+  await expect(controls).toHaveCount(3);
+  for (let index = 0; index < 3; index++) {
+    const item = await openInboxReview(controls.nth(index));
+    await expect(item.getByRole('heading', { name: `${domain} · adjacent case snapshots`, exact: true })).toBeVisible();
+  }
   expect(requests.count()).toBe(0);
 });
 
@@ -605,11 +610,8 @@ test('one canonical Review Item lifecycle persists independently and recurs afte
     },
   }, { destination: '/monitor?view=inbox' });
 
-  const item = page.locator('.review-inbox .items > li').filter({
-    has: page.getByRole('heading', { name: 'Complete reviewed handoff for lifecycle-review.invalid' }),
-  });
-  await expect(item).toBeVisible();
-  await openInboxReview(item);
+  const inspect = inboxReviewControls(page, 'Complete reviewed handoff for lifecycle-review.invalid');
+  const item = await openInboxReview(inspect);
   await expect(item).toContainText('packet');
   await expect(item).toContainText('open');
 
@@ -633,7 +635,7 @@ test('one canonical Review Item lifecycle persists independently and recurs afte
   await expect(page).toHaveURL('/monitor?view=inbox&queue=all');
   await expect(everything).toHaveAttribute('aria-pressed', 'true');
   await expect(everything).toBeFocused();
-  await openInboxReview(item);
+  await openInboxReview(inspect);
   await expect(item.locator('details.lifecycle-controls > summary')).toContainText('suppressed');
   await expect(item.locator('details.lifecycle-controls > summary')).not.toContainText('invalidated');
   await page.goBack();
@@ -641,7 +643,7 @@ test('one canonical Review Item lifecycle persists independently and recurs afte
   await expect(item).toHaveCount(0);
   await page.goForward();
   await expect(everything).toHaveAttribute('aria-pressed', 'true');
-  await openInboxReview(item);
+  await openInboxReview(inspect);
   await expect(item.locator('details.lifecycle-controls > summary')).toContainText('suppressed');
 
   const reviewStateAfter = await readBrowserLocalCollection(page, 'analyst_review_state', {
@@ -677,9 +679,7 @@ test('one canonical Review Item lifecycle persists independently and recurs afte
   await advancedFilters.locator(':scope > summary').click();
   const filters = advancedFilters.getByRole('group', { name: 'Advanced review filters' });
   await filters.getByLabel('Review state').selectOption('recurred');
-  const recurred = page.locator('.review-inbox .items > li').filter({ hasText: 'lifecycle-review.invalid' });
-  await expect(recurred).toBeVisible();
-  await openInboxReview(recurred);
+  const recurred = await openInboxReview(inboxReviewControls(page, 'Complete reviewed handoff for lifecycle-review.invalid'));
   await expect(recurred.locator('details.lifecycle-controls > summary')).toContainText('invalidated');
   await expect(recurred.locator('details.lifecycle-controls > summary')).toContainText('recurred');
   expect(collectionRequests.count()).toBe(0);
@@ -728,9 +728,7 @@ test('ambiguous and future certificate observations remain reviewable through th
   await expect(page.locator('#case-head-case-certificate-operations')).toBeFocused();
   await page.goto('/monitor?view=inbox');
   await page.getByRole('group', { name: 'Review queue' }).getByRole('button', { name: /^Changed since review/u }).click();
-  const review = page.locator('.review-inbox .items > li').filter({ has: page.getByRole('heading', { name: 'Review retained TLS issuer context for certificate-operations.example' }) });
-  await expect(review).toBeVisible();
-  await openInboxReview(review);
+  const review = await openInboxReview(inboxReviewControls(page, 'Review retained TLS issuer context for certificate-operations.example'));
   await expect(review).toContainText('inconclusive');
   expect(collectionRequests.count()).toBe(0);
 });

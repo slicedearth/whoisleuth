@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { onDestroy, tick, type ComponentProps } from 'svelte';
+  import { currentBrowserWorkspaceId } from '#lib/browser-workspace-context.ts';
   import { restoreSubmittedFocus } from '../controllers/submitted-draft.ts';
   import { page as route } from '$app/state';
   import { goto } from '$app/navigation';
@@ -8,15 +9,17 @@
   import { analystReviewNeedsAttention } from '../analysis/analyst-review-attention.ts';
   import Pagination from './Pagination.svelte';
   import AnalystReviewInboxItem from './AnalystReviewInboxItem.svelte';
+  import AnalystWorkbench from './AnalystWorkbench.svelte';
+  import { openRetainedPeek } from '#lib/controllers/retained-peek-key.ts';
   import ReviewSessionControl from './ReviewSessionControl.svelte';
   import type { ReviewFormDraft, ReviewSessionPosition } from '../../../../packages/contracts/review-session-contract.mts';
-  import { resolveReviewSessionSelection } from '../../../../packages/workspace/review-session.mts';
+  import { createReviewSessionBaseline, describeReviewSessionResume, mergeReviewSessionDrafts } from '../../../../packages/workspace/review-session.mts';
   import { MAX_ANALYST_REVIEW_ITEMS } from '../../../../packages/contracts/analyst-review-state-contract.mts';
   import {
     ANALYST_REVIEW_EVIDENCE_FAMILIES,
     ANALYST_REVIEW_KINDS,
     ANALYST_REVIEW_QUEUE_OPTIONS,
-    analystReviewQueue,
+    analystReviewMatchesQueue,
     filterAnalystReviewItems,
     type AnalystReviewAge,
     type AnalystReviewDismissalReason,
@@ -35,12 +38,14 @@
 
   let {
     inbox,
+    sourcesAvailable = false,
     selectedSubjectKey = '',
     now = new Date().toISOString(),
     ondismiss,
     onreview,
   }: {
     inbox: AnalystReviewInbox;
+    sourcesAvailable?: boolean;
     selectedSubjectKey?: string;
     now?: string;
     ondismiss?: (item: AnalystReviewItem, reason: AnalystReviewDismissalReason) => void | Promise<void>;
@@ -65,17 +70,18 @@
   let inboxElement = $state<HTMLElement>();
   let draftsSummary = $state<HTMLElement>();
   const focusedCaseId = $derived(route.url.searchParams.get('case-review') ?? '');
+  const emptyInbox = $derived(!inbox.items.length && !inbox.truncated);
   const scopedItems = $derived(focusedCaseId ? inbox.items.filter(item => item.caseId === focusedCaseId) : inbox.items);
   const sourceOptions = $derived([...new Set(inbox.items.flatMap((item) => item.sourceIds))].sort());
   const evidenceFamilyOptions = $derived([...new Set(inbox.items.map((item) => item.evidenceFamily))].sort());
   const queueCounts = $derived(Object.fromEntries(ANALYST_REVIEW_QUEUE_OPTIONS.map((option) => [
     option.value,
-    option.value === 'all' ? scopedItems.length : scopedItems.filter((item) => analystReviewQueue(item, now) === option.value).length,
+    scopedItems.filter((item) => analystReviewMatchesQueue(item, option.value, now)).length,
   ])) as Record<AnalystReviewQueue, number>);
   const filteredByQueue = $derived(scopedItems.filter((item) => {
     if (selectedSubjectKey) return item.subjectKey === selectedSubjectKey;
     if (attentionOnly) return analystReviewNeedsAttention(item.lifecycle);
-    if (queue !== 'all' && analystReviewQueue(item, now) !== queue) return false;
+    if (!analystReviewMatchesQueue(item, queue, now)) return false;
     return !kindFilter || item.kind === kindFilter;
   }));
   const filtered = $derived(selectedSubjectKey ? filteredByQueue : filterAnalystReviewItems(filteredByQueue, {
@@ -95,7 +101,9 @@
     sourceFilter, ageFilter, caseFilter, priorityFilter, nextActionFilter, evidenceFamilyFilter, lifecycleFilter]));
   $effect(() => { filterKey; page = 1; expandedId = undefined; });
   const currentItem = $derived(filtered.find(item => item.id === expanded));
+  const currentBaseline = $derived(createReviewSessionBaseline(filtered, { sourcesAvailable, truncated: inbox.truncated }));
   const position = $derived<ReviewSessionPosition>({
+    question: null, baseline: currentBaseline,
     filters: { queue, attentionOnly, focusedCaseId, kind: kindFilter, source: sourceFilter, age: ageFilter, caseQuery: caseFilter,
       priority: priorityFilter, nextAction: nextActionFilter, evidenceFamily: evidenceFamilyFilter, lifecycle: lifecycleFilter },
     selected: currentItem ? { id: currentItem.id, subjectKey: currentItem.subjectKey, materialFingerprint: currentItem.materialFingerprint, caseId: currentItem.caseId } : null,
@@ -148,12 +156,12 @@
     itemsElement?.querySelectorAll<HTMLElement>(':scope > li > details > summary')[visibleIndex]?.focus();
   }
 
-  async function resumeReview(saved: ReviewSessionPosition): Promise<string> {
-    const retained = new Map(reviewDrafts.map(draft => [draft.id, draft]));
-    for (const draft of saved.drafts) if (!retained.has(draft.id)) retained.set(draft.id, draft);
-    if (retained.size > MAX_ANALYST_REVIEW_ITEMS) return 'Saved and current forms exceed one admitted review queue. Finish or discard current drafts before resuming; no forms were removed.';
-    reviewDrafts = [...retained.values()];
-    restoreRevision += 1;
+  let resumeGeneration = 0, disposed = false;
+  onDestroy(() => { disposed = true; resumeGeneration++; });
+  const resumeReview: ComponentProps<typeof ReviewSessionControl>['onresume'] = async (saved, ownsRequest) => {
+    const generation = ++resumeGeneration, workspace = currentBrowserWorkspaceId();
+    const current = () => !disposed && generation === resumeGeneration && ownsRequest() && workspace === currentBrowserWorkspaceId();
+    if (!mergeReviewSessionDrafts(saved.drafts, reviewDrafts)) return { message: 'Saved and current forms exceed one admitted review queue. Finish or discard current drafts before resuming; no forms were removed.' };
     const url = new URL(route.url.href);
     url.searchParams.delete('review');
     url.searchParams.delete('resume');
@@ -163,17 +171,25 @@
     if (saved.filters.attentionOnly) url.searchParams.set('attention', '1');
     if (saved.filters.focusedCaseId) url.searchParams.set('case-review', saved.filters.focusedCaseId);
     await goto(`${url.pathname}${url.search}${url.hash}`, { reset: false });
+    if (!current()) return { message: 'Review context changed before resume completed. No saved form was replayed.' };
     kindFilter = saved.filters.kind; sourceFilter = saved.filters.source; ageFilter = saved.filters.age;
     caseFilter = saved.filters.caseQuery; priorityFilter = saved.filters.priority; nextActionFilter = saved.filters.nextAction;
     evidenceFamilyFilter = saved.filters.evidenceFamily; lifecycleFilter = saved.filters.lifecycle;
     await tick();
-    const selected = resolveReviewSessionSelection(saved, filtered);
+    if (!current()) return { message: 'Review context changed before resume completed. No saved form was replayed.' };
+    // Reconcile after asynchronous navigation so a newer open form always wins.
+    const retained = mergeReviewSessionDrafts(saved.drafts, reviewDrafts);
+    if (!retained) return { message: 'Saved and current forms exceed one admitted review queue. No forms were removed.' };
+    reviewDrafts = retained.drafts;
+    restoreRevision += 1;
+    const briefing = describeReviewSessionResume(saved, filtered, retained, currentBaseline);
+    const selected = briefing.selected;
     if (selected.index >= 0) await focusReview(selected.index);
     else { page = 1; expandedId = null; }
-    if (selected.state === 'changed') return 'Position restored. The selected review has changed since this checkpoint; inspect the current evidence before deciding.';
-    if (selected.state === 'unavailable' || selected.state === 'ambiguous') return 'Filters restored, but the saved item is unavailable or ambiguous in the current results. No other item was substituted.';
-    return 'Review position restored against current results. No decision or collection was replayed.';
-  }
+    if (selected.state === 'changed') return { briefing, message: 'Position restored. The selected review has changed since this checkpoint; inspect the current evidence before deciding.' };
+    if (selected.state === 'unavailable' || selected.state === 'ambiguous') return { briefing, message: 'Filters restored, but the saved item is unavailable or ambiguous in the current results. No other item was substituted.' };
+    return { briefing, message: 'Review position restored against current results. No decision or collection was replayed.' };
+  };
 
   async function reviewMutation(item: AnalystReviewItem, operation: () => void | Promise<void>) {
     const origin = inboxElement?.contains(document.activeElement) ? document.activeElement : null;
@@ -195,6 +211,12 @@
 </script>
 
 <section class="review-inbox card" aria-label="Review inbox" bind:this={inboxElement}>
+  {#if emptyInbox}
+    <div class="empty-start">
+      <h2 id="review-inbox-title" tabindex="-1">No retained review items</h2>
+      <div class="toolbar"><a class="primary" href="/lookup">Investigate a domain</a><a class="btn" href="/cases">Open Cases</a></div>
+    </div>
+  {/if}
   {#if !selectedSubjectKey}<ReviewSessionControl {position} onresume={resumeReview} resumeRequested={route.url.searchParams.get('resume') === '1'} />{/if}
   {#if reviewDrafts.length}
     <details class="current-drafts" bind:open={showDrafts}>
@@ -238,6 +260,9 @@
       </button>
     {/each}
   </div>
+  {#if queue === 'waiting' && !attentionOnly}
+    <p class="notice">Current evidence, provider, review-time and decision dependencies. Items can also appear in Needs action.</p>
+  {/if}
   <details class="advanced-filters">
     <summary>Advanced filters</summary>
     <div class="detail-filters responsive-grid" role="group" aria-label="Advanced review filters">
@@ -262,9 +287,9 @@
       <label class="field">Case
         <input bind:value={caseFilter} oninput={() => { page = 1; }} maxlength="253" placeholder="Filter domain" />
       </label>
-      <label class="field">Severity
+      <label class="field">Priority
         <select bind:value={priorityFilter} onchange={() => { page = 1; }}>
-          <option value="">Any severity</option><option value="urgent">Urgent</option><option value="high">High</option><option value="normal">Normal</option>
+          <option value="">Any priority</option><option value="urgent">Urgent</option><option value="high">High</option><option value="normal">Normal</option>
         </select>
       </label>
       <label class="field">Next action
@@ -290,10 +315,25 @@
   {/if}
 
   {#if visible.length}
+    <AnalystWorkbench label="Review items" selected={currentItem?.id ?? null} detailTitle="Review detail" onclose={() => expandedId = null}>
+      {#snippet queue()}
+        <ol class="review-queue">
+          {#each visible as item (item.id)}
+            <li class:inspected={expanded === item.id}>
+              <strong>{item.title}</strong>
+              <span>{item.evidenceFamily.replaceAll('_', ' ')} · {item.completeness}</span>
+              <span>{item.lifecycle.state.replaceAll('_', ' ')} · {item.nextAction.replaceAll('_', ' ')}</span>
+              <button class="btn" type="button" aria-label={`Inspect review: ${item.title}`} aria-controls={`review-detail-${encodeURIComponent(item.id)}`} aria-pressed={expanded === item.id} aria-keyshortcuts="P" title="Preview retained evidence: P while this button is focused" onclick={() => expandedId = item.id} onkeydown={event => openRetainedPeek(event, () => expandedId = item.id)}>Inspect</button>
+            </li>
+          {/each}
+        </ol>
+        <Pagination currentPage={currentPage} {pageCount} setPage={(value) => { page = value; expandedId = undefined; }} ariaLabel="Review inbox pages" />
+      {/snippet}
+      {#snippet children()}
     <ol class="items" bind:this={itemsElement}>
       {#key restoreRevision}
       {#each visible as item, index (item.id)}
-        <li>
+        <li id={`review-detail-${encodeURIComponent(item.id)}`} hidden={expanded !== item.id}>
           <AnalystReviewInboxItem {item} {now} expanded={expanded === item.id}
             onexpand={() => expandedId = item.id} oncollapse={() => expandedId = null}
             {...(reviewDrafts.find(draft => draft.id === item.id) ? { restoredDraft: reviewDrafts.find(draft => draft.id === item.id)! } : {})}
@@ -308,14 +348,9 @@
       {/each}
       {/key}
     </ol>
-    <Pagination currentPage={currentPage} {pageCount} setPage={(value) => { page = value; expandedId = undefined; }} ariaLabel="Review inbox pages" />
-  {:else if !inbox.items.length && !inbox.truncated}
-    <div class="empty-start">
-      <h2 id="review-inbox-title" tabindex="-1">No retained review items</h2>
-      <p>Investigate a domain or open saved Cases.</p>
-      <div class="toolbar"><a class="primary" href="/lookup">Investigate a domain</a><a class="btn" href="/cases">Open Cases</a></div>
-    </div>
-  {:else}
+      {/snippet}
+    </AnalystWorkbench>
+  {:else if !emptyInbox}
     <p class="empty">No retained items match this review filter.</p>
   {/if}
 
@@ -341,9 +376,8 @@
 <style>
   .review-inbox{padding:var(--card-pad)}
   .current-drafts{margin-block:12px}.current-drafts li{overflow-wrap:anywhere;margin-block:12px}.current-drafts p{white-space:pre-wrap}
-  .empty-start{max-width:70ch;margin:20px 0}
+  .empty-start{max-width:70ch;margin:0 0 20px}
   .empty-start h2{font-size:var(--text-lg)}
-  .empty-start p{color:var(--muted);font-size:var(--text-sm);line-height:1.5}
   .review-scope{margin-top:16px;padding-top:10px;border-top:1px solid var(--border)}
   .review-scope summary{cursor:pointer;font-size:var(--text-sm)}
   .inbox-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}
@@ -364,6 +398,10 @@
   .admission-warning{display:grid;gap:7px;margin-top:14px}.admission-warning .warning{margin:0}.admission-warning details{font-size:var(--text-xs)}.admission-warning summary{cursor:pointer;font:700 var(--text-xs) var(--mono)}.admission-warning ul{display:grid;gap:4px;margin:8px 0 0;padding:0;list-style:none}.admission-warning li{display:flex;justify-content:space-between;gap:16px;color:var(--muted);font-size:var(--text-2xs);line-height:1.4}.admission-warning li span:first-child{color:var(--text);text-transform:capitalize}
   .items{display:grid;gap:0;margin:0;padding:0;list-style:none}
   .items>li{min-width:0}
+  .review-queue { display: grid; list-style: none; margin: 0; padding: 0; }
+  .review-queue li { display: grid; gap: .5rem; padding: .75rem; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+  .review-queue span { color: var(--muted); font-size: var(--text-xs); }
+  .review-queue button { justify-self: start; min-height: 44px; }
   .selected-review{margin:14px 0;color:var(--muted);font-size:var(--text-sm);line-height:1.5;overflow-wrap:anywhere}
   .empty,.warning,.limitations{color:var(--muted);font-size:var(--text-sm)}
   .warning{color:var(--amber)}

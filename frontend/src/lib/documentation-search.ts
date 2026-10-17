@@ -19,7 +19,7 @@ export function documentationSearchDocuments(): SearchDocument[] {
     ...PUBLIC_CLI_INDEX.commands.map(command => ({ href: `/cli#command-${command.id}`, title: command.id, category: 'CLI command', description: command.summary })),
     ...toolGuides.map(tool => ({ href: `/resources#tool-${tool.id}`, title: tool.name, category: 'Tool guide', description: `${tool.useWhen} ${tool.input} ${tool.result} ${tool.next}` })),
     ...referenceGuides.map(tool => ({ href: `/resources#reference-${tool.id}`, title: tool.name, category: 'Reference', description: `${tool.useWhen} ${tool.input} ${tool.result} ${tool.next}` })),
-    ...publicGuideGoals.map(goal => ({ href: `/resources#${goal.id}`, title: goal.title, category: 'Task', description: goal.summary })),
+    ...publicGuideGoals.map(goal => ({ href: `/resources#${goal.id}`, title: goal.title, category: 'Task', description: `${goal.summary} ${goal.requirements}` })),
     ...glossaryTerms.map(item => ({ href: `/resources#term-${documentationAnchor(item.term)}`, title: item.term, category: 'Glossary', description: item.definition })),
     ...resultStates.map(item => ({ href: `/resources#state-${documentationAnchor(item.term)}`, title: item.term, category: 'Evidence state', description: item.definition })),
     ...guideFaqs.map(item => ({ href: `/resources#question-${documentationAnchor(item.question)}`, title: item.question, category: 'Question', description: item.answer })),

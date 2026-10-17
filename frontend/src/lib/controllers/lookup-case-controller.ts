@@ -24,6 +24,7 @@ import {
   type CheckpointFact,
 } from '../analysis/case-evidence-checkpoint.ts';
 import type { CaseTransitionExpectation } from '../analysis/case-response-model.ts';
+import type { LookupCollectionReceipt } from '../../../../packages/evidence/lookup-collection-receipt.mts';
 import {
   failedLocalMutationOutcome,
   type LocalMutationOutcome,
@@ -134,7 +135,7 @@ export class LookupCaseController {
         });
         return {
           record: refreshed.record,
-          status: `Refreshed the retained Case evidence for ${refreshed.record.domain}.${pruneSuffix(refreshed.pruned)}`,
+          status: `Saved this Lookup observation to the Case for ${refreshed.record.domain}.${pruneSuffix(refreshed.pruned)}`,
           mutationOutcome: 'committed',
         };
       }
@@ -425,6 +426,7 @@ export class LookupCaseController {
     facts: readonly CheckpointFact[],
     selectedFields: readonly string[],
     transitionExpectations: Readonly<Record<string, CaseTransitionExpectation>> = {},
+    collectionReceipt?: LookupCollectionReceipt,
   ): Promise<LookupCaseActionResult> {
     if (!record) {
       return {
@@ -445,7 +447,9 @@ export class LookupCaseController {
           mutationOutcome: 'rejected',
         };
       }
-      const updated = await this.#api.edit(record.id, { evidencePins });
+      const updated = await this.#api.edit(record.id, { evidencePins,
+        ...(collectionReceipt ? { checkpointCollectionReceipts: [{ checkpointId: evidencePins[0]!.checkpointId, collectionReceipt }] } : {}),
+      });
       return {
         record: updated.record,
         status: `Saved ${evidencePins.length} analyst-selected checkpoint fact${evidencePins.length === 1 ? '' : 's'}${evidencePins.some((pin) => pin.transitionExpectation) ? ' with a reviewed transition plan' : ''}.${pruneSuffix(updated.pruned)}`,

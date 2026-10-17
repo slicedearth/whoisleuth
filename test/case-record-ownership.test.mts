@@ -22,6 +22,7 @@ import {
 } from '../packages/cases/case-record-decisions.mts';
 import { RULE_FIELD_DEFINITIONS } from '../packages/workspace/detection-rule-model.mts';
 import { addCaseAttachments } from '../packages/cases/case-attachment-model.mts';
+import { normalizeCaseEvidencePins } from '../packages/cases/case-response-model.mts';
 
 const NOW = '2026-08-22T00:00:00.000Z';
 const PUBLISHED_CASE_FIXTURE = new URL('./fixtures/case-lifecycle/case-export-v15.json', import.meta.url);
@@ -30,6 +31,12 @@ async function currentCase() {
   const document = JSON.parse(await readFile(PUBLISHED_CASE_FIXTURE, 'utf8')) as unknown;
   const record = normalizeCaseStore(document).cases[0];
   assert.ok(record);
+  const lookup = JSON.parse(await readFile(new URL('./fixtures/cli-lookup-v3.json', import.meta.url), 'utf8'));
+  record.evidencePins = normalizeCaseEvidencePins([{ id: 'receipt-pin', label: 'Selected registrar', value: 'Example registrar',
+    checkpointId: 'private-checkpoint', collectionDepth: 'deep', observedAt: NOW, createdAt: NOW }], NOW);
+  const selectedPin = record.evidencePins[0]!;
+  assert.ok(selectedPin.checkpointId);
+  record.checkpointCollectionReceipts = [{ checkpointId: selectedPin.checkpointId, collectionReceipt: lookup.collectionReceipt }];
   // Published records intentionally lack optional retained-file metadata.
   // Supply it independently so the complete field/projection contract is exercised.
   record.evidenceLinks = [{ id: 'private-link', fromPinId: 'derived-pin', toPinId: 'source-pin', kind: 'derived_from', basis: 'Private relationship basis', createdAt: NOW }];
@@ -97,7 +104,7 @@ describe('Case decision and projection ownership', () => {
     assert.deepEqual(buildCaseExport([record], NOW).cases[0], durable);
     for (const audience of ['internal', 'trusted', 'public'] as const) {
       const projected = projectCaseForAudience(record, audience);
-      assert.deepEqual(Object.keys(projected).sort(), fields.filter(field => !(audience !== 'internal' && field === 'attachments') && !(audience === 'public' && field === 'evidenceLinks')));
+      assert.deepEqual(Object.keys(projected).sort(), fields.filter(field => !(audience !== 'internal' && (field === 'attachments' || field === 'checkpointCollectionReceipts')) && !(audience === 'public' && field === 'evidenceLinks')));
       if (audience === 'public') assert.doesNotMatch(JSON.stringify(projected), /Private relationship basis|private-link|derived-pin|source-pin/u);
       if (audience !== 'internal') {
         assert.doesNotMatch(JSON.stringify(projected), /private-selected\.png|Private selected-file provenance|selected-file|sha256:aaaaaaaa/u);

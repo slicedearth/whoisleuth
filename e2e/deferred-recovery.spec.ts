@@ -24,7 +24,7 @@ const CASES_KEY = 'whois-rdap-cases-v1';
 
 test('a failed opening action preserves an already loaded panel and does not repeat the action', async ({ page }, testInfo) => {
   await page.goto('/demo#case-practice');
-  const practice = page.getByRole('region', { name: 'Practise a Case review', exact: true });
+  const practice = page.getByRole('region', { name: 'Practise a case review', exact: true });
   await expect(practice).toBeVisible();
   await page.evaluate(() => {
     const original = HTMLElement.prototype.focus;
@@ -38,7 +38,7 @@ test('a failed opening action preserves an already loaded panel and does not rep
   await practice.getByRole('button', { name: 'Discard practice and restart', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: 'This section loaded, but its opening action could not finish.' })).toBeVisible();
   await expect(practice).toBeVisible();
-  await expect(practice.locator('..')).toHaveAttribute('data-deferred-state', 'ready');
+  await expect(practice.locator('xpath=ancestor::*[@data-deferred-state][1]')).toHaveAttribute('data-deferred-state', 'ready');
   const label = practice.locator('form[data-recovery-form="evidence-pin"]').getByLabel('Label', { exact: true });
   await label.fill('The loaded form is still usable');
   await expect(label).toHaveValue('The loaded form is still usable');
@@ -52,7 +52,7 @@ test('a failed opening action preserves an already loaded panel and does not rep
   await expect(page.locator('body')).not.toContainText('private opening-action sentinel');
   await expect(page.getByRole('button', { name: 'Reload page', exact: true })).toHaveCount(0);
   await practice.getByRole('button', { name: 'Discard practice and restart', exact: true }).click();
-  await expect(practice.getByRole('heading', { name: 'Practise a Case review', exact: true })).toBeFocused();
+  await expect(practice.getByRole('heading', { name: 'Practise a case review', exact: true })).toBeFocused();
   await expect(label).toHaveValue('');
   await expect(page.getByText('This section loaded, but its opening action could not finish.', { exact: false })).toHaveCount(0);
 });
@@ -252,7 +252,7 @@ test('CLI navigation readiness waits for working client-side filtering', async (
     await expect(catalogue.getByRole('combobox', { name: 'Group', exact: true })).toBeDisabled();
     await expect(catalogue.getByRole('combobox', { name: 'Mode', exact: true })).toBeDisabled();
     await expect(catalogue.getByRole('checkbox', { name: 'Common commands only', exact: true })).toBeDisabled();
-    await expect(catalogue.getByRole('button', { name: 'View workflow-plan command', exact: true })).toBeDisabled();
+    await expect(catalogue.locator('article[data-command="workflow-plan"]').getByRole('button')).toBeDisabled();
     await expect(catalogue).toHaveAttribute('data-client-ready', 'false');
     await waitForAnimationFrames(page);
     expect(await isNavigationReadinessMarked(page)).toBe(false);
@@ -340,7 +340,7 @@ test('Case readiness cannot complete while its selected workspace is held', asyn
     await waitForAnimationFrames(page);
     expect(await isBrowserInteractionReadinessMarked(page)).toBe(false);
 
-    await expect(page.getByText('Opening Case…', { exact: true })).toBeVisible();
+    await expect(page.getByText('Opening case…', { exact: true })).toBeVisible();
     await expect(page.getByRole('navigation', { name: 'Case sections' })).toHaveCount(0);
     await waitForAnimationFrames(page);
     expect(await isBrowserInteractionReadinessMarked(page)).toBe(false);
@@ -363,7 +363,7 @@ test('Case readiness cannot complete while its selected workspace is held', asyn
 
 test('a pending protected module reaches a terminal reload state and ignores late completion', async ({ page }) => {
   test.slow();
-  const chunkPath = productionChunkPath('src/lib/components/WebsiteProfileClusters.svelte');
+  const chunkPath = productionChunkPath('src/lib/components/RetainedEvidenceGallery.svelte');
   let releaseChunk = () => {};
   let markRequested = () => {};
   const requested = new Promise<void>((resolve) => { markRequested = resolve; });
@@ -396,7 +396,7 @@ test('a pending protected module reaches a terminal reload state and ignores lat
   expect((await placeholder.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(220);
 
   const unavailable = page.getByRole('alert').filter({
-    hasText: 'Website-profile relationships could not be loaded.',
+    hasText: 'The retained gallery could not be displayed. Saved evidence has not changed.',
   });
   await expect(unavailable).toBeVisible({ timeout: 7_000 });
   const surface = unavailable.locator('..');

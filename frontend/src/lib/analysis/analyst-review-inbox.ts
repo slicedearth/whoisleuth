@@ -8,6 +8,7 @@ import type { AnalystReviewQueue } from '../../../../packages/contracts/analyst-
 export { ANALYST_REVIEW_QUEUE_OPTIONS, type AnalystReviewQueue } from '../../../../packages/contracts/analyst-review-state-contract.mts';
 import { normalizeExplicitIsoTimestamp as timestamp } from '../../../../packages/evidence/observation.mts';
 import { latestObservationCohort } from '../../../../packages/evidence/latest-observations.mts';
+import { caseActionSchedule, caseRequestedEvidenceQueue } from '../../../../packages/cases/case-response-queue.mts';
 import {
   ANALYST_REVIEW_EVIDENCE_FAMILIES,
   ANALYST_REVIEW_KINDS,
@@ -58,6 +59,27 @@ export const ANALYST_REVIEW_DISMISSAL_REASONS = [
 export type AnalystReviewDismissalReason = typeof ANALYST_REVIEW_DISMISSAL_REASONS[number]['value'];
 
 export type AnalystReviewInboxItem = AnalystReviewItem & Readonly<{ lifecycle: AnalystReviewLifecycle }>;
+
+/** Names the retained event; it does not reinterpret or replace its timestamp. */
+export function analystReviewTimeLabel(kind: AnalystReviewKind): string {
+  switch (kind) {
+    case 'case':
+    case 'detection_rule': return 'Case updated';
+    case 'case_action':
+    case 'incomplete_packet': return 'Action updated';
+    case 'suppression':
+    case 'change_window': return 'Baseline updated';
+    case 'bulk_session': return 'Session updated';
+    case 'orphaned_state': return 'Last decision';
+    case 'watchlist_change': return 'Check time';
+    case 'evidence_gap': return 'Evidence or assertion time';
+    case 'observed_effect_review':
+    case 'comparison':
+    case 'desired_posture':
+    case 'certificate': return 'Observed';
+    default: return 'Recorded time';
+  }
+}
 
 export type AnalystReviewProjectionAdmission = Readonly<{
   omittedAtLeast: Readonly<Partial<Record<AnalystReviewEvidenceFamily, number>>>;
@@ -121,6 +143,27 @@ export function analystReviewQueue(
   now: unknown,
 ): Exclude<AnalystReviewQueue, 'all'> {
   return analystReviewQueueMembership(item, now).queue;
+}
+
+export function analystReviewWaitingReasons(item: AnalystReviewInboxItem, now: unknown) {
+  if (analystReviewQueue(item, now) === 'reviewed') return [];
+  const reasons: Array<Readonly<{ kind: 'evidence' | 'provider' | 'analyst' | 'time'; reason: string }>> = [...item.waitingOn ?? []];
+  if (item.lifecycle.invalidated || item.lifecycle.recurred || item.lifecycle.expired || item.lifecycle.reviewDue) {
+    reasons.push({ kind: 'analyst', reason: item.lifecycle.reason });
+  } else if (item.lifecycle.state === 'expected' || item.lifecycle.state === 'suppressed') {
+    reasons.push({ kind: item.lifecycle.decision?.reviewDueAt || item.lifecycle.decision?.expiresAt ? 'time' : 'analyst', reason: item.lifecycle.reason });
+  }
+  const nowAt = timestamp(now), dueAt = timestamp(item.dueAt);
+  if (nowAt && dueAt && Date.parse(dueAt) > Date.parse(nowAt)) {
+    reasons.push({ kind: 'time', reason: 'The recorded follow-up time has not arrived.' });
+  }
+  return reasons;
+}
+
+/** Dependencies overlap action queues: waiting for evidence must not hide work. */
+export function analystReviewMatchesQueue(item: AnalystReviewInboxItem, queue: AnalystReviewQueue, now: unknown): boolean {
+  return queue === 'all' || analystReviewQueue(item, now) === queue
+    || (queue === 'waiting' && analystReviewWaitingReasons(item, now).length > 0);
 }
 
 export function analystReviewQueueMembership(
@@ -399,6 +442,7 @@ function caseItems(records: readonly CaseRecord[], nowIso: string): AnalystRevie
         retryHref: null,
         caseId: record.id,
         dismissalTarget: null,
+        waitingOn: [{ kind: 'analyst', reason: 'This open Case has no analyst disposition.' }],
       }, nowIso));
     }
     const {
@@ -446,12 +490,31 @@ function caseItems(records: readonly CaseRecord[], nowIso: string): AnalystRevie
           retryHref: `/lookup?q=${encodeURIComponent(caseLookupTarget(record))}&depth=deep&case=${encodeURIComponent(record.id)}`,
           caseId: record.id,
           dismissalTarget: dismissalTarget!,
+          waitingOn: [{ kind: 'evidence', reason: parts.join(' · ') }],
         }, nowIso));
       }
     }
+    const evidenceRequests = caseRequestedEvidenceQueue(record, nowIso);
     for (const action of record.actions.slice(-50)) {
       if (!OPEN_ACTION_STATES.has(action.state)) continue;
-      const dueAt = timestamp(action.followUpAt) || timestamp(action.dueAt);
+      const requests = evidenceRequests.filter(request => request.actionId === action.id && request.editable && !request.deliveries.length);
+      const waitingOn: NonNullable<AnalystReviewItem['waitingOn']>[number][] = requests.map(request => ({
+        kind: 'evidence', reason: `${request.label}: ${request.request.summary}`,
+      }));
+      if (action.state === 'submitted' || action.state === 'acknowledged') {
+        if (action.providerOutcome === null || action.providerOutcome === 'accepted_for_review' || action.providerOutcome === 'no_response') {
+          waitingOn.push({ kind: 'provider', reason: action.providerOutcome === 'accepted_for_review'
+            ? 'The recipient accepted this action for review; no final provider outcome is recorded.'
+            : action.providerOutcome === 'no_response' ? 'No provider response was recorded at the last review.'
+              : 'The submitted action has no current provider outcome recorded.' });
+        } else if (!requests.length) {
+          waitingOn.push({ kind: 'analyst', reason: 'A provider outcome is recorded. Review the response and any independent follow-up.' });
+        }
+      } else {
+        waitingOn.push({ kind: 'analyst', reason: `The action is ${action.state.replaceAll('_', ' ')}; submission is not recorded.` });
+      }
+      const dueAt = [caseActionSchedule(action, nowIso).nextAt, ...requests.map(request => request.deadline)]
+        .filter((at): at is string => at !== null).sort((left, right) => Date.parse(left) - Date.parse(right))[0] ?? null;
       const overdue = dueAt !== null && Date.parse(dueAt) <= Date.parse(nowIso);
       const priority: AnalystReviewPriority = overdue ? 'urgent' : ['ready_for_review', 'reviewed', 'authorised', 'submitted'].includes(action.state) ? 'high' : 'normal';
       items.push(withReviewMetadata({
@@ -471,7 +534,8 @@ function caseItems(records: readonly CaseRecord[], nowIso: string): AnalystRevie
         retryHref: null,
         caseId: record.id,
         dismissalTarget: null,
-      }, nowIso));
+        waitingOn,
+      }, nowIso, [action.providerOutcome, requests.map(request => [request.eventId, request.request, request.concurrent])]));
     }
     for (const review of (record.observedEffects?.reviews ?? []).slice(-40)) {
       const dueAt = timestamp(review.followUpAt);

@@ -1,4 +1,5 @@
 import { formatDate } from './lookup-display-shared.ts';
+import { registrationSourceNotice } from './lookup-registry-display.ts';
 import {
   fmtAge,
   fmtExpiresIn,
@@ -384,12 +385,12 @@ function buildDiagnostics(
       source,
       status,
       label: statusLabel(status),
-      detail: diagnosticDetail(item),
+      detail: (isRdap || isWhois ? registrationSourceNotice(isRdap ? 'RDAP' : 'WHOIS', status, item.detail) : '') || diagnosticDetail(item),
       endpoint: boundedText(item.endpoint, 2_048),
       route: isRdap
-        ? 'The endpoint was selected through IANA RDAP bootstrap discovery and bounded endpoint failover.'
+        ? 'IANA RDAP bootstrap discovery and bounded endpoint failover determine the available service. Source status records whether a publication was obtained.'
         : isWhois
-          ? 'The response follows the bounded WHOIS registry and referral chain shown below.'
+          ? 'WHOIS collection uses registry access policy and a bounded IANA referral chain. Source status records whether a query was issued and a publication obtained.'
           : 'This derived state applies the authority-aware availability rules to the collected registration evidence.',
       observedAt: formatDate(item.fetchedAt || item.queriedAt || item.observedAt),
       conformance: isRdap ? textList(rdapParsed.conformance) : [],
@@ -563,9 +564,9 @@ export function buildLookupSummaryModel(input: LookupSummaryInput): LookupSummar
         value: display(availability.activityStatus),
         detail: display(availability.websiteProbeDetail),
         provenance: {
-          sources: ['Bounded homepage and favicon observation'],
+          sources: ['Bounded page and favicon observation'],
           observedAt: formatDate(input.resultObservedAt),
-          fieldFamilies: ['HTTP response', 'redirect chain', 'bounded homepage body', 'favicon response'],
+          fieldFamilies: ['HTTP response', 'redirect chain', 'bounded page body', 'favicon response'],
           normalization: 'Observed responses are classified into active, parked, inactive, or unknown context without executing page scripts.',
           completeness: record(availability.http).status === 'success' && record(availability.http).complete === true
             ? 'complete'

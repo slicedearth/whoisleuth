@@ -1,16 +1,16 @@
 <script lang="ts">
   import { onDestroy, tick } from 'svelte';
   import type { CaseRecord } from '#lib/cases.ts';
-  import type { CaseAttachment } from '../../../../packages/cases/case-attachment-model.mts';
-  import { declareImageDerivation } from '../../../../packages/evidence/image-regions.mts';
+  import { reviewCaseImageDerivation, type CaseAttachment } from '../../../../packages/cases/case-attachment-model.mts';
   import type { PersistCaseOperation } from '#lib/analysis/case-response-stage.ts';
   import { isoFromUtcInput, utcDateTimeInputAttributes } from '#lib/analysis/case-response-form-values.ts';
-  import { prepareCaseAttachmentFiles, readRetainedCaseFile, readRetainedCaseFiles, removeRetainedCaseAttachment, retainCaseAttachments, type SelectedCaseAttachment } from '#lib/case-attachments.ts';
+  import { prepareCaseAttachmentFiles, prepareCaseAttachmentExport, readRetainedCaseFile, removeRetainedCaseAttachment, retainCaseAttachments, type SelectedCaseAttachment } from '#lib/case-attachments.ts';
   import { downloadLocalFile } from '#lib/download-local-file.ts';
   import { supportsArtifactPreview } from '#lib/artifact-preview.ts';
   import { trackTransientCaseDraft } from '#lib/controllers/case-draft.svelte.ts';
   import ArtifactPreview from './ArtifactPreview.svelte';
   import CaseImageReview from './CaseImageReview.svelte';
+  import CaseImageLineage from './CaseImageLineage.svelte';
   import CaseTextComparison from './CaseTextComparison.svelte';
   import EvidenceFileExport from './EvidenceFileExport.svelte';
 
@@ -32,6 +32,10 @@
   let exporting = $state(false);
   let exportIds = $state<string[]>([]);
   const exportReferences = $derived((record.attachments ?? []).filter(item => exportIds.includes(item.id)));
+  const selectedImageEdits = $derived(exportReferences.flatMap(attachment => {
+    const review = reviewCaseImageDerivation(attachment, record.attachments ?? []);
+    return review ? [{ attachment, review }] : [];
+  }));
   let generation = 0;
   let activeCaseId: string | undefined;
   let previewTrigger: HTMLButtonElement | null = null;
@@ -99,20 +103,19 @@
     }
   }
   async function exportFiles(signal: AbortSignal) {
-    const selected = exportReferences;
-    signal.throwIfAborted();
-    const files = await readRetainedCaseFiles(selected);
-    signal.throwIfAborted();
-    return files.map(({ attachment, file }) => ({ file, mediaType: attachment.mediaType,
-      source: { identity: attachment.source, observedAt: attachment.observedAt },
-      imageDerivation: attachment.derivation ? declareImageDerivation(attachment.derivation) : null }));
+    return prepareCaseAttachmentExport(exportReferences, signal);
   }
 </script>
 
 <details class="case-files">
   <summary bind:this={summary}>Retained files <span>{record.attachments?.length ?? 0}</span></summary>
   <div class="files-body">
-    <p>Keep selected originals in this workspace. File digests identify bytes, not their source or accuracy. Ordinary JSON backups contain references only; keep a separate copy of the originals.</p>
+    <p>Keep selected originals in this workspace. Ordinary JSON backups contain references only; keep a separate copy of the originals.</p>
+    <details class="integrity-explainer">
+      <summary>File verification and provenance</summary>
+      <p>A saved reference records the expected size and SHA-256. Listing it does not read the file. Preview, download and export check the stored bytes against both values.</p>
+      <p>Sources, observation times and image-edit history are recorded declarations. Matching bytes do not verify those declarations or the accuracy of the contents.</p>
+    </details>
     <label class="file-select btn">{preparing ? 'Checking selected files…' : 'Choose original files'}<input bind:this={input} type="file" multiple disabled={preparing || mutationBusy || Boolean(loading) || imageBusy} onchange={select}></label>
     {#if pending.length}
       <section aria-label="Files selected for retention" class="pending-files">
@@ -132,16 +135,29 @@
           {#each record.attachments as attachment (attachment.id)}<label><input type="checkbox" bind:group={exportIds} value={attachment.id} disabled={exporting || mutationBusy}> {attachment.fileName} · {attachment.byteLength.toLocaleString('en-AU')} bytes</label>{/each}
         </div>
         <p>{exportReferences.length} selected · {record.attachments.length - exportReferences.length} not selected. Missing original bytes stop the export; they are never silently omitted.</p>
+        {#if exportReferences.some(item => item.mediaType.startsWith('image/'))}
+          <details class="selected-image-review">
+            <summary>Review edited images ({selectedImageEdits.length})</summary>
+            <p>Follow declared parent links in this Case's loaded metadata, starting with each selected image. This does not read ancestor files or other Cases, or authenticate the edits. An image without an edit declaration is not necessarily an unedited original.</p>
+            <ul>{#each selectedImageEdits as { attachment, review } (attachment.id)}
+              <li>
+                <h4>{attachment.fileName}</h4>
+                <CaseImageLineage {review} />
+              </li>
+            {/each}</ul>
+            <p>The package carries only each selected image's immediate-parent fingerprint and edit types, not these earlier links, this review sheet, filenames or edit coordinates. Parent pixels are included only if separately selected.</p>
+          </details>
+        {/if}
         <EvidenceFileExport workflow="Selected Case files" getFiles={exportFiles} disabled={!exportReferences.length || mutationBusy || preparing || Boolean(loading) || imageBusy || exporting}
           onbusy={value => exporting = value} {onmessage} />
       </details>
       <ul class="retained-files">{#each record.attachments as attachment (attachment.id)}
         <li>
-          <div class="file-heading"><h4>{attachment.fileName}</h4><span>{attachment.byteLength.toLocaleString('en-AU')} bytes · {attachment.mediaType}</span></div>
-          <p>{attachment.source ?? 'Source not declared'} · {#if attachment.observedAt}Observed <time datetime={attachment.observedAt}>{attachment.observedAt.replace('T', ' ').replace('Z', ' UTC')}</time>{:else}Observation time unknown{/if}</p>
+          <div class="file-heading"><h4>{attachment.fileName}</h4><span>Recorded size: {attachment.byteLength.toLocaleString('en-AU')} bytes · {attachment.mediaType}</span></div>
+          <p>Declared source: {attachment.source ?? 'not recorded'} · {#if attachment.observedAt}Observed <time datetime={attachment.observedAt}>{attachment.observedAt.replace('T', ' ').replace('Z', ' UTC')}</time>{:else}Observation time unknown{/if}</p>
           <p>Retained <time datetime={attachment.retainedAt}>{attachment.retainedAt.replace('T', ' ').replace('Z', ' UTC')}</time></p>
-          <p class="file-digest"><code>{attachment.digestSha256}</code></p>
-          {#if attachment.derivation}<details class="derivation"><summary>Derived image details</summary><p>Edited from attachment <code>{attachment.derivation.sourceAttachmentId}</code> using {attachment.derivation.method}. The observation time belongs to the source, not the edit.</p><p>Source digest: <code>{attachment.derivation.source.digestSha256}</code></p><ol>{#each attachment.derivation.plan.regions as region}<li>{region.kind === 'redact' ? 'Redact' : 'Outline'}: left {region.x}, top {region.y}, {region.width} × {region.height} source pixels</li>{/each}</ol></details>{/if}
+          <p class="file-digest">Recorded SHA-256: <code>{attachment.digestSha256}</code></p>
+          {#if attachment.derivation}<details class="derivation"><summary>Derived image details</summary><p>Recorded as edited from attachment <code>{attachment.derivation.sourceAttachmentId}</code> using {attachment.derivation.method}. The observation time belongs to the source, not the edit. This declared history is not an independent check of the source pixels or the edits.</p><p>Source digest: <code>{attachment.derivation.source.digestSha256}</code></p><ol>{#each attachment.derivation.plan.regions as region}<li>{region.kind === 'redact' ? 'Redact' : 'Outline'}: left {region.x}, top {region.y}, {region.width} × {region.height} source pixels</li>{/each}</ol></details>{/if}
           <div class="file-actions">
             {#if supportsArtifactPreview(attachment.mediaType)}<button class="btn" type="button" aria-label={`Preview ${attachment.fileName}`} disabled={mutationBusy || Boolean(loading) || preparing || imageBusy} onclick={event => void open(attachment, false, event.currentTarget)}>Preview</button>{/if}
             <button class="btn" type="button" aria-label={`Download ${attachment.derivation ? 'derivative' : 'original'} ${attachment.fileName}`} disabled={mutationBusy || Boolean(loading) || preparing || imageBusy} onclick={event => void open(attachment, true, event.currentTarget)}>Download {attachment.derivation ? 'derivative' : 'original'}</button>
@@ -155,6 +171,7 @@
     {#if preview}
       <section aria-label={`File preview: ${preview.attachment.fileName}`} class="file-preview">
         <button class="btn" type="button" disabled={mutationBusy || imageBusy} onclick={() => void closePreview()}>Close file preview</button>
+        <p role="status">Size and SHA-256 verified for this preview. The declared source and accuracy are not verified by this check.</p>
         {#key preview.attachment.id}
           {#if preview.attachment.mediaType === 'image/png'}
             <CaseImageReview bind:this={imageReview} {record} attachment={preview.attachment} file={preview.file} {mutationBusy} {persistOperation} onbusy={value => imageBusy = value} />
@@ -176,6 +193,8 @@
   .retained-files>li{display:grid;gap:8px;min-width:0;padding:15px 0;border-top:1px solid var(--border)}.file-heading{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:baseline;min-width:0}.file-heading span{color:var(--muted);font-size:var(--text-2xs);overflow-wrap:anywhere}
   .file-digest code{font:400 var(--text-2xs)/1.5 var(--mono);overflow-wrap:anywhere}.file-actions,.remove-file{display:flex;flex-wrap:wrap;gap:8px}.remove-file{align-items:center}.file-actions button{white-space:normal;overflow-wrap:anywhere;max-width:100%}.file-error{color:var(--danger)}
   .file-preview{display:grid;gap:14px;min-width:0;border-top:1px solid var(--border);padding-top:14px}.file-preview>button{justify-self:start}.derivation{min-width:0}.derivation summary{padding:8px 0}.derivation p,.derivation li{font-size:var(--text-xs);overflow-wrap:anywhere}.derivation ol{padding-left:1.5em}
+  .integrity-explainer{min-width:0}.integrity-explainer>summary{padding:8px 0}.integrity-explainer p{margin-top:8px}
   .file-export-selection{min-width:0}.file-export-selection>summary{padding:8px 0}.file-export-selection>p{margin:10px 0}.export-selection{display:grid;gap:4px}.export-selection label{display:flex;align-items:center;gap:8px;min-width:0;min-height:44px;font-size:var(--text-xs);overflow-wrap:anywhere}.export-selection input{flex:none}
+  .selected-image-review{min-width:0;margin:12px 0}.selected-image-review>summary{padding:8px 0}.selected-image-review ul{list-style:none;padding:0;margin:12px 0;display:grid;gap:12px}.selected-image-review li{display:grid;gap:6px;min-width:0}
   @media(max-width:600px){.source-fields{grid-template-columns:minmax(0,1fr)}.files-body{padding:12px}.file-actions{align-items:stretch}.file-actions button{flex:1 1 100%}}
 </style>

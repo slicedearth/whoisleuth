@@ -307,8 +307,7 @@
               type="button"
               onclick={createCase}
               disabled={actionBusy}
-              aria-label={`Refresh retained Case evidence for ${domain}`}
-              >Refresh case evidence</button
+              >Refresh case evidence<span class="sr-only"> for {domain}</span></button
             ><a
               href={caseWorkspaceHref(record.id)}
               onclick={(event) => {

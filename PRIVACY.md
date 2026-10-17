@@ -1,6 +1,6 @@
 # Privacy notice
 
-Last updated: 4 October 2026.
+Last updated: 16 October 2026.
 
 This notice describes the public WHOISleuth deployment. A self-hosted operator
 must adapt it when hosting, authentication, enabled providers, retention or
@@ -69,6 +69,13 @@ does not query a live target or write protected workspace data.
 Its Case-form practice keeps edits and unfinished forms only in page memory.
 Restarting, reloading or leaving discards them; it does not open the saved-work
 database, export practice files or expose collection and reporting controls.
+Its optional draft comparison generates and validates two fictional packets in
+memory, without authorising, downloading, delivering or importing them. Closing
+or clearing the comparison or leaving its practice step discards the pair;
+ordinary practice edits remain separate.
+The optional decorative source-map cover reduces only the selected fictional
+map to numeric geometry in page memory. It has no labels, export or saved state
+and clears on replacement, stage change or reset. It is not anonymisation.
 
 ## Standalone local application
 
@@ -78,6 +85,15 @@ IndexedDB. The workspace is plaintext at rest; protect it with operating-system
 access controls and disk encryption. Encrypted portable backups remain separate.
 The browser exchanges saved data only with its authenticated loopback process.
 The selected folder is displayed locally and is not included in exports.
+Its format information comes from validation at application launch; displaying
+it performs no new filesystem inspection and does not observe other-process locks.
+An optional temporary restart shortlist holds only explicitly added folder
+references in page memory. Supplied paths remain hidden until revealed, are not
+inserted into commands, and are excluded from print and exports. No folder is
+scanned, inspected, opened or switched by the shortlist. Removing an entry
+discards that reference only. Clear, opt-out, panel closure, navigation and reload
+discard all entries and unfinished inputs; inactive-folder format and lock state
+remain unverified.
 
 Appearance preferences and tab state remain browser-local. Clearing site data
 or signing out does not delete the filesystem workspace. Stop every application
@@ -180,29 +196,60 @@ bounded word sequences in a local worker. Original-byte digests, counts and
 matched excerpts stay in page memory; no file is fetched, uploaded or rewritten.
 Printing an ordinary Case report uses the exact prepared audience/options
 projection. The operating system handles the print or PDF destination.
+An optional analyst-only disclosure comparison prepares the ordinary report
+and recipient packet in page memory. It may show private values absent from
+the recipient projection; notes enter the internal side only when selected.
+The comparison is excluded from printing and every recipient export and is
+cleared on close, packet refresh, source/options changes, section changes or navigation.
+Recipient reading modes use only the actual packet and do not change its bytes.
+Pinned checkpoint references and the bounded Console navigation trail
+remain in tab memory. They contain exact Case/checkpoint or retained-infrastructure
+identifiers, display labels, section choices, search/filter text and view positions,
+not duplicate evidence. Return links contain a tab reference number, not the
+saved query. They clear on lock, sign-out, workspace
+replacement or leaving the Console and are not included in backups or exports.
 
 Unfinished Case response forms are saved automatically as bounded recovery
 drafts in the selected workspace. They remain separate from submitted Case
 records, use the workspace's encryption when enabled, and are excluded from
 portable backups, exports and legacy rollback copies. Drafts remain until
 submitted, explicitly discarded, or removed with their Case or workspace.
+The optional Case draft inventory reads existing copies and Case references after
+you select Read saved drafts, then refreshes when those collections change while
+the inventory is open. Unconfirmed-write notices use metadata from currently open
+forms in page memory, without persisting another copy or adding export data.
 Do not enter credentials into analyst forms. Storage health reads the browser's
 site-wide estimates; a persistence request happens only when selected and does
 not create a backup. Backup preparation is remembered only during that visit;
 the app cannot confirm that a file was kept or restored.
 
-Saved review positions retain filters, search text, selected Review Item and
-Case references, evidence fingerprints, unfinished review forms and save time in the current workspace,
+Saved review positions retain an optional private question, filters, search text,
+selected Review Item and Case references, unfinished review forms and save time.
+A baseline retains subject identities, material fingerprints, source identities
+and completeness from the explicitly saved, admitted filtered view, not source payloads.
+These fields stay in the current workspace,
 using its encryption when enabled. Saving is explicit; later navigation does
 not update that checkpoint. Positions are excluded from backups, exports and
 legacy rollback copies. Resume re-evaluates current records without collection
-or submission. Discarding a position removes its saved review-form copies;
+or submission. Discarding a position removes its question, baseline and saved review-form copies;
 Cases and currently open forms are unchanged.
+
+Favourites in this tab retain only exact Case/section or canonical navigation
+references in document memory. They are not stored, uploaded or exported and
+clear on document replacement, lock, sign-out or leaving the Console.
+Optional Case covers reuse retained titles, scope and review recording times
+without changing records. The workspace marker preview stays in document memory,
+clears on reload or workspace identity change, and conveys no protection or risk.
+The optional temporary Caseboard keeps ordered exact pin/assertion/note references,
+content fingerprints, authored text and reasoning links only in page memory.
+It resolves current retained content without keeping an earlier source copy.
+It uses the unsaved-work leave guard, not recovery storage; accepted closing,
+clearing or departure discards it. It is excluded from printing and all exports.
 
 Tab-scoped dictionaries, candidate handoffs, guided-investigation progress and
 similar transient state use bounded memory or `sessionStorage`. The one-use
 candidate handoff uses a random token and is removed when accepted. Appearance
-preferences (colour, reading density and decorative effects) can use `localStorage`. These records are not uploaded merely because
+preferences (colour, reading density, decorative effects and terminal-style headers) can use `localStorage`. These records are not uploaded merely because
 they exist.
 
 Named workspaces use separate IndexedDB databases and a local directory of
@@ -254,6 +301,17 @@ posture comparisons, evidence-gap queues and response preflight from retained
 records without another request. Derived views do not create evidence, prove a
 target state or silently mark an item reviewed.
 
+Retained change review can deliberately download selected rows from one displayed
+comparison as plain text. Selected normalised values and labels may be private;
+the file also includes source states, separate clocks, limitations and omission
+counts, not unselected values or owning records. Missing endpoint and algorithm
+references remain unavailable. Selection is held only in page memory, cleared
+when the displayed comparison changes or the page is left, and revalidated
+against current displayed details before download. No collection, upload or new
+saved evidence is created; the file is not an original-evidence package.
+Downloading does not reread the latest saved state. Reload the page
+to include changes made elsewhere.
+
 Creating or refreshing a Case is deliberate. A Case can retain
 the exact normalised submitted hostname and the DNS, TLS and web observation
 hostname on a new evidence snapshot, analyst
@@ -293,8 +351,8 @@ expiry and withdrawal records. Previewing or revising them makes no requests;
 only deliberate downloads create output files. STIX and MISP exports are not
 submitted or applied automatically. Content digests do not authenticate authors.
 
-Current Case schema 19 is written for new saves. Exact public v1 Case schema 12
-and earlier v2 schemas 13–18 remain readable and migrate directly; migrated
+Current Case schema 20 is written for new saves. Exact public v1 Case schema 12
+and earlier v2 schemas 13–19 remain readable and migrate directly; migrated
 fields can remain null, unknown or blank because WHOISleuth does not reconstruct
 them from weaker evidence.
 Case report v15 JSON and Markdown do not add the snapshot hostname.
@@ -319,6 +377,11 @@ decisions or assertions saves them locally with their original record times,
 plus a handoff entry containing the file digest and selected-record-key digest.
 No upload occurs; file identity does not authenticate the reviewer. Existing
 conflicts, response authorisations and unselected records are not imported.
+Read-only comparison of two deliberately selected Case exports or two response
+packets also stays in page memory. The full private copies, file digests and
+selected-value views are not saved, uploaded or added to recipient attachments. Replacing a file,
+clearing or closing the comparison, or leaving the Case releases those temporary
+references. Saved work is not used as an implicit comparison baseline.
 
 Brand Profiles can retain official-channel URLs and handles, rights owners,
 registration identifiers, jurisdictions, source URLs and review notes. These
@@ -326,6 +389,10 @@ records can be sensitive and remain browser-local until deliberately exported.
 Saved settings reviews also retain source times, completeness, the profile
 identifier and a digest of its collection settings. They do not retain raw
 DNS or registry responses.
+An opted-in inherited-DMARC review can show typed policy-owner, discovery and
+observation-time context in page memory. That structured context is excluded
+from saved settings observations, Case snapshots and portable CLI output;
+historical missing context is not reconstructed.
 
 Public CLI Case packs exclude Brand Profile references, actions, observed-effect
 reviews and closure records. Every audience, including public, retains domain
@@ -425,8 +492,11 @@ Capture and analysis limits are disclosed as incomplete evidence, not absence.
 Deep domain collection can query A, AAAA, CAA and MX once through one selected
 public address per nameserver, retaining at most sixteen normalised values
 for each record type. Direct-authority results stay separately attributed.
+Authoritative registration publications take priority; positive authoritative
+DNS delegation can support registered status when those publications are
+inconclusive. Missing DNS never establishes availability.
 
-Supporting sources remain separately attributed. DNS, website, certificate,
+Supporting sources remain separately attributed. Non-authoritative DNS, website, certificate,
 provider and analyst evidence cannot independently decide domain registration,
 ownership, control, safety, activity, intent or maliciousness.
 
@@ -533,6 +603,13 @@ deliberately selects a local file. Existing files are refused unless replacement
 is explicit. CLI files are not uploaded to WHOISleuth and remain under the
 operator's retention and deletion control.
 
+`doctor --summary-json` produces an optional troubleshooting summary on stdout.
+It retains numeric CLI/Node versions, fixed check codes and public format
+identifiers. It omits targets, URLs, file/folder/user names, credentials, headers,
+timestamps, version metadata and free-form diagnostic details. Normal detailed
+diagnostics can include error messages and should be inspected before sharing.
+The summary does not enable network checks or automatically save or upload anything.
+
 With explicit `review-evidence --mmdb`, the CLI reads one selected local database
 of at most 512 MiB. It is not bundled, downloaded, updated or transmitted. Current
 version-2 queries retain the exact-byte SHA-256, byte length, intrinsic database
@@ -599,6 +676,15 @@ Lookup without starting collection. Saving a review in a Case is explicit;
 retaining the unredacted original requires a separate choice. Reported account
 actions can be recorded as analyst claims and select recovery guidance. They
 do not establish account compromise.
+
+The public Link Inspector processes one supplied HTTP(S) link or bounded pasted
+plain text in page memory, without sign-in, uploads, target requests or saved
+workspace access. Ordinary page assets and session checks can contact this site;
+input processing does not contact supplied destinations. Input, parsed URLs and
+results are not put in routes, logs, browser storage, default downloads or guide
+printing. Editing, reset and navigation clear the review. Deliberate copy writes
+only the selected value to the device clipboard; review it before sharing.
+Clearing the page does not clear the clipboard.
 
 Text, message, calendar and extracted document text can also retain literal IPs
 and explicitly labelled hashes with their source-part digest. Complete URLs,
@@ -684,11 +770,27 @@ filenames and edit coordinates are not added by this declaration. The parent
 may itself be edited. Fingerprints can correlate matching files across exports;
 they are not anonymisation or proof of the edits or complete redaction. Missing
 declarations leave editing history unknown.
+The local image-history review follows only already-loaded attachment metadata
+within the selected Case. It does not read ancestor files or search other Cases;
+its derived multi-hop review is not saved or included in selected-file exports.
 Explicit inline review shows paged JSON text or locally decoded PNG pixels,
 without running document scripts, following links or making page requests.
 Capture attachment checks compare selected bytes with manifest declarations;
 matching bytes do not authenticate the capture. Review state is held in page
 memory and cleared when closed or when the page is left.
+
+Temporary Brand review references select an existing compact page baseline and
+PNG references from explicitly associated Cases. Context labels and choices
+stay in page memory; only a deliberately previewed original is read. Panel
+closure, Brand or Case source refresh, navigation and reload discard the review.
+It is excluded from printing and exports and does not change saved evidence.
+
+The retained evidence gallery searches current Case-file metadata and saved
+website-profile contributions locally. Search reads no original file bodies.
+An explicit comparison opens only the selected pair, preserving each Case and
+file-source declaration. Prepared bytes and results stay in page memory, are
+excluded from printing and exports, and clear when the selection, source state,
+workspace or page changes. No content index, upload or collection is added.
 
 Imports and exports are deliberate local actions. Importers validate bounded
 envelopes before preview or merge; omission never deletes destination data.
@@ -700,6 +802,22 @@ retention. Only selected findings or intelligence claims are imported. A local
 finding-content digest distinguishes reimports from changed evidence; it is an
 identity aid, not anonymisation or proof that the source is authentic. Full Case
 exports and reports retain it; recipient response packets omit it.
+
+For directly selected findings JSON and fixed-column CSV, the import preview can
+show an exact original string or cell, its decoded value and parser-owned location
+beside the accepted and proposed values. WACZ can show the selected package digest,
+verified member path/digest and record range in the expanded member, without raw
+URLs, headers or bodies. Those ranges are not ZIP offsets or raw summary fields.
+Original text, locations, member paths and member digests stay only in preview
+memory, outside Cases, reports, exports and printing. The JSON/CSV file digest is
+also preview-only; WACZ already retains its package digest as a source reference
+when findings are imported. Replacement, cancellation, closing the importer,
+navigation, page exit or successful import clears the preview context. Duplicate
+origins remain explicit; unsupported conversions do not reconstruct a source
+location. Deliberate copy
+can put original text or values on the device clipboard; clearing the preview does
+not clear that clipboard. Digests can correlate selected files and do not verify
+their source or accuracy.
 
 Saved Case views retain names, search text, status, disposition and sort choices
 within the current workspace. Workspace backups include them; response packets
@@ -726,15 +844,36 @@ not establish a match. Rehearsal checks restored data and referenced files, but
 does not apply preferences to the active tab. Its data remains until deliberately
 deleted, including after leaving the page. File-backup groups have their own
 optional package encryption; encrypting the JSON does not encrypt those groups.
+The recovery set index stays in review memory unless deliberately downloaded as
+a plain-text inventory. That unencrypted inventory lists selected backup and
+matched package digests, byte lengths, formats and counts, not filenames, paths,
+Case details or original contents. Digests can correlate private files; review
+before sharing. It includes no destination-verification result and does not
+establish download completion, delivery or complete recovery.
+
+A completed full Lookup also carries a small collection receipt containing
+submitted optional-source choices and closed states for admission, collector
+start, outcome, completeness and truncation. It contains no target value, URL,
+contact, raw error or response payload. It stays in the open browser result and
+can be retained in explicitly saved private CLI Lookup version 3 files, Case
+assessments and selected Case checkpoints. A selected checkpoint retains one
+receipt for its pin group, not the other Lookup results or an extra assessment.
+Ordinary Case/workspace backups and internal Case packs preserve these receipts.
+Trusted/public Case packs, Case reports and response packets omit them; shared
+assessment identities are recomputed without receipt context. Receipts are not
+added to Compact/Bulk results, Watchlist baselines or minimised Lookup evidence
+exports. Historical absence remains unknown; cancellation before a valid final
+result does not create a completed receipt.
 
 Different exports have different sensitivity:
 
 - a full saved Lookup can contain targets, bounded source endpoints and timings,
   raw RDAP publications, WHOIS response bodies and publicly published contacts;
-- current Lookup evidence schema 30 excludes raw registration payloads,
+- current Lookup evidence schema 31 excludes raw registration payloads,
   expanded contacts, credentials and complete query-bearing URLs. Published v2
-  schemas 27–29 and exact v1 schema 26 remain readable; schema 26 may contain public
-  contact fields;
+  schemas 27–30 and exact v1 schema 26 remain readable; schema 26 may contain public
+  contact fields. Schema 31 retains the bounded WHOIS registration classification,
+  not the underlying raw response or contacts;
 - Case, workspace, Case-pack, graph, campaign and response files can identify
   investigated targets or contain analyst-authored material; and
 - selected Case follow-up calendars identify only the stable Case reference by
@@ -810,6 +949,19 @@ check and the file bytes are not saved by the Case metadata import by default.
 An explicit retention option saves the manifest and matching original files
 with the Case in one transaction. Unmatched files are excluded from that action.
 A portable evidence package can preserve explicitly selected files separately.
+
+Optional session declarations in the capture-condition comparison contain only a
+closed analyst-selected value (signed in, signed out or explicitly unknown) and
+the annotation time. No declaration is recorded by default. They do not identify
+an account or authenticate the analyst, and are separate from capture observation
+times and manifest conditions. They remain in page memory, bound to the exact
+loaded inputs and selected capture ordinals. Replacing either input, closing or
+leaving the review, changing Case or workspace, locking, navigation or reloading
+clears them; deselecting a capture removes its declaration. They are excluded from
+browser storage, autosave, printing, application copy actions, downloads, Case
+reports and selected-file exports. They add no requests and do not change original
+manifest bytes, verification or comparison results. Fictional practice uses the
+same temporary controls.
 
 ## Retention and deletion
 

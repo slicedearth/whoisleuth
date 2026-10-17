@@ -582,7 +582,7 @@ test('measures a later fictional demo stage without opening production storage',
       ],
     },
     ready: heading,
-    readyControl: page.getByRole('button', { name: 'Use synthetic profile' }),
+    readyControl: page.getByRole('button', { name: 'Use profile' }),
   });
   await expect(heading).toBeFocused();
   expect(await page.evaluate(async () => (await indexedDB.databases())
@@ -626,7 +626,7 @@ test('measures navigation to a non-default Monitor view', async ({ page }, testI
 test('measures a deferred Brand Profile tool with a fictional active profile', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 393, height: 852 });
   const workbench = page.locator('#brand-workbench');
-  const heading = page.getByRole('heading', { name: 'Owned-domain comparison' });
+  const heading = page.getByRole('heading', { name: 'Official-domain settings comparison' });
 
   await measureDeferredInteraction({
     page,
@@ -648,7 +648,7 @@ test('measures a deferred Brand Profile tool with a fictional active profile', a
     browserReadiness: {
       start: { event: 'change', selector: '#brand-workbench' },
       targets: [
-        { selector: '#portfolio-posture-matrix-title', exactText: 'Owned-domain comparison' },
+        { selector: '#portfolio-posture-matrix-title', exactText: 'Official-domain settings comparison' },
         { selector: '#brand-workbench', requireEnabled: true },
       ],
     },
@@ -748,7 +748,7 @@ test('measures a deferred Lookup evidence family from deterministic fixture evid
     contentType: 'application/json',
     body: JSON.stringify(lookupResponse(target)),
   }));
-  const familyToggle = page.locator('#web-evidence > button.family-summary');
+  const familyToggle = page.locator('#web-evidence > .family-summary > button');
   const dnsHeading = page.locator('#evidence-dns .dns-card').getByRole('heading', { name: 'DNS evidence' });
 
   await measureDeferredInteraction({
@@ -769,7 +769,7 @@ test('measures a deferred Lookup evidence family from deterministic fixture evid
       await page.keyboard.press('Enter');
     },
     browserReadiness: {
-      start: { event: 'click', selector: '#web-evidence > button.family-summary' },
+      start: { event: 'click', selector: '#web-evidence > .family-summary > button' },
       targets: [
         { selector: '#evidence-dns .dns-card' },
         { selector: '#evidence-dns .dns-card > summary' },

@@ -3,6 +3,7 @@ import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_BYTES } from './selected-file-lim
 import { defineSchemaCompatibility } from './schema-compatibility.mts';
 
 export const LOCAL_WORKSPACE_FILE = 'workspace.sqlite';
+export const LOCAL_WORKSPACE_MAX_DIRECTORY_CHARACTERS = 4_096;
 export const LOCAL_WORKSPACE_FORMAT_VERSION = 1;
 export const LOCAL_WORKSPACE_APPLICATION_ID = 0x574c5331;
 export const LOCAL_WORKSPACE_MAX_FILES = MAX_CASES * MAX_SELECTED_FILES;

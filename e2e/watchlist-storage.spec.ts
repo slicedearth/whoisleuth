@@ -124,7 +124,7 @@ for (const all of [false, true]) test(`a committed watchlist ${all ? 'clear' : '
   const before = await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 2 });
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'watchlists');
   page.once('dialog', dialog => dialog.accept());
-  await (all ? page.getByRole('button', { name: 'Clear all', exact: true }) : page.getByRole('row', { name: /Priority/ }).getByRole('button', { name: 'Delete', exact: true })).click();
+  await (all ? page.getByRole('button', { name: 'Clear all watchlists', exact: true }) : page.getByRole('row', { name: /Priority/ }).getByRole('button', { name: 'Delete', exact: true })).click();
   const result = page.getByRole('status').filter({ hasText: all ? 'Cleared all watchlists.' : 'Deleted "Priority".' });
   await expect(result).toContainText('committed');
   await expect(page.getByRole('row', { name: /Priority/ })).toHaveCount(0);
@@ -165,7 +165,7 @@ test('a watchlist quota failure reports a stable message and preserves the previ
   await failBrowserLocalManifestWrites(page, 'watchlists');
 
   page.once('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: 'Clear all' }).click();
+  await page.getByRole('button', { name: 'Clear all watchlists', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('out of storage space');
   const stored = await readBrowserLocalCollection(page, 'watchlists');
   expect(stored.records.map((entry) => entry.id)).toEqual(['Priority']);
@@ -274,7 +274,7 @@ test('watchlist history focuses one domain without implying complete coverage', 
   await expect(domainHistory).toContainText('Delegation');
   await expect(domainHistory).toContainText('Mail');
   await expect(domainHistory).toContainText('Risk');
-  await expect(domainHistory.getByRole('img', { name: 'Observed domain timeline with 2 checks and 3 evidence categories' })).toBeVisible();
+  await expect(domainHistory.getByRole('img', { name: 'Domain check history with 2 checks and 3 evidence categories' })).toBeVisible();
   await expect(domainHistory).not.toContainText('other.invalid');
   await expect(domainHistory).toContainText('does not prove this domain was included in every check');
   await expect(domainHistory).toContainText('cannot be attributed reliably to this domain');

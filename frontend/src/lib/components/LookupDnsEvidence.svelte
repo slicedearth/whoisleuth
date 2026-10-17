@@ -14,7 +14,7 @@
     initiallyExpanded = false,
     headingId = 'dns-title',
     title = 'DNS evidence',
-    summaryDetail = 'Expand for observed records, provenance, and limitations',
+    summaryDetail = 'Observed records, provenance and limits',
     note = 'Point-in-time resolver evidence. Verify shared DNS infrastructure independently.',
   }: {
     status: string;

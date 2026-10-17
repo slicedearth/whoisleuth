@@ -1,0 +1,391 @@
+{
+  "schema": "whoisleuth.lookup-evidence",
+  "schemaVersion": 30,
+  "generatedAt": "2026-10-16T00:00:00.000Z",
+  "application": {
+    "name": "WHOISleuth",
+    "version": "2.7.0",
+    "projectUrl": "https://github.com/slicedearth/whoisleuth"
+  },
+  "query": {
+    "submitted": "unknown.invalid",
+    "type": "domain",
+    "inputHostname": "unknown.invalid",
+    "registrableDomain": "unknown.invalid",
+    "isSubdomain": false
+  },
+  "diagnostics": {
+    "version": 8,
+    "timing": {
+      "version": 1,
+      "totalMs": 16,
+      "sources": [
+        {
+          "source": "rdap",
+          "outcome": "rejected",
+          "durationMs": 1,
+          "completedAfterMs": 1
+        },
+        {
+          "source": "whois",
+          "outcome": "fulfilled",
+          "durationMs": 1,
+          "completedAfterMs": 1
+        },
+        {
+          "source": "domain_evidence",
+          "outcome": "fulfilled",
+          "durationMs": 1,
+          "completedAfterMs": 1
+        },
+        {
+          "source": "network_context",
+          "outcome": "fulfilled",
+          "durationMs": 1,
+          "completedAfterMs": 2
+        }
+      ]
+    },
+    "rdap": {
+      "status": "error",
+      "errorCode": "RDAP_UPSTREAM_FAILED",
+      "endpoint": null,
+      "transportSecurity": null,
+      "httpStatus": null,
+      "fetchedAt": null,
+      "attempts": []
+    },
+    "whois": {
+      "status": "complete",
+      "errorCode": null,
+      "queriedAt": null,
+      "authoritativeHop": "whois.example",
+      "failedHop": null,
+      "conflictingHop": null
+    },
+    "availability": {
+      "status": "complete",
+      "errorCode": null,
+      "resultState": "available"
+    },
+    "network": {
+      "status": "unsupported",
+      "address": null,
+      "family": null,
+      "addressSource": null,
+      "endpoint": null,
+      "transportSecurity": null,
+      "httpStatus": null,
+      "fetchedAt": null,
+      "attempts": []
+    },
+    "sslbl": {
+      "status": "unavailable",
+      "verdict": "inconclusive",
+      "observedAt": "2026-10-15T18:42:15.750Z",
+      "complete": false,
+      "snapshotUpdatedAt": null
+    }
+  },
+  "sources": {
+    "rdap": {
+      "status": "error",
+      "error": "RDAP timed out",
+      "attempts": []
+    },
+    "whois": {
+      "status": "complete",
+      "queriedAt": null,
+      "authoritativeHop": "whois.example",
+      "failedHop": null,
+      "conflictingHop": null,
+      "parsed": {
+        "createdDateIso": null,
+        "expiryDateIso": null,
+        "updatedDateIso": null,
+        "chainStatus": "complete",
+        "authoritativeHop": "whois.example",
+        "failedHop": null,
+        "conflictingHop": null,
+        "lifecycle": {
+          "createdDate": null,
+          "expiryDate": null,
+          "updatedDate": null,
+          "createdDateIso": null,
+          "expiryDateIso": null,
+          "updatedDateIso": null
+        },
+        "statuses": [],
+        "nameservers": [],
+        "fieldsTruncated": [],
+        "contactsExcluded": true
+      },
+      "chain": [
+        {
+          "server": "whois.iana.org",
+          "address": null,
+          "queriedAt": null,
+          "queryProfile": null,
+          "responseEncoding": null,
+          "status": "success",
+          "detail": null
+        },
+        {
+          "server": "whois.example",
+          "address": null,
+          "queriedAt": null,
+          "queryProfile": null,
+          "responseEncoding": null,
+          "status": "success",
+          "detail": null
+        }
+      ]
+    },
+    "reverseDns": null,
+    "network": {
+      "contextVersion": 1,
+      "version": 1,
+      "status": "unsupported",
+      "observedAt": "2026-10-15T18:42:15.736Z",
+      "scanMode": "deep",
+      "source": "ip_rdap",
+      "durationMs": 0,
+      "complete": false,
+      "truncated": false,
+      "limitations": [
+        "No IP RDAP request was made because the deep lookup did not retain an eligible public address.",
+        "Missing network context is not evidence that the domain has no website, network registration, or hosting provider."
+      ],
+      "diagnostics": {
+        "requestCount": 0,
+        "addressSource": null,
+        "httpStatus": null,
+        "cidrCount": null
+      },
+      "detail": "No validated public endpoint address was available from the retained TLS or DNS evidence.",
+      "endpoint": null,
+      "rdap": null,
+      "network": null
+    },
+    "securityTxt": null,
+    "sslbl": {
+      "sslblVersion": 1,
+      "source": "sslbl",
+      "status": "unavailable",
+      "verdict": "inconclusive",
+      "complete": false,
+      "observedAt": "2026-10-15T18:42:15.750Z",
+      "fingerprintSha1": null,
+      "referenceUrl": null,
+      "snapshot": {
+        "sourceUpdatedAt": null,
+        "generatedAt": null,
+        "ageSeconds": null,
+        "entryCount": null,
+        "digestSha256": null
+      },
+      "detail": "The deep TLS observation did not retain a usable leaf-certificate SHA-1 fingerprint.",
+      "limitations": [
+        "Unavailable certificate warning data is not evidence that the observed certificate is absent from SSLBL or safe.",
+        "SSLBL associates listed certificate fingerprints with observed botnet command-and-control activity; a match does not establish current domain ownership, intent, or activity."
+      ]
+    }
+  },
+  "analysis": {
+    "availability": {
+      "applicable": true,
+      "domain": "example.com",
+      "state": "available",
+      "confidence": "medium",
+      "registryContactsExcluded": true
+    },
+    "idn": null,
+    "registryInsights": {
+      "version": 1,
+      "contactDisclosure": {
+        "registryRdap": {
+          "source": "registry_rdap",
+          "state": "unavailable",
+          "detail": "The source did not provide a usable normalised publication."
+        },
+        "whois": {
+          "source": "whois",
+          "state": "unavailable",
+          "detail": "Contact fields are deliberately excluded from this portable projection, so publication disclosure remains unavailable."
+        },
+        "limitation": "Disclosure state describes what each point-in-time source published. It does not infer the identity, intent, reachability, or legal status of a registrant."
+      },
+      "lifecycle": {
+        "stage": "registered",
+        "label": "Registered",
+        "rawStatuses": [],
+        "redemption": false,
+        "pendingDelete": false,
+        "pendingTransfer": false,
+        "hold": {
+          "client": false,
+          "server": false
+        },
+        "locks": {
+          "client": false,
+          "server": false,
+          "clientStatuses": [],
+          "serverStatuses": []
+        },
+        "acquisitionPath": [
+          "Continue monitoring registry status and expiry."
+        ],
+        "limitation": "EPP statuses describe the current registry lifecycle. They do not guarantee deletion, release timing, transfer completion, eligibility, price, or acquisition success."
+      },
+      "reconciliation": {
+        "state": "unavailable",
+        "conflictCount": 0,
+        "equivalentCount": 0,
+        "sourceOnlyCount": 0,
+        "redactedCount": 0,
+        "unavailableCount": 0,
+        "summary": "No comparable fields were available."
+      },
+      "publications": [
+        {
+          "source": "registry_rdap",
+          "state": "unavailable",
+          "observedAt": null,
+          "conformance": [],
+          "redactionCount": 0,
+          "issueCount": 1,
+          "issues": [
+            "No usable publication was available from this source."
+          ]
+        },
+        {
+          "source": "whois",
+          "state": "complete",
+          "observedAt": null,
+          "conformance": [],
+          "redactionCount": 0,
+          "issueCount": 0,
+          "issues": []
+        },
+        {
+          "source": "registrar_rdap",
+          "state": "unavailable",
+          "observedAt": null,
+          "conformance": [],
+          "redactionCount": 0,
+          "issueCount": 1,
+          "issues": [
+            "No usable publication was available from this source."
+          ]
+        }
+      ],
+      "rdapCapabilities": {
+        "registry": {
+          "version": 1,
+          "catalogReviewedAt": "2026-10-14",
+          "state": "unavailable",
+          "declarations": [],
+          "unknownIdentifiers": [],
+          "omittedDeclarations": 0,
+          "reverseSearch": {
+            "state": "unknown",
+            "execution": "not_attempted",
+            "helpDiscoveryRequired": true,
+            "actionAvailable": false,
+            "detail": "The response was unavailable or incomplete, so reverse-search support cannot be assessed.",
+            "limitations": [
+              "Missing or truncated conformance data is not evidence that reverse search is unsupported.",
+              "No help or reverse-search request was made."
+            ]
+          },
+          "limitations": [
+            "No usable RDAP publication was available for capability inspection.",
+            "Declarations describe what the server claims for this response; they do not prove that an operation is authorised, implemented correctly, complete, or available anonymously.",
+            "Unknown identifiers remain visible and neutral. Catalogue recognition never affects availability or Risk scoring."
+          ]
+        },
+        "registrar": {
+          "version": 1,
+          "catalogReviewedAt": "2026-10-14",
+          "state": "unavailable",
+          "declarations": [],
+          "unknownIdentifiers": [],
+          "omittedDeclarations": 0,
+          "reverseSearch": {
+            "state": "unknown",
+            "execution": "not_attempted",
+            "helpDiscoveryRequired": true,
+            "actionAvailable": false,
+            "detail": "The response was unavailable or incomplete, so reverse-search support cannot be assessed.",
+            "limitations": [
+              "Missing or truncated conformance data is not evidence that reverse search is unsupported.",
+              "No help or reverse-search request was made."
+            ]
+          },
+          "limitations": [
+            "No usable RDAP publication was available for capability inspection.",
+            "Declarations describe what the server claims for this response; they do not prove that an operation is authorised, implemented correctly, complete, or available anonymously.",
+            "Unknown identifiers remain visible and neutral. Catalogue recognition never affects availability or Risk scoring."
+          ]
+        }
+      }
+    },
+    "registryComparison": {
+      "fields": [],
+      "counts": {
+        "equivalent": 0,
+        "conflict": 0,
+        "rdap_only": 0,
+        "whois_only": 0,
+        "rdap_redacted": 0,
+        "whois_redacted": 0,
+        "rdap_unavailable": 0,
+        "whois_unavailable": 0,
+        "rdap_incomplete": 0,
+        "whois_incomplete": 0
+      },
+      "sourceHealth": {
+        "rdap": {
+          "status": "error",
+          "condition": "unavailable"
+        },
+        "whois": {
+          "status": "complete",
+          "condition": "complete"
+        }
+      }
+    },
+    "registrarPublicationComparison": null,
+    "registrarStanding": {
+      "schema": "whoisleuth.registrar-standing",
+      "version": 1,
+      "ianaId": null,
+      "accreditation": {
+        "state": "unknown",
+        "sourceUrl": "https://www.iana.org/assignments/registrar-ids/registrar-ids-1.csv",
+        "observedAt": "2026-10-14T14:42:41.620Z",
+        "sourceHealth": "current"
+      },
+      "compliance": {
+        "state": "not_applicable",
+        "sourceUrl": "https://www.icann.org/compliance/notices",
+        "reviewedAt": "2026-10-14T14:42:41.620Z",
+        "catalogueYear": 2026,
+        "sourceHealth": "current",
+        "actions": [],
+        "truncated": false
+      },
+      "assessment": {
+        "state": "unknown",
+        "label": "Current standing unavailable",
+        "detail": "The published registrar identifier could not be matched to the checked-in official-source catalogue."
+      },
+      "limitations": [
+        "Registrar standing describes the provider, not whether this domain is malicious, safe, owned, or controlled.",
+        "The reviewed 2026 ICANN index is not a complete enforcement history and excludes third-party allegations.",
+        "No single numeric registrar IANA ID was available across the registration evidence, so no registrar match was attempted."
+      ],
+      "nextActions": []
+    }
+  }
+}

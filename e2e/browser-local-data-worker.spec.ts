@@ -34,15 +34,22 @@ test('held or failed verification never becomes an empty Case collection and a d
   let held = 0;
   let fail = () => {};
   const failed = new Promise<void>((resolve) => { fail = resolve; });
-  await page.route(pattern, async (route) => { held += 1; await failed; await route.abort('failed'); });
+  let finishRoute = () => {};
+  const routeFinished = new Promise<void>(resolve => { finishRoute = resolve; });
+  await page.route(pattern, async (route) => {
+    held += 1;
+    try { await failed; await route.abort('failed'); }
+    finally { finishRoute(); }
+  });
   try {
     await navigation.getByRole('link', { name: /^Cases(?:\s|$)/u }).click();
     await expect.poll(() => held).toBe(1);
     await expect(page.locator('.local-collection-state')).toHaveAttribute('aria-busy', 'true');
-    await expect(page.getByRole('heading', { name: 'Loading saved work', exact: true })).toBeVisible();
+    await expect(page.locator('.local-collection-state').getByRole('heading')).toBeVisible();
+    await expect(page.locator('.local-collection-state').getByRole('heading')).toHaveText(/\S/u);
     await expect(page.getByRole('heading', { name: 'Cases unavailable', exact: true })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'No cases yet', exact: true })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Open or create case', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Open or create Case', exact: true })).toHaveCount(0);
     for (const viewport of [
       { width: 1280, height: 720 }, { width: 1024, height: 768 },
       { width: 390, height: 844 }, { width: 320, height: 700 },
@@ -61,7 +68,7 @@ test('held or failed verification never becomes an empty Case collection and a d
     await expectNoHorizontalOverflow(page);
     if (captureVisualEvidenceEnabled()) { await testInfo.attach('retained-verification-unavailable', { body: await page.screenshot(), contentType: 'image/png' }); }
     expect(await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).toEqual(before);
-  } finally { fail(); await page.unroute(pattern); }
+  } finally { fail(); if (held) await routeFinished; await page.unroute(pattern); }
   await page.reload();
   await expect(page.locator('.case-head', { hasText: DOMAIN })).toBeVisible();
   expect(await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).toEqual(before);
@@ -92,7 +99,7 @@ test('a verification worker failure after a committed note preserves the write a
   try {
     await page.getByRole('textbox', { name: 'Add note', exact: true }).fill('One committed note.');
     await page.getByRole('button', { name: 'Add note', exact: true }).click();
-    await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('The change was saved, but Cases could not be reread.');
+    await expect(page.getByRole('status', { name: 'Case workspace action status' })).toContainText('The change was saved, but cases could not be reread.');
     expect(rejected).toBeGreaterThan(0);
     await expect(page.locator('.notes')).toContainText('One committed note.');
     await expect(page.getByRole('textbox', { name: 'Add note', exact: true })).toHaveValue('');

@@ -1,20 +1,25 @@
 <script lang="ts">
+  import { getContext } from 'svelte';
+  import { CONSOLE_PRESENTATION_CONTEXT, type ConsolePresentationContext } from '../appearance.ts';
   import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import { caseWorkspaceHref } from '#lib/analysis/case-response-stage.ts';
   import Pagination from '#lib/components/Pagination.svelte';
   import RetainedTimelineEntities from './RetainedTimelineEntities.svelte';
   import {
     filterRetainedEvidenceTimeline,
+    retainedTimelineLanes,
     RETAINED_TIMELINE_AREAS,
+    RETAINED_TIMELINE_FAMILIES,
     type RetainedEvidenceTimeline,
     type RetainedTimelineArea,
     type RetainedTimelineEventType,
     type RetainedTimelineFreshness,
+    type RetainedTimelineFamily,
     type RetainedTimelineTimeFilter,
   } from '#lib/analysis/retained-evidence-timeline.ts';
 
   const PAGE_SIZE = 50;
-  let { timeline }: { timeline: RetainedEvidenceTimeline } = $props();
+  let { timeline, recordNavigation = true }: { timeline: RetainedEvidenceTimeline; recordNavigation?: boolean } = $props();
   let entity = $state('');
   let caseId = $state('');
   let source = $state('');
@@ -22,8 +27,14 @@
   let freshness = $state<'all' | RetainedTimelineFreshness>('all');
   let eventType = $state<'all' | RetainedTimelineEventType>('all');
   let time = $state<RetainedTimelineTimeFilter>('all');
+  let family = $state<'' | RetainedTimelineFamily>('');
   let page = $state(1);
-  const filtered = $derived(filterRetainedEvidenceTimeline(timeline, { entity, caseId, source, area, freshness, eventType, time }));
+  let journal = $state(false);
+  const presentation = getContext<ConsolePresentationContext | undefined>(CONSOLE_PRESENTATION_CONTEXT);
+  const journalLayout = $derived(presentation ? presentation.current === 'journal' : journal);
+  const matching = $derived(filterRetainedEvidenceTimeline(timeline, { entity, caseId, source, area, freshness, eventType, time }));
+  const lanes = $derived(retainedTimelineLanes(matching));
+  const filtered = $derived(family ? matching.filter(item => item.family === family) : matching);
   const pageCount = $derived(Math.max(1, Math.ceil(filtered.length / PAGE_SIZE)));
   const currentPage = $derived(Math.min(page, pageCount));
   const visible = $derived(filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE));
@@ -39,6 +50,7 @@
     freshness = 'all';
     eventType = 'all';
     time = 'all';
+    family = '';
     page = 1;
   }
   function formatDate(value: string | null): string {
@@ -53,12 +65,12 @@
   }
 </script>
 
-<section class="timeline-workspace" aria-labelledby="retained-evidence-timeline-title">
+<section class="timeline-workspace" class:journal={journalLayout} aria-labelledby="retained-evidence-timeline-title">
   <header>
     <div>
       <p class="eyebrow">Retained evidence</p>
       <h2 id="retained-evidence-timeline-title">Investigation timeline</h2>
-      <p>Review source observations and local activity, with storage times kept separate. Open a record for its evidence and analyst context.</p>
+      <p>Review source observations and local activity, with storage times kept separate. {recordNavigation ? 'Open a record for its evidence and analyst context.' : 'These fictional records do not open saved workspace records.'}</p>
     </div>
     <div class="metrics" role="group" aria-label="Timeline summary">
       <span><strong>{timeline.counts.all}</strong> retained events</span>
@@ -66,6 +78,7 @@
       <span><strong>{timeline.freshnessCounts.stale}</strong> stale</span>
     </div>
   </header>
+  {#if !presentation}<label class="journal-choice"><input type="checkbox" bind:checked={journal}> Field journal reading layout</label>{/if}
 
   <div class="filters" role="group" aria-label="Timeline filters">
     <label>Entity<input type="search" bind:value={entity} oninput={resetPage} maxlength="253" placeholder="Filter domains"></label>
@@ -75,12 +88,33 @@
     <label>Freshness<select bind:value={freshness} onchange={resetPage}><option value="all">Any freshness</option><option value="current">Current</option><option value="stale">Stale</option><option value="unknown">Unknown</option></select></label>
     <label>Type<select bind:value={eventType} onchange={resetPage}><option value="all">All events</option><option value="evidence">Evidence</option><option value="change">Changes</option><option value="activity">Local activity</option></select></label>
     <label>Event time<select bind:value={time} onchange={resetPage}><option value="all">Any time</option><option value="undated">Time unavailable</option><option value="7d" disabled={!timeline.evaluatedAt}>Last 7 days</option><option value="30d" disabled={!timeline.evaluatedAt}>Last 30 days</option><option value="90d" disabled={!timeline.evaluatedAt}>Last 90 days</option></select></label>
-    <button type="button" class="btn" onclick={clearFilters} disabled={!entity&&!caseId&&!source&&!area&&freshness==='all'&&eventType==='all'&&time==='all'}>Clear filters</button>
+    <button type="button" class="btn" onclick={clearFilters} disabled={!entity&&!caseId&&!source&&!area&&!family&&freshness==='all'&&eventType==='all'&&time==='all'}>Clear filters</button>
   </div>
+
+  <details class="family-coverage">
+    <summary>Evidence family coverage{family ? ` · ${RETAINED_TIMELINE_FAMILIES[family]}` : ''}</summary>
+    <p>Counts cover records matching the filters above, across all pages. Empty lanes mean no matching retained records. The time between observations remains unobserved here.</p>
+    <button type="button" class="btn" aria-pressed={!family} onclick={() => { family = ''; resetPage(); }}>Show all families</button>
+    <ul class="family-lanes" aria-label="Evidence families">
+      {#each lanes as lane (lane.family)}
+        <li>
+          <button type="button" class="btn" aria-pressed={family === lane.family} onclick={() => { family = lane.family; resetPage(); }}>Show {lane.label}</button>
+          <p>{lane.count} retained record{lane.count === 1 ? '' : 's'} · {lane.undated} undated{lane.clock === 'Observed' ? ` · ${lane.limited} with incomplete or unknown coverage` : ''}</p>
+          {#if lane.count}
+            <dl>
+              <div><dt>Earliest {lane.clock.toLowerCase()}</dt><dd>{#if lane.earliest}<time datetime={lane.earliest}>{formatDate(lane.earliest)}</time>{:else}Time unavailable{/if}</dd></div>
+              <div><dt>Latest {lane.clock.toLowerCase()}</dt><dd>{#if lane.latest}<time datetime={lane.latest}>{formatDate(lane.latest)}</time>{:else}Time unavailable{/if}</dd></div>
+            </dl>
+          {/if}
+        </li>
+      {/each}
+    </ul>
+    <p>Combined observations have no separate family clocks. Categories group records, not independent corroboration. These are observations retained now, not a reconstruction of what was known at a past date; equal-time records remain separate and may disagree.</p>
+  </details>
 
   {#if timeline.truncated}<div class="partial"><p>Partial timeline. Source omissions are listed below.</p><ul>{#each timeline.omissions as omission}<li>{omission.source}: {omission.count === Number.MAX_SAFE_INTEGER ? 'at least ' : ''}{omission.count}</li>{/each}</ul></div>{/if}
   {#if !timeline.evaluatedAt}<p class="partial" role="status">Review time unavailable. Source freshness and relative-date filters cannot be evaluated.</p>{/if}
-  <p class="result-count">{filtered.length} matching event{filtered.length === 1 ? '' : 's'}</p>
+  <p class="result-count" role="status">{filtered.length} matching event{filtered.length === 1 ? '' : 's'}{family ? ` · ${RETAINED_TIMELINE_FAMILIES[family]}` : ''}</p>
 
   {#if visible.length}
     <ol class="timeline-list">
@@ -108,17 +142,18 @@
               {#if item.eventType !== 'activity' || item.storedAt}<div><dt>{['case_snapshot', 'bulk_session', 'watchlist_check'].includes(item.kind) ? 'Record updated' : 'Stored'}</dt><dd>{#if item.storedAt}<time datetime={item.storedAt}>{formatDate(item.storedAt)}</time>{:else}Storage time unavailable{/if}</dd></div>{/if}
               {#if item.eventType !== 'activity'}<div><dt>Freshness</dt><dd>{item.ageDays === null ? 'Unknown age' : `${item.ageDays} day${item.ageDays === 1 ? '' : 's'} old`} · stale at {item.freshnessThresholdDays} days</dd></div>{/if}
               <div><dt>Source</dt><dd>{item.source} · {item.sourceState}</dd></div>
+              <div><dt>Family</dt><dd>{RETAINED_TIMELINE_FAMILIES[item.family]}</dd></div>
               <div><dt>Area</dt><dd>{item.areas.map(areaLabel).join(' · ')}</dd></div>
               {#if item.eventType !== 'activity'}<div><dt>Interpretation</dt><dd>{item.derived ? 'Derived relationship' : item.eventType === 'change' ? 'Observed change record' : 'Retained observation'}</dd></div>{/if}
             </dl>
             {#if item.caseAssociations?.length}
               <details class="case-associations">
                 <summary>Currently associated Cases ({item.caseAssociations.length})</summary>
-                <ul>{#each item.caseAssociations as association}<li>{#if association.present}<a href={caseWorkspaceHref(association.id)}>{association.label}</a>{:else}{association.label}{/if}</li>{/each}</ul>
+                <ul>{#each item.caseAssociations as association}<li>{#if association.present && recordNavigation}<a href={caseWorkspaceHref(association.id)}>{association.label}</a>{:else}{association.label}{/if}</li>{/each}</ul>
               </details>
             {/if}
             <div class="item-actions">
-              <a class="btn" href={item.href}>Open {item.owner}</a>
+              {#if recordNavigation}<a class="btn" href={item.href}>Open {item.owner}</a>{:else}<span>{item.owner} · fictional record</span>{/if}
               {#if item.truncated}<span class="truncated">Truncated</span>{/if}
             </div>
             <details><summary>Limitations</summary>{#each item.limitations as limitation}<p>{limitation}</p>{/each}</details>
@@ -138,6 +173,8 @@
 </section>
 
 <style>
+  .journal article{background:color-mix(in srgb,var(--panel) 94%,#d5ad64)}
+  .journal-choice{display:flex;align-items:center;gap:8px;min-height:44px;font-size:var(--text-sm)}.journal-choice input{width:18px;height:18px;flex:none}.journal article{padding:clamp(16px,3vw,26px);border-radius:var(--radius-sm)}.journal article>p{font-size:var(--text-sm);line-height:1.75;max-width:75ch}.journal article h3{font-size:var(--text-lg)}.journal dl{grid-template-columns:repeat(2,minmax(0,1fr))}.journal dl div{border:0;padding:7px 0;border-bottom:1px solid var(--border);border-radius:0;background:transparent}@media(max-width:480px){.journal dl{grid-template-columns:1fr}}@media print{.journal-choice{display:none}}
   .timeline-workspace{display:grid;gap:14px}.timeline-workspace>header{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}.timeline-workspace>header h2{margin:0}.timeline-workspace>header p:not(.eyebrow){max-width:760px;margin:6px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .metrics{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:7px}.metrics span{padding:7px 9px;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--muted);font:650 var(--text-2xs) var(--mono);white-space:nowrap}.metrics strong{color:var(--accent)}
   .filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:end;gap:8px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}.filters label{display:grid;gap:4px;color:var(--muted);font:650 var(--text-2xs) var(--mono)}.filters select,.filters input{min-width:0;width:100%}.filters button{min-height:38px}
@@ -148,7 +185,8 @@
   dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:0}dl div{min-width:0;padding:7px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}dt{color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}dd{margin:3px 0 0;font-size:var(--text-xs);overflow-wrap:anywhere}
   .item-actions{display:flex;align-items:center;justify-content:space-between;gap:8px}.item-actions .btn{font-size:var(--text-xs)}details summary{color:var(--muted);font-size:var(--text-xs);cursor:pointer}details p{margin:7px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.45}.empty{padding:16px}.empty h3,.empty p{margin:0}.empty p{margin-top:5px;color:var(--muted);font-size:var(--text-xs)}.scope{margin-top:2px}
   .case-associations ul{display:grid;gap:7px;padding-left:22px;font-size:var(--text-xs);overflow-wrap:anywhere}article>p{overflow-wrap:anywhere}
+  .family-coverage{padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}.family-coverage>summary{color:var(--text);font-weight:650}.family-coverage>.btn{margin-top:10px}.family-lanes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:14px 0 0;padding:0;list-style:none}.family-lanes>li{min-width:0;padding-top:10px;border-top:1px solid var(--border)}.family-lanes .btn{max-width:100%;white-space:normal;text-align:left;overflow-wrap:anywhere}.family-coverage .btn[aria-pressed="true"]{border-color:var(--interface-accent);background:rgb(var(--interface-accent-rgb) / .07)}.family-lanes dl{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:8px}.family-coverage .btn:focus-visible,.family-coverage>summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
   @media(max-width:1100px){.filters{grid-template-columns:repeat(3,minmax(0,1fr))}.filters button{width:100%}}
-  @media(max-width:760px){.timeline-workspace>header{display:grid}.metrics{justify-content:flex-start}.filters{grid-template-columns:1fr 1fr}dl{grid-template-columns:1fr 1fr}}
-  @media(max-width:480px){.filters,dl{grid-template-columns:1fr}.timeline-list>li{grid-template-columns:14px minmax(0,1fr);gap:4px}.item-actions{align-items:flex-start;flex-direction:column}.item-actions .btn{width:100%}}
+  @media(max-width:760px){.timeline-workspace>header{display:grid}.metrics{justify-content:flex-start}.filters{grid-template-columns:1fr 1fr}dl{grid-template-columns:1fr 1fr}.family-lanes{grid-template-columns:1fr}}
+  @media(max-width:480px){.filters,dl,.family-lanes dl{grid-template-columns:1fr}.timeline-list>li{grid-template-columns:14px minmax(0,1fr);gap:4px}.item-actions{align-items:flex-start;flex-direction:column}.item-actions .btn{width:100%}}
 </style>

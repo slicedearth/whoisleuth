@@ -69,7 +69,7 @@
     sourceCheckpoint?: Snippet<[CheckpointFact['category'], string]>;
   } = $props();
 
-  const { caseDomain, lookupEvidenceDepth, lookupObservedAt } = $derived(analysis);
+  const { caseDomain, lookupEvidenceDepth } = $derived(analysis);
   const availability = $derived(view.availability);
   const observationHostname = $derived(lookupObservationHostname(availability) ?? caseDomain);
   const reverseDns = $derived(view.reverseDns);
@@ -188,7 +188,7 @@
           props={{
             headingId: 'reverse-dns-title',
             title: 'Reverse DNS context',
-            summaryDetail: 'Expand for PTR names, provenance, and limitations',
+            summaryDetail: 'PTR names, provenance and limits',
             status: show(reverseDns.status),
             complete: reverseDns.complete !== false,
             rows: networkDisplay.reverseDnsRows,
@@ -279,7 +279,7 @@
           loadingLabel="Loading TLS evidence…"
           unavailableLabel="TLS evidence could not be loaded."
           {onready}
-          props={{ ...lookupTlsProps(networkDisplay), observedAt: lookupObservedAt }}
+          props={lookupTlsProps(networkDisplay)}
         /></div
       >
       {@render sourceCheckpoint?.('tls', 'TLS')}

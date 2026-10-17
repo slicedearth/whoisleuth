@@ -114,12 +114,13 @@
     <header>
       <div><p class="eyebrow">Bounded relationship map</p><h3>{title}</h3></div>
       <div class="map-summary" role="group" aria-label="Map summary">
-        <span>{graph.nodes.length} facts</span>
+        <span>{graph.nodes.length} nodes</span>
         <span>{graph.links.length} links</span>
         {#if graph.truncated}<strong>Partial visual · {omittedInputCount} omitted</strong>{/if}
       </div>
     </header>
     <p>{description}</p>
+    {#if graph.layout === 'grouped' && layout === 'force'}<p>Nodes are grouped to keep the labels readable.</p>{/if}
     {#if graph.clusters.length}
       <ul class="cluster-legend" aria-label="Evidence groups">
         {#each graph.clusters as cluster (cluster.id)}
@@ -127,7 +128,7 @@
             <button
               type="button"
               aria-pressed={selectedGroup === cluster.id}
-              aria-label={`${selectedGroup === cluster.id ? 'Show all groups instead of' : 'Focus'} ${cluster.label}, ${cluster.count} facts`}
+              aria-label={`${selectedGroup === cluster.id ? 'Show all groups instead of' : 'Focus'} ${cluster.label}, ${cluster.count} nodes`}
               onclick={() => activeGroup = selectedGroup === cluster.id ? '' : cluster.id}
             ><i aria-hidden="true"></i>{cluster.label}<span>{cluster.count}</span></button>
           </li>

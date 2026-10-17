@@ -1,7 +1,11 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { expect, test } from './fixtures';
+import AxeBuilder from '@axe-core/playwright';
 import { normalizeBrandProfile } from '../packages/workspace/brand-profile-model.mts';
-import { currentBrandProfileBrowserStore, expectNoHorizontalOverflow, migrateLegacyBrowserData, openBrandProfileList, runBulkScan, selectBulkResultView, useTheme } from './helpers';
+import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoHorizontalOverflow, migrateLegacyBrowserData, openBrandProfileList, readBrowserLocalCollection, runBulkScan, selectBulkResultView, useTheme } from './helpers';
+import { createCase } from '../packages/cases/case-record-operations.mts';
+import { createWorkspace, openArchive, switchWorkspace } from './browser-workspace-fixtures';
+import { caseNumber } from '../packages/cases/case-workflow-metadata.mts';
 
 const viewports = [
   { width: 320, height: 700 }, { width: 390, height: 844 },
@@ -9,6 +13,113 @@ const viewports = [
   { width: 1920, height: 1080 }, { width: 2560, height: 1440 },
   { width: 3840, height: 2160 },
 ] as const;
+
+test('public and console footers keep one layout and complete accessible links', async ({ page }, testInfo) => {
+  for (const width of [320, 1024, 1280]) for (const theme of ['light', 'dark'] as const) {
+    await page.setViewportSize({ width, height: 900 });
+    let publicLayout: number[] | undefined;
+    for (const path of ['/', '/resources', '/dashboard']) {
+      await page.goto(path);
+      await useTheme(page, theme);
+      const footer = page.locator('.site-footer');
+      const links = footer.getByRole('navigation', { name: 'Footer', exact: true });
+      await expect(links.getByRole('link')).toHaveCount(5);
+      for (const [label, href] of [['Privacy', '/privacy'], ['Terms', '/terms'], ['Request policy', '/request-policy'], ['Contact', '/contact']] as const) {
+        const link = links.getByRole('link', { name: new RegExp(`^${label}(?: \\(|$)`, 'u') });
+        await expect(link).toHaveAttribute('href', href);
+        await expect(link).toBeVisible();
+        if (path === '/dashboard') {
+          await expect(link).toHaveAttribute('target', '_blank');
+          await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+        } else await expect(link).not.toHaveAttribute('target');
+      }
+      await expect(links.getByRole('link', { name: 'Source and licence (opens in a new tab)', exact: true })).toHaveAttribute('target', '_blank');
+      await page.evaluate(() => document.fonts.ready);
+      await footer.scrollIntoViewIfNeeded();
+      await expectNoHorizontalOverflow(page);
+      const layout = await footer.evaluate(element => {
+        const box = element.getBoundingClientRect();
+        const metadata = element.querySelector('p')!.getBoundingClientRect();
+        const navigation = element.querySelector('nav')!.getBoundingClientRect();
+        return {
+          metadataBottom: metadata.bottom - box.top,
+          navigationTop: navigation.top - box.top,
+          positions: Array.from(element.querySelectorAll('nav > a')).flatMap(link => {
+            const bounds = link.getBoundingClientRect();
+            return [bounds.left - box.left, bounds.top - box.top];
+          }),
+        };
+      });
+      expect(layout.navigationTop).toBeGreaterThan(layout.metadataBottom);
+      if (publicLayout) {
+        expect(layout.positions).toHaveLength(publicLayout.length);
+        layout.positions.forEach((value, index) => expect(value).toBeCloseTo(publicLayout![index]!, 0));
+      } else publicLayout = layout.positions;
+      if (captureVisualEvidenceEnabled()) await footer.screenshot({ path: testInfo.outputPath(`footer-${path.slice(1) || 'home'}-${width}-${theme}.png`) });
+    }
+  }
+  await page.getByRole('navigation', { name: 'Footer' }).getByRole('link').first().focus();
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('navigation', { name: 'Footer' }).getByRole('link', { name: /^Terms/u })).toBeFocused();
+  expect((await new AxeBuilder({ page }).include('.site-footer').withTags(['wcag2a','wcag2aa','wcag21aa','wcag22aa']).analyze()).violations).toEqual([]);
+});
+
+test('optional Case covers and workspace markers stay temporary and retain exact identities and review clocks', async ({ page }, testInfo) => {
+  const record = createCase({ domain: 'cover.example' }, '2026-09-01T00:00:00.000Z');
+  record.updatedAt = '2026-09-20T00:00:00.000Z';
+  record.decisions = [{ id: 'cover-review', summary: 'More evidence is needed', rationale: 'Separate evidence remains incomplete',
+    confidence: 'low', confidenceBasis: 'Recorded scope', evidencePinIds: [], createdAt: '2026-09-05T00:00:00.000Z' }];
+  await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': currentBrowserLocalDocument('cases', { cases: [record] }) }, { clearStorage: true, destination: '/cases' });
+  const retained = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  const covers = page.getByRole('checkbox', { name: 'Preview Case covers', exact: true });
+  await expect(covers).not.toBeChecked();
+  const header = page.locator(`#case-head-${record.id}`);
+  const href = await header.getAttribute('href');
+  const before = await page.evaluate(() => ({ local: Object.entries(localStorage).sort(), session: Object.entries(sessionStorage).sort() }));
+  await covers.focus(); await covers.press('Space');
+  const cover = page.locator('.case.cover');
+  await expect(cover).toContainText(caseNumber(record.id));
+  await expect(cover.locator('.cover-context time')).toHaveAttribute('datetime', '2026-09-05T00:00:00.000Z');
+  await expect(cover.locator('time.updated')).toHaveAttribute('datetime', '2026-09-20T00:00:00.000Z');
+  await expect(header).toHaveAttribute('href', href!);
+  const workspace = page.getByRole('note', { name: 'Active workspace', exact: true });
+  const storage = page.locator('.console-context details.context-storage').filter({ has: page.getByText('Browser-local storage', { exact: true }) });
+  await expect(storage).toHaveJSProperty('open', false);
+  await expect(storage.getByText('Workspace marker', { exact: true })).not.toBeVisible();
+  await storage.locator(':scope > summary').focus();
+  await storage.locator(':scope > summary').press('Enter');
+  await storage.getByText('Workspace marker', { exact: true }).click();
+  const marker = storage.getByRole('combobox', { name: 'Temporary marker', exact: true });
+  await expect(marker).toHaveValue('none');
+  await marker.selectOption('violet');
+  await expect(workspace.locator('.workspace-marker.violet')).toHaveCount(1);
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(marker).toHaveValue('violet');
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(retained);
+  expect(await page.evaluate(() => ({ local: Object.entries(localStorage).sort(), session: Object.entries(sessionStorage).sort() }))).toEqual(before);
+  for (const width of [320, 1280]) for (const theme of ['light', 'dark'] as const) {
+    await page.setViewportSize({ width, height: width === 320 ? 700 : 720 }); await useTheme(page, theme);
+    await covers.scrollIntoViewIfNeeded(); await expectNoHorizontalOverflow(page);
+    expect((await new AxeBuilder({ page }).include('.case-list').include('.console-context').withTags(['wcag2a','wcag2aa','wcag21aa','wcag22aa']).analyze()).violations).toEqual([]);
+    if (captureVisualEvidenceEnabled()) {
+      await page.screenshot({ path: testInfo.outputPath(`optional-covers-${width}-${theme}.png`) });
+      await workspace.screenshot({ path: testInfo.outputPath(`optional-marker-${width}-${theme}.png`) });
+    }
+  }
+  await page.reload();
+  await expect(covers).not.toBeChecked();
+  await storage.locator(':scope > summary').click();
+  await storage.getByText('Workspace marker', { exact: true }).click();
+  await expect(marker).toHaveValue('none');
+  await page.goto('/dashboard#workspaces');
+  const created = await createWorkspace(page, 'Temporary marker check');
+  await switchWorkspace(page, created.name);
+  await storage.locator(':scope > summary').click();
+  await storage.getByText('Workspace marker', { exact: true }).click();
+  await expect(marker).toHaveValue('none');
+  const archive = await openArchive(page, true);
+  await expect(archive.locator('.workspace-scope').getByRole('combobox')).toHaveCount(0);
+});
 
 test('overflowing review tabs expose scroll controls without changing the selected view', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 700 });
@@ -166,6 +277,24 @@ test('Bulk keeps collection and result controls readable with a header-aware vie
       await page.setViewportSize(viewport);
       await expect(page.getByRole('heading', { name: 'Results', exact: true })).toBeVisible();
       await expectNoHorizontalOverflow(page);
+      if (viewport.width <= 700) {
+        const risk = page.locator('.results-table tbody tr').first().locator('td[data-label="Risk"]');
+        const qualification = risk.locator('.bulk-risk > small');
+        await expect(qualification).toContainText('comparable cohort');
+        const geometry = await qualification.evaluate(element => {
+          const cell = element.closest('td')!.getBoundingClientRect();
+          const range = document.createRange(); range.selectNodeContents(element);
+          return { left: cell.left, right: cell.right,
+            text: [...range.getClientRects()].map(rect => ({ left: rect.left, right: rect.right, width: rect.width })) };
+        });
+        expect(geometry.text.length).toBeGreaterThan(0);
+        for (const rect of geometry.text) {
+          expect(rect.width).toBeGreaterThan(0);
+          expect(rect.left).toBeGreaterThanOrEqual(geometry.left - 1);
+          expect(rect.right).toBeLessThanOrEqual(Math.min(geometry.right, viewport.width) + 1);
+        }
+        await expect(risk.getByLabel(`Inspect Risk model and factors for ${targets[0]}`, { exact: true })).toBeVisible();
+      }
       for (const field of [page.locator('#domains'), page.getByLabel('Scan mode'), page.getByLabel('Request pacing')]) {
         const box = await field.boundingBox();
         expect(box).not.toBeNull();

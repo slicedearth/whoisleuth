@@ -29,7 +29,7 @@ import { workspacePreferenceStorage } from './browser-workspace-context.ts';
 import { serialiseWorkspacePortableJson } from '../../../packages/contracts/workspace-portability.mts';
 import { candidateMaterialFingerprint, mergeCandidateObservations, normalizeCandidateObservation, normalizeCandidateObservations, reviseCandidateException, type BrandCandidateObservation, type BrandCandidateException } from '../../../packages/workspace/brand-candidate-workflow.mts';
 import { candidateReviewItem } from '../../../packages/monitoring/brand-candidate-review.mts';
-import { reviseBrandKeywordCampaign, attributeKeywordCampaignCandidate, type BrandKeywordCampaignInput } from '../../../packages/workspace/brand-keyword-campaign.mts';
+import { reviseBrandKeywordCampaign, attributeKeywordCampaignCandidate, keywordCampaignCorpusRevision, type BrandKeywordCampaignInput } from '../../../packages/workspace/brand-keyword-campaign.mts';
 import { setAnalystReviewDecision, type AnalystReviewItem, type AnalystReviewStateStore } from '../../../packages/monitoring/analyst-review-state.mts';
 export { MAX_PROFILE_IMPORT_BYTES } from '../../../packages/contracts/workspace-portability.mts';
 
@@ -102,11 +102,13 @@ export async function retainBrandCandidates(profileId: string, candidates: reado
   });
 }
 
-/** Revision-owned local intent; never requests a feed or changes a Watchlist. */
-export async function saveBrandKeywordCampaign(profileId: string, input: BrandKeywordCampaignInput, expectedRevision: number | null, now = new Date().toISOString()) {
+/** A selected comparison adds a corpus precondition; ordinary edits retain revision-only semantics. */
+export async function saveBrandKeywordCampaign(profileId: string, input: BrandKeywordCampaignInput, expectedRevision: number | null, now = new Date().toISOString(), expectedCorpusRevision: string | null = null) {
   return updateBrowserLocalData('brand_profiles', current => {
     const profiles = [...current], index = profiles.findIndex(profile => profile.id === profileId), profile = profiles[index];
     if (!profile) throw new LocalRecordConflictError('Brand Profile');
+    if (expectedCorpusRevision !== null && keywordCampaignCorpusRevision(profile) !== expectedCorpusRevision)
+      throw new LocalRecordConflictError('retained candidate corpus');
     const campaigns = profile.keywordCampaigns ?? [];
     const existing = campaigns.find(campaign => campaign.id === input.id) ?? null;
     const campaign = reviseBrandKeywordCampaign(existing, input, expectedRevision, now);

@@ -18,20 +18,22 @@ import type { LookupFreshnessPolicy } from './lookup-source-refresh.ts';
 import { createLookupViewModel, type LookupHttpResponse } from './lookup-response.ts';
 import { plannedLookupSources, lookupDiagnosticStates } from '../../../../lib/lookup-progress.mts';
 import { LOOKUP_SOURCE_LABELS } from './lookup-source-labels.ts';
+import { lookupSourceStateExplanation } from '../../../../packages/evidence/lookup-collection-review.mts';
 import { rec } from './lookup-display-shared.ts';
 
 export const LOOKUP_EVIDENCE_QUALITY_MODEL_VERSION = 1 as const;
 
-/** Reconstruct only the supported recipe for the request that completed.
- * Original optional consent and deployment configuration are not retained. */
+/** Reconstruct the supported recipe, separately from the operation's receipt.
+ * Eligibility does not establish optional consent or deployment admission. */
 export function buildLookupCollectionOutcomeReview(
   original: LookupHttpResponse | null,
   completedMode: 'fast' | 'deep' | null,
   entries: readonly LookupEvidenceQualityPresentationEntry[],
 ) {
   const empty = { target: original?.query ?? '', mode: completedMode, groups: [] as Array<{
-    id: string; label: string; expectation: 'included' | 'conditional' | 'selection_unknown';
+    id: string; label: string; expectation: 'included' | 'conditional' | 'optional';
     diagnosticState: string | null; records: readonly (LookupEvidenceQualityPresentationEntry & { sourceState: string | null })[];
+    explanation: string;
   }> };
   if (!original || !completedMode) return empty;
   const diagnostics = lookupDiagnosticStates(original.diagnostics);
@@ -46,15 +48,18 @@ export function buildLookupCollectionOutcomeReview(
     empty.groups.push({ id: source, label: LOOKUP_SOURCE_LABELS[source],
       expectation: ['registrar_rdap', 'network_context', 'reverse_dns'].includes(source) || source === 'domain_evidence' && completedMode === 'fast' ? 'conditional' : 'included',
       diagnosticState: diagnostics[source === 'domain_evidence' ? 'availability' : source] ?? null,
+      explanation: lookupSourceStateExplanation(diagnostics[source === 'domain_evidence' ? 'availability' : source] ?? null, source),
       records: sourceRecords.filter(entry => source === 'domain_evidence'
         ? domainRecords.has(entry.id) && (completedMode === 'deep' || entry.id === 'availability')
         : entry.id === source.replaceAll('_', '-')) });
   }
   if (original.type === 'domain' && completedMode === 'deep') {
-    empty.groups.push({ id: 'security_txt', label: LOOKUP_SOURCE_LABELS.security_txt, expectation: 'selection_unknown',
+    empty.groups.push({ id: 'security_txt', label: LOOKUP_SOURCE_LABELS.security_txt, expectation: 'optional',
       diagnosticState: diagnostics.security_txt ?? null,
+      explanation: lookupSourceStateExplanation(diagnostics.security_txt ?? null, 'security_txt'),
       records: sourceRecords.filter(entry => entry.id === 'security-txt') });
-    empty.groups.push({ id: 'optional-intelligence', label: 'Optional third-party intelligence', expectation: 'selection_unknown', diagnosticState: null,
+    empty.groups.push({ id: 'optional-intelligence', label: 'Optional third-party intelligence', expectation: 'optional', diagnosticState: null,
+      explanation: 'Each provider keeps its own result below; an unrequested provider is not an empty result.',
       records: sourceRecords.filter(entry => entry.category === 'external' && entry.id.startsWith('external-')) });
   }
   return empty;

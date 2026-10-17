@@ -54,29 +54,54 @@ test('reading preferences persist without touching saved work and synchronise be
     await page.getByLabel('Reading density').selectOption('comfortable');
     await expect(other.locator('html')).toHaveAttribute('data-density', 'comfortable');
     expect(await page.evaluate(() => localStorage.getItem('whoisleuth:appearance:v1'))).toBe('comfortable:minimal');
+    await page.getByLabel('Terminal-style headers', { exact: true }).check();
+    await expect(other.locator('html')).toHaveAttribute('data-console-style', 'terminal');
+    await expect(other.locator('html')).toHaveAttribute('data-effects', 'minimal');
   } finally { await other.close(); }
 });
 
-test('the blocking appearance initialiser works before application hydration', async ({ page }) => {
+test('the blocking appearance initialiser works before application hydration', { tag: '@timing-sensitive' }, async ({ page }) => {
   await page.addInitScript(() => {
-    localStorage.setItem('whoisleuth:appearance:v1', 'compact:minimal');
+    localStorage.setItem('whoisleuth:appearance:v1', 'compact:minimal:terminal');
     localStorage.setItem('whoisleuth:theme:v1', 'light');
   });
-  let release = () => {};
-  const held = new Promise<void>(resolve => { release = resolve; });
-  const pattern = '**/_app/immutable/**/*.js';
-  const holdScript = async (route: Route) => { await held; await route.fallback(); };
-  await page.route(pattern, holdScript);
-  try {
-    await page.goto('/resources', { waitUntil: 'commit' });
-    await expect(page.locator('html')).toHaveAttribute('data-density', 'compact');
-    await expect(page.locator('html')).toHaveAttribute('data-effects', 'minimal');
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-    await expect(page.getByRole('heading', { name: 'Guides for common investigation tasks', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Colour theme, System selected' })).toBeVisible();
-  } finally { release(); }
-  await expect(page.getByRole('button', { name: 'Colour theme, Light selected' })).toBeVisible();
-  await page.unroute(pattern, holdScript);
+  for (const [path, width] of [['/resources', 1280], ['/methodology', 320]] as const) {
+    await page.setViewportSize({ width, height: 720 });
+    let release = () => {}, requested = 0;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    const pattern = '**/_app/immutable/**/*.js';
+    const holdScript = async (route: Route) => { requested += 1; await held; await route.fallback(); };
+    await page.route(pattern, holdScript);
+    try {
+      await page.goto(path, { waitUntil: 'commit' });
+      await expect.poll(() => requested).toBeGreaterThan(0);
+      await expect(page.locator('html')).toHaveAttribute('data-density', 'compact');
+      await expect(page.locator('html')).toHaveAttribute('data-effects', 'minimal');
+      await expect(page.locator('html')).toHaveAttribute('data-console-style', 'terminal');
+      await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+      await expect(page.locator('main h1')).toBeVisible();
+      const trigger = page.getByRole('button', { name: 'Colour theme, System selected' });
+      await expect(trigger).toBeVisible();
+      // Script delivery is held, so this is a stable prerendered state rather
+      // than a timing-based wait for the control to become interactive.
+      expect(await trigger.isDisabled()).toBe(true);
+    } finally { release(); }
+    const trigger = page.getByRole('button', { name: /^Colour theme,/u });
+    await expect(trigger).toBeEnabled();
+    await expect(trigger).toHaveAccessibleName('Colour theme, Light selected');
+    await page.unroute(pattern, holdScript);
+    await trigger.click();
+    await page.getByRole('option', { name: 'Dark theme', exact: true }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme-preference', 'dark');
+    await expect(trigger).toBeFocused();
+    await trigger.press('ArrowDown');
+    const dark = page.getByRole('option', { name: 'Dark theme', exact: true });
+    await expect(dark).toBeFocused(); await dark.press('ArrowDown');
+    const light = page.getByRole('option', { name: 'Light theme', exact: true });
+    await expect(light).toBeFocused(); await light.press('Enter');
+    await expect(page.locator('html')).toHaveAttribute('data-theme-preference', 'light');
+    await expect(trigger).toBeFocused();
+  }
 });
 
 test('appearance controls remain usable at narrow and wide widths in both themes', async ({ page }, testInfo) => {
@@ -95,6 +120,7 @@ test('appearance controls remain usable at narrow and wide widths in both themes
       expect(box!.x + box!.width).toBeLessThanOrEqual(width);
       await expect(page.getByLabel('Reading density')).toBeInViewport();
       await expect(page.getByLabel('Decorative effects')).toBeInViewport();
+      await expect(page.getByLabel('Terminal-style headers', { exact: true })).toBeInViewport();
       await expectNoHorizontalOverflow(page);
       if (width === 390 || width === 1920) if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`appearance-${theme}-${width}.png`) }); }
       await page.getByLabel('Reading density').press('Escape');

@@ -5,7 +5,7 @@ import { expect, test } from './fixtures';
 import { caseRecord, createCase, openCasesView, openCaseResponseWorkspace, openSeededTimelineCase } from './case-test-fixtures';
 import { addFixtureCasePin, currentActionFixture } from './case-response-fixtures';
 import { openCaseSection } from './console-navigation';
-import { expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
+import { expectNoHorizontalOverflow, failNextBrowserLocalCollectionRead, failNextBrowserLocalManifestWrite, holdNextBrowserLocalCommitAcknowledgement, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
 import { downloadWorkspaceArchive, workspaceArchiveRegion } from './workspace-backup';
 import { caseStoreAtCapacity } from '../test/workspace-backup-capacity-fixture.mts';
 import { beginBrowserInteractionReadiness, readBrowserInteractionReadiness } from './performance-sampling';
@@ -151,6 +151,90 @@ test('Case drafts recover after reload, stay out of backups and clear atomically
   expect(cases.records[0]?.value.evidencePins).toHaveLength(1);
 });
 
+test('draft inventory reads saved copies without restoring forms and recovers from an unavailable read', async ({ page }, testInfo) => {
+  await openCasesView(page); await createCase(page, 'inventory-draft.example');
+  let form = await pinForm(page);
+  await form.getByLabel('Label', { exact: true }).fill('Unsubmitted inventory example');
+  await form.getByLabel('Fact', { exact: true }).fill('Private unfinished values stay in this workspace.');
+  await expect(form.getByRole('status')).toContainText('Draft saved in this workspace');
+  const before = await readBrowserLocalCollection(page, 'case_drafts', { minimumRecords: 1 });
+  await page.reload();
+  const disclosure = page.locator('.draft-inventory-disclosure');
+  await expect(disclosure).toBeVisible();
+  await expect(disclosure).not.toHaveAttribute('open', '');
+  const toggle = disclosure.locator(':scope > summary');
+  await toggle.focus(); await page.keyboard.press('Enter');
+  const inventory = page.getByRole('region', { name: 'Draft inventory', exact: true });
+  await expect(inventory.getByRole('button', { name: 'Read saved drafts', exact: true })).toBeVisible();
+  await expect(inventory.locator('.draft-list')).toHaveCount(0);
+  await inventory.getByRole('button', { name: 'Read saved drafts', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(inventory.getByRole('status')).toContainText('1 saved draft · 0 with an unavailable Case reference');
+  await expect(inventory.locator('pre')).toHaveCount(0);
+  await inventory.getByRole('button', { name: 'View saved values', exact: true }).click();
+  await expect(inventory.locator('pre')).toContainText('Private unfinished values stay in this workspace.');
+  expect(await readBrowserLocalCollection(page, 'case_drafts')).toEqual(before);
+  for (const [width, height] of [[1280, 720], [2560, 1440], [390, 844], [320, 700]] as const) {
+    await page.setViewportSize({ width, height });
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme); await expectNoHorizontalOverflow(page);
+      await expect(inventory.getByRole('link', { name: 'Open Case', exact: true })).toBeVisible();
+      if (width === 320 || width === 1280) {
+        expect((await new AxeBuilder({ page }).include('.draft-inventory-disclosure').analyze()).violations).toEqual([]);
+        if (captureVisualEvidenceEnabled()) await disclosure.screenshot({ path: testInfo.outputPath(`draft-inventory-${theme}-${width}.png`) });
+      }
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await failNextBrowserLocalCollectionRead(page, 'case_drafts');
+  await inventory.getByRole('button', { name: 'Refresh saved drafts', exact: true }).click();
+  await expect(inventory.getByRole('status')).toContainText('Saved drafts could not be read');
+  await expect(inventory.locator('.draft-list,pre')).toHaveCount(0);
+  await expect(inventory).not.toContainText('No saved recovery drafts were found');
+  await inventory.getByRole('button', { name: 'Refresh saved drafts', exact: true }).click();
+  await expect(inventory.getByRole('status')).toContainText('1 saved draft');
+  await inventory.getByRole('link', { name: 'Open Case', exact: true }).click();
+  form = await pinForm(page);
+  await expect(form.getByLabel('Label', { exact: true })).toHaveValue('');
+  await expect(form.getByText('1 saved draft for this form', { exact: true })).toBeVisible();
+  expect(await readBrowserLocalCollection(page, 'case_drafts')).toEqual(before);
+  await toggle.focus(); await page.keyboard.press('Enter');
+  await expect(inventory).toHaveCount(0);
+  await page.keyboard.press('Enter');
+  await expect(inventory.getByRole('button', { name: 'Read saved drafts', exact: true })).toBeVisible();
+  await expect(inventory.locator('pre')).toHaveCount(0);
+});
+
+test('draft inventory does not turn a readable copy into confirmation of an unknown write', async ({ page }) => {
+  await openCasesView(page); await createCase(page, 'uncertain-draft.example');
+  const form = await pinForm(page);
+  const acknowledgement = await holdNextBrowserLocalCommitAcknowledgement(page, 'case_drafts');
+  try {
+    await form.getByLabel('Label', { exact: true }).fill('An unconfirmed recovery write');
+    await form.getByLabel('Fact', { exact: true }).fill('The original in-memory reasoning');
+    await acknowledgement.wait();
+    // The real write has committed, but its acknowledgement is held. Refusing
+    // the reconciliation read leaves the provider unable to confirm its outcome.
+    await failNextBrowserLocalCollectionRead(page, 'case_drafts');
+    await expect(form.getByRole('status')).toContainText('The write may have succeeded');
+    await acknowledgement.release();
+    await page.locator('.draft-inventory-disclosure > summary').click();
+    const inventory = page.getByRole('region', { name: 'Draft inventory', exact: true });
+    await expect(inventory.getByRole('alert')).toContainText('Unconfirmed writes in open forms · 1');
+    await inventory.getByRole('button', { name: 'Read saved drafts', exact: true }).click();
+    await expect(inventory.getByRole('status')).toContainText('1 saved draft');
+    await expect(inventory.getByRole('alert')).toContainText('Unconfirmed writes in open forms · 1');
+    await form.getByLabel('Fact', { exact: true }).fill('Later edits must remain in the open form');
+    await form.getByRole('button', { name: 'Pin evidence', exact: true }).click();
+    await expect(form.getByRole('status')).toContainText('The write may have succeeded');
+    await expect(form.getByLabel('Fact', { exact: true })).toHaveValue('Later edits must remain in the open form');
+    expect((await readBrowserLocalCollection(page, 'cases')).records[0]?.value.evidencePins).toHaveLength(0);
+    await inventory.getByRole('button', { name: 'View saved values', exact: true }).click();
+    await expect(inventory.locator('pre')).toContainText('The original in-memory reasoning');
+    await expect(inventory.locator('pre')).not.toContainText('Later edits must remain');
+  } finally { await acknowledgement.release(); }
+});
+
 test('a failed recovery save protects navigation and can be retried without submitting evidence', async ({ page }) => {
   await openCasesView(page); await createCase(page, 'failed-draft.example');
   const form = await pinForm(page); const selected = page.url();
@@ -204,15 +288,23 @@ test('deleting a Case also removes its unsubmitted recovery copies', async ({ pa
   const form = await pinForm(page);
   await form.getByLabel('Label', { exact: true }).fill('Delete this recovery copy with its Case');
   await expect(form.getByRole('status')).toContainText('Draft saved in this workspace');
+  await page.locator('.draft-inventory-disclosure > summary').click();
+  const inventory = page.getByRole('region', { name: 'Draft inventory', exact: true });
+  await inventory.getByRole('button', { name: 'Read saved drafts', exact: true }).click();
+  await expect(inventory.getByRole('status')).toContainText('1 saved draft');
   await page.locator('.case-more > summary').click();
   page.once('dialog', dialog => { void dialog.accept(); });
   await page.getByRole('button', { name: 'Delete case', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Cases', exact: true })).toBeVisible();
   expect((await readBrowserLocalCollection(page, 'cases')).records).toHaveLength(0);
   expect((await readBrowserLocalCollection(page, 'case_drafts')).records).toHaveLength(0);
+  await expect(inventory.getByRole('status')).toContainText('0 saved drafts');
+  await expect(inventory.locator('.draft-list')).toHaveCount(0);
 });
 
 test('action metadata and transition drafts keep independent targets through selection and recovery', async ({ page }) => {
+  const recordedAt = '2026-10-16T06:00:00.000Z';
+  await page.clock.setFixedTime(recordedAt);
   await openCasesView(page); await createCase(page, 'action-recovery.example');
   async function actionStage() {
     const workspace = await openCaseResponseWorkspace(page, '', 'advanced', 'Response');
@@ -249,6 +341,72 @@ test('action metadata and transition drafts keep independent targets through sel
   await transition.locator('summary').click(); await transition.getByRole('button', { name: 'Restore draft', exact: true }).click();
   await expect(stage.getByRole('combobox', { name: 'Action for transition', exact: true })).toHaveValue(first);
   await expect(stage.getByLabel('Bounded reference', { exact: true })).toHaveValue('first-desk-event-reference');
+  await expect(stage.getByLabel(/^Event time/u)).toHaveValue('');
+  await stage.getByRole('button', { name: 'Append transition', exact: true }).click();
+  await expect.poll(async () => {
+    const cases = await readBrowserLocalCollection(page, 'cases');
+    return cases.records[0]!.value.actions.find(action => action.id === first)?.history.at(-1)?.reference;
+  }).toBe('first-desk-event-reference');
+  const appended = (await readBrowserLocalCollection(page, 'cases')).records[0]!.value.actions.find(action => action.id === first)!.history.at(-1)!;
+  expect(appended.occurredAt).toBe(recordedAt);
+  expect(appended.nextState).toBe('ready_for_review');
+  await expect(stage.getByLabel(/Contact limitations/)).toHaveValue('Unsubmitted metadata for the first desk');
+});
+
+test('recovered malformed event times remain drafts instead of becoming current-time transitions', async ({ page }) => {
+  const now = '2026-10-16T06:00:00.000Z';
+  await page.clock.setFixedTime(now);
+  await openCasesView(page);
+  const action = currentActionFixture({
+    id: 'recovered-time-action', type: 'internal_review', recipient: 'Fixture reviewer', contactSource: 'Analyst supplied',
+    routeObservedAt: null, contactLimitations: [], dueAt: null, targetState: 'ready_for_review', reference: null,
+    followUpAt: null, outcome: null, createdAt: '2026-10-01T00:00:00.000Z', updatedAt: '2026-10-01T00:00:00.000Z',
+  });
+  const record = caseRecord({ id: 'recovered-time-case', domain: 'recovered-time.example', actions: [action] });
+  const fields = {
+    transitionActionId: action.id, transitionNextState: 'reviewed', transitionOccurredAt: '2026-02-30T09:30',
+    transitionProvenance: 'Recovered analyst event', transitionReference: 'retain-this-reference',
+  };
+  await migrateLegacyBrowserData(page, {
+    'whois-rdap-cases-v1': { version: 13, cases: [record] },
+    'whoisleuth-case-drafts-v1': { schema: 'whoisleuth.case-drafts', version: 1, records: [{
+      id: 'recovered-event', revision: 'original-draft', caseId: record.id, form: 'action-transition', formVersion: 1, updatedAt: now, fields,
+    }] },
+  }, { destination: `/cases?case=${record.id}&section=response`, clearStorage: true });
+  const workspace = await openCaseResponseWorkspace(page, '', 'advanced', 'Response');
+  const stage = workspace.getByRole('region', { name: 'Case response actions', exact: true });
+  const disclosure = stage.locator(':scope > details');
+  if (await disclosure.getAttribute('open') === null) await disclosure.locator(':scope > summary').click();
+  const recovery = stage.locator('.draft-recovery[data-recovery-form="action-transition"]');
+  await recovery.locator('summary').click();
+  await recovery.getByRole('button', { name: 'Restore draft', exact: true }).click();
+  const form = stage.locator('form[data-recovery-form="action-transition"]');
+  const time = form.getByLabel(/^Event time/u);
+  // A native datetime field sanitises the recovered malformed string to an empty
+  // display. The model still owns that nonempty draft and must not treat it as now.
+  await expect(time).toHaveValue('');
+  expect(await form.evaluate(element => (element as HTMLFormElement).checkValidity())).toBe(true);
+  const before = await readBrowserLocalCollection(page, 'cases');
+  const draftBefore = await readBrowserLocalCollection(page, 'case_drafts');
+  await form.getByRole('button', { name: 'Append transition', exact: true }).click();
+  await expect(workspace.getByRole('alert')).toContainText('Enter a valid UTC event time');
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+  expect(await readBrowserLocalCollection(page, 'case_drafts')).toEqual(draftBefore);
+  await expect(form.getByLabel('Bounded reference', { exact: true })).toHaveValue('retain-this-reference');
+
+  await time.fill('10000-01-01T00:00');
+  expect(await time.evaluate(element => (element as HTMLInputElement).validity.rangeOverflow)).toBe(true);
+  await form.getByRole('button', { name: 'Append transition', exact: true }).click();
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
+
+  await time.fill('2026-10-15T09:30:12.345');
+  await form.getByRole('button', { name: 'Append transition', exact: true }).click();
+  await expect.poll(async () => (await readBrowserLocalCollection(page, 'cases')).records[0]!.value.actions[0]!.history.length).toBe(action.history.length + 1);
+  const event = (await readBrowserLocalCollection(page, 'cases')).records[0]!.value.actions[0]!.history.at(-1)!;
+  expect(event.occurredAt).toBe('2026-10-15T09:30:12.345Z');
+  expect(event.reference).toBe('retain-this-reference');
+  expect(event.nextState).toBe('reviewed');
+  expect((await readBrowserLocalCollection(page, 'case_drafts')).records).toHaveLength(0);
 });
 
 test('recovery saves retain a full-capacity Case workspace without rewriting its evidence', async ({ page }, testInfo) => {
@@ -274,7 +432,7 @@ test('recovery saves retain a full-capacity Case workspace without rewriting its
     });
     await beginBrowserInteractionReadiness(page, {
       start: { event: 'input', selector: 'form[data-recovery-form="evidence-pin"] input' },
-      targets: [{ selector: 'form[data-recovery-form="evidence-pin"] [data-recovery-status="saved"] [role="status"]', exactText: 'Draft saved in this workspace. Not yet added to the Case.' }],
+      targets: [{ selector: 'form[data-recovery-form="evidence-pin"] [data-recovery-status="saved"] [role="status"]', exactText: 'Draft saved in this workspace. Not yet added to the case.' }],
     });
     await form.getByLabel('Label', { exact: true }).fill(`Capacity recovery sample ${sample}`);
     await expect(form.getByRole('status')).toContainText('Draft saved in this workspace');

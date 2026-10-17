@@ -85,6 +85,7 @@
     BULK_PROFILE_CONTEXT_MISMATCH_LIMITATION,
     bulkProfileContextProvenance,
     normalizeBulkProfileContext,
+    planBulkSessionResume,
     summarizeBulkProfileContexts,
     type BulkProfileContextProvenance,
   } from '#lib/analysis/bulk-session-model.ts';
@@ -1166,8 +1167,7 @@
       return;
     }
     loadSavedBulkSession(session);
-    const settled = new Set(session.results.map((row) => row.domain));
-    const pending = session.domains.filter((domain) => !settled.has(domain));
+    const { pendingDomains: pending } = planBulkSessionResume(session);
     if (!pending.length) {
       sessionWorkspace.setStatus(
         'Every queued domain already has a settled result. Use Retry failed to repeat error rows.',

@@ -14,7 +14,12 @@ import {
   type SourceStatus,
 } from './lookup-display-shared.ts';
 
-function assessment(status: string): string {
+function assessment(status: string, rdapStatus?: string, whoisStatus?: string): string {
+  const protocol = status === 'rdap_unavailable' ? 'RDAP' : status === 'whois_unavailable' ? 'WHOIS' : null;
+  const sourceStatus = protocol === 'RDAP' ? rdapStatus : whoisStatus;
+  if (protocol && sourceStatus === 'unsupported') return `${protocol} not supported`;
+  if (protocol && sourceStatus === 'skipped') return `${protocol} not queried`;
+  if (protocol && sourceStatus === 'disabled') return `${protocol} disabled`;
   return (
     {
       equivalent: 'Equivalent',
@@ -62,6 +67,18 @@ export type RegistrationTraceState =
   | 'disabled'
   | 'rate_limited'
   | 'error';
+
+/** Neutral non-publication states; errors retain their separate failure display. */
+export function registrationSourceNotice(source: 'RDAP' | 'WHOIS', state: unknown, detail?: unknown): string {
+  const fallback = state === 'unsupported'
+    ? `No ${source} service is published for this target. This is not a failed lookup or a domain-absence finding.`
+    : state === 'skipped'
+      ? `${source} was not queried for this lookup.`
+      : state === 'disabled'
+        ? `${source} is disabled by deployment policy.`
+        : '';
+  return fallback ? boundedTechnologyText(detail, 300) || fallback : '';
+}
 
 export function registrationTraceState(
   statusRaw: unknown,
@@ -186,7 +203,7 @@ export function buildLookupRegistryDisplay(input: {
     whoisState: field.whoisState || 'unknown',
     rdapMatrixTone: matrixTone(field.rdapState, field.status),
     whoisMatrixTone: matrixTone(field.whoisState, field.status),
-    assessment: assessment(field.status),
+    assessment: assessment(field.status, rdapDiagnostic.status, whoisDiagnostic.status),
     tone:
       field.status === 'conflict'
         ? 'danger'
@@ -333,6 +350,10 @@ export function buildLookupRegistryDisplay(input: {
     })),
     registrarRdap: {
       visible: Boolean(registrarRdap.status),
+      traceState: registrationTraceState(registrarRdap.status, {
+        hasPublication: Object.keys(registrarRdapParsed).length > 0,
+        partial: registrarRdapParsed.serverTruncated === true || registrarRdapParsed.eventsTruncated === true,
+      }),
       label: diagnosticLabel(registrarRdap),
       endpoint: boundedTechnologyText(registrarRdap.endpoint, 2_048),
       detail: [

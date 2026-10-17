@@ -1,5 +1,6 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import type { Page, Request } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 import { CLI_COMMANDS, RUNNABLE_INVESTIGATION_PLAN_RECIPES } from '../cli/command-reference.mts';
 import { PUBLIC_COVERAGE_SUMMARY } from '../frontend/src/lib/generated/public-coverage-summary.ts';
 import { PUBLIC_METHODOLOGY } from '../frontend/src/lib/generated/public-methodology.ts';
@@ -207,7 +208,7 @@ test('long reference labels remain distinct and the mobile navigator works by ke
   }
 });
 
-test('reference pages expose the first recipe on mobile and constrain wide prose', async ({ page }) => {
+test('reference pages expose the first recipe on mobile and constrain wide prose', async ({ page }, testInfo) => {
   for (const theme of ['light', 'dark'] as const) {
     await useTheme(page, theme);
     await page.setViewportSize({ width: 320, height: 700 });
@@ -215,8 +216,11 @@ test('reference pages expose the first recipe on mobile and constrain wide prose
     const firstCommand = page.locator('.start-steps .copyable-command').first();
     await expect(firstCommand.getByRole('button', { name: 'Copy run-once help command' })).toBeVisible();
     await expect(firstCommand.locator('code')).toBeInViewport({ ratio: 1 });
+    if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`first-recipe-${theme}.png`) });
     const copy = firstCommand.getByRole('button', { name: 'Copy run-once help command' });
-    await copy.scrollIntoViewIfNeeded();
+    // The initial recipe was checked without scrolling. Centre the control for
+    // the separate keyboard check; nearest-edge scrolling can round below it.
+    await copy.evaluate(element => element.scrollIntoView({ block: 'center' }));
     await copy.focus();
     await expect(copy).toBeFocused();
     await expect(copy).toBeInViewport({ ratio: 1 });
@@ -247,7 +251,8 @@ test('filters and opens the canonical CLI catalogue entirely by keyboard', async
   await expect(catalogue.getByRole('status')).toHaveText(`Showing 1 of ${CLI_COMMANDS.length} commands.`);
 
   const command = catalogue.locator('article[data-command="workflow-plan"]');
-  const open = command.getByRole('button', { name: 'View workflow-plan command' });
+  const open = command.getByRole('button');
+  await expect(open).toHaveAccessibleName(/^workflow-plan\b.*View command$/u);
   await expect(open).toContainText('View command');
   await open.focus();
   await page.keyboard.press('Enter');
@@ -519,6 +524,14 @@ test('keeps the final CLI section current at the end of the document', async ({ 
 
 test('renders methodology and deferred coverage from fixed metadata without requests', async ({ page }, testInfo) => {
   const investigationRequests = collectInvestigationRequests(page);
+  await page.context().clearCookies();
+  await page.addInitScript(() => {
+    Reflect.set(window, 'coverageStorageAttempts', 0);
+    IDBFactory.prototype.open = function() {
+      Reflect.set(window, 'coverageStorageAttempts', Number(Reflect.get(window, 'coverageStorageAttempts')) + 1);
+      throw new Error('Public coverage must not open saved work');
+    };
+  });
   await page.goto('/methodology');
   await expect(page.locator('.topic-grid article')).toHaveCount(PUBLIC_METHODOLOGY.topics.length);
   await expect(page.getByRole('heading', { name: 'Authority-aware registration decisions' })).toBeVisible();
@@ -560,6 +573,71 @@ test('renders methodology and deferred coverage from fixed metadata without requ
   await expect(standard).toHaveCount(0);
   await optionalOnly.uncheck();
   await expect(standard).toBeVisible();
+
+  const search = catalogue.getByRole('searchbox', { name: 'Find a capability' });
+  const scope = catalogue.getByRole('combobox', { name: 'Capability scope' });
+  const reset = catalogue.getByRole('button', { name: 'Reset filters' });
+  const cards = catalogue.locator('.capability-grid article');
+  const total = PUBLIC_COVERAGE_SUMMARY.summary.capabilityFamilies;
+  await search.fill('  DNS INTELLIGENCE  ');
+  await expect(cards).toHaveCount(1);
+  await expect(standard).toBeVisible();
+  await expect(cards).toContainText('Resolver answers are point-in-time publications and do not prove provider ownership or control.');
+  await expect(catalogue.getByRole('status')).toHaveText(`Showing 1 of ${total} implemented capability families.`);
+  await search.fill('point-in-time publications');
+  await expect(cards).toHaveCount(1);
+  await expect(standard).toBeVisible();
+  await scope.selectOption('respond');
+  await expect(cards).toHaveCount(0);
+  await optionalOnly.check();
+  await search.fill('private-coverage-query.example.test');
+  await expect(catalogue.getByRole('status')).toHaveText(`Showing 0 of ${total} implemented capability families.`);
+  await expect(catalogue.getByText(/No capabilities match the selected filters/u)).toBeVisible();
+  expect(await page.evaluate(() => `${location.href} ${JSON.stringify(localStorage)} ${JSON.stringify(sessionStorage)}`)).not.toContain('private-coverage-query');
+  await reset.focus(); await page.keyboard.press('Enter');
+  await expect(reset).toBeFocused();
+  await expect(search).toHaveValue('');
+  await expect(scope).toHaveValue('all');
+  await expect(optionalOnly).not.toBeChecked();
+  await expect(cards).toHaveCount(total);
+  await search.fill('DNS intelligence');
+
+  for (const density of ['comfortable', 'compact'] as const) {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.getByRole('button', { name: /^Colour theme,/u }).click();
+    await page.getByLabel('Reading density').selectOption(density);
+    await page.getByLabel('Reading density').press('Escape');
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      for (const [width, height] of [[320, 700], [390, 844], [1024, 768], [1280, 720]] as const) {
+        await page.setViewportSize({ width, height });
+        await scope.focus(); await page.keyboard.press('Shift+Tab');
+        await expect(search).toBeFocused();
+        await expect.poll(() => search.evaluate(input => {
+          const bounds = input.getBoundingClientRect();
+          return [bounds.top + 4, bounds.bottom - 4].every(y => input.contains(document.elementFromPoint(bounds.left + bounds.width / 2, y)));
+        })).toBe(true);
+        await expectNoHorizontalOverflow(page);
+        expect((await new AxeBuilder({ page }).include('.coverage-catalogue').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+        if ((width === 320 || width === 1280) && captureVisualEvidenceEnabled()) {
+          await page.screenshot({ path: testInfo.outputPath(`coverage-${density}-${theme}-${width}-viewport.png`) });
+          await catalogue.screenshot({ path: testInfo.outputPath(`coverage-${density}-${theme}-${width}.png`) });
+        }
+      }
+    }
+  }
+  expect(await page.evaluate(() => Reflect.get(window, 'coverageStorageAttempts'))).toBe(0);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  const documentation = page.getByRole('navigation', { name: 'Documentation', exact: true });
+  await documentation.getByRole('link', { name: 'Examples', exact: true }).click();
+  await expect(page).toHaveURL(/\/examples$/u);
+  await documentation.getByRole('link', { name: 'Coverage', exact: true }).click();
+  await page.getByRole('button', { name: 'Open capability catalogue' }).click();
+  await expect(search).toHaveValue('');
+  await expect(scope).toHaveValue('all');
+  await expect(optionalOnly).not.toBeChecked();
+  await expect(cards).toHaveCount(total);
+  expect(await page.evaluate(() => Reflect.get(window, 'coverageStorageAttempts'))).toBe(0);
   expect(investigationRequests).toEqual([]);
 });
 
@@ -584,7 +662,7 @@ test('contains an optional chunk preload failure without a page error', async ({
   expect(pageErrors).toEqual([]);
 });
 
-test('opens, filters and downloads a large synthetic example without workspace access', async ({ page }) => {
+test('opens, filters and downloads a large synthetic example without workspace access', async ({ page }, testInfo) => {
   const investigationRequests = collectInvestigationRequests(page);
   const exampleChunks = new Map(PUBLIC_EXAMPLES_INDEX.examples.map(example =>
     [productionChunkPath(`src/lib/generated/public-example-outputs/${example.id}.ts`), example.id]));
@@ -600,6 +678,25 @@ test('opens, filters and downloads a large synthetic example without workspace a
     workspace: (await indexedDB.databases()).some((database) => database.name === 'whoisleuth-browser-data-v1'),
   }));
   expect(before.workspace).toBe(false);
+  expect([...requestedExamples]).toEqual([]);
+
+  const outcomes = page.getByRole('region', { name: 'Start with the investigation outcome' });
+  const stories = outcomes.getByRole('article');
+  await expect(stories).toHaveCount(4);
+  const accounts = stories.filter({ has: page.getByRole('heading', { name: 'Two sources disagree', exact: true }) });
+  const accountDetails = accounts.locator('details');
+  await expect(accountDetails).not.toHaveAttribute('open', '');
+  await accountDetails.locator('summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(accountDetails).toHaveAttribute('open', '');
+  await expect(accounts).toContainText('neither its path nor viewport');
+  for (const story of await stories.all()) {
+    const details = story.locator('details');
+    if (await details.getAttribute('open') === null) await details.locator('summary').click();
+  }
+  await expect(stories.nth(1)).toContainText('The advertisement was not rechecked');
+  await expect(stories.nth(2)).toContainText('not attribution');
+  await expect(stories.nth(3)).toContainText('not delivery or recipient acceptance');
   expect([...requestedExamples]).toEqual([]);
 
   const gallery = page.getByTestId('public-example-gallery');
@@ -656,6 +753,40 @@ test('opens, filters and downloads a large synthetic example without workspace a
   expect(after).toEqual(before);
   expect(investigationRequests).toEqual([]);
   expect([...requestedExamples].sort()).toEqual(['case-assess-input', 'case-handoff', 'case-pin-input', 'case-recheck-input', 'lookup-preflight']);
+
+  // Appearance controls deliberately save preferences; exercise them after the no-storage comparison.
+  for (const density of ['comfortable', 'compact'] as const) {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.getByRole('button', { name: /^Colour theme,/u }).click();
+    await page.getByLabel('Reading density').selectOption(density);
+    await page.getByLabel('Reading density').press('Escape');
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      for (const [width, height] of [[1280, 720], [1024, 768], [390, 844], [320, 700]] as const) {
+        await page.setViewportSize({ width, height });
+        await outcomes.scrollIntoViewIfNeeded();
+        await expectNoHorizontalOverflow(page);
+        if (width === 320) {
+          expect((await new AxeBuilder({ page }).include('.worked-outcomes').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+        }
+        if (density === 'comfortable' && (width === 320 || width === 1280) && captureVisualEvidenceEnabled()) {
+          await outcomes.screenshot({ path: testInfo.outputPath(`examples-outcomes-${theme}-${width}.png`) });
+        }
+      }
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await accounts.getByRole('link', { name: 'Inspect the two source accounts', exact: true }).click();
+  await expect(page).toHaveURL(/\/methodology#method-example-conflicting-page-accounts$/u);
+  await expect(page.locator('#method-example-conflicting-page-accounts')).toHaveAttribute('open', '');
+  await page.goto('/examples');
+  const amendment = outcomes.getByRole('article').filter({ has: page.getByRole('heading', { name: 'Amend the handoff without replacing its history', exact: true }) });
+  await amendment.locator('summary').click();
+  await amendment.getByRole('link', { name: 'Open the amendment practice', exact: true }).click();
+  await expect(page).toHaveURL('/demo?practice=requested-amendment#case-practice');
+  await expect(page.getByRole('combobox', { name: 'Practice scenario', exact: true })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Practice scenario', exact: true })).toHaveValue('requested-amendment');
+  expect(investigationRequests).toEqual([]);
 });
 
 test('uses Investigate, Respond and Assure as the only top-level product jobs', async ({ page }) => {

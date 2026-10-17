@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test as base, expect } from './fixtures';
 import { startVerifiedLocalProcess } from '../tools/local-application-process.mts';
+import { consoleWorkspaceIdentity } from './console-navigation';
 
 type Instance = Awaited<ReturnType<typeof startVerifiedLocalProcess>>;
 type LocalFixture = {
@@ -46,7 +47,7 @@ export const test = base.extend<{ localApplication: LocalFixture }>({
 export async function openLocalApplication(page: import('@playwright/test').Page, local: LocalFixture) {
   await page.goto(local.instance.launchUrl);
   await expect(page).toHaveURL(`${local.instance.origin}/dashboard`);
-  await expect(page.locator('#main-content > .workspace-scope strong')).toHaveText('Filesystem workspace');
+  await expect(consoleWorkspaceIdentity(page)).toHaveText('Filesystem workspace');
   await expect(page.getByLabel('Password', { exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => (window as unknown as { __unexpectedBrowserDatabaseCalls: number }).__unexpectedBrowserDatabaseCalls)).toBe(0);
 }

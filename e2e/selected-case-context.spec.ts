@@ -5,6 +5,7 @@ import { TEST_SITE_PASSWORD } from './constants';
 import { caseRecord, snapshot } from './case-test-fixtures';
 import { currentActionFixture } from './case-response-fixtures';
 import { sectionedLookupFixture } from './lookup-design-fixtures';
+import { consoleWorkspaceIdentity } from './console-navigation';
 import { currentBrowserLocalDocument, expandLookupFamilies, expectNoHorizontalOverflow, failNextBrowserLocalCollectionRead, migrateLegacyBrowserData, openNativeLinkInNewTab, readBrowserLocalCollection, useTheme } from './helpers';
 
 const DOMAIN = 'selected-context.example';
@@ -18,7 +19,10 @@ async function seed(page: Page) {
       assertions: [{ id: 'context-hypothesis', kind: 'hypothesis', statement: 'The page may impersonate an account portal.', rationale: 'Analyst hypothesis, not a source verdict.', evidencePinIds: ['context-pin'], state: 'open', createdAt: WHEN, updatedAt: WHEN }],
       actions: [currentActionFixture({ id: 'context-action', type: 'security_contact_report', recipient: 'security@example.test', contactSource: 'Reviewed public contact', routeObservedAt: WHEN, contactLimitations: ['Manual submission only.'], dueAt: null, targetState: 'acknowledged', reference: 'receipt-example', followUpAt: '2026-06-08T00:00:00.000Z', outcome: 'Receipt acknowledged; no independent removal finding.', createdAt: WHEN, updatedAt: '2026-06-02T00:00:00.000Z' })],
     }),
-    decisions: [{ id: 'context-decision', summary: 'Review the suspected impersonation', rationale: 'The retained field needs corroborating evidence.', confidence: 'unknown', confidenceBasis: 'The capture is partial.', evidencePinIds: ['context-pin'], createdAt: WHEN }],
+    decisions: [
+      { id: 'earlier-context-decision', summary: 'Retain the initial uncertain assessment', rationale: 'Further observations were needed.', confidence: 'unknown', confidenceBasis: '', evidencePinIds: ['context-pin'], createdAt: '2026-05-31T00:00:00.000Z' },
+      { id: 'context-decision', summary: 'Review the suspected impersonation', rationale: 'The retained field needs corroborating evidence.', confidence: 'unknown', confidenceBasis: 'The capture is partial.', evidencePinIds: ['context-pin'], createdAt: WHEN },
+    ],
   };
   await migrateLegacyBrowserData(page, { 'whois-rdap-cases-v1': currentBrowserLocalDocument('cases', { cases: [record, caseRecord({ id: 'other-context', domain: 'other-context.example' })] }) }, { destination: `/cases?case=${CASE_ID}` });
   await expect(page.locator(`#case-head-${CASE_ID}`)).toBeVisible();
@@ -35,6 +39,16 @@ test('selected Case context follows tool navigation without changing saved evide
   page.on('request', (request) => { if (/\/api\/(?:lookup|discover|bulk|mail)/u.test(request.url())) collections.push(request.url()); });
   await expect(page.getByRole('region', { name: 'Selected Case', exact: true })).toHaveCount(0);
   await navigate(page, 'Bulk');
+  const shellContext = page.getByRole('region', { name: 'Current investigation context', exact: true });
+  await expect(consoleWorkspaceIdentity(page)).toHaveText('Default');
+  await expect(shellContext.getByRole('note', { name: 'Current task', exact: true })).toContainText('Bulk');
+  const storage = shellContext.getByText('Browser-local storage', { exact: true }).and(shellContext.locator('summary')).locator('..');
+  await expect(storage).not.toHaveAttribute('open');
+  await storage.locator(':scope > summary').focus(); await page.keyboard.press('Enter');
+  await expect(storage).toHaveAttribute('open', '');
+  await expect(storage).toContainText('not a live source-health check');
+  await page.keyboard.press('Enter');
+  await expect(storage).not.toHaveAttribute('open');
   const context = page.getByRole('region', { name: 'Selected Case', exact: true });
   await expect(context.getByRole('link', { name: DOMAIN, exact: true })).toBeVisible();
   await context.locator(':scope > details > summary').click();
@@ -44,8 +58,18 @@ test('selected Case context follows tool navigation without changing saved evide
   await expect(context.getByRole('region', { name: 'Case report history' })).toContainText('receipt-example');
   await expect(context.getByRole('region', { name: 'Case report history' })).toContainText('no independent removal finding');
   await expect(context.getByRole('region', { name: 'Case follow-up dates' }).locator('time')).toHaveAttribute('datetime', '2026-06-08T00:00:00.000Z');
+  await context.getByRole('link', { name: 'Review all 2 recorded decisions', exact: true }).click();
+  const assessment = page.getByRole('group', { name: 'Case assessment workspace', exact: true });
+  await expect(assessment).toBeVisible();
+  await expect(assessment.getByText('Retain the initial uncertain assessment', { exact: true })).toBeVisible();
+  await expect(assessment.getByText('Review the suspected impersonation', { exact: true })).toBeVisible();
+  const response = page.getByRole('group', { name: 'Case response workspace', exact: true, includeHidden: true });
+  await expect(response).toHaveCount(1); await expect(response).toBeHidden();
+  await navigate(page, 'Bulk');
   for (const label of ['Lookup', 'Discover', 'Brands', 'Monitoring', 'Dashboard']) {
     await navigate(page, label);
+    await expect(shellContext.getByRole('note', { name: 'Current task', exact: true })).toContainText(label);
+    await expect(consoleWorkspaceIdentity(page)).toHaveText('Default');
     await expect(context.getByRole('link', { name: DOMAIN, exact: true })).toBeVisible();
   }
   expect(collections).toEqual([]);
@@ -109,6 +133,15 @@ test('Case links retain modified-click behaviour without changing the selected c
   const peer = await openNativeLinkInNewTab(page, context.getByRole('link', { name: DOMAIN, exact: true }));
   try { await expect(peer).toHaveURL(`/cases?case=${CASE_ID}`); await expect(peer.locator(`#case-head-${CASE_ID}`)).toBeVisible(); }
   finally { await peer.close(); await page.bringToFront(); }
+  await expect(page).toHaveURL('/bulk');
+  await expect(context.getByRole('link', { name: DOMAIN, exact: true })).toBeVisible();
+  await context.locator(':scope > details > summary').click();
+  const decisions = await openNativeLinkInNewTab(page, context.getByRole('link', { name: 'Review all 2 recorded decisions', exact: true }));
+  try {
+    const assessment = decisions.getByRole('group', { name: 'Case assessment workspace', exact: true });
+    await expect(assessment.getByText('Retain the initial uncertain assessment', { exact: true })).toBeVisible();
+    await expect(assessment.getByText('Review the suspected impersonation', { exact: true })).toBeVisible();
+  } finally { await decisions.close(); await page.bringToFront(); }
   await expect(page).toHaveURL('/bulk');
   await expect(context.getByRole('link', { name: DOMAIN, exact: true })).toBeVisible();
 });

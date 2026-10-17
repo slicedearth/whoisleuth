@@ -28,7 +28,7 @@
   <label id={`${id}-label`} for={id}>{label}</label>
   <input {id} bind:this={input} type="file" {accept} {disabled} aria-describedby={`${id}-help`} onchange={event => select(event.currentTarget.files)}>
   <p id={`${id}-help`} class="file-help">Choose or drop one file · up to {size(maximumBytes)}<span>Accepted: {accept.split(',').filter(value => value.startsWith('.')).join(', ') || accept}</span></p>
-  {#if file}<div class="file-selection"><span><strong>{file.name}</strong> · {size(file.size)}</span><button class="btn" type="button" {disabled} onclick={clear} aria-label={`Remove ${label.toLowerCase()}`}>Remove file</button></div>{/if}
+  {#if file}<div class="file-selection"><span><strong>{file.name}</strong> · {size(file.size)}</span><button class="btn" type="button" {disabled} onclick={clear} aria-describedby={`${id}-label`}>Remove file</button></div>{/if}
   {#if error}<p role="alert">{error}</p>{/if}
 </div>
 

@@ -326,11 +326,55 @@ test('folder export uses direct activation and read-back verification, with a ZI
         const child = children[0] as FileSystemDirectoryHandle;
         const manifest = JSON.parse(await (await (await child.getFileHandle('manifest.json')).getFile()).text());
         const file = await (await (await child.getDirectoryHandle('artifacts')).getFileHandle('artifact-1')).getFile();
-        return { bytes: [...new Uint8Array(await file.arrayBuffer())], manifest, probe: Reflect.get(window, 'folderPickerProbe') };
+        return { name: child.name, bytes: [...new Uint8Array(await file.arrayBuffer())], manifest, probe: Reflect.get(window, 'folderPickerProbe') };
       }, parentName);
       expect(result.bytes).toEqual([0, 255, 128, 1]); expect(result.manifest.artifacts[0].source.observedAt).toBeNull();
       expect(result.probe).toEqual({ calls: 1, active: true, mode: 'readwrite' });
-    } finally { await page.evaluate(async name => (await navigator.storage.getDirectory()).removeEntry(name, { recursive: true }), parentName); }
+      // Hold a real payload close after it commits, then cancel before the
+      // completion manifest. No production writer or verifier is replaced.
+      await page.evaluate(() => {
+        const create = FileSystemFileHandle.prototype.createWritable;
+        let release!: () => void;
+        const held = new Promise<void>(resolve => { release = resolve; });
+        const probe = { entered: false, release, restore: () => { FileSystemFileHandle.prototype.createWritable = create; } };
+        Reflect.set(window, 'interruptedFolderWrite', probe);
+        FileSystemFileHandle.prototype.createWritable = async function(options) {
+          const stream = await create.call(this, options);
+          if (this.name === 'artifact-1') {
+            probe.restore();
+            const close = stream.close.bind(stream);
+            Object.defineProperty(stream, 'close', { value: async () => { await close(); probe.entered = true; await held; } });
+          }
+          return stream;
+        };
+      });
+      await write.click();
+      await expect.poll(() => page.evaluate(() => Reflect.get(window, 'interruptedFolderWrite').entered)).toBe(true);
+      await panel.getByRole('button', { name: 'Cancel export', exact: true }).click();
+      await page.evaluate(() => Reflect.get(window, 'interruptedFolderWrite').release());
+      await expect(panel.getByRole('alert')).toContainText('private partial output');
+      await expect(panel.getByRole('alert')).toContainText('inspect or remove it before another export');
+      await expect(write).toBeEnabled();
+      await expect(panel.getByRole('status', { includeHidden: true })).toHaveText('');
+      const partial = await page.evaluate(async ({ name, complete }) => {
+        const parent = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
+        const children: FileSystemDirectoryHandle[] = [];
+        for await (const item of parent.values()) if (item.kind === 'directory') children.push(item as FileSystemDirectoryHandle);
+        const unfinished = children.filter(child => child.name !== complete);
+        if (children.length !== 2 || unfinished.length !== 1) throw new Error('Expected one complete and one interrupted child.');
+        const child = unfinished[0]!;
+        const names: string[] = []; for await (const item of child.values()) names.push(item.name);
+        const file = await (await (await child.getDirectoryHandle('artifacts')).getFileHandle('artifact-1')).getFile();
+        const original = await parent.getDirectoryHandle(complete);
+        return { names, bytes: [...new Uint8Array(await file.arrayBuffer())],
+          previousManifest: JSON.parse(await (await (await original.getFileHandle('manifest.json')).getFile()).text()) };
+      }, { name: parentName, complete: result.name });
+      expect(partial.names).toEqual(['artifacts']); expect(partial.bytes).toEqual([0, 255, 128, 1]);
+      expect(partial.previousManifest).toEqual(result.manifest);
+    } finally { await page.evaluate(async name => {
+      const probe = Reflect.get(window, 'interruptedFolderWrite'); probe?.release(); probe?.restore();
+      await (await navigator.storage.getDirectory()).removeEntry(name, { recursive: true });
+    }, parentName); }
   }
   expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
 });

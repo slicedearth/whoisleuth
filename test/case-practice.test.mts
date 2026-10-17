@@ -1,12 +1,26 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createCasePracticeRecord, createCasePracticeSession, CASE_PRACTICE_LATER_AT, CASE_PRACTICE_SCENARIOS, reviewCasePracticeInput, previewCasePracticeContainment, casePracticeFeedback, casePracticeJourneyActions, casePracticeJourneyMaterials, casePracticeRoutes } from '../frontend/src/lib/analysis/case-practice.ts';
+import { createCasePracticeRecord, createCasePracticeSession, CASE_PRACTICE_LATER_AT, CASE_PRACTICE_SCENARIOS, reviewCasePracticeInput, previewCasePracticeContainment, previewCasePracticePackets, casePracticeFeedback, casePracticeJourneyActions, casePracticeJourneyMaterials, casePracticeRoutes, casePracticeImageLineage } from '../frontend/src/lib/analysis/case-practice.ts';
+import { compareCaseHandoffCopies } from '../packages/cases/case-handoff-comparison.mts';
+import { validateCaseResponsePacket } from '../packages/cases/case-response-packet-validation.mts';
 import { normalizeCase } from '../packages/cases/case-record-operations.mts';
 import { replaceCaseDraft } from '../packages/cases/case-drafts.mts';
 import { caseRecheckAnswerContext } from '../packages/cases/case-recheck-model.mts';
 import { createCaseDraftRecovery, type CaseDraftRecoveryState } from '../frontend/src/lib/controllers/case-draft-recovery.ts';
-import { caseIncidentTargets } from '../packages/cases/case-workflow-metadata.mts';
+import { caseIncidentTargets, buildCaseIncidentCoverage } from '../packages/cases/case-workflow-metadata.mts';
 import { latestEvidenceRequests, submittedPacketReceipts } from '../packages/cases/case-requested-evidence.mts';
+
+test('fictional image history preserves separately declared operations without adding practice attachments', () => {
+  const record = createCasePracticeRecord('requested-amendment'), before = structuredClone(record);
+  const reviewed = casePracticeImageLineage();
+  assert.equal(reviewed.termination, 'no_further_declaration');
+  assert.deepEqual(reviewed.steps.map(step => [step.declaration.operations, step.declaration.source.digestSha256, step.parentHasDeclaredEdits]), [
+    [['outline'], `sha256:${'b'.repeat(64)}`, true], [['redact'], `sha256:${'a'.repeat(64)}`, false],
+  ]);
+  assert.deepEqual(casePracticeImageLineage(), reviewed);
+  assert.deepEqual(record, before);
+  assert.equal(record.attachments?.length ?? 0, 0);
+});
 
 test('practice starts from fictional, separately attributed complete and unavailable observations', () => {
   const record = createCasePracticeRecord();
@@ -46,6 +60,51 @@ test('the existing offer-page practice runs deterministic offline owners without
   assert.deepEqual(record, before);
 });
 
+test('fictional packet comparison retains exact identities and omitted source pins without authorising or changing practice', async () => {
+  const record = createCasePracticeRecord(), before = structuredClone(record);
+  const [baseline, comparison] = await previewCasePracticePackets(record);
+  for (const copy of [baseline, comparison]) {
+    assert.equal(copy.kind, 'response_packet');
+    assert.equal(copy.caseId, record.id);
+    assert.equal(copy.domain, record.domain);
+    await validateCaseResponsePacket(copy.record);
+    assert.equal(copy.record.reviewRequired, true);
+    assert.equal(copy.record.submissionPerformed, false);
+    const authority = copy.record.authorisation as Record<string, unknown>;
+    assert.equal(authority.status, 'draft');
+    assert.equal(authority.confirmedAt, null);
+    assert.equal(authority.suppliedReviewDigestSha256, null);
+    const actions = copy.record.escalationHistory as Record<string, unknown>[];
+    assert.equal(actions.length, 1);
+    assert.equal(actions[0]!.state, 'drafting');
+    assert.equal(JSON.stringify(actions).includes('packetReceipt'), false);
+  }
+  const changes = compareCaseHandoffCopies(baseline, comparison);
+  assert.equal(changes.state, 'ready');
+  assert.equal(changes.rows.find(row => row.field === 'recipientRoute')?.state, 'changed');
+  assert.equal(changes.rows.find(row => row.field === 'incident')?.state, 'changed');
+  assert.equal(changes.rows.find(row => row.field === 'actionBinding')?.state, 'unchanged');
+  const action = changes.rows.find(row => row.field === 'escalationHistory')!;
+  assert.equal(action.state, 'changed');
+  assert.ok(action.recordId);
+  assert.deepEqual((action.baseline as { responseObjects: unknown }).responseObjects, [record.evidencePins[0]!.responseObject]);
+  assert.deepEqual((action.comparison as { responseObjects: unknown }).responseObjects, [record.evidencePins[3]!.responseObject]);
+  const selected = changes.rows.filter(row => row.field === 'selectedEvidence');
+  assert.deepEqual(selected.filter(row => row.state === 'baseline_only').map(row => row.recordId), [record.evidencePins[0]!.id, record.evidencePins[2]!.id]);
+  assert.deepEqual(selected.filter(row => row.state === 'comparison_only').map(row => row.recordId), [record.evidencePins[3]!.id]);
+  assert.deepEqual(record, before);
+  assert.equal(record.actions.length, 0);
+  assert.equal(record.evidencePins.length, 4);
+});
+
+test('fictional packet preparation rejects other scenarios and stops an already cancelled attempt', async () => {
+  await assert.rejects(previewCasePracticePackets(createCasePracticeRecord('provider-resolved')), /supplied offer-page/u);
+  const controller = new AbortController(); controller.abort();
+  const record = createCasePracticeRecord(), before = structuredClone(record);
+  await assert.rejects(previewCasePracticePackets(record, controller.signal), { name: 'AbortError' });
+  assert.deepEqual(record, before);
+});
+
 test('required practice families have distinct supplied evidence, scope, report comparisons and recheck conditions', () => {
   const required = ['credential-form', 'compromised-page', 'unobserved-lookalike', 'related-hosts', 'fake-shop', 'ad-redirect', 'social-payment', 'role-impersonation',
     'email-only', 'conditional-presentation', 'hosted-object', 'app-listing', 'requested-amendment', 'restored-dispute', 'infrastructure-move', 'unexpected-notice'];
@@ -77,6 +136,10 @@ test('connected practice records separate recipient material, simulated delivery
     assert.deepEqual(materials.map(item => item.incident.abusiveUrls), [['https://case-practice.example/offer'], ['https://distribution.example/ad/7']]);
     assert.deepEqual(materials.map(item => item.selectedEvidence.map(pin => pin.label)), [['Earlier page', 'Reference offer text'], ['Advertisement distribution object']]);
     assert.ok(materials.every(item => item.selectedEvidence.every(pin => !Object.hasOwn(pin, 'value'))));
+    const preparedCoverage = buildCaseIncidentCoverage(prepared);
+    assert.deepEqual(preparedCoverage.map(row => row.responseObject.kind), ['page', 'advertisement']);
+    assert.ok(preparedCoverage.every(row => row.actionCoverage === 'bound' && row.responseContexts.length === 1
+      && row.responseContexts[0]!.currentState === 'drafting' && row.responseContexts[0]!.deliveryEvents.length === 0));
     const signature = JSON.stringify(materials);
     session.edit({ actionUpdate: { id: prepared.actions[0]!.id, recipient: 'changed-recipient@example.invalid' } });
     assert.throws(() => session.journey('deliver', signature), /changed/u);
@@ -84,6 +147,11 @@ test('connected practice records separate recipient material, simulated delivery
     assert.deepEqual(casePracticeJourneyActions(delivered).map(action => action.state), ['acknowledged', 'submitted']);
     assert.equal(delivered.observedEffects.reviews.length, 0, 'acknowledgement cannot invent independent remediation');
     assert.ok(delivered.actions.every(action => action.history.some(event => event.nextState === 'submitted' && event.reference?.startsWith('Practice-only'))));
+    const deliveredCoverage = buildCaseIncidentCoverage(delivered);
+    assert.deepEqual(deliveredCoverage.map(row => row.providerEvents.length), [1, 0]);
+    assert.ok(deliveredCoverage.every(row => row.responseContexts[0]!.reviewEvents.length === 2
+      && row.responseContexts[0]!.deliveryEvents.length === 1 && row.reviews.length === 0));
+    assert.ok(deliveredCoverage.flatMap(row => row.responseContexts[0]!.deliveryEvents).every(event => !event.packetReceipt), 'do not invent exported packet receipts');
     const closed = session.journey('close-page');
     assert.equal(casePracticeJourneyActions(closed)[0]!.state, 'terminal');
     assert.equal(casePracticeJourneyActions(closed)[1]!.state, 'submitted');
@@ -91,6 +159,9 @@ test('connected practice records separate recipient material, simulated delivery
     assert.deepEqual(caseIncidentTargets(closed).map(target => target.url), ['https://distribution.example/ad/7']);
     assert.notEqual(closed.status, 'resolved');
     assert.equal(closed.closures.records.length, 0, 'closing one page must not close the whole Case');
+    const closedCoverage = buildCaseIncidentCoverage(closed);
+    assert.equal(closedCoverage.find(row => row.responseObject.kind === 'page')!.reviews[0]!.state, 'not_reproduced');
+    assert.equal(closedCoverage.find(row => row.responseObject.kind === 'advertisement')!.observationCoverage, 'unknown');
     assert.deepEqual(normalizeCase(closed), closed);
     assert.deepEqual(initial.actions, []);
     assert.throws(() => session.journey('close-page'), /separate fictional deliveries/u);
@@ -154,7 +225,7 @@ test('a practice Case mutation and its submitted draft settle together without s
   await session.storage.update(store => replaceCaseDraft(store, draft, null));
   assert.throws(() => session.edit({ note: 'Must not commit' }, { id: draft.id, revision: 'stale' }), /draft changed/u);
   assert.deepEqual(session.read(), before);
-  await assert.rejects(session.storage.update(store => replaceCaseDraft(store, { ...draft, id: 'other-draft', caseId: 'another-case' }, null)), /fictional Case/u);
+  await assert.rejects(session.storage.update(store => replaceCaseDraft(store, { ...draft, id: 'other-draft', caseId: 'another-case' }, null)), /fictional case/u);
   assert.deepEqual((await session.storage.read()).records, [draft]);
   session.edit({ note: 'The reviewed practice note.' }, draft);
   assert.equal(session.read().notes.at(-1)!.body, 'The reviewed practice note.');
@@ -166,7 +237,8 @@ test('practice uses the same non-reproduction boundary and retains unavailable e
   const session = createCasePracticeSession(), before = session.read();
   const later = before.evidencePins[1]!;
   const review = { state: 'not_reproduced', observedAt: later.observedAt!, sourceClass: 'analyst', source: later.source,
-    completeness: later.completeness, evidencePinId: later.id, recheck: caseRecheckAnswerContext(before.assertions[0]!, 'comparable') };
+    completeness: later.completeness, evidencePinId: later.id, responseObject: later.responseObject,
+    recheck: caseRecheckAnswerContext(before.assertions[0]!, 'comparable') };
   assert.throws(() => session.edit({ observedEffectReview: review }), /complete|partial/iu);
   assert.deepEqual(session.read(), before);
   const saved = session.edit({ observedEffectReview: { ...review, state: 'unavailable' } });

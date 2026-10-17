@@ -1,7 +1,5 @@
 # WHOISleuth CLI guide
 
-`review-evidence` also reviews bounded source-qualified infrastructure snapshots and explicit earlier/later comparison inputs entirely offline. See [infrastructure observations](infrastructure-observations.md) for the exact schemas, outcome semantics and retained-evidence limitations.
-
 The first-party CLI runs on the operator's machine and does not call the hosted
 WHOISleuth deployment. Use this guide for installation, common commands,
 collection boundaries and output. Installed `whoisleuth --help`, focused
@@ -13,6 +11,11 @@ The [website command reference](https://www.whoisleuth.com/cli) starts with comm
 tasks, then offers searchable commands with examples, option explanations and
 defaults. Command-section links can be bookmarked. Its option guidance and
 installed help derive from the same command definitions.
+
+Not sure which interface to use? The [installation-mode comparison](https://www.whoisleuth.com/cli#choose-mode)
+covers the hosted console, filesystem-local application, CLI and capture companion,
+including request origin, storage, offline use and distribution. The optional
+application and capture archives are separate from the public CLI package.
 
 The generated [privacy and data-flow catalogue](https://github.com/slicedearth/whoisleuth/blob/main/docs/privacy-data-flow-catalogue.md)
 lists the network, recipient, retention and export boundary for every command.
@@ -77,21 +80,34 @@ private document from the interactive view:
 
 ```bash
 whoisleuth lookup example.test --deep --browse --save-lookup lookup.json
+whoisleuth verify-artifact lookup.json --json
+whoisleuth export lookup.json --output evidence.json
+whoisleuth verify-artifact evidence.json --json
 ```
 
-In Console Lookup, open **Replay exported evidence**, select the file, verify
-its digest and source states, then create or update a browser-local Case. The
-file is not uploaded. Case classification, exact incident links and response
-actions remain deliberate analyst steps. Ordinary Case files also support the
+Keep `lookup.json` as the private CLI original. In Lookup in the console, open **Replay
+exported evidence**, select `evidence.json`, check its digest and source states,
+then create or update a browser-local case. The private CLI document is not a
+browser replay format; the separate evidence export excludes raw registration
+payloads and expanded contacts. Neither file is uploaded. Case classification, exact incident links and response
+actions remain deliberate analyst steps. Ordinary case files also support the
 offline CLI workflow below.
-When several incident Cases share a domain, select the intended Case before
-retaining replay evidence. Case packs preserve each current Case ID separately;
+When several incident cases share a domain, select the intended case before
+retaining replay evidence. Case packs preserve each current case ID separately;
 trusted and public packs exclude analyst-entered incident titles.
 Every audience retains tags, decision summaries and rationale as well as domain
-evidence and Case, pin and decision IDs. Public does not mean anonymous.
+evidence and case, pin and decision IDs. Public does not mean anonymous.
 Browser Lookup evidence can be verified or packaged in the CLI. `brief`,
 `export`, `compare`, `registry-doctor` and `source-report` instead require a
 saved CLI Lookup; they do not reconstruct it from a browser export.
+
+Registration source states are independent: `unsupported` means no RDAP or
+WHOIS service is published for the target, while `skipped` means no query was
+issued in that mode or under the registry access policy. Neither is a transport
+failure or a domain-absence finding. Standard terminal output explains these
+non-query outcomes; JSON and evidence exports retain their separate states.
+`--strict-exit` does not fail solely because a protocol is unsupported or skipped,
+but continues to report genuine failed or partial sources.
 
 Process selected local input:
 
@@ -146,6 +162,8 @@ For an explicit inherited-policy and direct parent-delegation review, use
 option, posture collection keeps its existing exact-name scope. The extra
 results distinguish recursive policy publication from sampled parent referrals;
 they do not establish name existence, message authentication or DNSSEC validity.
+The machine-readable posture document keeps its existing versioned fields;
+the website's transient structured policy scope is not included in that export.
 
 | Mode | Behaviour |
 | --- | --- |
@@ -159,6 +177,16 @@ Networked commands run from the local machine and contact the sources named in
 their focused help. They do not use the hosted login or hosted usage controls.
 `lookup --plan` lists planned source families and disclosure targets before
 collection. `doctor` is offline unless `--network` is selected.
+
+For troubleshooting that you intend to share, use
+`whoisleuth doctor --summary-json > diagnostics.json`. This summary keeps numeric
+CLI/Node versions, fixed check codes and public format identifiers from the command
+catalogue. Those identifiers describe declared formats, not a compatibility test.
+Targets, URLs, filenames, paths, user names, credentials, headers, timestamps and
+free-form diagnostic details are omitted. Version prerelease/build metadata is
+also omitted. Normal terminal and `--json` diagnostics can include error details;
+inspect them before sharing. The summary does not enable network checks or upload
+anything, and it has the same success/partial exit behaviour as the detailed report.
 
 Deep Lookup reports IPv4 and IPv6 results separately, including empty answers,
 NODATA, resolver-reported missing names and query failures. These outcomes remain
@@ -265,6 +293,8 @@ metadata or freshness admission; terminal output identifies that limitation.
 
 ### Contextual reviews
 
+`review-evidence` reviews bounded source-qualified infrastructure snapshots and explicit earlier/later comparisons offline. See [infrastructure observations](infrastructure-observations.md) for supported inputs and how to interpret their outcomes.
+
 `review-evidence` also accepts [contextual review inputs](contextual-reviews.md)
 for source-qualified incident sequences, retained domain history, platform-object continuity, authorised storefront
 comparison and connector provenance. These workflows are offline; partial
@@ -278,11 +308,11 @@ reassessment; they do not establish ownership or discard prior evidence.
 
 `review-evidence containment.json --json --strict-exit` accepts a
 `whoisleuth.internal-containment.input` version-1 document containing a supported
-Case export, selected next-step assertion and linked pin IDs, internal or trusted
+case export, selected next-step assertion and linked pin IDs, internal or trusted
 audience, recipient role and an explicit disclosure-review acknowledgement.
-It exports only that selected handoff, never writes the Case or performs a
+It exports only that selected handoff, never writes the case or performs a
 control. Missing or unselected supporting context stays partial (exit 4 under
-`--strict-exit`), and a resolved Case or provider outcome does not close an open
+`--strict-exit`), and a resolved case or provider outcome does not close an open
 internal follow-up. See [internal containment](offline-intake-context.md#selected-internal-containment-handoff)
 for the complete input and audience limitations.
 
@@ -335,19 +365,19 @@ selected file, including an envelope when supplied. No provider API is contacted
 
 ## Output and automation
 
-### Local Case files
+### Local case files
 
 Manual response scope is explicit and offline. `case incident-link` takes
 `{"url":"https://example.test/reported-page"}`; use its retained ID to bind
 `responseObjects` on `case action`. Each object contains `kind`, `identifier`
-and `incidentTargetId` (null for the Case domain or an associated hostname).
+and `incidentTargetId` (null for the case domain or an associated hostname).
 New URL objects must match that exact retained link. Exact historical identities
 already retained in response records remain selectable after a link edit or
 removal; they are not rebound to its replacement. An action may bind up to 20
 objects; missing historical scope stays unknown.
 
 `case action-event` takes `{"id":"action-id","transition":{...}}`, using
-the same reviewed, authorised and manually submitted workflow as Console.
+the same reviewed, authorised and manually submitted workflow as the console.
 After submission, a typed `objectOutcome` such as `removed`, `restricted`,
 `suspended`, `delisted`, `restored` or `disputed` requires explicit event
 `responseObjects`: a partial receipt never applies to all objects by default.
@@ -372,11 +402,11 @@ Independent removal, restriction, suspension, delisting, transfer and restoratio
 use those same comparison requirements. Disputes and warnings retain procedural
 source attribution separately; provider claims are not independent observations.
 `case close-object` requires one `responseObject` and the usual typed closure
-reason/evidence links. It leaves the Case and other objects unchanged.
+reason/evidence links. It leaves the case and other objects unchanged.
 All these JSON operations require `--input`, `--output`, deliberate file
 replacement and the existing digest/lease checks. No report or request is sent.
 
-Create a working file, inspect its Case IDs, then append a note:
+Create a working file, inspect its case IDs, then append a note:
 
 ```sh
 whoisleuth case open --domain example.test --title "Review the selected form" --output cases.json
@@ -384,8 +414,8 @@ whoisleuth case show cases.json
 whoisleuth case note cases.json --note-file note.txt --output cases.json --force
 ```
 
-Use `--case-id` when the file contains several Cases. `open` reuses the selected
-Case; `--new-incident --title "Another incident"` creates a distinct ID for the
+Use `--case-id` when the file contains several cases. `open` reuses the selected
+case; `--new-incident --title "Another incident"` creates a distinct ID for the
 same domain. It does not open a browser or collect anything.
 
 `pin`, `link`, `withdraw-link`, `assess` and `recheck` read a selected JSON file with `--input`:
@@ -442,23 +472,23 @@ A recheck input contains `state`, `observedAt`, `completeness`, `source` and
 `comparisonSummary`, with optional limitations and follow-up time. For example,
 use `state: "unavailable"` and `completeness: "partial"` when a supplied capture
 did not complete. `not_reproduced` requires a saved recheck question from the
-Case's console workflow, its exact `recheck` context, the target
+case's console workflow, its exact `recheck` context, the target
 `observationHostname`, a complete later observation where a baseline exists,
 and `conditionsMatch: "comparable"`. It never means global removal or takedown.
 
-Mutations require an explicit output path and write the complete current Case
+Mutations require an explicit output path and write the complete current case
 export. They never prune old evidence to fit. Input formatting may use up to
-16 MiB; the canonical store remains limited to 4 MiB and 500 Cases. `show --json`
-can export a selected subset to a **different** path. Ordinary Case imports also
+16 MiB; the canonical store remains limited to 4 MiB and 500 cases. `show --json`
+can export a selected subset to a **different** path. Ordinary case imports also
 allow 16 MiB for formatting and export metadata; the stored-data limit remains
-4 MiB. Case packs retain their separate 25-Case selection and 4-MiB source-file
+4 MiB. Case packs retain their separate 25-case selection and 4-MiB source-file
 limits, and include generated reports within the bounded import allowance.
 
 `show` reports the exact file digest. Add `--expect-file-digest sha256:<digest>`
 to reject a file changed since that review. Source/output locks and atomic
 replacement also detect changes during execution. After an interrupted process,
 inspect its adjacent `.workflow.lock` before deliberately removing it. Validation
-or conflict failures leave the Case file unchanged and return 2. Filesystem
+or conflict failures leave the case file unchanged and return 2. Filesystem
 publication failures return 3.
 
 Working files contain private analyst content and file references, not attachment
@@ -478,19 +508,19 @@ whoisleuth manifest evidence.json screenshot.png --workflow "Evidence review" \
 whoisleuth verify-artifact --folder ./evidence-project --json --strict-exit
 ```
 
-Packages admit the 128-file, 64-MiB original selection plus one bounded Case
+Packages admit the 128-file, 64-MiB original selection plus one bounded case
 export, with a separate manifest allowance. Original-file limits remain unchanged.
-`verify-artifact` uses the same exact ordinary Case reader as `case show`,
+`verify-artifact` uses the same exact ordinary case reader as `case show`,
 without repairing content. Package verification also reports original-reference
-completeness for each Case file; `--strict-exit` returns 4 when a referenced original is missing.
-An ordinary Case JSON file alone provides structural validity, not a checksum.
+completeness for each case file; `--strict-exit` returns 4 when a referenced original is missing.
+An ordinary case JSON file alone provides structural validity, not a checksum.
 They use generated entry names, not original paths. Ordinary ZIPs and folders
 are private and unencrypted; packaging does not redact selected files. The report distinguishes
 file identity, supported source formats, opaque content, exact capsule/source
 links, declared image derivation and capture-manifest attachment matches.
 Image derivation reports an immediate-parent digest and byte length, editing
 method and operation kinds, not proof of transformation. Parent inclusion matches
-another selected manifest entry by exact byte digest and size; an unselected Case
+another selected manifest entry by exact byte digest and size; an unselected case
 attachment reference does not count. Parent pixels are optional; absent declarations
 leave editing history unknown. Include the capture manifest and
 its screenshot/DOM-digest files together to check their declared bytes; original
@@ -551,6 +581,35 @@ trees and unlisted files. Its package digest and byte count describe the
 canonical stored-ZIP representation, not filesystem metadata. These are
 selected evidence exports, not complete workspace backups.
 
+### Exporting a fixed workflow for review
+
+Terminal plans and recipe explanations distinguish networked steps, offline
+steps and declared reuse of earlier outputs. These are step and handoff counts,
+not request totals or confirmation that a saved file is available. The planner
+does not inspect files or caches; collection and evidence selection remain
+deliberate actions. JSON exports keep their existing versioned fields.
+
+Select one installed recipe and save its declared steps for review:
+
+```sh
+whoisleuth workflow-plan --explain domain-triage --json --output recipe.json
+```
+
+The document includes the subject requirement, command and argument examples,
+network modes, required approvals, output artefact families and completion guidance.
+To prepare the same recipe for a specific subject:
+
+```sh
+whoisleuth workflow-plan domain-triage example.test --json --output plan.json
+```
+
+Both commands plan offline. The files contain declarative steps rather than
+shell history or executable scripts. Argument examples and approval fields
+describe requirements; they do not record a completed review or grant approval.
+These are review documents, not `workflow-run` checkpoints or custom recipe
+imports. Run an installed recipe deliberately with its required inputs and
+fresh approvals.
+
 ### Resuming a fixed workflow
 
 Inspect a paused run without executing any step or rewriting its checkpoint:
@@ -583,7 +642,7 @@ whoisleuth workflow-run domain-triage example.test --approve-network \
 ```
 
 Bindings accept Lookup outputs for export, diff, timeline, comparison, source
-reports and briefs; evidence exports for verification; and Case-pack output
+reports and briefs; evidence exports for verification; and case-pack output
 for sharing review. Remaining placeholders use `--select` in order;
 for example, `--select diff=previous.json` keeps the current observation as the
 second input. Supply every input for an uncompleted step to use files instead,
@@ -698,6 +757,9 @@ and machine output contains no ANSI or transient progress text.
 - `lookup --browse` provides an interactive terminal view; press `?` for keys.
 - `--events` writes versioned lifecycle events to stderr.
 - `--strict-exit` and `--fail-on` expose selected evidence states to automation.
+- `lookup --junit` reports retained diagnostic source states, not version or
+  timing metadata. Nested diagnostic failures remain failures; target-bearing
+  diagnostic paths are not copied into the XML. This is not a truth verdict.
 - `--output` writes a private local file atomically and refuses an existing path
   unless `--force` is also selected.
 
@@ -708,7 +770,22 @@ options override profile defaults.
 
 `source-report` summarises collector-owned health envelopes in saved Lookup
 and Bulk output. Raw publications and extension fields are not interpreted as
-diagnostics, and missing health metadata remains unmeasured.
+diagnostics, and missing health metadata remains unmeasured. Its text view groups
+collection states, sample counts and durations under each source. Observation
+durations and Lookup timings stay separate; merged-report distributions describe
+retained report statistics, not a new measurement of individual requests.
+
+After verifying a domain-control or Lookup-claim passport, `verify-artifact`
+suggests the compatible offline `interchange-report` command. Suggestions use
+example filenames and never run automatically. Other artefact families receive
+guidance only when the suggested reader supports that format.
+
+The text output of `brief` groups selected facts in an indented source tree.
+Each source keeps its collection state and observation time, including sources
+with no fact selected for the brief; that does not mean the source was empty.
+Conflicting values remain separate and include both the value state and source
+state. The brief uses retained evidence only. Use `--json` for the
+structured report, including its facts, source health, unknowns and action plan.
 
 `mail-review` keeps failed input targets, incomplete DNS coverage and original
 collection times visible. Source-output and review-generation times do not

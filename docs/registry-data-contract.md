@@ -459,7 +459,7 @@ reinterpret a disabled, skipped, unsupported, or failed source as upstream
 absence. The source objects use explicit status values:
 
 - RDAP: `success`, `not_found`, `unsupported`, `disabled`, or `error`.
-- WHOIS: `complete`, `partial`, `skipped`, `disabled`, or `error`.
+- WHOIS: `complete`, `partial`, `unsupported`, `skipped`, `disabled`, or `error`.
 - Availability: `complete`, `not_applicable`, `disabled`, or `error`.
 
 RDAP diagnostics may include the selected endpoint, transport (`https` or
@@ -492,6 +492,19 @@ WHOIS diagnostics may include query time, authoritative hop, failed hop, and
 conflicting hop. A partial chain can still contain useful published values;
 field comparison uses those values but does not treat a missing field in a
 partial chain as proof that WHOIS omitted it.
+
+`unsupported` means no service was published through the applicable IANA
+discovery source; it is not a failed query or evidence that the domain is absent.
+A WHOIS admission decision records `queryProfile: "not-issued"`, its explicit
+`unsupported` or permission-gated `skipped` state, and a neutral detail instead
+of a transport error. No socket or observation time is invented. The live
+envelope has no parsed publication for either state. A fulfilled RDAP discovery
+with no matching service likewise returns `status: "unsupported"` and detail,
+not an error. Rejected bootstrap discovery, transport failures and partial
+referral chains keep their failure states; RDAP HTTP 404 remains `not_found`.
+Portable evidence retains these existing status values and registry-access
+context, with null parsed data and an empty chain for an uncollected publication.
+Historical exports keep their original recorded states.
 
 Stable source error codes include `RDAP_UPSTREAM_FAILED`, `RDAP_UNSUPPORTED`,
 `WHOIS_UPSTREAM_FAILED`, `AVAILABILITY_CHECK_FAILED`, and `FEATURE_DISABLED`.
@@ -745,13 +758,16 @@ performance, identity, ownership, safety, or maliciousness conclusions.
 ## Evidence export and privacy boundary
 
 Lookup evidence uses schema `whoisleuth.lookup-evidence`. Exact v1 version 26,
-published v2 versions 27–29, and current version 30 form its complete durable reader
+supported v2 versions 27–30, and current version 31 form its complete durable reader
 boundary. Version 27 added bounded homepage publication and delivery/cache
 metadata and the privacy-minimised registration projection. Version 28 adds a
 bounded registrar-standing projection from the checked-in IANA registrar-ID and
 current-year ICANN compliance-notice catalogues. Version 29 adds the explicit
 DNS, TLS and web observation hostname. Registration identity stays separately
 attributed; readers preserve the registrable-domain scope of older captures.
+Version 30 adds attributed form destinations. Version 31 retains the WHOIS
+registration classification separately from collection completion. Versions
+26–30 keep their original registry-insight derivation when replayed.
 Other historical reader shapes
 and unreleased checkpoints are unsupported.
 
@@ -764,7 +780,7 @@ HTTPS service-binding, page, HTTP, DNS, and TLS evidence when the selected
 Lookup represented them. Missing, partial, unavailable, direct no-data, and
 failed observations remain distinct and do not change availability or Risk.
 
-Versions 27 and 28 exclude raw RDAP payloads, expanded RDAP and WHOIS
+Versions 27–31 exclude raw RDAP payloads, expanded RDAP and WHOIS
 contacts, vCards, entity inventories, attributed contact routes, request and
 response headers, cookies, session and credential fields, URL credentials,
 queries, and fragments. Positive source allowlists retain only reviewed
@@ -789,7 +805,7 @@ Unicode table is not part of the runtime bundle. Mapping changes can alter
 which domains share a visual skeleton, so exported analyses must retain the
 mapping version when present.
 
-The local CLI `export` command can convert one bounded version-1 or version-2
+The local CLI `export` command can convert one bounded version-1, version-2 or version-3
 `whoisleuth.cli.lookup` domain document into the same evidence schema without
 making another request. CLI conversion retains the source material already in
 that saved document but cannot add browser-only profile context, so its optional

@@ -3,8 +3,9 @@
   import type { PersistCaseOperation } from '#lib/analysis/case-response-stage.ts';
   import { CASE_SCHEMA_VERSION } from '../../../../packages/contracts/case-portability.mts';
   import { MAX_CONTEXT_RECORDS, type ContextReview } from '../../../../packages/contracts/context-review.mts';
-  import { DOMAIN_HISTORY_INPUT_SCHEMA, DOMAIN_HISTORY_INPUT_VERSION, DOMAIN_CHANGE_FAMILIES, REGISTRATION_BOUNDARY_KINDS, MAX_REGISTRATION_BOUNDARIES, readDomainHistoryDeclarations, reviewDomainHistory, type RegistrationBoundary, type DomainChangeFamily, type ExpectedDomainChange, type RetiredDependency } from '../../../../packages/investigation/domain-history-review.mts';
+  import { DOMAIN_HISTORY_INPUT_SCHEMA, DOMAIN_HISTORY_INPUT_VERSION, DOMAIN_CHANGE_FAMILIES, RETIRED_DEPENDENCY_REVIEW_STEPS, REGISTRATION_BOUNDARY_KINDS, MAX_REGISTRATION_BOUNDARIES, readDomainHistoryDeclarations, reviewDomainHistory, type RegistrationBoundary, type DomainChangeFamily, type ExpectedDomainChange, type RetiredDependency } from '../../../../packages/investigation/domain-history-review.mts';
   import CaseContextReport from './CaseContextReport.svelte';
+  import EvidenceTimestamp from './EvidenceTimestamp.svelte';
   import './context-review.css';
   let { record, mutationBusy, persistOperation }: { record: CaseRecord; mutationBusy: boolean; persistOperation: PersistCaseOperation } = $props();
   let expected = $state<ExpectedDomainChange[]>([]), retired = $state<RetiredDependency[]>([]), family = $state<DomainChangeFamily>('web');
@@ -39,7 +40,12 @@
   }
 </script>
 <section class="context-review" aria-label="Domain history and retired dependencies"><h3>Domain history and retired dependencies</h3><div class="body">
-  <p>Compare this Case’s retained observations. Add expected maintenance, a retired dependency or a source-linked registration boundary to put changes in context without replacing earlier evidence.</p>
+  <p>Compare this case’s retained observations. Add expected maintenance, a retired dependency or a source-linked registration boundary to put changes in context without replacing earlier evidence.</p>
+  <details><summary>Retirement review checklist</summary><div class="body">
+    <p>Before retiring a domain, review the references you control. These are planning prompts, not checks performed by this review.</p>
+    <ul>{#each RETIRED_DEPENDENCY_REVIEW_STEPS as step}<li>{step}</li>{/each}</ul>
+    <p>Use the declaration below to record each affected asset, dependency hostname, evidence family, retirement time and source. Saving a review retains your declaration, not confirmation that cleanup is complete.</p>
+  </div></details>
   <details><summary>Declare an expected change or retired dependency</summary><div class="body">
     <label class="checkbox"><input type="checkbox" bind:checked={authorised}> I own or am authorised to review the affected assets.</label>
     <label>Evidence family<select bind:value={family}>{#each DOMAIN_CHANGE_FAMILIES as item}<option value={item}>{item}</option>{/each}</select></label>
@@ -47,8 +53,13 @@
     <form onsubmit={event => add('expected', event)}><fieldset disabled={mutationBusy || expected.length >= MAX_CONTEXT_RECORDS}><legend>Expected change</legend><div class="fields"><label>Window start (local time)<input type="datetime-local" required bind:value={start}></label><label>Window end (local time)<input type="datetime-local" required bind:value={end}></label></div><label>Reason or change reference<input required maxlength="500" bind:value={reason}></label><button class="btn" type="submit">Add expected window</button></fieldset></form>
     {#if retired.length >= MAX_CONTEXT_RECORDS}<p role="status">The {MAX_CONTEXT_RECORDS}-dependency limit is reached. Remove a dependency below before adding another.</p>{/if}
     <form onsubmit={event => add('retired', event)}><fieldset disabled={mutationBusy || retired.length >= MAX_CONTEXT_RECORDS}><legend>Retired dependency</legend><div class="fields"><label>Owned asset hostname<input required maxlength="253" bind:value={asset} placeholder="www.example.test"></label><label>Dependency hostname<input required maxlength="253" bind:value={dependency} placeholder="retired.example.test"></label><label>Retirement time (local)<input type="datetime-local" required bind:value={retiredAt}></label><label>Source or change reference<input required maxlength="500" bind:value={source}></label></div><button class="btn" type="submit">Add retired dependency</button></fieldset></form>
-    <ul>{#each expected as item, index}<li>{item.family}: {item.reason} <button class="btn small" type="button" onclick={() => { expected = expected.filter((_, i) => i !== index); report = null; }}>Remove expected window {index + 1}</button></li>{/each}
-    {#each retired as item, index}<li>{item.asset} → {item.dependency} <button class="btn small" type="button" onclick={() => { retired = retired.filter((_, i) => i !== index); report = null; }}>Remove dependency {index + 1}</button></li>{/each}</ul>
+    <ul>{#each expected as item, index}<li>{item.family}: {item.reason} <button class="btn small" type="button" onclick={() => { expected = expected.filter((_, i) => i !== index); report = null; }}>Remove expected window {index + 1}</button></li>{/each}</ul>
+    {#if retired.length}<ul aria-label="Retired dependency declarations">{#each retired as item, index}<li>
+      <strong>{item.asset} → {item.dependency}</strong>
+      <p>Declared {item.family} dependency · {item.source}</p>
+      <p>Declared retirement: <EvidenceTimestamp value={item.retiredAt} copyable={false} /></p>
+      <button class="btn small" type="button" onclick={() => { retired = retired.filter((_, i) => i !== index); report = null; }}>Remove dependency {index + 1}</button>
+    </li>{/each}</ul>{/if}
   </div></details>
   <details><summary>Declare a registration-lifecycle review boundary</summary><div class="body">
     <p>Link an analyst-reported event or review boundary to retained evidence. Earlier observations and decisions are preserved. This does not confirm deletion, re-registration, transfer or a new owner.</p>
@@ -66,5 +77,5 @@
   </div></details>
   <button class="btn" type="button" disabled={mutationBusy} onclick={review}>Review retained history</button>
   {#if error}<p role="alert">{error}</p>{/if}
-  {#if report}<CaseContextReport {report} {record} {mutationBusy} {persistOperation} reusableInput={input} retainReusableInput={false} /><p class="meta">The reusable input download includes this Case’s retained record. It is not duplicated in Case storage.</p>{/if}
+  {#if report}<CaseContextReport {report} {record} {mutationBusy} {persistOperation} reusableInput={input} retainReusableInput={false} /><p class="meta">The reusable input download includes this case’s retained record. It is not duplicated in case storage.</p>{/if}
 </div></section>

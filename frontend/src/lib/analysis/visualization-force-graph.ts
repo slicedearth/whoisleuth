@@ -218,6 +218,32 @@ function forceGraphNodeBounds(node: ProjectedForceNode) {
   };
 }
 
+function forceGraphNodeOverlap(left: ProjectedForceNode, right: ProjectedForceNode, margin = 0) {
+  const a = forceGraphNodeBounds(left), b = forceGraphNodeBounds(right);
+  return {
+    x: a.halfWidth + b.halfWidth + margin - Math.abs(left.x - right.x),
+    y: Math.min(left.y + a.below, right.y + b.below)
+      - Math.max(left.y - a.above, right.y - b.above) + margin,
+  };
+}
+
+function placeGroupedForceGraph(nodes: ProjectedForceNode[], groups: readonly string[], width: number, focusNode?: ProjectedForceNode) {
+  // Type/namespace bands organise the same nodes; they never add graph edges.
+  let cursor = focusNode ? 225 : 40;
+  if (focusNode) { focusNode.x = width / 2; focusNode.y = 112; }
+  for (const group of groups) {
+    const members = nodes.filter(node => node.group === group && node !== focusNode);
+    const rowHeight = Math.max(...members.map(node => 62 + node.labelLines.length * FORCE_GRAPH_LABEL_LINE_HEIGHT), 80);
+    const columns = Math.max(1, Math.floor(width / (Math.max(...members.map(node => node.labelWidth), 54) + 12)));
+    members.forEach((node, index) => {
+      node.x = width / columns * (index % columns + 0.5);
+      node.y = cursor + Math.floor(index / columns) * rowHeight + 22;
+    });
+    cursor += Math.ceil(members.length / columns) * rowHeight + 24;
+  }
+  return Math.max(500, cursor + 30);
+}
+
 function resolveForceGraphLabelCollisions(
   nodes: ProjectedForceNode[],
   width: number,
@@ -235,14 +261,7 @@ function resolveForceGraphLabelCollisions(
         const right = nodes[rightIndex];
         if (!right) continue;
         const rightBounds = forceGraphNodeBounds(right);
-        const overlapX = leftBounds.halfWidth + rightBounds.halfWidth + margin - Math.abs(left.x - right.x);
-        const overlapY = Math.min(
-          left.y + leftBounds.below,
-          right.y + rightBounds.below,
-        ) - Math.max(
-          left.y - leftBounds.above,
-          right.y - rightBounds.above,
-        ) + margin;
+        const { x: overlapX, y: overlapY } = forceGraphNodeOverlap(left, right, margin);
         if (overlapX <= 0 || overlapY <= 0) continue;
         moved = true;
         const leftFixed = left.id === focusNodeId;
@@ -308,7 +327,12 @@ export function projectBoundedForceGraph(
     })
     .filter((node): node is ProjectedForceNode => Boolean(node))
     .sort((a, b) => a.id.localeCompare(b.id));
-  const nodes = candidates.slice(0, MAX_FORCE_GRAPH_NODES);
+  const requestedFocusId = boundedText(options.focusNodeId, 80);
+  const focusNode = candidates.find(node => node.id === requestedFocusId)
+    ?? candidates.find(node => node.kind === 'target');
+  // Reserve one place for the admitted focus before applying the visual cap.
+  const nodes = (focusNode ? [focusNode, ...candidates.filter(node => node !== focusNode)] : candidates)
+    .slice(0, MAX_FORCE_GRAPH_NODES).sort((a, b) => a.id.localeCompare(b.id));
   const nodeIds = new Set(nodes.map((node) => node.id));
   const seenLinks = new Set<string>();
   const links = (Array.isArray(rawLinks) ? rawLinks : [])
@@ -335,9 +359,6 @@ export function projectBoundedForceGraph(
     .sort((a, b) => a.id.localeCompare(b.id))
     .slice(0, MAX_FORCE_GRAPH_LINKS) satisfies ProjectedForceLink[];
 
-  const requestedFocusId = boundedText(options.focusNodeId, 80);
-  const focusNode = nodes.find((node) => node.id === requestedFocusId)
-    ?? nodes.find((node) => node.kind === 'target');
   const groupLabels = new Map<string, string>();
   for (const node of nodes) {
     if (node.id !== focusNode?.id && !groupLabels.has(node.group)) groupLabels.set(node.group, node.groupLabel);
@@ -355,21 +376,9 @@ export function projectBoundedForceGraph(
   const clusterIndex = new Map(groupIds.map((group) => [group, forceGraphClusterIndex(group)]));
   for (const node of nodes) node.clusterIndex = clusterIndex.get(node.group) ?? 0;
 
-  if (options.layout === 'grouped') {
-    // Type/namespace bands are visual organisation, not additional graph edges.
-    let cursor = focusNode ? 225 : 40;
-    if (focusNode) { focusNode.x = centerX; focusNode.y = 112; }
-    for (const group of groupIds) {
-      const members = nodes.filter(node => node.group === group && node !== focusNode);
-      const rowHeight = Math.max(...members.map(node => 62 + node.labelLines.length * FORCE_GRAPH_LABEL_LINE_HEIGHT), 80);
-      const columns = Math.max(1, Math.floor(width / (Math.max(...members.map(node => node.labelWidth), 54) + 12)));
-      members.forEach((node, index) => {
-        node.x = width / columns * (index % columns + 0.5);
-        node.y = cursor + Math.floor(index / columns) * rowHeight + 22;
-      });
-      cursor += Math.ceil(members.length / columns) * rowHeight + 24;
-    }
-    height = Math.max(500, cursor + 30);
+  let layout = options.layout ?? 'force';
+  if (layout === 'grouped') {
+    height = placeGroupedForceGraph(nodes, groupIds, width, focusNode);
   } else if (nodes.length) {
     if (focusNode) {
       focusNode.fx = centerX;
@@ -400,6 +409,15 @@ export function projectBoundedForceGraph(
       node.y = Math.max(topInset, Math.min(height - bottomInset, Number(node.y) || centerY));
     }
     resolveForceGraphLabelCollisions(nodes, width, height, focusNode?.id);
+    if (nodes.some((left, index) => nodes.slice(index + 1).some(right => {
+      const overlap = forceGraphNodeOverlap(left, right);
+      return overlap.x > 0 && overlap.y > 0;
+    }))) {
+      // A bounded simulation can leave collisions in dense cohorts. Reuse the
+      // deterministic grouped layout instead of hiding labels or retrying it.
+      layout = 'grouped';
+      height = placeGroupedForceGraph(nodes, groupIds, width, focusNode);
+    }
   }
 
   const projectedLinks = links.flatMap((link) => {
@@ -422,6 +440,7 @@ export function projectBoundedForceGraph(
   return {
     width,
     height,
+    layout,
     nodes: nodes.map(({ id, label, labelLines, labelWidth, kind, detail, group, groupLabel, clusterIndex, x, y }) => ({
       id,
       label,

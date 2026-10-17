@@ -1,9 +1,14 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
+import { readFile } from 'node:fs/promises';
+import AxeBuilder from '@axe-core/playwright';
 import type { Locator, Page } from '@playwright/test';
 import { test, expect } from './fixtures';
 import { caseRecord, snapshot } from './case-test-fixtures';
-import { currentBrowserLocalDocument, currentBulkSessionBrowserStore, expectNoHorizontalOverflow, migrateLegacyBrowserData, useTheme } from './helpers';
+import { currentBrowserLocalDocument, currentBulkSessionBrowserStore, expandLookupFamilies, expectNoHorizontalOverflow, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
+import { sectionedLookupFixture } from './lookup-design-fixtures';
+import { comparisonLedgerCasePairIndexId } from '../frontend/src/lib/analysis/comparison-ledger.ts';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
+import type { CaseRecord } from '../packages/cases/case-record-contracts.mts';
 import type { WebsiteProfileSnapshot, WebsiteSnapshotTechnology } from '../packages/workspace/website-snapshot-model.mts';
 import {
   TECHNOLOGY_PROFILE_VERSION,
@@ -232,11 +237,103 @@ async function selectRetainedComparison(review: Locator, text: string) {
   await select.selectOption(value ?? '');
 }
 
+test('downloads only deliberately selected current comparison rows without collecting or retaining a selection', async ({ page }, testInfo) => {
+  const requests = unexpectedApiRequests(page);
+  const entries = retainedFixture();
+  entries['whois-rdap-cases-v1'].cases[0]!.notes = [{ body: 'PRIVATE_NOTE_NOT_SELECTED', createdAt: LATER }];
+  const review = await openRetainedReview(page, entries);
+  const storedBefore = await readBrowserLocalCollection(page, 'cases');
+  expect(storedBefore.records[0]!.value.notes.some(note => note.body === 'PRIVATE_NOTE_NOT_SELECTED')).toBe(true);
+  expect(storedBefore.records[0]!.value.evidenceHistory.map(snapshot => snapshot.registrar)).toEqual(['Earlier Registrar', 'Later Registrar']);
+  const ownerLabel = 'case-change.reservation.invalid · adjacent case snapshots';
+  const downloadButton = review.getByRole('button', { name: /^Download selected rows \(/u });
+
+  for (const width of [1280, 320]) for (const theme of ['dark', 'light'] as const) {
+    await page.setViewportSize({ width, height: 844 });
+    await useTheme(page, theme);
+    await selectRetainedComparison(review, ownerLabel);
+    await expect(downloadButton).toBeDisabled();
+    const selected = review.getByRole('checkbox', { name: 'Select case-change.reservation.invalid, Availability for text report', exact: true });
+    await expect(review.getByRole('checkbox', { name: 'Select case-change.reservation.invalid, Registrar for text report', exact: true })).not.toBeChecked();
+    await expect(selected).not.toBeChecked();
+    await selected.focus();
+    await expect(selected).toBeFocused();
+    await selected.press('Space');
+    await expect(selected).toBeChecked();
+    await expect(downloadButton).toHaveText('Download selected rows (1)');
+    await expect(review.getByRole('region', { name: 'Selected-row text report' })).toContainText('which may be private');
+    await expectNoHorizontalOverflow(page);
+    expect((await new AxeBuilder({ page }).include('#retained-change-review')
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+    if (captureVisualEvidenceEnabled()) await review.screenshot({ path: testInfo.outputPath(`selected-report-${width}-${theme}.png`) });
+
+    const pending = page.waitForEvent('download');
+    await downloadButton.click();
+    const download = await pending;
+    expect(download.suggestedFilename()).toBe('whoisleuth-comparison.txt');
+    const path = await download.path();
+    expect(path).not.toBeNull();
+    const content = await readFile(path!, 'utf8');
+    expect(content).toContain('Selected rows: 1');
+    expect(content).toContain('Field: "Availability"');
+    expect(content).toContain('Comparison state: "incomplete"');
+    expect(content).toContain('"registered"');
+    expect(content).toContain('"unknown"');
+    expect(content).toContain(EARLIER);
+    expect(content).toContain(LATER);
+    expect(content).toContain('Published: Not retained in this projection');
+    expect(content).toContain('Retained locally: Not retained in this projection');
+    expect(content).toContain('Available rows not selected:');
+    for (const excluded of ['Earlier Registrar', 'Later Registrar', 'PRIVATE_NOTE_NOT_SELECTED', 'complete-profile.reservation.invalid']) {
+      expect(content).not.toContain(excluded);
+    }
+    await selectRetainedComparison(review, 'partial-profile.reservation.invalid · adjacent website profiles');
+    await expect(downloadButton).toBeDisabled();
+    await expect(review.getByRole('checkbox', { name: /for text report/u }).first()).not.toBeChecked();
+    await expect(review.getByRole('region', { name: 'Selected-row text report' })).toContainText('displayed comparison changed');
+  }
+  expect((await readBrowserLocalCollection(page, 'cases')).manifest.revision).toBe(storedBefore.manifest.revision);
+  expect((await readBrowserLocalCollection(page, 'cases')).records).toEqual(storedBefore.records);
+  await selectRetainedComparison(review, ownerLabel);
+  await review.getByRole('checkbox', { name: 'Select case-change.reservation.invalid, Availability for text report', exact: true }).check();
+  await expect(downloadButton).toBeEnabled();
+
+  // A newly read source starts with no inherited selection, even for the same
+  // Case and field. This owner intentionally does not poll peer-tab storage.
+  const changed = retainedFixture();
+  changed['whois-rdap-cases-v1'].cases[0]!.evidenceHistory[1]!.availability = 'available';
+  await openRetainedReview(page, changed);
+  await selectRetainedComparison(review, ownerLabel);
+  await expect(downloadButton).toBeDisabled();
+  const fresh = review.getByRole('checkbox', { name: 'Select case-change.reservation.invalid, Availability for text report', exact: true });
+  await expect(fresh).not.toBeChecked();
+  await fresh.check();
+  const pending = page.waitForEvent('download');
+  await downloadButton.click();
+  const download = await pending;
+  const downloadedPath = await download.path();
+  expect(downloadedPath).not.toBeNull();
+  const current = await readFile(downloadedPath!, 'utf8');
+  expect(current).toContain('"available"');
+  expect(current).not.toContain('Normalized value: "unknown"');
+  await review.getByRole('button', { name: 'Clear row selection' }).click();
+  await expect(downloadButton).toBeDisabled();
+  expect(requests).toEqual([]);
+});
+
 test('reviews retained case, website and watchlist changes without turning incomplete evidence into removal', async ({ page }) => {
   const requests = unexpectedApiRequests(page);
   const review = await openRetainedReview(page, retainedFixture());
 
   await selectRetainedComparison(review, 'case-change.reservation.invalid · adjacent case snapshots');
+  for (const side of ['Earlier', 'Later']) {
+    const source = review.getByRole('region', { name: `${side} comparison source` });
+    await expect(source).toBeVisible();
+    await expect(source.getByText('Observed', { exact: true })).toBeVisible();
+    await expect(source.getByText('Published', { exact: true })).toBeVisible();
+    await expect(source.getByText('Retained locally', { exact: true })).toBeVisible();
+    await expect(source.getByText('Not retained', { exact: true })).toHaveCount(2);
+  }
   const caseRow = review.locator('.ledger-table tbody', { hasText: 'Availability' });
   await expect(caseRow.locator('.state-label')).toHaveText('Incomplete comparison');
   expect(await caseRow.locator('.state-label').evaluate((element) => {
@@ -419,5 +516,129 @@ test('uses exact stacked cards without page overflow at narrow supported widths'
   await desktop.getByRole('button', { name: /^Inspect exact values/u }).press('Enter');
   await expect(expanded).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
+  expect(requests).toEqual([]);
+});
+
+test('shows exact saved website observations and distinct clocks without recollecting or rewriting them', async ({ page }, testInfo) => {
+  const domain = 'comparison-profile.example';
+  const earlier = { ...websiteSnapshot('retained-earlier', domain, EARLIER), savedAt: MIDDLE };
+  const later = websiteSnapshot('retained-later', domain, LATER, { complete: false, technologies: [] });
+  const fixture = sectionedLookupFixture(domain);
+  const profile = { version: 1, status: 'success', observedAt: LATER, scanMode: 'deep', source: 'derived',
+    durationMs: null, complete: true, truncated: false, limitations: [], diagnostics: {}, findings: [] };
+  let lookupRequests = 0;
+  await page.route('**/api/lookup?*', async route => {
+    lookupRequests += 1;
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...fixture,
+      availability: { ...fixture.availability,
+        technologyProfile: { ...profile, profileVersion: TECHNOLOGY_PROFILE_VERSION },
+        securityPosture: { ...profile, postureVersion: WEBSITE_SECURITY_POSTURE_VERSION,
+          summary: { observed: 0, potentialExposure: 0, observedAbsence: 0, unavailable: 0 } },
+      },
+    }) });
+  });
+  await migrateLegacyBrowserData(page, {
+    'whoisleuth-website-snapshots-v1': currentBrowserLocalDocument('website_snapshots', { snapshots: [earlier, later] }),
+  }, { clearStorage: true, destination: '/lookup' });
+  const retainedBefore = await readBrowserLocalCollection(page, 'website_snapshots');
+  await page.getByRole('radio', { name: /Deep/u }).check();
+  await page.locator('#query').fill(domain);
+  await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
+  await expandLookupFamilies(page);
+  const manager = page.getByRole('region', { name: 'Website profile snapshots' });
+  await manager.getByLabel('Earlier snapshot').selectOption(earlier.id);
+  await manager.getByLabel('Later snapshot').selectOption(later.id);
+  const first = manager.getByRole('region', { name: 'Earlier website observation' });
+  const second = manager.getByRole('region', { name: 'Later website observation' });
+  await expect(first).toContainText(earlier.id);
+  await expect(second).toContainText(later.id);
+  await expect(first.locator('dt')).toHaveText(['Snapshot ID', 'Observed', 'Saved locally', 'Collection']);
+  expect(await first.locator('dd').nth(1).textContent()).not.toBe(await first.locator('dd').nth(2).textContent());
+  await expect(first.getByText('Complete', { exact: true })).toBeVisible();
+  await expect(second.getByText('Partial', { exact: true })).toBeVisible();
+  await expect(manager.getByText(/Apparent absences remain incomparable/u)).toBeVisible();
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 1280]) {
+      await page.setViewportSize({ width, height: 844 });
+      await first.scrollIntoViewIfNeeded();
+      await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) await manager.screenshot({ path: testInfo.outputPath(`website-comparison-${theme}-${width}.png`) });
+    }
+  }
+  const retainedAfter = await readBrowserLocalCollection(page, 'website_snapshots');
+  expect(retainedAfter.records).toEqual(retainedBefore.records);
+  expect(retainedAfter.manifest.revision).toBe(retainedBefore.manifest.revision);
+  expect(lookupRequests).toBe(1);
+});
+
+test('selects two or three exact Case checkpoints without saving a timeline or substituting endpoints', async ({ page }, testInfo) => {
+  const requests = unexpectedApiRequests(page);
+  const fixture = multiIntervalCaseFixture();
+  fixture['whois-rdap-cases-v1'].cases.push(caseRecord({ id: 'other-checkpoint-case', domain: 'other-checkpoint.example',
+    evidenceHistory: [snapshot({ id: 'other-a', capturedAt: EARLIER, registrar: 'Other A' }), snapshot({ id: 'other-b', capturedAt: LATER, registrar: 'Other B' })],
+  }));
+  const review = await openRetainedReview(page, fixture);
+  const retainedBefore = await readBrowserLocalCollection(page, 'cases');
+  const retainedHistory = retainedBefore.records.find(item => item.value.id === 'ledger-interval-case')!.value.evidenceHistory as CaseRecord['evidenceHistory'];
+  expect(retainedHistory).toHaveLength(3);
+  const earlierId = retainedHistory.find(item => item.capturedAt === EARLIER)!.id;
+  const middleId = retainedHistory.find(item => item.capturedAt === MIDDLE)!.id;
+  const laterId = retainedHistory.find(item => item.capturedAt === LATER)!.id;
+  expect(new Set([earlierId, middleId, laterId]).size).toBe(3);
+  await review.getByText('Choose Case checkpoints', { exact: true }).click();
+  const stage = review.getByRole('region', { name: 'Compare Case checkpoints' });
+  await stage.getByLabel('Case for checkpoint review').selectOption('ledger-interval-case');
+  const first = stage.getByRole('checkbox', { name: new RegExp(earlierId, 'u') });
+  const middle = stage.getByRole('checkbox', { name: new RegExp(middleId, 'u') });
+  const last = stage.getByRole('checkbox', { name: new RegExp(laterId, 'u') });
+  await expect(first).toBeVisible();
+  await first.focus(); await first.press('Space'); await expect(first).toBeChecked();
+  await last.check();
+  const intervals = stage.getByLabel('Interval to inspect');
+  await expect(intervals.locator('option')).toHaveCount(2);
+  await intervals.selectOption(comparisonLedgerCasePairIndexId('ledger-interval-case', earlierId, laterId));
+  await expect(stage.getByRole('region', { name: 'Earlier selected checkpoint' })).toContainText(earlierId);
+  await expect(stage.getByRole('region', { name: 'Later selected checkpoint' })).toContainText(laterId);
+  const registrar = stage.locator('.ledger-table tbody', { hasText: 'Registrar' });
+  await registrar.getByRole('button', { name: /^Inspect exact values/u }).click();
+  await expect(registrar.getByText('Registrar A', { exact: true })).toBeVisible();
+  await expect(registrar.getByText('Registrar C', { exact: true })).toBeVisible();
+  await expect(registrar.getByText('Registrar B', { exact: true })).toHaveCount(0);
+  await middle.check();
+  await expect(stage.getByRole('heading', { name: 'Selected checkpoint interval' })).toHaveCount(0);
+  await expect(intervals.locator('option')).toHaveCount(4);
+  await intervals.focus(); await expect(intervals).toBeFocused();
+  await intervals.selectOption(comparisonLedgerCasePairIndexId('ledger-interval-case', middleId, laterId));
+  await expect(stage.getByRole('region', { name: 'Earlier selected checkpoint' })).toContainText(middleId);
+  await expect(stage.getByRole('region', { name: 'Later selected checkpoint' })).toContainText(laterId);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 1280]) {
+      await page.setViewportSize({ width, height: 844 });
+      await stage.scrollIntoViewIfNeeded();
+      await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`checkpoint-stage-${theme}-${width}.png`) });
+    }
+  }
+  await stage.getByLabel('Case for checkpoint review').selectOption('other-checkpoint-case');
+  await expect(stage.getByRole('checkbox', { checked: true })).toHaveCount(0);
+  await expect(stage.getByLabel('Interval to inspect')).toHaveCount(0);
+  await expect(stage.getByRole('heading', { name: 'Selected checkpoint interval' })).toHaveCount(0);
+  await stage.getByRole('button', { name: 'Clear comparison' }).click();
+  await expect(stage.getByLabel('Case for checkpoint review')).toHaveValue('');
+  const retainedAfter = await readBrowserLocalCollection(page, 'cases');
+  expect(retainedAfter.records).toEqual(retainedBefore.records);
+  expect(retainedAfter.manifest.revision).toBe(retainedBefore.manifest.revision);
+  await stage.getByLabel('Case for checkpoint review').selectOption('ledger-interval-case');
+  await first.check(); await last.check();
+  await intervals.selectOption(comparisonLedgerCasePairIndexId('ledger-interval-case', earlierId, laterId));
+  await expect(stage.getByRole('heading', { name: 'Selected checkpoint interval' })).toBeVisible();
+  await page.goto('/resources'); await page.goBack();
+  const disclosure = page.getByText('Choose Case checkpoints', { exact: true }).locator('..');
+  if (await disclosure.getAttribute('open') === null) await disclosure.locator(':scope > summary').click();
+  await expect(page.getByLabel('Case for checkpoint review')).toBeVisible();
+  await expect(page.getByLabel('Case for checkpoint review')).toHaveValue('');
   expect(requests).toEqual([]);
 });

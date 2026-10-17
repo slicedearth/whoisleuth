@@ -5,15 +5,24 @@
   min-width: 0;
 }
 
+section.case-response-stage {
+  container-type: inline-size;
+  padding-inline: var(--card-pad);
+  border-block: 1px solid var(--border);
+  background: var(--panel);
+}
+
+section.case-response-stage > details:first-child { border-top: 0; }
+
 .case-response-stage details {
   min-width: 0;
-  border-block: 1px solid var(--border);
+  border-top: 1px solid var(--border);
 }
 
 .case-response-stage summary {
   padding: 12px 4px;
   cursor: pointer;
-  font: 650 var(--text-sm) var(--mono);
+  font: 600 var(--text-sm) var(--font-sans);
   overflow-wrap: anywhere;
 }
 
@@ -119,10 +128,10 @@
 .case-response-stage .separate-times div { min-width: 0; }
 .case-response-stage .separate-times dt { color: var(--muted); font-size: var(--text-xs); }
 .case-response-stage .separate-times dd { margin: 4px 0 0; overflow-wrap: anywhere; }
-.case-response-stage .pin-references { display: grid; gap: 10px; margin: 0; padding: 12px; border: 1px solid var(--border); }
-.case-response-stage legend { padding-inline: 5px; font-size: var(--text-xs); }
+.case-response-stage .pin-references { display: grid; gap: 14px; margin: 0; padding: 16px 0 0; border: 0; border-top: 1px solid var(--border); }
+.case-response-stage legend { padding-inline: 0 12px; font: 650 var(--text-sm) var(--font-sans); }
 .case-response-stage .choice { display: flex; align-items: flex-start; gap: 8px; padding-block: 4px; }
-.case-response-stage .choice input { width: auto; margin-top: 3px; }
+.case-response-stage .choice input { flex-shrink: 0; margin-top: 3px; }
 .case-response-stage .choice span { min-width: 0; overflow-wrap: anywhere; }
 .case-response-stage .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .case-response-stage .notice { margin: 0; color: var(--muted); font-size: var(--text-xs); line-height: 1.6; overflow-wrap: anywhere; }
@@ -137,4 +146,8 @@
 @media (max-width: 620px) {
   .case-response-stage form > :is(.btn, .primary),
   .case-response-stage .quick-form > :is(.btn, .primary) { width: 100%; }
+}
+
+@media print {
+  section.case-response-stage { padding-inline: 0; background: transparent; }
 }

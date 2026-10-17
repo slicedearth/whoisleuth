@@ -6,12 +6,14 @@
   import { PUBLIC_CLI_GUIDANCE } from '#lib/generated/public-cli-guidance.ts';
   import { PUBLIC_CLI_INDEX } from '#lib/generated/public-cli-index.ts';
   import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../../../../../packages/analysis/project-metadata.mts';
+  const localMode = PUBLIC_CLI_GUIDANCE.operationModes.find(mode => mode.id === 'local-console');
 
   const pageSections = [
     { href: '#start', label: 'Get started' },
     { href: '#tasks', label: 'Common tasks' },
     { href: '#commands', label: 'Command reference' },
     { href: '#browser-handoff', label: 'Browser and CLI handoffs' },
+    { href: '#choose-mode', label: 'Choose how to run' },
     { href: '#capture-companion', label: 'Capture companion' },
     { href: '#local-application', label: 'Local application' },
     { href: '#behaviour', label: 'CLI behaviour' },
@@ -27,7 +29,7 @@
     {
       id: 'respond',
       label: 'Respond',
-      description: 'Maintain local Case files and prepare reviewed handoffs.',
+      description: 'Maintain local case files and prepare reviewed handoffs.',
     },
     {
       id: 'assure',
@@ -70,7 +72,7 @@
   <div class="section-intro"><h2 id="start-title">Run the CLI locally</h2><p>Node.js 24 or later.</p></div>
   <ol class="start-steps">
     <li>
-      <span>1</span><div><h3>Run help without installing</h3><CopyableCommand command={PUBLIC_CLI_GUIDANCE.runOnce[0]} label="run-once help command" /></div>
+      <span>1</span><div><h3>Run help without a global install</h3><CopyableCommand command={PUBLIC_CLI_GUIDANCE.runOnce[0]} label="run-once help command" /></div>
     </li>
     <li>
       <span>2</span><div><h3>Install and check the CLI</h3><CopyableCommand command={PUBLIC_CLI_GUIDANCE.install[0]} label="installation command" /><CopyableCommand command={PUBLIC_CLI_GUIDANCE.install[1]} label="runtime check command" compact /></div>
@@ -79,6 +81,7 @@
       <span>3</span><div><h3>Inspect a request before running it</h3><p>Show planned sources and limits without starting collection.</p><CopyableCommand command={PUBLIC_CLI_GUIDANCE.runOnce[1]} label="lookup plan command" /></div>
     </li>
   </ol>
+  <p>Choosing between the browser and terminal? <a href="#choose-mode">Compare ways to run WHOISleuth</a>.</p>
   <div class="start-notes independent-grid">
     <p>Use <code>whoisleuth &lt;command&gt; --help</code> for the exact options installed on your machine.</p>
     <details class="update-instructions compact-disclosure"><summary>Update an installed package</summary><div>{#each PUBLIC_CLI_GUIDANCE.update as command}<CopyableCommand {command} label="update command" compact />{/each}</div></details>
@@ -116,6 +119,25 @@
   <p class="handoff-boundary">These checks do not upload, submit or publish an artefact. Browser import remains a separate reviewed action.</p>
 </section>
 
+<section class="cli-section" id="choose-mode" aria-labelledby="choose-mode-title">
+  <div class="section-intro"><h2 id="choose-mode-title">Choose how to run WHOISleuth</h2><p>Choose where you work and where requests originate. Opening this guide does not install anything or start collection.</p></div>
+  <div class="operation-modes">
+    {#each PUBLIC_CLI_GUIDANCE.operationModes as mode}
+      <article aria-labelledby={`mode-${mode.id}`}>
+        <header><p class="availability">{mode.availability}</p><h3 id={`mode-${mode.id}`}>{mode.title}</h3><p>{mode.task}</p></header>
+        <dl>
+          <dt>What you need</dt><dd>{#if mode.nodeRequirement}Node.js <code>{mode.nodeRequirement}</code>.{' '}{/if}{mode.prerequisites}</dd>
+          <dt>Where requests run</dt><dd>{mode.requests}</dd>
+          <dt>Where work is saved</dt><dd>{mode.storage}</dd>
+          <dt>Working offline</dt><dd>{mode.offline}</dd>
+        </dl>
+        <a class="reference-link" href={mode.href}>{mode.linkLabel} <span aria-hidden="true">→</span></a>
+      </article>
+    {/each}
+  </div>
+  <p>These are distribution channels, not a claim that this page’s application revision has been published to each one. Check the intended release or local candidate report before installing; the two optional archives have their own package versions.</p>
+</section>
+
 <section class="cli-section" id="capture-companion" aria-labelledby="capture-companion-title">
   <div class="section-intro"><h2 id="capture-companion-title">Optional rendered capture</h2><p>A separate local companion captures an explicitly authorised page or compares two captures offline. It is not included in the main CLI or hosted application.</p></div>
   <p>Install it from a verified local archive, then install its browser explicitly. Cases can prepare a command for a retained Incident URL and import reviewed manifest metadata. Screenshots remain local files.</p>
@@ -123,8 +145,16 @@
 </section>
 
 <section class="cli-section" id="local-application" aria-labelledby="local-application-title">
-  <div class="section-intro"><h2 id="local-application-title">Console with a filesystem workspace</h2><p>The separate local application serves the Console on your machine and saves records, drafts and original files in a folder you choose. It requires Node.js 24.19 or newer and a verified local package archive.</p></div>
-  <CopyableCommand command="whoisleuth-local --workspace ./review-workspace --init --offline" label="new offline local workspace command" />
+  <div class="section-intro"><h2 id="local-application-title">Console with a filesystem workspace</h2><p>The separate local application serves the console on your machine and saves records, drafts and original files in a folder you choose. It requires Node.js <code>{localMode?.nodeRequirement ?? 'as declared by the package'}</code> and a verified local package archive.</p></div>
+  <CopyableCommand command={PUBLIC_CLI_GUIDANCE.localArchive.initialize} label="new offline local workspace command" />
+  <details class="compact-disclosure"><summary>Verify and install a local archive</summary>
+    <ul>{#each PUBLIC_CLI_GUIDANCE.localArchive.verification as item}<li>{item}</li>{/each}</ul>
+    <CopyableCommand command={PUBLIC_CLI_GUIDANCE.localArchive.install} label="offline reviewed local archive installation command" />
+  </details>
+  <details class="compact-disclosure"><summary>Upgrade without replacing saved work</summary>
+    <ol>{#each PUBLIC_CLI_GUIDANCE.localArchive.upgrade as item}<li>{item}</li>{/each}</ol>
+    <CopyableCommand command={PUBLIC_CLI_GUIDANCE.localArchive.reopen} label="reopen an existing offline filesystem workspace command" />
+  </details>
   <p>Open the private launch link printed in the terminal. Omit <code>--init</code> when reopening the folder. The workspace is plaintext at rest; use operating-system protection and encrypted portable backups. Browser preferences remain browser-local.</p>
   <p>It listens only on loopback. Starting it makes no collection request; omitting <code>--offline</code> enables the existing explicit collection actions from your machine.</p>
   <a class="btn" href={`${WHOISLEUTH_SOURCE_REPOSITORY_URL}/blob/main/packages/local-application/README.md`}>Local installation, backup and recovery</a>
@@ -179,6 +209,15 @@
   .recipe-commands{display:grid;gap:6px;margin-top:14px}
   .handoff-recipes p{margin:13px 0 0;color:var(--muted);font-size:var(--type-supporting-size);line-height:1.55}
   .handoff-boundary{margin:13px 0 0;padding:12px 14px;border-left:3px solid var(--interface-accent);background:var(--panel);color:var(--muted);font-size:var(--type-supporting-size);line-height:1.5}
+  .operation-modes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px 32px}
+  .operation-modes article{min-width:0;padding:18px 0;border-top:1px solid var(--border)}
+  .operation-modes h3{margin:6px 0 10px;font:700 var(--text-lg)/1.35 var(--font-sans)}
+  .operation-modes p,.operation-modes dd{margin:0;line-height:1.6;overflow-wrap:anywhere}
+  .operation-modes .availability{font-size:var(--text-xs);color:var(--muted)}
+  .operation-modes dl{margin:18px 0}
+  .operation-modes dt{margin-top:14px;font-weight:700;font-size:var(--text-sm)}
+  .operation-modes dd{margin-top:4px;color:var(--muted);font-size:var(--text-sm)}
+  #choose-mode>p{max-width:85ch;line-height:1.6;color:var(--muted);font-size:var(--text-sm)}
   .boundary-list p{margin:0;padding:14px 0;border-bottom:1px solid var(--border);color:var(--muted);font-size:var(--text-sm);line-height:1.55}
   .exit-codes{margin-top:34px}
   .exit-codes h3{margin:0 0 12px;font:700 var(--text-md) var(--mono)}
@@ -205,7 +244,7 @@
   .package-verification nav{display:flex;flex:0 0 auto;align-items:flex-end;flex-direction:column;gap:6px}
   .package-verification a{color:var(--accent);font:700 var(--text-xs) var(--mono)}
   .package-verification nav a{display:inline-flex;align-items:center;min-height:32px;padding:4px 2px}
-  @media(max-width:900px){.task-groups>section{grid-template-columns:1fr}.start-notes{grid-template-columns:1fr}}
+  @media(max-width:900px){.task-groups>section{grid-template-columns:1fr}.start-notes{grid-template-columns:1fr}.operation-modes{grid-template-columns:1fr}}
   @media(max-width:720px){.cli-section{padding:30px 0;scroll-margin-top:20px}.additional-behaviour,.more-links{grid-template-columns:1fr}.package-verification{align-items:flex-start;flex-direction:column;gap:12px}}
-  @media(max-width:440px){.start-steps>li{grid-template-columns:28px minmax(0,1fr);gap:10px}.task-groups>section{padding:15px 0}.exit-codes th{width:48px}.exit-codes th,.exit-codes td{padding:10px}}
+  @media(max-width:440px){#start .section-intro{margin-bottom:16px}.start-steps>li{grid-template-columns:28px minmax(0,1fr);gap:10px;padding:14px 0}.task-groups>section{padding:15px 0}.exit-codes th{width:48px}.exit-codes th,.exit-codes td{padding:10px}}
 </style>

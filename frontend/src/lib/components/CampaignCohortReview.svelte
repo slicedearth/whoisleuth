@@ -100,7 +100,7 @@
     </div>
     {#if review.selectedScope}<span class="state-chip">{review.state}</span>{/if}
   </header>
-  <p class="qualification">Choose an exact Case association to review retained cross-case rationale. This view does not change campaign membership or make a new request.</p>
+  <p class="qualification">Choose a Brand Profile explicitly linked by these Cases to review their retained cross-case rationale. Campaign membership stays unchanged; no new request is made.</p>
 
   {#if review.sources.cases === 'loading'}
     <p class="source-state" role="status">Case associations are still loading. No cohort count is available yet.</p>
@@ -112,7 +112,7 @@
     <label class="scope-control" for={`campaign-cohort-scope-${campaign.id}`}>
       <span>Brand Profile scope</span>
       <select id={`campaign-cohort-scope-${campaign.id}`} bind:value={selectedProfileId}>
-        <option value="">Choose an exact Case association</option>
+        <option value="">Choose a Case-linked Brand Profile</option>
         {#each review.scopeOptions as option (option.id)}
           <option value={option.id}>{scopeLabel(option)}</option>
         {/each}
@@ -191,7 +191,7 @@
         {/each}
       </div>
     {:else}
-      <p class="empty">{cohortCountsComplete ? 'No connected cohort can be derived within this bounded view for the exact scope from retained relationship, registrar, and creation-publication evidence.' : 'No connected cohort is visible in the currently readable bounded evidence; missing or omitted relationship evidence prevents a complete cohort count.'} This is not a negative finding.</p>
+      <p class="empty">{cohortCountsComplete ? 'No connected cohort is supported by the retained evidence for this exact scope.' : 'No connected cohort is visible; missing or omitted relationship evidence prevents a complete count.'} This is not a negative finding.</p>
     {/if}
 
     {#if review.ungroupedMembers.length}

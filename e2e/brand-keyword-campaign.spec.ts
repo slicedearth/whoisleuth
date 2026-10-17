@@ -12,6 +12,7 @@ import {
 } from './helpers';
 import { normalizeBrandProfile } from '../packages/workspace/brand-profile-model.mts';
 import { reviseBrandKeywordCampaign } from '../packages/workspace/brand-keyword-campaign.mts';
+import { candidateMaterialFingerprint, normalizeCandidateObservation, reviseCandidateException } from '../packages/workspace/brand-candidate-workflow.mts';
 
 const NOW = '2000-01-01T00:00:00.000Z';
 const profile = normalizeBrandProfile(
@@ -34,13 +35,32 @@ const saved = reviseBrandKeywordCampaign(
   NOW,
 );
 
-async function seed(page: import('@playwright/test').Page, campaigns = [saved]) {
+function comparisonCorpus() {
+  const candidateObservations = ['launch.example', 'release.example', 'launch-release.example',
+    'excluded-release.example', ...Array.from({ length: 26 }, (_, i) => `ordinary-${String(i).padStart(2, '0')}.example`)]
+    .map(domain => normalizeCandidateObservation({ domain, matches: [{ brandProfileId: profile.id, ruleKey: 'keyword:example',
+      term: 'example', reason: 'Retained exact keyword nomination' }],
+    sources: [{ source: 'Imported local example', revision: 'sha256:' + 'a'.repeat(64),
+      observedHostname: `login.${domain}`, sourceFirstObservedAt: null, sourceLastObservedAt: null,
+      firstLocalObservedAt: NOW, completeness: 'partial', gap: 'Earlier source coverage is unknown.' }] })!);
+  const first = candidateObservations[0]!;
+  const review = reviseCandidateException(null, { id: 'earlier-review', domain: first.domain,
+    ruleKey: first.matches[0]!.ruleKey, purpose: 'irrelevant_match',
+    reason: 'An unrelated use under the original retained rule.', reviewedAt: NOW,
+    expiresAt: '2099-01-01T00:00:00.000Z', enabled: true,
+    reviewedFingerprint: candidateMaterialFingerprint(first, profile.id, first.matches[0]!.ruleKey),
+  }, null);
+  return { candidateObservations, candidateExceptions: [review], officialDomains: ['release.example'] };
+}
+
+async function seed(page: import('@playwright/test').Page, campaigns = [saved],
+  fields: Partial<typeof profile> = {}, others: typeof profile[] = []) {
   await page.goto('/brands');
   await migrateLegacyBrowserData(
     page,
     {
       'whois-rdap-brand-profiles-v1': currentBrandProfileBrowserStore([
-        { ...profile, keywordCampaigns: campaigns },
+        { ...profile, keywordCampaigns: campaigns, ...fields }, ...others,
       ]),
       'whois-rdap-active-brand-profile-v1': profile.id,
       'whois-rdap-watchlist-v1': currentBrowserLocalDocument('watchlists', {}),
@@ -59,6 +79,8 @@ async function seed(page: import('@playwright/test').Page, campaigns = [saved]) 
 test('campaign preview and retained revision preserve exact source provenance and historical Watchlist defaults without collection', async ({
   page,
 }) => {
+  const clock = new Date();
+  await page.clock.setFixedTime(clock);
   const requests: string[] = [];
   page.on('request', (request) => {
     if (
@@ -84,6 +106,8 @@ test('campaign preview and retained revision preserve exact source provenance an
     .fill(
       'launch.example\nprelaunch.example\nlaunc-h.example\nexcluded-launch.example\n例え.example',
     );
+  // Advance the wall clock without firing the component's idle refresh timer.
+  await page.clock.setFixedTime(new Date(clock.getTime() + 1_000));
   await panel.getByRole('button', { name: 'Preview keyword campaign', exact: true }).click();
   const preview = panel.getByRole('region', { name: 'Keyword campaign preview' });
   await expect(preview).toContainText('prelaunch.example: literal match: launch');
@@ -104,6 +128,7 @@ test('campaign preview and retained revision preserve exact source provenance an
   await intake
     .getByLabel('Local domain-only feed file')
     .setInputFiles({ name: 'example-feed.txt', mimeType: 'text/plain', buffer: Buffer.from(raw) });
+  await expect(intake.getByRole('button', { name: 'Scan local file', exact: true })).toBeEnabled();
   await intake.getByRole('button', { name: 'Scan local file', exact: true }).click();
   await expect(intake.getByRole('heading', { name: 'Staged feed nominations' })).toBeFocused();
   await expect(intake.getByRole('checkbox')).toHaveCount(1);
@@ -158,6 +183,63 @@ test('campaign preview and retained revision preserve exact source provenance an
   expect(requests).toEqual([]);
 });
 
+for (const failRefresh of [false, true]) test(`a peer corpus edit rejects a stale comparison and preserves drafts${failRefresh ? ' when refresh fails' : ' until a fresh preview'}`, async ({ page, context }) => {
+  const { panel } = await seed(page, [saved], comparisonCorpus());
+  await panel.getByRole('button', { name: 'Edit campaign Example launch' }).click();
+  await panel.getByLabel('Positive literal terms', { exact: true }).fill('release');
+  await panel.getByLabel('Example hostnames to preview (optional)').fill('release.example');
+  await panel.getByRole('checkbox', { name: /Compare this Brand’s retained candidates/u }).check();
+  await panel.getByRole('button', { name: 'Preview keyword campaign', exact: true }).click();
+  const comparison = panel.getByRole('region', { name: 'Retained candidate comparison' });
+  await expect(comparison).toBeVisible();
+  const peer = await context.newPage();
+  try {
+    await peer.goto('/brands');
+    const allowlist = peer.getByRole('region', { name: 'Allowlist', exact: true });
+    await allowlist.getByLabel('Add domains').fill('launch.example');
+    await allowlist.getByRole('region', { name: 'Domains', exact: true }).getByRole('button', { name: 'Add', exact: true }).click();
+    await allowlist.getByRole('button', { name: 'Save allowlist', exact: true }).click();
+    await expect(peer.getByRole('status', { name: 'Brand Profile action status' })).toContainText('Saved the allowlist');
+    const peerState = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 1 });
+    expect(peerState.records[0]!.value.keywordCampaigns![0]!.revision).toBe(1);
+    await expect(comparison).toBeVisible();
+    if (failRefresh) await page.evaluate(() => {
+      const original = IDBObjectStore.prototype.get;
+      let reads = 0;
+      IDBObjectStore.prototype.get = function (query) {
+        if (this.name === 'manifests' && query === 'brand_profiles' && ++reads === 2) {
+          IDBObjectStore.prototype.get = original;
+          throw new DOMException('Fixture refresh unavailable', 'InvalidStateError');
+        }
+        return original.call(this, query);
+      };
+    });
+    await panel.getByRole('button', { name: 'Save reviewed campaign revision' }).click();
+    await expect(panel.getByRole('status', { name: 'Keyword campaign action status' })).toContainText(
+      failRefresh ? 'The campaign was not saved. The retained context changed, but the Brand could not be refreshed.' : 'Preview it again before saving',
+    );
+    await expect(comparison).toHaveCount(0);
+    await expect(panel.getByRole('button', { name: 'Save reviewed campaign revision' })).toHaveCount(0);
+    await expect(panel.getByLabel('Positive literal terms', { exact: true })).toHaveValue('release');
+    await expect(panel.getByLabel('Example hostnames to preview (optional)')).toHaveValue('release.example');
+    expect(await readBrowserLocalCollection(page, 'brand_profiles')).toEqual(peerState);
+    if (failRefresh) {
+      await expect(panel.getByRole('button', { name: 'Preview keyword campaign', exact: true })).toBeDisabled();
+      return;
+    }
+    await panel.getByRole('button', { name: 'Preview keyword campaign', exact: true }).click();
+    await comparison.getByLabel('Show comparison results').selectOption('removed');
+    await expect(comparison.getByRole('listitem')).toContainText('Exact domain allowlist entry');
+    await panel.getByRole('button', { name: 'Save reviewed campaign revision' }).click();
+    await expect(panel.getByRole('status', { name: 'Keyword campaign action status' })).toContainText('revision 2 saved');
+    const after = (await readBrowserLocalCollection(page, 'brand_profiles')).records[0]!.value;
+    expect(after.keywordCampaigns![0]!.positiveTerms).toEqual(['release']);
+    expect(after.allowlistedDomains).toEqual(['launch.example']);
+    expect(after.candidateObservations).toEqual(peerState.records[0]!.value.candidateObservations);
+    expect(after.candidateExceptions).toEqual(peerState.records[0]!.value.candidateExceptions);
+  } finally { await peer.close(); }
+});
+
 test('paused and expired campaign intent cannot start a feed scan and leaves retained intent readable', async ({
   page,
 }) => {
@@ -189,15 +271,79 @@ test('paused and expired campaign intent cannot start a feed scan and leaves ret
   expect(retained.records[0]!.value.candidateObservations).toEqual([]);
 });
 
+test('retained corpus comparison is explicit, complete and transient, with scoped earlier reviews', async ({ page }) => {
+  const second = normalizeBrandProfile({ id: 'second-brand', name: 'Second Brand', createdAt: NOW, updatedAt: NOW }, { nowIso: NOW })!;
+  const { panel } = await seed(page, [saved], comparisonCorpus(), [second]);
+  const requests: string[] = [];
+  page.on('request', request => { if (/\/api\/(?:domain-feed|lookup|bulk|discover|scheduled-monitor)(?:[/?]|$)/u.test(request.url())) requests.push(request.url()); });
+  const original = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 2 });
+  await panel.getByRole('button', { name: 'Edit campaign Example launch' }).click();
+  await panel.getByLabel('Positive literal terms', { exact: true }).fill('release');
+  await panel.getByRole('button', { name: 'Preview keyword campaign', exact: true }).click();
+  const comparison = panel.getByRole('region', { name: 'Retained candidate comparison' });
+  await expect(comparison).toHaveCount(0);
+  await panel.getByRole('checkbox', { name: /Compare this Brand’s retained candidates/u }).check();
+  await expect(panel.getByRole('region', { name: 'Keyword campaign preview' })).toHaveCount(0);
+  await panel.getByRole('button', { name: 'Preview keyword campaign', exact: true }).click();
+  await expect(comparison).toContainText('1 newly match, 1 no longer match, 1 still match and 27 still do not match');
+  const list = comparison.getByRole('list', { name: 'Campaign comparison candidates' });
+  await expect(list.getByRole('listitem')).toHaveCount(25);
+  await comparison.getByRole('navigation', { name: 'Campaign comparison pages' }).getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(list.getByRole('listitem')).toHaveCount(5);
+  await comparison.getByLabel('Show comparison results').selectOption('removed');
+  await expect(list.getByRole('listitem')).toHaveCount(1);
+  await expect(list).toContainText('launch.example');
+  await expect(list).toContainText('Positive literals not found: release');
+  await list.getByText('Retained source evidence (1)', { exact: true }).click();
+  await expect(list).toContainText('login.launch.example');
+  await expect(list).toContainText('Start unknown');
+  await list.getByText('Earlier analyst reviews (1)', { exact: true }).click();
+  await expect(list).toContainText('irrelevant match · active');
+  await expect(list).toContainText('keyword:example');
+  await expect(list).toContainText('not new decisions about the proposed revision');
+  expect(await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 2 })).toEqual(original);
+  await panel.getByLabel('Positive literal terms', { exact: true }).fill('launch');
+  await expect(comparison).toHaveCount(0);
+  await panel.getByLabel('Positive literal terms', { exact: true }).fill('release');
+  await panel.getByRole('button', { name: 'Preview keyword campaign', exact: true }).click();
+  await panel.getByRole('button', { name: 'Save reviewed campaign revision' }).click();
+  await expect(panel.getByRole('status', { name: 'Keyword campaign action status' })).toContainText('revision 2 saved');
+  const retained = await readBrowserLocalCollection(page, 'brand_profiles', { minimumRecords: 2 });
+  const before = original.records.find(record => record.value.id === profile.id)!.value;
+  const after = retained.records.find(record => record.value.id === profile.id)!.value;
+  expect(after.candidateObservations).toEqual(before.candidateObservations);
+  expect(after.candidateExceptions).toEqual(before.candidateExceptions);
+  expect(after.keywordCampaigns![0]!.positiveTerms).toEqual(['release']);
+  expect((await readBrowserLocalCollection(page, 'watchlists')).records).toEqual([]);
+  await panel.getByRole('button', { name: 'Edit campaign Example launch' }).click();
+  await panel.getByLabel('Example hostnames to preview (optional)').fill('local-draft.example');
+  await panel.getByRole('checkbox', { name: /Compare this Brand’s retained candidates/u }).check();
+  await panel.getByRole('button', { name: 'Preview keyword campaign', exact: true }).click();
+  await expect(comparison).toBeVisible();
+  const profiles = page.locator('details.brand-profiles');
+  if (await profiles.getAttribute('open') === null) await profiles.locator(':scope > summary').click();
+  await page.getByRole('radio', { name: 'Set Second Brand active', exact: true }).check();
+  await expect(page.getByRole('heading', { name: 'Candidate review for Second Brand' })).toBeVisible();
+  await expect(comparison).toHaveCount(0);
+  await panel.getByRole('button', { name: 'New keyword campaign', exact: true }).click();
+  await expect(panel.getByLabel('Example hostnames to preview (optional)')).toHaveValue('');
+  await expect(panel.getByRole('checkbox', { name: /Compare this Brand’s retained candidates/u })).not.toBeChecked();
+  expect(requests).toEqual([]);
+});
+
 test('campaign form, example preview and history remain usable in both themes at supported widths', async ({
   page,
 }, testInfo) => {
-  const { panel } = await seed(page);
+  const { panel } = await seed(page, [saved], comparisonCorpus());
   await panel.getByRole('button', { name: 'Edit campaign Example launch' }).click();
   await panel
     .getByLabel('Example hostnames to preview (optional)')
     .fill('launch.example\n例え.example');
+  await panel.getByRole('checkbox', { name: /Compare this Brand’s retained candidates/u }).check();
   await panel.getByRole('button', { name: 'Preview keyword campaign', exact: true }).click();
+  const comparison = panel.getByRole('region', { name: 'Retained candidate comparison' });
+  await comparison.getByLabel('Show comparison results').selectOption('unchanged_match');
+  await comparison.getByText('Corpus identity and coverage', { exact: true }).click();
   for (const theme of ['light', 'dark'] as const) {
     await useTheme(page, theme);
     for (const width of [320, 390, 1280, 2560]) {
@@ -210,10 +356,13 @@ test('campaign form, example preview and history remain usable in both themes at
         'xn--r8jz45g.example',
       );
       await expectNoHorizontalOverflow(page);
-      if (captureVisualEvidenceEnabled())
+      if (captureVisualEvidenceEnabled()) {
         await panel.screenshot({
           path: testInfo.outputPath(`keyword-campaign-${theme}-${width}.png`),
         });
+        await comparison.getByRole('listitem').first().scrollIntoViewIfNeeded();
+        await page.screenshot({ path: testInfo.outputPath(`campaign-comparison-${theme}-${width}.png`) });
+      }
     }
   }
 });

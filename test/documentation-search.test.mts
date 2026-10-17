@@ -3,12 +3,24 @@ import { test } from 'node:test';
 import { createDocumentationSearch, documentationSearchDocuments } from '../frontend/src/lib/documentation-search.ts';
 import { resolveCommandReferenceHash, commandReferenceSections } from '../frontend/src/lib/public-cli-sections.ts';
 import { relatedPublicReferences } from '../frontend/src/lib/public-reference-navigation.ts';
+import { PUBLIC_PRERENDERED_ROUTES } from '../lib/prerendered-routes.mts';
+
+const publicRoutes = new Set<string>(PUBLIC_PRERENDERED_ROUTES);
+function isPublicDocumentationHref(href: string): boolean {
+  if (!href.startsWith('/') || href.startsWith('//') || href.includes('?')) return false;
+  const url = new URL(href, 'https://docs.example');
+  return url.origin === 'https://docs.example' && publicRoutes.has(url.pathname)
+    && href.split('#')[0] === url.pathname;
+}
 
 test('documentation search finds commands, concepts and tasks using only public content', () => {
   const search = createDocumentationSearch();
   assert.ok(search('verify-artifact').some(result => result.href === '/cli#command-verify-artifact'));
   assert.ok(search('DMARC').some(result => result.href === '/resources#term-dmarc'));
   assert.ok(search('brand lookalikes').some(result => result.href === '/resources#find-brand-lookalikes'));
+  assert.ok(search('supplied message').some(result => result.href === '/resources#review-a-message'));
+  assert.ok(search('encrypted workspace').some(result => result.href === '/resources#track-important-findings'));
+  assert.ok(search('link inspector').some(result => result.href === '/link-inspector'));
   assert.deepEqual(search('  '), []);
   assert.deepEqual(search('unmatchabletokenexample'), []);
   assert.ok(search('domain').length <= 12);
@@ -17,9 +29,15 @@ test('documentation search finds commands, concepts and tasks using only public 
   assert.equal(new Set(documents.map(item => item.href)).size, documents.length);
   assert.ok(documents.filter(item => item.category === 'Methodology').length > 1);
   for (const item of documents) {
-    assert.match(item.href, /^\/(?:resources|cli|examples|methodology|coverage)(?:\/|#|$)/u);
+    assert.ok(isPublicDocumentationHref(item.href), `Documentation destination must use an exact public route: ${item.href}`);
     assert.ok(!item.href.includes('?'));
     assert.ok(item.description.length > 0);
+  }
+  // Independent privacy expectations must survive a mistaken classification.
+  for (const href of ['/dashboard', '/lookup#result', '/discover', '/bulk', '/cases', '/monitor', '/brands', '/login',
+    'https://docs.example/cli', 'https://external.example/cli', '//docs.example/cli', '//external.example/cli',
+    '/cli?target=private', '/link-inspector?input=private', '/resources/../lookup', '/cli/']) {
+    assert.equal(isPublicDocumentationHref(href), false, 'Private, external, query-bearing and aliased destinations must remain excluded.');
   }
 });
 

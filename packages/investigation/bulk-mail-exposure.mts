@@ -153,8 +153,8 @@ function relation(
       ? {
           baselineRelation: state === 'authenticated_mail' ? 'aligned' : 'review',
           baselineDetail: state === 'authenticated_mail'
-            ? 'Receiving mail plus SPF and DMARC matches the configured standard-mail baseline.'
-            : 'Receiving mail was observed with an authentication gap relative to the configured baseline.',
+            ? 'Published MX, SPF and DMARC records match the configured standard-mail baseline.'
+            : 'MX publication was observed with a mail-authentication policy gap relative to the configured baseline.',
         }
       : {
           baselineRelation: 'review',

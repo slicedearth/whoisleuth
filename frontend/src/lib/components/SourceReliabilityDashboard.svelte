@@ -1,5 +1,6 @@
 <script lang="ts">
   import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import { registrySupportLabel } from '#lib/analysis/registry-support.ts';
   import {
     parseSourceReliabilityDashboard,
     reliabilityDurationLabel,
@@ -44,10 +45,6 @@
     fileName = '';
   }
 
-  function sourceLabel(value: string): string {
-    return value.replaceAll('_', ' ').replace(/\b\w/gu, (letter) => letter.toUpperCase());
-  }
-
   function trendLabel(value: 'faster' | 'slower' | 'steady' | 'unmeasured'): string {
     return ({ faster: 'Faster', slower: 'Slower', steady: 'Steady', unmeasured: 'Unmeasured' })[value];
   }
@@ -67,6 +64,7 @@
   </header>
 
   <p class="reliability-boundary">Rates describe only the supplied sample. They do not rank providers, predict the next request, or turn missing evidence into a successful result.</p>
+  <p class="reliability-boundary">Failure, partial and rate-limit rates exclude disabled, not-applicable, skipped and unsupported states. Truncation uses observation samples.</p>
 
   {#if error}
     <div class="report-message error" role="alert"><strong>Report not loaded</strong><span>{error}</span></div>
@@ -74,8 +72,8 @@
     <div class="report-meta" aria-live="polite">
       <span><strong>{dashboard.summary.sources}</strong> sources</span>
       <span><strong>{dashboard.summary.stateSamples}</strong> state samples</span>
-      <span><strong>{dashboard.summary.attention}</strong> attention</span>
-      <span><strong>{dashboard.summary.measuredDuration}</strong> timed</span>
+      <span><strong>{dashboard.summary.attention}</strong> sources to review</span>
+      <span><strong>{dashboard.summary.measuredDuration}</strong> sources with timing</span>
       <span class="report-file">{fileName} · generated {formatEvidenceDate(dashboard.generatedAt)}</span>
       <button class="clear-report" type="button" onclick={clearReport}>Clear report</button>
     </div>
@@ -85,7 +83,7 @@
         {#each dashboard.rows as row}
           <article class="source-card" data-tone={row.tone}>
             <header>
-              <div><h3>{sourceLabel(row.source)}</h3><span>{row.sampleLabel}</span></div>
+              <div><h3>{registrySupportLabel(row.source)}</h3><span>{row.sampleLabel}</span></div>
               <span class="tone">{row.tone === 'attention' ? 'Review' : row.tone === 'limited' ? 'Limited sample' : row.tone === 'healthy' ? 'Healthy sample' : 'Mixed sample'}</span>
             </header>
             <dl>

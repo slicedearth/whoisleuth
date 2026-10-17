@@ -44,6 +44,20 @@ export const RETAINED_TIMELINE_AREAS = [
 export type RetainedTimelineArea = typeof RETAINED_TIMELINE_AREAS[number];
 export type RetainedTimelineFreshness = 'current' | 'stale' | 'unknown';
 
+export const RETAINED_TIMELINE_FAMILIES = {
+  registration: 'Registration',
+  dns: 'DNS',
+  tls: 'TLS and certificates',
+  page: 'HTTP and page',
+  external_report: 'External reports',
+  analyst_decision: 'Analyst decisions',
+  combined: 'Combined observations',
+  relationship: 'Derived relationships',
+  activity: 'Session activity',
+  unclassified: 'Other or unclassified evidence',
+} as const;
+export type RetainedTimelineFamily = keyof typeof RETAINED_TIMELINE_FAMILIES;
+
 export const RETAINED_TIMELINE_FRESHNESS_DAYS: Readonly<Record<RetainedTimelineArea, number | null>> = {
   lookup: 30,
   bulk: 7,
@@ -57,6 +71,7 @@ export const RETAINED_TIMELINE_FRESHNESS_DAYS: Readonly<Record<RetainedTimelineA
 export type RetainedTimelineItem = Readonly<{
   id: string;
   kind: RetainedTimelineKind;
+  family: RetainedTimelineFamily;
   eventType: RetainedTimelineEventType;
   title: string;
   detail: string;
@@ -100,6 +115,7 @@ export type RetainedTimelineFilters = Readonly<{
   freshness: 'all' | RetainedTimelineFreshness;
   eventType: 'all' | RetainedTimelineEventType;
   time: RetainedTimelineTimeFilter;
+  family?: '' | RetainedTimelineFamily;
 }>;
 
 const CONTROL_REPLACE_RE = /[\u0000-\u001f\u007f]+/gu;
@@ -160,6 +176,19 @@ function timelineSource<T>(values: readonly T[], maximum: number, source: string
   return newestLast ? values.slice(-maximum) : values.slice(0, maximum);
 }
 
+function pinFamily(category: string | null): RetainedTimelineFamily {
+  switch (category) {
+    case 'registration': return 'registration';
+    case 'dns': return 'dns';
+    case 'tls':
+    case 'certificate': return 'tls';
+    case 'http':
+    case 'page':
+    case 'page_identity': return 'page';
+    default: return 'unclassified';
+  }
+}
+
 function caseTimelineItems(records: readonly CaseRecord[], now: string | null, omissions: Map<string, number>): RetainedTimelineItem[] {
   const items: RetainedTimelineItem[] = [];
   for (const record of timelineSource(records, MAX_CASES, 'Cases outside the source bound', omissions)) {
@@ -174,6 +203,7 @@ function caseTimelineItems(records: readonly CaseRecord[], now: string | null, o
       items.push({
         id: `case-snapshot:${record.id}:${snapshot.id}`,
         kind: 'case_snapshot',
+        family: 'combined',
         eventType: 'evidence',
         title: `${depth} case evidence retained`,
         detail: snapshot.availability
@@ -203,6 +233,7 @@ function caseTimelineItems(records: readonly CaseRecord[], now: string | null, o
       items.push({
         id: `${checkpoint ? 'checkpoint' : 'pin'}:${record.id}:${pin.id}`,
         kind: checkpoint ? 'evidence_checkpoint' : 'evidence_pin',
+        family: pinFamily(pin.category),
         eventType: 'evidence',
         title: `${checkpoint ? 'Checkpoint fact' : 'Evidence pin'} · ${text(pin.label, 80) || 'Retained fact'}`,
         detail: `Analyst selected a bounded ${text(pin.category, 60) || 'evidence'} fact. The value remains in the owning case rather than this timeline projection.`,
@@ -231,6 +262,7 @@ function caseTimelineItems(records: readonly CaseRecord[], now: string | null, o
       items.push({
         id: `external-assertion:${record.id}:${assertion.id}`,
         kind: 'external_assertion',
+        family: 'external_report',
         eventType: 'evidence',
         title: `External ${provenance.format.toUpperCase()} claim retained`,
         detail: `A bounded external ${provenance.entityType} claim was merged into this case as an assertion. Its value remains in the owning case.`,
@@ -263,6 +295,7 @@ function websiteTimelineItems(snapshots: readonly WebsiteProfileSnapshot[], now:
     return [{
       id: `website:${snapshot.id}`,
       kind: 'website_snapshot',
+      family: 'page',
       eventType: 'evidence',
       title: 'Website profile snapshot retained',
       detail: `${snapshot.technologies.length} technology indicator${snapshot.technologies.length === 1 ? '' : 's'} and ${snapshot.posture.length} posture state${snapshot.posture.length === 1 ? '' : 's'} were retained as curated identifiers and digests.`,
@@ -297,6 +330,7 @@ function watchlistTimelineItems(watchlists: WatchlistCollection, now: string | n
       items.push({
         id: `watchlist:${name}:${observedAt ?? 'undated'}:${index}`,
         kind: 'watchlist_check',
+        family: 'combined',
         eventType: event.changeCount > 0 ? 'change' : 'evidence',
         title: event.changeCount > 0
           ? `${event.changeCount} watchlist change${event.changeCount === 1 ? '' : 's'} retained`
@@ -330,6 +364,7 @@ function relationshipTimelineItems(records: readonly RelationshipObservation[], 
     return [{
       id: `relationship:${record.id}`,
       kind: 'relationship',
+      family: 'relationship',
       eventType: 'evidence',
       title: `${text(record.label, 100) || 'Relationship'} retained`,
       detail: `${record.domains.length} domain${record.domains.length === 1 ? '' : 's'} shared the bounded observation by ${text(record.method, 120) || 'the recorded comparison method'}.`,
@@ -368,6 +403,7 @@ function bulkTimelineItems(sessions: readonly BulkSession[], now: string | null,
     return [{
       id: `bulk:${session.id}`,
       kind: 'bulk_session',
+      family: 'activity',
       eventType: 'activity',
       title: `${text(session.name, 100) || 'Bulk session'} retained`,
       detail: `${settled} of ${session.domains.length} queued domains have compact settled results in this ${session.mode} session.`,
@@ -415,6 +451,7 @@ function reviewTimelineItems(
       return {
         id: `review-${identity}:${occurrence}`,
         kind: 'review_decision',
+        family: 'analyst_decision',
         eventType: 'activity',
         title: `${index === 0 ? 'Latest' : 'Earlier'} ${record.evidenceFamily.replaceAll('_', ' ')} review: ${decision.disposition}`,
         detail: text(decision.rationale, MAX_ANALYST_REVIEW_RATIONALE_LENGTH),
@@ -449,6 +486,40 @@ function reviewTimelineItems(
 
 function eventTime(item: RetainedTimelineItem): string | null {
   return item.eventType === 'activity' ? item.activityAt ?? null : item.observedAt;
+}
+
+export type RetainedTimelineLane = Readonly<{
+  family: RetainedTimelineFamily;
+  label: string;
+  clock: 'Observed' | 'Decision' | 'Session activity';
+  count: number;
+  undated: number;
+  limited: number;
+  earliest: string | null;
+  latest: string | null;
+}>;
+
+/** Summaries cover the supplied retained records, never the intervals between them. */
+export function retainedTimelineLanes(items: readonly RetainedTimelineItem[]): RetainedTimelineLane[] {
+  const lanes = Object.entries(RETAINED_TIMELINE_FAMILIES).map(([family, label]) => ({
+    family: family as RetainedTimelineFamily,
+    label,
+    clock: (family === 'analyst_decision' ? 'Decision' : family === 'activity' ? 'Session activity' : 'Observed') as RetainedTimelineLane['clock'],
+    count: 0, undated: 0, limited: 0, earliest: null as string | null, latest: null as string | null,
+  }));
+  const byFamily = new Map(lanes.map(lane => [lane.family, lane]));
+  for (const item of items.slice(0, MAX_RETAINED_TIMELINE_ITEMS)) {
+    const lane = byFamily.get(item.family)!;
+    lane.count += 1;
+    const time = eventTime(item);
+    if (!time) lane.undated += 1;
+    else {
+      if (lane.earliest === null || time < lane.earliest) lane.earliest = time;
+      if (lane.latest === null || time > lane.latest) lane.latest = time;
+    }
+    if (item.truncated || item.completeness !== 'complete') lane.limited += 1;
+  }
+  return lanes;
 }
 
 function itemSort(left: RetainedTimelineItem, right: RetainedTimelineItem): number {
@@ -513,6 +584,9 @@ export function buildRetainedEvidenceTimeline(input: Readonly<{
     limitations: [
       'This is a bounded projection of deliberately retained browser-local records. It does not run collection, duplicate raw payloads, or infer maliciousness.',
       'Observation time records when evidence was collected or asserted. Storage time records when this browser retained the owning record; the two are never silently merged.',
+      'Family lanes use retained pin categories or record types, not source-name guesses. Combined observations lack separate family clocks; other categories remain unclassified.',
+      'These are records available now, not a reconstruction of what was known at a past date. A recorded observation time is not the time the underlying domain state changed.',
+      'No state is inferred between retained observations. Equal-time entries remain separate and may disagree; missing or omitted records cannot resolve those disagreements.',
       'Undated evidence remains available. Time filters use source observation dates for evidence and separately labelled event dates for session activity and analyst decisions.',
       ...(now === null ? ['The review clock is unavailable; freshness and relative-date filters cannot be evaluated.'] : []),
       'Open the owning record for complete retained detail, exact values, source limitations, and analyst notes.',
@@ -541,6 +615,7 @@ export function filterRetainedEvidenceTimeline(
     && (!normalizedCase || item.caseId === normalizedCase || item.caseAssociations?.some((association) => association.id === normalizedCase))
     && (!normalizedSource || item.source.toLowerCase().includes(normalizedSource.toLowerCase()))
     && (!filters.area || item.areas.includes(filters.area))
+    && (!filters.family || item.family === filters.family)
     && (filters.freshness === 'all' || item.freshness === filters.freshness)
     && (filters.eventType === 'all' || item.eventType === filters.eventType)
     && inTimeRange;

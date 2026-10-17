@@ -94,6 +94,14 @@ function apiErrorResponseFor(error: unknown): ApiRequestErrorResponse {
   return apiUnexpectedErrorResponse();
 }
 
+function httpResponseInterruptedError(): Error {
+  const error = new Error('HTTP response interrupted after headers were sent.');
+  // The terminal handler still closes the connection and logs this diagnostic.
+  // Neither original error properties nor a newly captured filesystem stack are forwarded.
+  error.stack = `Error: ${error.message}`;
+  return error;
+}
+
 function json(
   statusCode: number,
   body: unknown,
@@ -239,6 +247,7 @@ export {
   apiErrorResponseFor,
   apiRequestErrorResponse,
   apiUnexpectedErrorResponse,
+  httpResponseInterruptedError,
   json,
   netlifyJsonToResponse,
   readRequestTextCapped,

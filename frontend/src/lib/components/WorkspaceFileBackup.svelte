@@ -1,19 +1,21 @@
 <script lang="ts">
   import { readWorkspaceArchive, type WorkspaceArchiveDocument } from '../../../../packages/workspace/workspace-archive.mts';
-  import { workspaceAttachmentGroups } from '../../../../packages/workspace/workspace-recovery.mts';
+  import { workspaceAttachmentGroups, workspaceBackupCoverage } from '../../../../packages/workspace/workspace-recovery.mts';
   import type { CaseAttachment } from '../../../../packages/cases/case-attachment-model.mts';
   import { readRetainedCaseFiles } from '#lib/case-attachments.ts';
   import EvidenceFileExport from './EvidenceFileExport.svelte';
+  import WorkspaceBackupCoverage from './WorkspaceBackupCoverage.svelte';
 
   let { archive }: { archive: WorkspaceArchiveDocument } = $props();
   let groups = $state.raw<readonly (readonly CaseAttachment[])[]>([]), selected = $state(0), busy = $state(false), error = $state('');
+  let coverage = $state.raw<ReturnType<typeof workspaceBackupCoverage> | null>(null);
   const count = $derived(groups.reduce((sum, group) => sum + group.length, 0));
   $effect(() => {
     const current = archive;
     let disposed = false;
-    groups = []; selected = 0; error = '';
+    groups = []; selected = 0; error = ''; coverage = null;
     void readWorkspaceArchive(current).then(review => {
-      if (!disposed) groups = workspaceAttachmentGroups(review);
+      if (!disposed) { coverage = workspaceBackupCoverage(review); groups = workspaceAttachmentGroups(review); }
     }).catch(() => { if (!disposed) error = 'The required file list could not be prepared. This backup has not been checked for complete file coverage.'; });
     return () => { disposed = true; };
   });
@@ -28,6 +30,7 @@
   }
 </script>
 
+{#if coverage}<WorkspaceBackupCoverage {coverage} />{/if}
 {#if groups.length}
   <details class="file-backup">
     <summary>Back up {count} referenced file{count === 1 ? '' : 's'} separately</summary>

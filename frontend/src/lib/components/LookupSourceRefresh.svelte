@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, tick } from 'svelte';
   import {
-    requestLookupSourceRefresh, mergeLookupSourceRefreshLedger, MAX_LOOKUP_SOURCE_REFRESH_HISTORY,
+    requestLookupSourceRefresh, mergeLookupSourceRefreshLedger, sourceRefreshObservationTimes, MAX_LOOKUP_SOURCE_REFRESH_HISTORY,
     type LookupSourceRefreshLedger, type LookupSourceRefreshPlan, type LookupSourceRefreshPlanItem,
     type LookupSourceRefreshResult, type SourceRefreshCaseTarget,
   } from '#lib/analysis/lookup-source-refresh.ts';
@@ -10,6 +10,7 @@
   import type { LookupHttpResponse } from '#lib/analysis/lookup-response.ts';
   import { downloadLocalFile } from '#lib/download-local-file.ts';
   import LookupSourceCheckpoint from './LookupSourceCheckpoint.svelte';
+  import EvidenceTimestamp from './EvidenceTimestamp.svelte';
 
   let { plan, original, depth, ledger, onledgerchange, caseTarget }: {
     plan: LookupSourceRefreshPlan;
@@ -27,6 +28,12 @@
   let cancelledFromControl = false;
   const results = $derived(ledger?.entries ?? []);
   const full = $derived(results.length >= MAX_LOOKUP_SOURCE_REFRESH_HISTORY);
+  const observationSummary = $derived(plan.items.map(item => {
+    const latest = results.findLast(result => result.id === item.id);
+    return { id: item.id, label: item.label, latest,
+      originalTimes: sourceRefreshObservationTimes(originalSourceRefreshFacts(item.id, original, depth)),
+      refreshedTimes: latest ? sourceRefreshObservationTimes(latest.facts) : null };
+  }));
 
   $effect(() => {
     original;
@@ -93,6 +100,14 @@
   }
 </script>
 
+{#snippet observationTimes(value: ReturnType<typeof sourceRefreshObservationTimes>)}
+  {#if !value.factCount}No retained facts
+  {:else if !value.distinctTimes}Observation time unknown
+  {:else if value.distinctTimes === 1}<EvidenceTimestamp value={value.earliest} copyable={false} />
+  {:else}<span>Mixed observation times</span><span><EvidenceTimestamp value={value.earliest} copyable={false} /> to <EvidenceTimestamp value={value.latest} copyable={false} /></span>{/if}
+  {#if value.unknownCount && value.distinctTimes}<span>{value.unknownCount} {value.unknownCount === 1 ? 'fact also has' : 'facts also have'} an unknown observation time</span>{/if}
+{/snippet}
+
 {#if plan.items.length}
   <section class="source-refresh" aria-labelledby={headingId}>
     <header>
@@ -114,6 +129,21 @@
     {#if active}<button class="btn cancel" type="button" onclick={() => {cancelledFromControl = true;request?.abort();}}>Cancel source refresh</button>{/if}
     {#if full}<p>The review holds {MAX_LOOKUP_SOURCE_REFRESH_HISTORY} refreshes. Save or download anything needed, then remove a reviewed entry before another request.</p>{/if}
     {#if results.length}
+      <section class="observation-overview" aria-label="Original and refreshed observations">
+        <h6>Original and refreshed observations</h6>
+        <p>The original result stays unchanged. This overview covers only refreshes retained in this review; removed and cancelled requests are not represented. Request times show when you asked; fact times show when each source was observed.</p>
+        <ul class="observation-summary">
+          {#each observationSummary as row (row.id)}
+            <li aria-label={row.label}>
+              <strong>{row.label}</strong>
+              <dl><div><dt>Original Lookup · fact times</dt><dd>{@render observationTimes(row.originalTimes)}</dd></div>
+                <div><dt>Latest retained refresh · fact times</dt><dd>{#if row.latest?.state === 'unavailable'}No observation retained by this request
+                  {:else if row.refreshedTimes}{@render observationTimes(row.refreshedTimes)}{:else}No refresh retained in this review{/if}</dd></div></dl>
+              {#if row.latest}<p>Latest retained request in this review: <EvidenceTimestamp value={row.latest.attemptedAt} copyable={false} /> · {row.latest.state}</p>{/if}
+            </li>
+          {/each}
+        </ul>
+      </section>
       <label class="baseline">Compare with
         <select bind:value={baseline}>
           <option value="original">Original Lookup</option>
@@ -184,6 +214,7 @@
   dl div{min-width:0}dt{color:var(--muted);font-size:var(--text-2xs)}dd{margin:3px 0 0;font-size:var(--text-xs);overflow-wrap:anywhere}
   .review-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
   .refresh-status:empty{margin:0}
+  h6{font-size:var(--text-xs);margin:0}.observation-summary{list-style:none;margin:0;padding:0;display:grid;gap:8px}.observation-summary>li{padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);min-width:0;font-size:var(--text-xs)}.observation-summary dd{display:grid;gap:4px}
   @media(max-width:760px){.refresh-actions,.comparison-grid{grid-template-columns:1fr}}
   @media(max-width:390px){dl{grid-template-columns:1fr}}
 </style>

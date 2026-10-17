@@ -15,6 +15,9 @@ import {
 } from '../frontend/src/lib/controllers/lookup-session.ts';
 import type { LookupHttpResponse } from '../lib/lookup-response-contract.mts';
 import type { Candidate } from '../frontend/src/lib/candidate-handoff.ts';
+import { createLookupCollectionReceiptTracker } from '../lib/lookup-collection-receipt.mts';
+import { classifyQuery } from '../lib/classify.mts';
+import { parseLookupCollectionReceipt } from '../packages/evidence/lookup-collection-receipt.mts';
 
 const response: LookupHttpResponse = {
   query: 'example.test',
@@ -222,6 +225,47 @@ test('a submitted investigation owns target, Case preference and completion orde
   ]);
   assert.equal(h.state.loading, false);
   assert.equal(h.state.sourceProgress, null);
+});
+
+test('receipt binds pre-filter submitted choices through a delayed profile refresh, not changed controls', async (t) => {
+  const held = deferred<void>(), entered = deferred<void>();
+  const tracker = createLookupCollectionReceiptTracker(classifyQuery('example.test'), {});
+  tracker.started('rdap'); tracker.settled('rdap', 'fulfilled', null);
+  const serverReceipt = tracker.finish();
+  const h = harness(async () => ({ ok: true, value: { ...response, collectionReceipt: {
+    ...serverReceipt, sources: serverReceipt.sources.map(row => ({ ...row })),
+  } } }), { refreshProfile: async () => { entered.resolve(); await held.promise; } });
+  t.after(() => h.requests.dispose());
+  h.state.request.lookupMode = 'deep';
+  h.state.request.includeExternalIntelligence = true;
+  const pending = h.workflow.run();
+  await entered.promise;
+  h.state.request.includeExternalIntelligence = false;
+  h.state.request.includeSecurityTxt = true;
+  held.resolve();
+  await pending;
+  assert.deepEqual(h.calls, [{ url: '/api/lookup?q=example.test' }], 'Unsupported optional collection was never admitted.');
+  const receipt = parseLookupCollectionReceipt(h.state.observation.response?.collectionReceipt)!;
+  assert.equal(receipt.originalChoices.externalIntelligence, true);
+  assert.equal(receipt.originalChoices.securityTxt, false);
+  assert.deepEqual(receipt.sources.find(row => row.source === 'external_intelligence'), {
+    source: 'external_intelligence', intent: 'requested', admission: 'unknown', attempt: 'not_started', settlement: 'unknown', complete: null, truncated: null,
+  });
+  assert.equal(receipt.sources.find(row => row.source === 'rdap')?.settlement, 'unsupported');
+  assert.equal(serverReceipt.originalChoices.externalIntelligence, false, 'Binding does not mutate the server result.');
+  assert.equal(h.state.loading, false);
+});
+
+test('a receipt for another mode is rejected before publication or Case retention', async (t) => {
+  const tracker = createLookupCollectionReceiptTracker(classifyQuery('example.test'), { fast: true });
+  const receipt = tracker.finish();
+  const h = harness(async () => ({ ok: true, value: { ...response, collectionReceipt: { ...receipt, sources: receipt.sources.map(row => ({ ...row })) } } }));
+  t.after(() => h.requests.dispose());
+  h.state.request.lookupMode = 'deep';
+  await h.workflow.run({ refreshCaseEvidence: true });
+  assert.equal(h.state.observation.response, null);
+  assert.equal(h.seen.includes('retain'), false);
+  assert.ok(h.state.error);
 });
 
 test('input invalidation while collecting or reconciling prevents later retention and reveal', async (t) => {

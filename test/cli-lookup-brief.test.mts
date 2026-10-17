@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import { buildCliLookupBrief, formatCliLookupBrief } from '../cli/lookup-brief.mts';
+import { MAX_TERMINAL_VALUE_LENGTH } from '../cli/formatters/terminal.mts';
 import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { parseRdap } from '../lib/rdap.mts';
@@ -16,6 +17,17 @@ function lookup() {
     whois: { parsed: {} },
     availability: { state: 'registered', activityStatus: 'active', pageTitle: 'Example service', dns: { status: 'success' }, http: { status: 'success' }, tls: { status: 'unavailable' } },
   };
+}
+
+function sourceBranch(output: string, label: string): string {
+  const lines = output.split('\n');
+  const start = lines.findIndex(line => line.trimStart().startsWith(`${label} [`));
+  assert.ok(start >= 0, `The ${label} source must be present`);
+  const indentation = lines[start]!.length - lines[start]!.trimStart().length;
+  let end = start + 1;
+  while (end < lines.length && lines[end]!.trim()
+    && lines[end]!.length - lines[end]!.trimStart().length > indentation) end += 1;
+  return lines.slice(start, end).join('\n');
 }
 
 describe('CLI Lookup brief', () => {
@@ -36,6 +48,31 @@ describe('CLI Lookup brief', () => {
     assert.match(formatCliLookupBrief(brief), /Recommended manual actions/u);
   });
 
+  test('groups selected facts under their source without turning an empty branch into absence', () => {
+    const brief = buildCliLookupBrief(JSON.stringify(lookup()), NOW);
+    const before = JSON.stringify(brief);
+    const output = formatCliLookupBrief(brief);
+    const registry = sourceBranch(output, 'Registry RDAP');
+    assert.match(registry, /\[success; observed 2026-08-05T02:00:00\.000Z\]/);
+    assert.match(registry, /Registrar: Example Registrar/);
+    assert.match(registry, /Created: 2024-01-02T00:00:00\.000Z/);
+    assert.doesNotMatch(registry, /Page title|Website activity/);
+    const http = sourceBranch(output, 'HTTP and static page identity');
+    assert.match(http, /\[success; source time not recorded\]/);
+    assert.match(http, /Page title: Example service/);
+    assert.match(http, /Website activity: active/);
+    assert.doesNotMatch(http, /Registrar:|Created:/);
+    const dns = sourceBranch(output, 'DNS');
+    assert.match(dns, /\[success; source time not recorded\]/);
+    assert.match(dns, /No fact selected for this brief/);
+    const whois = sourceBranch(output, 'WHOIS');
+    assert.match(whois, /\[partial; observed 2026-08-05T02:00:00\.000Z\]/);
+    assert.match(whois, /No fact selected for this brief/);
+    assert.match(sourceBranch(output, 'TLS'), /\[unavailable; source time not recorded\]/);
+    assert.doesNotMatch(dns + whois, /source (?:empty|absent)|no (?:records|evidence)/i);
+    assert.equal(JSON.stringify(brief), before);
+  });
+
   test('retains conflicting publication values with separate source states and times', () => {
     const source = lookup();
     source.diagnostics.rdap = { status: 'success', observedAt: NOW };
@@ -54,6 +91,8 @@ describe('CLI Lookup brief', () => {
     const rendered = formatCliLookupBrief(brief);
     assert.match(rendered, new RegExp(`Registry Registrar.*observed ${NOW.replaceAll('.', '\\.')}`, 'u'));
     assert.match(rendered, /WHOIS Registrar.*observed 2026-08-05T01:59:00.000Z/u);
+    assert.match(rendered, /Registry Registrar \(value state: value; source state: success;/);
+    assert.match(rendered, /WHOIS Registrar \(value state: value; source state: complete;/);
   });
 
   test('reads registration and expiry dates from the canonical RDAP parser lifecycle', () => {
@@ -89,6 +128,23 @@ describe('CLI Lookup brief', () => {
     assert.doesNotMatch(formatCliLookupBrief(brief), /[\u0080-\u009f]|\p{Default_Ignorable_Code_Point}/u);
   });
 
+  test('keeps the existing selected-value bound without losing source grouping', () => {
+    const source = lookup();
+    source.availability.pageTitle = `${'Long title '.repeat(100)}hidden-tail`;
+    const brief = buildCliLookupBrief(JSON.stringify(source), NOW);
+    const value = brief.facts.find(item => item.id === 'page-title')!.value;
+    assert.equal(value.length, 300);
+    const rendered = formatCliLookupBrief(brief);
+    const title = sourceBranch(rendered, 'HTTP and static page identity')
+      .split('\n').find(line => line.trimStart().startsWith('Page title:'))!
+      .trimStart().slice('Page title: '.length);
+    assert.equal(title.length, MAX_TERMINAL_VALUE_LENGTH);
+    assert.ok(title.endsWith('…'));
+    assert.ok(value.startsWith(title.slice(0, -1)));
+    assert.doesNotMatch(rendered, /hidden-tail/);
+    assert.equal(rendered.split('Page title:').length - 1, 1);
+  });
+
   test('surfaces local certificate warning data as a review lead rather than a verdict', () => {
     const source = lookup();
     Object.assign(source, {
@@ -113,15 +169,27 @@ describe('CLI Lookup brief', () => {
   });
 
   test('routes the offline command without collecting', async () => {
-    let stdout = '';
-    let collected = false;
-    const code = await runCli(['brief', '--json'], {
-      stdout: { write(value) { stdout += value; } }, stderr: { write() {} }, now: () => NOW,
-      readArtifactInput: async () => JSON.stringify(lookup()),
-      runUnifiedLookup: async () => { collected = true; return {}; },
-    });
-    assert.equal(code, EXIT_CODES.SUCCESS);
-    assert.equal(collected, false);
-    assert.equal(JSON.parse(stdout).schema, 'whoisleuth.cli.lookup-brief');
+    const raw = JSON.stringify(lookup());
+    const expected = buildCliLookupBrief(raw, NOW);
+    let requests = 0;
+    const denied = () => { requests += 1; throw new Error('Offline brief attempted collection.'); };
+    for (const mode of [[], ['--json'], ['--quiet']]) {
+      let stdout = '', stderr = '';
+      const code = await runCli(['brief', '--no-color', ...mode], {
+        stdout: { write(value) { stdout += value; } }, stderr: { write(value) { stderr += value; } }, now: () => NOW,
+        readArtifactInput: async () => raw,
+        runUnifiedLookup: denied, safeFetch: denied, resolvePublicAddresses: denied,
+        whoisQuery: denied, fetchHomepage: denied, collectTlsIntelligence: denied,
+      });
+      assert.equal(code, EXIT_CODES.SUCCESS, stderr);
+      assert.equal(stderr, '');
+      assert.equal(requests, 0);
+      if (mode.includes('--json')) assert.deepEqual(JSON.parse(stdout), expected);
+      else if (mode.includes('--quiet')) assert.equal(stdout, '');
+      else {
+        assert.match(sourceBranch(stdout, 'Registry RDAP'), /Registrar: Example Registrar/);
+        assert.match(sourceBranch(stdout, 'TLS'), /unavailable/);
+      }
+    }
   });
 });

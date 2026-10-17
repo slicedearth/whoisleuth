@@ -26,7 +26,7 @@
 
 <details class="notice">
   <summary>Compare an unexpected response notice locally</summary>
-  <p>This comparison stays in page memory and is not included when saving the intake review. It does not authenticate a sender, confirm a provider outcome, close this Case or authorise disclosure.</p>
+  <p>This comparison stays in page memory and is not included when saving the intake review. It does not authenticate a sender, confirm a provider outcome, close this case or authorise disclosure.</p>
   <label>Recorded action<select bind:value={actionId} onchange={clearFields}><option value="">Choose an action</option>{#each record.actions as item (item.id)}<option value={item.id}>{item.type.replaceAll('_', ' ')} · {item.recipient} · {item.id}</option>{/each}</select></label>
   {#if action}
     <p>Retained recipient: {action.recipient}. Route source: {action.contactSource ?? 'Not retained'}. Route freshness: {review.routeFreshness}. Source text is not a trusted link or authenticated identity.</p>
@@ -36,7 +36,7 @@
     {#if pages > 1}<nav aria-label="Notice comparison pages"><button class="btn" type="button" disabled={currentPage <= 1} onclick={() => page = currentPage - 1}>Previous comparisons</button><span>Page {currentPage} of {pages}</span><button class="btn" type="button" disabled={currentPage >= pages} onclick={() => page = currentPage + 1}>Next comparisons</button></nav>{/if}
     <label class="confirmation"><input type="checkbox" bind:checked={confirmed}> I independently contacted a known official route out of band</label>
     <p>Confirmation: {review.confirmation === 'analyst_reported_out_of_band' ? 'Analyst-reported out-of-band contact, not independently verified here' : 'Not reported'}.</p>
-    {#if officialRoutes.length}<p>Independently review a retained official catalogue route:</p><ul>{#each officialRoutes as route (route.id)}<li><a href={route.guidanceUrl} target="_blank" rel="noopener noreferrer">{route.platformLabel} · {route.label} official guidance<span class="sr-only"> (opens in a new tab)</span></a> · reviewed {route.reviewedAt}, review after {route.reviewAfter}</li>{/each}</ul>{:else}<p>No matching official catalogue route is retained here. Independently obtain a known official route; do not use the supplied notice link for confirmation.</p>{/if}
+    {#if officialRoutes.length}<p>Independently review a retained official catalogue route:</p><ul>{#each officialRoutes as route (route.id)}<li><a class="text-link" href={route.guidanceUrl} target="_blank" rel="noopener noreferrer">{route.platformLabel} · {route.label} official guidance<span class="sr-only"> (opens in a new tab)</span></a> · reviewed {route.reviewedAt}, review after {route.reviewAfter}</li>{/each}</ul>{:else}<p>No matching official catalogue route is retained here. Independently obtain a known official route; do not use the supplied notice link for confirmation.</p>{/if}
     <p>Do not open supplied attachments, provide credentials or accept payment instructions. From and Reply-To domains are shown separately; exact sender addresses and message subjects are not retained. {result.report.coverage.state === 'partial' ? 'Input review is partial; missing context remains unknown.' : ''}</p>
   {/if}
 </details>

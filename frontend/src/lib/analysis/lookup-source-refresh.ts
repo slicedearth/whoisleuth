@@ -75,6 +75,18 @@ export type LookupSourceRefreshLedger = Readonly<{
   entries: readonly LookupSourceRefreshResult[];
 }>;
 
+/** Observation clocks belong to the retained facts, never to a later request. */
+export function sourceRefreshObservationTimes(facts: readonly CheckpointFact[], now = new Date().toISOString()) {
+  const observed = facts.filter(fact => fact.value !== null);
+  const clocks = observed.map(fact => {
+    const time = readObservationTime(fact.observedAt, now);
+    return time.ageDays === null ? null : time.observedAt;
+  });
+  const times = [...new Set(clocks.filter((time): time is string => time !== null))].sort();
+  return { factCount: observed.length, unknownCount: clocks.filter(time => time === null).length,
+    distinctTimes: times.length, earliest: times[0] ?? null, latest: times.at(-1) ?? null };
+}
+
 export type SourceRefreshCaseTarget = Readonly<{
   record: CaseRecord | null;
   ready: boolean;

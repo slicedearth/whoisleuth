@@ -20,7 +20,7 @@
     unsupported: 'Unsupported',
   };
   const actionLabels = {
-    retry: 'Review retry',
+    retry: 'Review retry options',
     deep_lookup: 'Open Deep Lookup',
     case_review: 'Review case',
   } as const;
@@ -187,7 +187,7 @@
           </div>
           <div class="actions">
             <a class="btn" href={item.nextHref} onclick={(event) => { if (item.nextAction === 'case_review') openCase(event, item); }}>{actionLabels[item.nextAction]}</a>
-            {#if item.reviewHref !== item.nextHref}<a class="btn secondary" href={item.reviewHref} onclick={(event) => openCase(event, item)}>Open retained owner</a>{/if}
+            {#if item.reviewHref !== item.nextHref}<a class="btn secondary" href={item.reviewHref} onclick={(event) => openCase(event, item)}>Open saved record</a>{/if}
           </div>
         </li>
       {/each}

@@ -24,7 +24,7 @@ test('external evaluation with missing authority stays unmeasured in the console
   const evaluation = output.reports.find((report: { split: string }) => report.split === 'evaluation');
   expect(evaluation).toBeTruthy();
   await page.goto('/monitor?view=cases');
-  await page.locator('details.advanced-case-tools > summary').click();
+  await page.getByRole('region', { name: 'Cases', exact: true }).locator('summary').filter({ hasText: /^Advanced Case tools$/u }).click();
   const dashboard = page.locator('.calibration-dashboard');
   await expect(dashboard.getByRole('heading', { name: 'Reviewed Risk calibration' })).toBeVisible();
   const requests: string[] = [];
@@ -100,7 +100,7 @@ function reports(explain: ExplainRiskScore = explainRiskScore) {
 test('target-free calibration review stays tab-local, exact, accessible, and mobile-safe', async ({ page }, testInfo) => {
   const { detailed, summary } = reports();
   await page.goto('/monitor?view=cases');
-  await page.locator('details.advanced-case-tools > summary').click();
+  await page.getByRole('region', { name: 'Cases', exact: true }).locator('summary').filter({ hasText: /^Advanced Case tools$/u }).click();
   const dashboard = page.locator('.calibration-dashboard');
   await expect(dashboard.getByRole('heading', { name: 'Reviewed Risk calibration' })).toBeVisible();
 
@@ -198,7 +198,7 @@ test('a delayed calibration read cannot replace a newer file selection', { tag: 
   const { summary } = reports();
   const content = JSON.stringify(summary);
   await page.goto('/monitor?view=cases');
-  await page.locator('details.advanced-case-tools > summary').click();
+  await page.getByRole('region', { name: 'Cases', exact: true }).locator('summary').filter({ hasText: /^Advanced Case tools$/u }).click();
   const dashboard = page.locator('.calibration-dashboard');
   const input = dashboard.locator('input[type="file"]');
   await page.evaluate(() => {

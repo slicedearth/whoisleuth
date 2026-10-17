@@ -5,6 +5,8 @@ import path from 'node:path';
 import { describe, test } from 'node:test';
 
 import { CLI_COMMAND_REGISTRY } from '../cli/command-reference.mts';
+import { runCli } from '../cli/runner.mts';
+import { createCase, CASE_SCHEMA_VERSION } from '../packages/cases/case-model.mts';
 import {
   INVESTIGATION_PLAN_RECIPES,
   buildWorkflowRecipeCatalogue,
@@ -44,6 +46,7 @@ import { WHOISLEUTH_SITE_ORIGIN } from '../lib/project-metadata.mts';
 import { writeAtomically, obsoleteExampleOutputs } from '../tools/public-product-catalogue.mts';
 import { PUBLIC_CLI_CATALOGUE } from '../frontend/src/lib/generated/public-cli-catalogue.ts';
 import { PUBLIC_CLI_GRAMMAR } from '../frontend/src/lib/generated/public-cli-grammar.ts';
+import { PUBLIC_CLI_GUIDANCE } from '../frontend/src/lib/generated/public-cli-guidance.ts';
 import { PUBLIC_EXAMPLE_LOADERS } from '../frontend/src/lib/generated/public-examples.ts';
 
 const GENERATED_DIRECTORY = new URL('../frontend/src/lib/generated/', import.meta.url);
@@ -57,6 +60,43 @@ function strings(value: unknown): string[] {
 }
 
 describe('public product catalogue', () => {
+  test('Watchlist export help agrees with an actual offline export', async () => {
+    let help = '', exported = '';
+    const input = readFileSync(new URL('./fixtures/brand-candidate-workflow/candidate-watch-input-v1.json', import.meta.url), 'utf8');
+    assert.equal(await runCli(['watchlist-review', '--help'], {
+      stdout: { write(value) { help += value; } }, stderr: { write() {} },
+    }), 0);
+    assert.equal(await runCli(['watchlist-review', 'export', '--json'], {
+      stdout: { write(value) { exported += value; } }, stderr: { write() {} },
+      readArtifactInput: async () => input, now: () => '2026-10-01T00:00:00.000Z',
+    }), 0);
+    const document = JSON.parse(exported);
+    assert.equal(document.schema, 'whoisleuth.watchlists');
+    assert.ok(help.includes(`Watchlist schema ${document.version}`));
+  });
+
+  test('published Case handoff commands create the file consumed by the next step', async () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'whoisleuth-public-handoff-'));
+    const now = '2026-10-01T00:00:00.000Z';
+    const source = path.join(root, 'cases.json'), output = path.join(root, 'case-pack.json');
+    try {
+      writeFileSync(source, JSON.stringify({ version: CASE_SCHEMA_VERSION, cases: [createCase({ domain: 'handoff.example' }, now)] }));
+      const recipe = CLI_PUBLIC_GUIDANCE.interchangeRecipes.find(item => item.id === 'case-handoff')!;
+      const commands = recipe.commands.map(command => (command.match(/"[^"]*"|\S+/gu) ?? []).slice(1)
+        .map(token => token.startsWith('"') ? token.slice(1, -1) : token)
+        .map(token => token === 'cases.json' ? source : token === 'case-pack.json' ? output : token));
+      const sink = { write() {} };
+      assert.equal(await runCli(commands[0], { stdout: sink, stderr: sink, now: () => now }), 0);
+      const original = readFileSync(output, 'utf8');
+      assert.equal(JSON.parse(original).packet.schema, 'whoisleuth.cli.case-pack');
+      let review = '';
+      assert.equal(await runCli(commands[1], { stdout: { write(value) { review += value; } }, stderr: sink, now: () => now }), 0);
+      assert.notEqual(JSON.parse(review).summary.status, 'blocked');
+      assert.notEqual(await runCli(commands[0], { stdout: sink, stderr: sink, now: () => now }), 0);
+      assert.equal(readFileSync(output, 'utf8'), original);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+
   test('generated command data preserves every canonical field after sharing repeated options', () => {
     assert.deepEqual(PUBLIC_CLI_CATALOGUE, JSON.parse(JSON.stringify(publicCliCatalogue())));
     assert.deepEqual(PUBLIC_CLI_GRAMMAR, Object.fromEntries(CLI_COMMAND_REGISTRY.map(definition => [definition.command, definition.grammar])));
@@ -155,6 +195,39 @@ describe('public product catalogue', () => {
     assert.deepEqual([...new Set(publicHostnames)], ['github.com']);
   });
 
+  test('methodology claims preserve the supplied input accounts and do not turn a failed recheck into absence', () => {
+    const methodology = publicMethodology();
+    assert.deepEqual(methodology, publicMethodology());
+    const conflict = methodology.examples.find(example => example.id === 'conflicting-page-accounts');
+    const recheck = methodology.examples.find(example => example.id === 'unavailable-page-recheck');
+    assert.ok(conflict && recheck);
+    const input = JSON.parse(publicExamples().examples.find(example => example.id === 'case-assess-input')!.content);
+    const later = JSON.parse(publicExamples().examples.find(example => example.id === 'case-recheck-input')!.content);
+    assert.deepEqual(input.evidence.map((item: { stance: string }) => item.stance), ['supports', 'contradicts']);
+    for (const [index, source] of conflict.sources.entries()) {
+      const { id: _id, role: _role, ...pin } = source;
+      assert.deepEqual(pin, input.evidence[index].pin);
+    }
+    assert.equal(conflict.sources[0]!.sourceState, 'partial');
+    assert.match(conflict.sources[0]!.value, /form asking for a password/u);
+    assert.notEqual(conflict.sources[0]!.source, conflict.sources[1]!.source);
+    assert.match(conflict.sources[1]!.value, /no password form was seen/u);
+    assert.match(conflict.unknowns.join(' '), /not directly comparable/u);
+    assert.match(conflict.conclusion, /does not establish.*every visitor/u);
+    assert.equal(recheck.sources[1]!.value, later.comparisonSummary);
+    assert.equal(recheck.sources[1]!.sourceState, 'unavailable');
+    assert.equal(recheck.sources[1]!.observationHostname, null);
+    assert.ok(Date.parse(recheck.sources[0]!.observedAt) < Date.parse(recheck.sources[1]!.observedAt));
+    assert.match(recheck.sources[0]!.role, /not current contrary evidence/u);
+    assert.match(recheck.conclusion, /Not established.*no later page content/u);
+    for (const example of methodology.examples) {
+      assert.ok(METHODOLOGY_TOPICS.some(topic => example.rule.href === `#method-${topic.id}`));
+      assert.ok(publicExamples().examples.some(input => example.example.href === `/examples#example-${input.id}`));
+      assert.equal(new Set(example.sources.map(source => source.id)).size, example.sources.length);
+    }
+    assert.doesNotMatch(strings(methodology.examples).join('\n'), /(?:\/Users\/|\/home\/|Cookie:|Authorization:|Set-Cookie:)/iu);
+  });
+
   test('retains byte-exact generated frontend projections without browser execution imports', () => {
     const artifacts = [
       ['public-cli-catalogue.ts', renderPublicCliCatalogueModule()],
@@ -177,6 +250,40 @@ describe('public product catalogue', () => {
       'whoisleuth workflow-plan --explain evidence-handoff',
       'whoisleuth case-pack cases.json --audience public --reviewed --json',
     ]);
+  });
+
+  test('installation guidance retains distinct request, storage and distribution boundaries', () => {
+    const modes = PUBLIC_CLI_GUIDANCE.operationModes;
+    assert.deepEqual(modes.map(mode => mode.id), ['hosted-console', 'local-console', 'main-cli', 'rendered-capture']);
+    const [hosted, local, cli, capture] = modes;
+    assert.equal(hosted.nodeRequirement, null);
+    assert.match(hosted.requests, /website service.*host/u);
+    assert.match(hosted.storage, /browser profile/u);
+    assert.match(hosted.offline, /not an offline installation/u);
+    assert.match(local.availability, /Local archive only/u);
+    assert.match(local.storage, /SQLite.*plaintext/u);
+    assert.match(local.offline, /--offline/u);
+    assert.match(local.offline, /host-scoped, not isolated by port/u);
+    assert.match(cli.availability, /Public npm package/u);
+    assert.match(cli.requests, /your computer, not the hosted/u);
+    assert.match(capture.availability, /local archive only/u);
+    assert.match(capture.prerequisites, /separately installed matching browser.*sandbox/u);
+    assert.match(capture.requests, /executes page JavaScript/u);
+    assert.match(capture.storage, /unencrypted/u);
+    assert.match(capture.offline, /Comparison.*no request/u);
+    for (const [mode, manifestPath] of [
+      [local, '../packages/local-application/package.json'],
+      [cli, '../packages/cli/package.template.json'],
+      [capture, '../packages/web-capture/package.json'],
+    ] as const) {
+      const manifest = JSON.parse(readFileSync(new URL(manifestPath, import.meta.url), 'utf8'));
+      assert.equal(mode.nodeRequirement, manifest.engines.node);
+      assert.equal(Object.hasOwn(mode, 'packageManifest'), false);
+    }
+    const localManifest = JSON.parse(readFileSync(new URL('../packages/local-application/package.json', import.meta.url), 'utf8'));
+    const captureManifest = JSON.parse(readFileSync(new URL('../packages/web-capture/package.json', import.meta.url), 'utf8'));
+    assert.equal(localManifest.private, true);
+    assert.equal(captureManifest.private, true);
   });
 
   test('discovers individual example payloads from the same canonical catalogue', async () => {

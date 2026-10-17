@@ -10,6 +10,7 @@ import {
   parseWaczEvidenceArchive,
 } from '../frontend/src/lib/analysis/wacz-evidence-import.ts';
 import zipFixtures from '../fixtures/zip-fixtures.mts';
+import { parseSelectedWacz } from '../frontend/src/lib/analysis/selected-wacz-original.ts';
 
 const encoder = new TextEncoder();
 const { patchZipDeclaredUncompressedSize } = zipFixtures;
@@ -93,6 +94,59 @@ function wacz(options: Readonly<{
 }
 
 describe('portable WACZ evidence import', () => {
+  function packageResources(entries: Readonly<Record<string, Uint8Array>>): Uint8Array {
+    const manifest = encoder.encode(JSON.stringify({ profile: 'data-package', wacz_version: '1.1.1',
+      resources: Object.entries(entries).map(([path, bytes]) => ({ path, bytes: bytes.byteLength, hash: `sha256:${sha256(bytes)}` })),
+    }));
+    return zipSync({ ...entries, 'datapackage.json': manifest,
+      'datapackage-digest.json': encoder.encode(JSON.stringify({ path: 'datapackage.json', hash: `sha256:${sha256(manifest)}` })),
+    });
+  }
+
+  test('selected archive provenance preserves duplicate record origins across compressed and plain members without changing retained evidence', async () => {
+    const excluded = encoder.encode('WARC/1.1\r\nWARC-Type: request\r\nContent-Length: 0\r\n\r\n');
+    const record = warcArchive();
+    const first = new Uint8Array(excluded.length + record.length); first.set(excluded); first.set(record, excluded.length);
+    const compressed = gzipSync(first);
+    const input = packageResources({ 'archive/First.warc.gz': compressed, 'archive/second.warc': record });
+    const expected = await parseWaczEvidenceArchive(toArrayBuffer(input));
+    const owned = toArrayBuffer(input), pending = parseSelectedWacz(owned, 'selected.wacz');
+    new Uint8Array(owned).fill(0);
+    const { report, original } = await pending;
+    assert.deepEqual(report, expected);
+    assert.equal(report.accepted, 1); assert.equal(report.records, 3);
+    const finding = report.document.findings[0]!;
+    const provenance = original.archive!(report.document, finding)!;
+    assert.equal(provenance.digestSha256, sha256(input)); assert.equal(provenance.byteLength, input.length);
+    assert.equal(provenance.manifestDigest, 'verified');
+    assert.deepEqual(provenance.origins, [
+      { state: 'available', record: 2, offset: excluded.length, end: first.length - 4,
+        resource: { path: 'archive/First.warc.gz', ordinal: 1, bytes: compressed.length, digestSha256: sha256(compressed), compression: 'gzip', expandedBytes: first.length } },
+      { state: 'available', record: 3, offset: 0, end: record.length - 4,
+        resource: { path: 'archive/second.warc', ordinal: 2, bytes: record.length, digestSha256: sha256(record), compression: 'none', expandedBytes: record.length } },
+    ]);
+    assert.equal(original.locate(report.document, finding, 'finding.summary').state, 'unavailable');
+    assert.equal(original.archive!({ ...report.document }, finding), null);
+    assert.equal(original.archive!(report.document, { ...finding }), null);
+    assert.doesNotMatch(JSON.stringify(report), /First\.warc|second\.warc|"offset":|"origins":|secret=value|Discarded body/u);
+    assert.doesNotMatch(JSON.stringify(provenance), /secret=value|Discarded body|WARC-Target-URI/u);
+    original.dispose(); assert.equal(original.archive!(report.document, finding), null);
+  });
+
+  test('a record split between valid members never receives an invented member-relative location', async () => {
+    const record = warcArchive();
+    const input = packageResources({ 'archive/one.warc': record.slice(0, 70), 'archive/two.warc': record.slice(70) });
+    const { report, original } = await parseSelectedWacz(toArrayBuffer(input), 'split.wacz');
+    assert.equal(report.accepted, 1);
+    assert.deepEqual(original.archive!(report.document, report.document.findings[0]!)!.origins, [{ state: 'spans_resources', record: 1 }]);
+  });
+
+  test('invalid archive integrity cannot publish selected provenance', async () => {
+    for (const input of [wacz({ resourceDigest: 'invalid' }), wacz({ manifestDigest: 'invalid' }), wacz({ resourceBytes: 1 })]) {
+      await assert.rejects(parseSelectedWacz(toArrayBuffer(input), 'invalid.wacz'));
+    }
+  });
+
   test('keeps a retained HTTP length inconsistency partial after package integrity verification', async () => {
     const input = wacz({ warcBytes: warcArchive('https://portal.example.test/', responseBlock(['Content-Length: 1'])) });
     const report = await parseWaczEvidenceArchive(toArrayBuffer(input));

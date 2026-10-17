@@ -8,6 +8,7 @@
   import { CASE_REVIEW_KINDS, previewCaseReviewReturn, selectedCaseReviewRows, type CaseReviewReturn, type CaseReviewRow } from '../../../../packages/cases/case-review-return.mts';
   import { parseBoundedJson, boundedJsonLimitsForBytes } from '#lib/bounded-json.ts';
   import CaseReviewPackage from './CaseReviewPackage.svelte';
+  import CaseHandoffComparison from './CaseHandoffComparison.svelte';
   import EvidencePackageInput from './EvidencePackageInput.svelte';
   import { runInvestigationPackageWorker } from '#lib/investigation-package-worker.ts';
   import { readPackagedCaseReview } from '#lib/case-review-package.ts';
@@ -28,6 +29,7 @@
   let filter = $state<'changed' | 'all'>('changed');
   let heading: HTMLHeadingElement;
   let generation = 0;
+  let comparing = $state(false);
   const stale = $derived(preview !== null && canonicalArtifactJsonV2(record) !== preview.expectedCase);
   const rows = $derived(preview?.rows.filter(row => filter === 'all' || row.state !== 'unchanged') ?? []);
   const pages = $derived(Math.max(1, Math.ceil(rows.length / 10)));
@@ -98,7 +100,7 @@
       const text = JSON.stringify(buildCaseExport([record]), null, 2);
       if (new TextEncoder().encode(text).length > MAX_CASE_IMPORT_BYTES) throw new Error(`This Case exceeds the ${MAX_CASE_IMPORT_BYTES}-byte review-file limit. Use a workspace backup for its complete contents; no shortened review copy was created.`);
       downloadLocalFile(new Blob([text], { type: 'application/json' }), `case-review-${record.id}.json`);
-      message = 'Downloaded a full review copy of this Case. Share it only with the intended reviewer.';
+      message = 'Prepared the full Case review copy for download. Confirm the download before sharing it with the intended reviewer.';
     } catch (cause) { message = cause instanceof Error ? cause.message : 'Could not export the review copy.'; }
   }
   async function apply() {
@@ -116,6 +118,10 @@
 
 <section class="case-response-stage review-return" aria-labelledby={`case-review-heading-${record.id}`}>
   <h3 id={`case-review-heading-${record.id}`} tabindex="-1" bind:this={heading}>Review with another analyst</h3>
+  <details ontoggle={event => comparing = event.currentTarget.open}>
+    <summary>Compare Case exports or response packets</summary>
+    {#if comparing}{#key record.id}<CaseHandoffComparison caseId={record.id} domain={record.domain} />{/key}{/if}
+  </details>
   <details>
     <summary>Share a copy or review returned entries</summary>
     <div class="stack">
@@ -127,7 +133,7 @@
       <label for={`case-review-file-${record.id}`}>Returned Case file (JSON)</label>
       <input id={`case-review-file-${record.id}`} type="file" accept="application/json,.json" onchange={selectFile} disabled={mutationBusy || parsing || exporting}>
       {#if packageMessage}<p class="muted">{packageMessage}</p>{/if}
-      <p class="muted">Review stays in page memory. Only selected new notes, pins, decisions and assertions are added. Status, authorisations, actions, closures and observations are not inherited. Matching IDs do not authenticate the reviewer.</p>
+      <p class="muted">Choose new notes, pins, decisions and assertions to add. Status, authorisations, actions, closures and independent outcome reviews are not inherited. This preview stays in page memory; matching IDs do not authenticate the reviewer.</p>
       <p role="status" aria-label="Case review return status">{parsing ? 'Reading the selected review file…' : message}</p>
       {#if preview}
         <p class="digest">Case file: <code>{preview.fileDigest}</code></p>

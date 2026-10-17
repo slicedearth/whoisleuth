@@ -1,10 +1,11 @@
 <script lang="ts">
-  import type {
-    LookupClaimReadiness,
-    LookupClaimId,
-    LookupClaimReadinessState,
+  import {
+    lookupQuestionsNeedingEvidence,
+    type LookupClaimReadiness,
+    type LookupClaimId,
+    type LookupClaimReadinessState,
   } from '#lib/analysis/lookup-claim-readiness.ts';
-  import type { LookupReviewActionModel } from '#lib/analysis/lookup-review-action-model.ts';
+  import { lookupQuestionNextActions, type LookupReviewActionModel } from '#lib/analysis/lookup-review-action-model.ts';
 
   let {
     readiness,
@@ -17,6 +18,10 @@
   } = $props();
 
   const impact = $derived(reviewActions.evidenceImprovements);
+  const questions = $derived(lookupQuestionsNeedingEvidence(readiness));
+  let questionId = $state<LookupClaimId | null>(null);
+  const question = $derived(questions.find(item => item.id === questionId) ?? questions[0]);
+  const next = $derived(lookupQuestionNextActions(impact, readiness.entries.find(item => item.id === question?.id)));
 
   let exportingClaim = $state<LookupClaimId | null>(null);
   let passportStatus = $state('');
@@ -54,6 +59,19 @@
     not_ready: 'Not ready',
   };
 </script>
+
+{#snippet nextAction(action: ReturnType<typeof lookupQuestionNextActions>['actions'][number])}
+  <li data-requirement-id={action.item.requirementId}>
+    <a href={action.item.href}><strong>{action.item.evidenceLabel}</strong></a>
+    <p>{action.item.expectedEffect}</p>
+    <details>
+      <summary>Before you continue<span class="sr-only">: {action.item.evidenceLabel}</span></summary>
+      <p>{action.prerequisite}</p>
+      <p>{action.item.disclosure}</p>
+      {#each action.item.limitations as limitation}<p>{limitation}</p>{/each}
+    </details>
+  </li>
+{/snippet}
 
 {#if readiness.entries.length}
   <section class="claim-readiness card" aria-labelledby="claim-readiness-title">
@@ -100,6 +118,30 @@
     </ul>
     {#if passportStatus}<p class="passport-status" role="status">{passportStatus}</p>{/if}
 
+    {#if question}
+      <section class="question-review" aria-labelledby="question-review-title">
+        <h5 id="question-review-title">Next reviews for your question</h5>
+        <label>Question to review
+          <select value={question.id} onchange={event => questionId = event.currentTarget.value as LookupClaimId}>
+            {#each questions as item (item.id)}<option value={item.id}>{item.question}</option>{/each}
+          </select>
+        </label>
+        {#if next.actions.length}
+          <ol class="next-steps">{#each next.actions as action (action.item.requirementId)}{@render nextAction(action)}{/each}</ol>
+        {:else}<p class="note">No eligible next action is available for this question in the current result. Review the gaps below.</p>{/if}
+        {#if next.further.length}
+          <details><summary>More reviews for this question · {next.further.length}</summary>
+            <ol class="next-steps" start={next.actions.length + 1}>{#each next.further as action (action.item.requirementId)}{@render nextAction(action)}{/each}</ol>
+          </details>
+        {/if}
+        {#if next.unavailable.length}
+          <details><summary>Gaps without an available action · {next.unavailable.length}</summary>
+            <ul class="unavailable-gaps">{#each next.unavailable as gap (gap.item.requirementId)}<li><strong>{gap.item.evidenceLabel}</strong><p>{gap.reason}</p><a href={gap.item.href}>Review source context</a></li>{/each}</ul>
+          </details>
+        {/if}
+      </section>
+    {/if}
+
     {#if impact.displayedItems.length}
       <details
         class="impact-plan"
@@ -107,9 +149,9 @@
         data-displayed-count={impact.displayedCount}
         data-omitted-count={impact.omittedCount}
       >
-        <summary>Plan {impact.total} evidence improvement{impact.total === 1 ? '' : 's'}</summary>
-        <p class="impact-intro">Prioritised by the statement each step could improve, rather than by the number of sources available.</p>
-        <p class="impact-counts">Showing <strong>{impact.displayedCount}</strong> of <strong>{impact.total}</strong> bounded actions. {impact.omittedCount > 0 ? `${impact.omittedCount} omitted.` : 'None omitted.'}</p>
+        <summary>All evidence-gap details · {impact.total}</summary>
+        <p class="impact-intro">Source and context requirements for every statement, including gaps with no available action.</p>
+        <p class="impact-counts">Showing <strong>{impact.displayedCount}</strong> of <strong>{impact.total}</strong> requirements. {impact.omittedCount > 0 ? `${impact.omittedCount} omitted.` : 'None omitted.'}</p>
         <ul class="impacts">
           {#each impact.displayedItems as item (item.id)}
             <li
@@ -122,7 +164,7 @@
             >
               <div class="impact-head">
                 <strong>{item.evidenceLabel}</strong>
-                <span class="mode">{item.mode === 'network_collection' ? 'Network request' : 'Local review'}</span>
+                <span class="mode">{item.mode === 'network_collection' ? 'Network evidence' : 'Local review'}</span>
               </div>
               <p class="basis"><b>Basis:</b> {item.basisLabel}</p>
               {#if item.factId && item.evidencePresentation && item.freshnessPresentation}
@@ -211,6 +253,14 @@
   .impact-intro,.impact-counts{margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}.impact-counts{margin-top:5px}.impact-counts strong{color:var(--text)}.impacts{margin-top:9px}.impact-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.impact-head strong{font-size:var(--text-xs)}.mode{flex:0 0 auto;color:var(--accent);font:650 var(--text-2xs) var(--mono)}.impacts p,.impacts small{display:block;margin:5px 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}.impacts .effect,.impacts .fact-id b,.impacts .basis b,.impacts .limitation b{color:var(--text)}.impacts a{font:650 var(--text-2xs) var(--mono)}
   .canonical-state{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}.canonical-state span{padding:3px 6px;border:1px solid var(--border);border-radius:999px;color:var(--text);font:650 var(--text-2xs) var(--mono)}.canonical-state span[data-tone='caution']{border-color:color-mix(in srgb,var(--amber) 45%,var(--border))}.canonical-state span[data-tone='conflict']{border-color:color-mix(in srgb,var(--danger) 45%,var(--border))}.impact-contributors{display:grid;gap:5px;margin:7px 0 0;padding:7px 0 0;border-top:1px solid var(--border);list-style:none}.impact-contributors li{min-width:0}.impact-contributors strong,.impact-contributors span{display:block;overflow-wrap:anywhere}.impact-contributors strong{font-size:var(--text-2xs)}.impact-contributors span{color:var(--muted);font-size:var(--text-2xs)}.impacts .limitation{padding-left:8px;border-left:1px solid var(--amber);overflow-wrap:anywhere}.impacts .fact-id,.impacts .context-note,.impacts .basis{overflow-wrap:anywhere}
   .limit{padding-top:10px;border-top:1px solid var(--border)}
+  .question-review{margin-top:16px;padding-top:14px;border-top:1px solid var(--border);min-width:0}
+  .question-review h5{margin:0 0 10px;font-size:var(--text-sm)}
+  .question-review label{display:grid;gap:6px;font-size:var(--text-xs);max-width:100%}
+  .question-review select{width:100%;min-width:0;max-width:100%}
+  .next-steps,.unavailable-gaps{display:grid;gap:12px;padding-inline-start:22px;font-size:var(--text-xs);line-height:1.55}
+  .next-steps li,.unavailable-gaps li{min-width:0;overflow-wrap:anywhere}
+  .next-steps p,.unavailable-gaps p{margin:5px 0;color:var(--muted)}
+  .next-steps details{margin-top:6px}.next-steps summary{padding:7px 0;font:inherit}
   @media(max-width:760px){
     header{display:grid}
     .counts{width:100%}.counts span{flex:1}

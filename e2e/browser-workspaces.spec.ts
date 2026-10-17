@@ -121,7 +121,9 @@ test('blocked native deletion retains its tombstone and rejects a late selection
     await Promise.all([page.waitForEvent('load'), manager(page).getByRole('button', { name: 'Switch workspace', exact: true }).click()]);
     const recovered = await openManager(page);
     await expect(recovered.getByText('Deletion pending', { exact: true })).toBeVisible();
-    await recovered.getByRole('button', { name: `Delete workspace ${row.name}`, exact: true }).click();
+    const retry = recovered.getByRole('listitem').filter({ has: page.getByRole('heading', { name: row.name, exact: true }) }).getByRole('button', { name: /^Retry deletion/u });
+    await expect(retry).toHaveAccessibleName(`Retry deletion workspace ${row.name}`);
+    await retry.click();
     await recovered.getByLabel('Type the workspace name to confirm').fill(row.name);
     await recovered.getByRole('button', { name: 'Delete workspace data', exact: true }).click();
     await expect(recovered.getByRole('status')).toContainText('Workspace data and directory entry deleted.');

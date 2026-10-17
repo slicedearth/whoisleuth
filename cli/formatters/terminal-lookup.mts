@@ -1,5 +1,7 @@
 import { registryAccessProfileLabel } from '../registry-access.mts';
+import { isSupportedRegistryInsightsVersion } from '../../packages/contracts/registry-insights.mts';
 import { dnsAddressFamilyEvidence } from '../../packages/evidence/dns-query-outcome.mts';
+import { lookupCollectionReceiptReview } from '../../packages/evidence/lookup-collection-review.mts';
 import { appendTechnologyLines } from './terminal-technology.mts';
 import { appendDeliveryMetadataLines, appendPublicationMetadataLines } from './terminal-metadata.mts';
 import { securityPostureReview, summarizeSecurityPostureReview } from '../../lib/website-security-posture.mts';
@@ -258,6 +260,14 @@ function formatTerminalLookup(
     `RDAP           ${titleCase(rdapDiagnostics.status)}`,
     `WHOIS          ${titleCase(whoisDiagnostics.status)}`,
   ];
+  if (detail !== 'summary') {
+    for (const [source, status] of [['rdap', rdapDiagnostics.status], ['whois', whoisDiagnostics.status]] as const) {
+      const sourceDetail = terminalRecord(document[source]).detail;
+      if (['unsupported', 'skipped', 'disabled'].includes(String(status)) && typeof sourceDetail === 'string' && sourceDetail) {
+        registrationLines.push(`${source.toUpperCase()} detail    ${boundedTerminalComponent(sourceDetail, 300)}`);
+      }
+    }
+  }
   if (detail !== 'summary' && rdapDiagnostics.endpoint) {
     registrationLines.splice(1, 0, `RDAP source    ${safeTerminalValue(rdapDiagnostics.endpoint)}`);
   }
@@ -273,7 +283,7 @@ function formatTerminalLookup(
     appendNetworkRegistrationLines(registrationLines, terminalRecord(rdap.parsed), document.type, detail);
   }
   const registryInsights = terminalRecord(document.registryInsights);
-  if (detail !== 'summary' && registryInsights.version === 1) {
+  if (detail !== 'summary' && isSupportedRegistryInsightsVersion(registryInsights.version)) {
     const lifecycle = terminalRecord(registryInsights.lifecycle);
     const disclosure = terminalRecord(registryInsights.contactDisclosure);
     const registryDisclosure = terminalRecord(disclosure.registryRdap);
@@ -682,6 +692,16 @@ function formatTerminalLookup(
   const collectionLines: string[] = [];
   if (detail === 'verbose') {
     collectionLines.push(`Generated      ${safeTerminalValue(document.generatedAt, 'unknown')}`);
+    const receipt = lookupCollectionReceiptReview(document.collectionReceipt);
+    if (receipt) {
+      collectionLines.push(`Original plan  ${receipt.selection}`);
+      for (const choice of receipt.choices) collectionLines.push(`${choice.label}: ${choice.selected ? 'selected' : 'not selected'}`);
+      for (const source of receipt.sources) {
+        collectionLines.push(`${source.label}: ${source.summary}; ${source.outcome}`);
+        collectionLines.push(`  ${source.explanation}`);
+      }
+      collectionLines.push('Collector start is local execution provenance, not proof of network delivery or complete evidence.');
+    } else collectionLines.push('Original plan  Not retained; original optional choices and collector starts are unknown.');
     const timing = terminalRecord(document.timing);
     if (Number(timing.totalMs) >= 0) collectionLines.push(`Total time     ${safeTerminalValue(timing.totalMs)} ms`);
     const sources = Array.isArray(timing.sources) ? timing.sources.map(terminalRecord) : [];

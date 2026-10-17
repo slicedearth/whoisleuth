@@ -3,6 +3,8 @@
 
 export const MAX_WHOIS_STATUSES = 100;
 export const MAX_WHOIS_QUERY_HOPS = 6;
+// A stopped referral remains evidence even when no further request is issued.
+export const MAX_WHOIS_CHAIN_HOPS = MAX_WHOIS_QUERY_HOPS + 1;
 
 export type WhoisScalarFields = Record<string, string | undefined>;
 

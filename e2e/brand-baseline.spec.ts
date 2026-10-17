@@ -1,8 +1,14 @@
 import { readFile } from 'node:fs/promises';
+import AxeBuilder from '@axe-core/playwright';
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
-import { openInboxReview } from './console-navigation';
+import { openInboxReview, inboxReviewControls } from './console-navigation';
 import { expect, test } from './fixtures';
-import { currentBrandProfileBrowserStore, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, failNextBrowserLocalManifestWrite, failNextBrowserLocalCollectionReadAfterWrite, holdBrowserLocalReads, holdBrowserLocalTransaction, migrateLegacyBrowserData, openBrandProfileList, openBrandWorkbench, readBrowserLocalCollection, requiredValue, useTheme } from './helpers';
+import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, failNextBrowserLocalManifestWrite, failNextBrowserLocalCollectionReadAfterWrite, holdBrowserLocalReads, holdBrowserLocalTransaction, migrateLegacyBrowserData, openBrandProfileList, openBrandWorkbench, readBrowserLocalCollection, requiredValue, useTheme } from './helpers';
+import { createCase as makeCase } from '../packages/cases/case-record-operations.mts';
+import { readCaseAttachment } from '../packages/cases/case-attachment-model.mts';
+import { createPageBaseline } from '../packages/workspace/page-baseline.mts';
+import { openRetainedFiles, storedFiles } from './case-attachment-fixtures';
+import { sourceImage } from './case-image-fixtures';
 import {
   buildDomainControlManifest,
   DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
@@ -44,6 +50,84 @@ function profileFixture() {
     updatedAt: ISO,
   };
 }
+
+test('temporary Brand references preserve original attribution and clear across source and view changes', async ({ page }, testInfo) => {
+  const linked = { ...makeCase({ domain: 'reference.example' }, ISO), brandProfileIds: ['profile-1'] };
+  const unrelated = { ...makeCase({ domain: 'reference.example' }, ISO), attachments: [readCaseAttachment({
+    id: 'unrelated', fileName: 'unlinked.png', mediaType: 'image/png', source: null, observedAt: null,
+    retainedAt: ISO, byteLength: 12, digestSha256: `sha256:${'c'.repeat(64)}`,
+  })] };
+  const missing = { ...makeCase({ domain: 'missing.example' }, ISO), brandProfileIds: ['profile-1'], attachments: [readCaseAttachment({
+    ...unrelated.attachments[0], id: 'missing', fileName: 'missing.png', digestSha256: `sha256:${'f'.repeat(64)}`,
+  })] };
+  const baseline = createPageBaseline('example.com', availabilityFixture()); expect(baseline).not.toBeNull();
+  await page.goto('/brands');
+  await migrateLegacyBrowserData(page, {
+    [PROFILES_KEY]: currentBrandProfileBrowserStore([
+      { ...profileFixture(), officialDomains: ['example.com'], pageBaseline: baseline },
+      { ...profileFixture(), id: 'profile-2', name: 'Other Brand' },
+    ]), [ACTIVE_KEY]: 'profile-1', 'whois-rdap-cases-v1': currentBrowserLocalDocument('cases', { cases: [linked, unrelated, missing] }),
+  }, { destination: `/cases?case=${encodeURIComponent(linked.id)}` });
+  const retained = await openRetainedFiles(page);
+  await retained.getByLabel('Choose original files', { exact: true }).setInputFiles({ name: 'reference.png', mimeType: 'image/png', buffer: sourceImage() });
+  await retained.getByLabel('Source', { exact: true }).fill('Reviewed campaign reference');
+  await retained.getByRole('button', { name: 'Retain selected files', exact: true }).click();
+  await expect(retained.getByRole('button', { name: 'Download original reference.png', exact: true })).toBeVisible();
+  const before = await readBrowserLocalCollection(page, 'cases'), brandsBefore = await readBrowserLocalCollection(page, 'brand_profiles'), bytes = await storedFiles(page);
+  const requests: string[] = [];
+  page.on('request', request => { if (/\/api\/(?:lookup|bulk|discover|domain-posture|ct-search)/u.test(request.url())) requests.push(request.url()); });
+  await page.goto('/brands');
+  const panel = page.locator('.brand-reference-review'), summary = panel.locator(':scope > summary');
+  await expect(panel).not.toHaveAttribute('open');
+  await summary.focus(); await summary.press('Enter');
+  await panel.getByRole('checkbox', { name: 'Use the saved page baseline', exact: true }).check();
+  await panel.getByRole('combobox', { name: 'Baseline context for this review', exact: true }).selectOption('Desktop');
+  const picker = panel.getByRole('combobox', { name: 'Reference on this page', exact: true });
+  await expect(picker).not.toContainText('unlinked.png');
+  async function selectFile(name: string) {
+    const option = picker.locator('option').filter({ hasText: name });
+    await expect(option).toHaveCount(1);
+    await picker.selectOption((await option.getAttribute('value'))!);
+    await panel.getByRole('button', { name: 'Add review reference', exact: true }).click();
+  }
+  await selectFile('reference.png');
+  await panel.getByRole('combobox', { name: 'Context for reference 1: reference.png', exact: true }).selectOption('Campaign');
+  await expect(panel).toContainText('Observed: Unknown');
+  await expect(panel).toContainText('Declared source: Reviewed campaign reference');
+  const preview = panel.getByRole('listitem').filter({ has: page.getByRole('heading', { name: 'reference.png', exact: true }) }).getByRole('button', { name: /^Preview /u });
+  await preview.focus(); await preview.press('Enter');
+  const opened = panel.getByRole('region', { name: 'Selected Brand original', exact: true });
+  await expect(opened.getByRole('heading', { name: 'reference.png', exact: true })).toBeFocused();
+  await expect(opened.getByRole('img', { name: 'Selected screenshot reference.png, 640 by 360 pixels', exact: true })).toBeVisible();
+  for (const width of [320, 1280]) for (const theme of ['light', 'dark'] as const) {
+    await page.setViewportSize({ width, height: width === 320 ? 700 : 720 }); await useTheme(page, theme);
+    await opened.getByRole('heading', { name: 'reference.png', exact: true }).scrollIntoViewIfNeeded();
+    await expectNoHorizontalOverflow(page);
+    expect((await new AxeBuilder({ page }).include('.brand-reference-review').withTags(['wcag2a','wcag2aa','wcag21aa','wcag22aa']).analyze()).violations).toEqual([]);
+    if (captureVisualEvidenceEnabled()) await panel.screenshot({ path: testInfo.outputPath(`brand-references-${width}-${theme}.png`) });
+  }
+  await panel.getByRole('button', { name: 'Close preview', exact: true }).click(); await expect(preview).toBeFocused();
+  await selectFile('missing.png'); await panel.getByRole('listitem').filter({ has: page.getByRole('heading', { name: 'missing.png', exact: true }) }).getByRole('button', { name: /^Preview /u }).click();
+  await expect(panel.getByRole('alert')).toContainText('original could not be read and verified'); await expect(opened).toHaveCount(0);
+  const release = await holdBrowserLocalTransaction(page);
+  try {
+    await preview.click(); await expect(panel.getByRole('button', { name: 'Cancel preview', exact: true })).toBeVisible();
+    await summary.click(); await expect(panel).not.toHaveAttribute('open');
+  } finally { await release(); }
+  await summary.click(); await expect(panel.getByRole('list', { name: 'Selected Brand references', exact: true }).getByRole('listitem')).toHaveCount(0);
+  await expect(opened).toHaveCount(0); await expect(panel.getByRole('checkbox')).not.toBeChecked();
+  await selectFile('reference.png');
+  await openBrandProfileList(page); await page.getByRole('radio', { name: 'Set Other Brand active', exact: true }).check();
+  await expect(panel).toContainText('for Other Brand'); await expect(picker.locator('option')).toHaveCount(1);
+  await expect(panel.getByRole('list', { name: 'Selected Brand references', exact: true }).getByRole('listitem')).toHaveCount(0);
+  await page.getByRole('radio', { name: 'Set Stored Brand active', exact: true }).check(); await selectFile('reference.png');
+  await page.getByRole('tab', { name: 'Tools', exact: true }).click(); await expect(panel).toHaveCount(0);
+  await page.getByRole('tab', { name: 'Overview', exact: true }).click(); await expect(panel).not.toHaveAttribute('open');
+  await summary.click(); await expect(panel.getByRole('list', { name: 'Selected Brand references', exact: true }).getByRole('listitem')).toHaveCount(0);
+  await page.emulateMedia({ media: 'print' }); await expect(panel).not.toBeVisible(); await page.emulateMedia({ media: null });
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before); expect(await readBrowserLocalCollection(page, 'brand_profiles')).toEqual(brandsBefore);
+  expect(await storedFiles(page)).toEqual(bytes); expect(requests).toEqual([]);
+});
 
 test('expected-setting domain switches require an explicit decision before discarding a draft', async ({ page }) => {
   await page.goto('/brands');
@@ -87,7 +171,7 @@ test('official-domain review and comparison include later batches without implic
   await expect(page.getByRole('status', { name: 'Brand Profile action status' })).toHaveText('Reviewed 1/1 official domain in this batch; 21 domains in the profile.');
   expect(requested).toEqual(['d20.example']);
   await openBrandWorkbench(page, 'portfolio');
-  const matrix = page.getByRole('region', { name: 'Owned-domain comparison' });
+  const matrix = page.getByRole('region', { name: 'Official-domain settings comparison' });
   await matrix.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(matrix).toContainText('d20.example');
   for (const width of [1280, 390, 320]) {
@@ -640,6 +724,13 @@ test('official channels and rights references remain editable and browser-local'
   await page.getByText('Rights and official channels', { exact: true }).click();
   await expect(page.getByLabel('Official channel 1 exact public URL')).toHaveValue('https://social.example/example/');
   await expect(page.getByLabel('Rights reference 1 identifier')).toHaveValue('TM-123');
+  const channel = page.getByRole('article', { name: 'Official channel 1', exact: true });
+  const rights = page.getByRole('article', { name: 'Rights reference 1', exact: true });
+  await channel.getByRole('button', { name: /^Remove channel/u }).click();
+  await rights.getByRole('button', { name: /^Remove reference/u }).click();
+  await expect(channel).toHaveCount(0);
+  await expect(rights).toHaveCount(0);
+  expect((await readBrowserLocalCollection(page, 'brand_profiles')).records).toEqual(snapshot.records);
 });
 
 test('the active Brand Profile has a separate maintainable allowlist', async ({ page }) => {
@@ -1150,7 +1241,11 @@ test('additional DNS review is explicit, visible and not retained as a backgroun
     selections.push(query.get('includeInheritedDns'));
     const report = postureFixture(query.get('q') || 'stored.example');
     if (query.get('includeInheritedDns') === '1') {
-      report.checks.push({ id: 'dmarc_inheritance', label: 'Inherited DMARC policy', status: 'info', summary: 'Inherited policy published at _dmarc.example.', detail: 'Existing and nonexistent names remain separate.', records: ['Recursive DNS TXT _dmarc.example · policy reject'], remediation: '' });
+      const inheritance: import('../packages/evidence/domain-posture-context.mts').DomainPostureCheck = { id: 'dmarc_inheritance', label: 'Inherited DMARC policy', status: 'info', summary: 'Inherited policy published at _dmarc.example.', detail: 'Existing and nonexistent names remain separate.', records: ['Recursive DNS TXT _dmarc.example · policy reject'], remediation: '',
+        dmarcPolicyContext: { version: 1, source: 'recursive_dns_txt', relation: 'inherited', complete: true,
+          owner: 'example', observedAt: '2026-06-01T00:00:00.000Z', policy: 'reject', subdomainPolicy: 'quarantine', nonexistentPolicy: 'reject', psd: 'y', testMode: false,
+          discovery: [{ owner: query.get('q')!, state: 'not_found', observedAt: '2026-06-01T00:00:00.000Z' }, { owner: 'example', state: 'observed', observedAt: '2026-06-01T00:00:00.000Z' }] } };
+      report.checks.push(inheritance);
       report.summary.info += 1;
       report.dmarcAuthorizations = [
         { destination: 'reports.stored.example', reportType: 'aggregate', recordName: null, state: 'self', error: null },
@@ -1175,6 +1270,10 @@ test('additional DNS review is explicit, visible and not retained as a backgroun
   expect(selections).toEqual([null, '1']);
   const disclosure = page.locator('.checks details').filter({ has: page.getByText('Inherited DMARC policy', { exact: true }) });
   await disclosure.locator('summary').click(); await expect(disclosure).toContainText('Recursive DNS TXT _dmarc.example');
+  const scope = disclosure.getByRole('region', { name: 'DMARC policy scope', exact: true });
+  await expect(scope).toContainText('Inherited from an ancestor');
+  await expect(scope).toContainText('_dmarc.example');
+  await expect(scope.locator('div').filter({ hasText: 'Existing subdomain policy' }).locator('dd')).toHaveText('quarantine');
   const reporting = page.locator('.audit details').filter({ has: page.getByText('DMARC reporting authorisation', { exact: true }) });
   await reporting.locator('summary').click();
   await expect(reporting).toContainText('same organisational scope');
@@ -1182,6 +1281,8 @@ test('additional DNS review is explicit, visible and not retained as a backgroun
   for (const width of [320, 1280]) for (const theme of ['light', 'dark'] as const) {
     await page.setViewportSize({ width, height: 800 }); await useTheme(page, theme);
     await expectNoHorizontalOverflow(page);
+    expect((await new AxeBuilder({ page }).include('[aria-label="DMARC policy scope"]').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+    if (captureVisualEvidenceEnabled()) await scope.screenshot({ path: testInfo.outputPath(`policy-scope-${width}-${theme}.png`) });
     if (captureVisualEvidenceEnabled()) await reporting.screenshot({ path: testInfo.outputPath(`reporting-${width}-${theme}.png`) });
   }
   await page.reload(); await openBrandWorkbench(page, 'posture'); await expect(option).not.toBeChecked();
@@ -1297,7 +1398,7 @@ test('equal-time posture captures retain both source records and remain unknown 
   await comparison.getByRole('combobox', { name: 'Show fields for stored.example' }).selectOption('all');
   await expect(comparison.locator('.comparison-grid > article')).toHaveCount(allComparisons);
   await openBrandWorkbench(page, 'portfolio');
-  const matrix = page.getByRole('region', { name: 'Owned-domain comparison' });
+  const matrix = page.getByRole('region', { name: 'Official-domain settings comparison' });
   await expect(matrix.locator('tbody tr')).toContainText('Unknown');
   const records = matrix.locator('[id="retained-posture-observation-stored.example"]');
   expect(await records.locator(':scope > summary').evaluate((element) => getComputedStyle(element).display)).toBe('list-item');
@@ -1330,7 +1431,7 @@ test('legacy posture records remain readable without claiming current alignment'
     }] }]), [ACTIVE_KEY]: 'profile-1',
   }, { destination: '/brands' });
   await openBrandWorkbench(page, 'portfolio');
-  const matrix = page.getByRole('region', { name: 'Owned-domain comparison' });
+  const matrix = page.getByRole('region', { name: 'Official-domain settings comparison' });
   await expect(matrix.locator('tbody tr')).toContainText('Unknown');
   await expect(matrix.locator('tbody tr')).not.toContainText('Aligned');
   const retained = matrix.locator('[id="retained-posture-observation-stored.example"]');
@@ -1344,9 +1445,8 @@ test('legacy posture records remain readable without claiming current alignment'
   await expect(inbox.getByText('at an unknown time', { exact: true })).toBeVisible();
   await inbox.getByText('Advanced filters', { exact: true }).click();
   await inbox.getByRole('combobox', { name: 'Age', exact: true }).selectOption('unknown');
-  const item = inbox.locator('.items > li');
-  await expect(item).toHaveCount(1);
-  await openInboxReview(item);
+  await expect(inboxReviewControls(page)).toHaveCount(1);
+  const item = await openInboxReview(inboxReviewControls(page));
   await item.locator('summary', { hasText: 'Review state:' }).click();
   await expect(item.getByRole('option', { name: 'Resolved', exact: true })).toHaveJSProperty('disabled', true);
   await page.setViewportSize({ width: 320, height: 700 });
@@ -1471,8 +1571,8 @@ test('cross-domain posture matrix links exact retained baselines and observation
   });
   await openBrandWorkbench(page, 'portfolio');
 
-  const matrix = page.getByRole('region', { name: 'Owned-domain comparison' });
-  await expect(matrix).toContainText('2/3 configured · 1 observed');
+  const matrix = page.getByRole('region', { name: 'Official-domain settings comparison' });
+  await expect(matrix).toContainText('2/3 configured · 1 with retained observations');
   const storedRow = matrix.locator('tbody tr', { hasText: 'stored.example' });
   await expect(storedRow).toContainText('Aligned');
   await expect(storedRow).toContainText('Unsupported');
@@ -1626,7 +1726,7 @@ test('exports and locally verifies a selective domain-control passport on deskto
   await expect(passport.getByRole('status')).toContainText('duplicate object key');
 
   await passport.getByLabel('Review passport').setInputFiles(path!);
-  await expect(passport).toContainText('Verified 1 passport entry');
+  await expect(passport).toContainText('Checked the passport format and digest for 1 entry');
   await expect(passport.getByRole('heading', { name: 'Import preview' })).toBeVisible();
   await expect(passport.getByText('Not configured; destination remains unchanged').first()).toBeVisible();
 
@@ -1730,7 +1830,7 @@ test('preserves explicit record expectations, null MX and complete record sets t
   const exported = JSON.parse(await readFile(file, 'utf8'));
   expect(exported.entries[0]).toEqual(expect.objectContaining({ nameservers, ds: [], mx: ['0 .'], caa: [], recordModes: expectedModes }));
   await passport.getByLabel('Review passport').setInputFiles(file);
-  await expect(passport).toContainText('Verified 1 passport entry');
+  await expect(passport).toContainText('Checked the passport format and digest for 1 entry');
   await expect(passport.getByRole('heading', { name: 'Import preview' })).toBeVisible();
   await page.setViewportSize({ width: 320, height: 700 });
   await expectNoHorizontalOverflow(page);

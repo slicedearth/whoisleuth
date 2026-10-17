@@ -464,13 +464,34 @@ const SHARED_PRIVACY_FACTS: readonly PrivacyFact[] = Object.freeze([
   {
     id: 'saved-review-position',
     clauses: [
-      /Saved review positions retain filters, search text, selected Review Item and Case references, evidence fingerprints, unfinished review forms and save time/iu,
+      /Saved review positions/iu,
+      /optional private question/iu,
+      /\bfilters\b/iu,
+      /search text/iu,
+      /selected Review Item and Case references/iu,
+      /unfinished review forms/iu,
+      /save time/iu,
+      /\bbaseline\b/iu,
+      /subject identities/iu,
+      /material fingerprints/iu,
+      /source identities/iu,
+      /\bcompleteness\b/iu,
+      /explicitly saved/iu,
+      /admitted filtered view/iu,
+      /(?:not|without copying) source payloads/iu,
       /current workspace/iu,
       /encryption when enabled/iu,
       /Saving is explicit/iu,
-      /excluded from backups, exports and legacy rollback copies/iu,
-      /Resume re-evaluates current records without collection or submission/iu,
-      /Discarding a position removes its saved review-form copies/iu,
+      /later navigation does not update (?:that|the) checkpoint/iu,
+      /excluded from\b[^.;]*\bbackups\b/iu,
+      /excluded from\b[^.;]*\bexports\b/iu,
+      /excluded from\b[^.;]*\blegacy rollback copies\b/iu,
+      /Resume re-evaluates current records/iu,
+      /without\b[^.;]*\bcollection\b/iu,
+      /without\b[^.;]*\bsubmission\b/iu,
+      /Discarding a position removes\b[^.;]*\bquestion\b/iu,
+      /Discarding a position removes\b[^.;]*\bbaseline\b/iu,
+      /Discarding a position removes\b[^.;]*\bsaved review-form copies\b/iu,
       /Cases and currently open forms are unchanged/iu,
     ],
   },
@@ -759,6 +780,29 @@ function paragraphHasFact(paragraph: string, fact: PrivacyFact): boolean {
   return fact.clauses.every((clause) => clause.test(paragraph));
 }
 
+test('saved review disclosure accepts reordered facts but still requires each private field and exclusion together', () => {
+  const fact = SHARED_PRIVACY_FACTS.find(value => value.id === 'saved-review-position');
+  assert.ok(fact);
+  const paragraph = compact(`Saving is explicit. Saved review positions retain save time,
+    unfinished review forms, selected Review Item and Case references, search text,
+    filters and an optional private question. In the current workspace, these fields
+    use encryption when enabled. From the admitted filtered view, an explicitly saved
+    baseline retains completeness, source identities, subject identities and material
+    fingerprints, without copying source payloads. Later navigation does not update
+    the checkpoint. Positions are excluded from legacy rollback copies, backups and
+    exports. Resume re-evaluates current records without submission or collection.
+    Discarding a position removes saved review-form copies, baseline and question.
+    Cases and currently open forms are unchanged.`);
+  assert.equal(paragraphHasFact(paragraph, fact), true);
+  for (const omitted of ['an optional private question', 'without copying source payloads', 'baseline and question']) {
+    const missing = paragraph.replace(omitted, '');
+    assert.notEqual(missing, paragraph);
+    assert.equal(paragraphHasFact(missing, fact), false, omitted);
+    assert.equal([missing, omitted].some(value => paragraphHasFact(value, fact)), false,
+      'An unrelated paragraph cannot supply the missing disclosure.');
+  }
+});
+
 test('privacy clauses allow sentence reordering but cannot borrow a disclosure from another paragraph', async () => {
   const notice = await readFile(ROOT_NOTICE_URL, 'utf8');
   const paragraph = notice
@@ -835,15 +879,15 @@ test('public privacy notices share the current material data-handling contract',
   );
   assert.match(
     normalisedDisclosure,
-    /Hosted and distributable collection does not .*execute remote page scripts/iu,
+    /Hosted and main-CLI collection does not [^.]*execute remote page scripts/iu,
   );
   assert.match(
     normalisedDisclosure,
-    /separate repo-local rendered-capture package is an explicit authorised exception/iu,
+    /separate optional rendered-capture companion is distributed as a locally assembled archive, not as part of the hosted application or main CLI, and is not published to a package registry/iu,
   );
   assert.match(
     normalisedDisclosure,
-    /executes page JavaScript in a disposable, network-bounded browser/iu,
+    /executes page JavaScript only after explicit authorisation, in a disposable, sandboxed, network-bounded browser/iu,
   );
 
   // Published epochs remain an independent expectation, not a mirror of the

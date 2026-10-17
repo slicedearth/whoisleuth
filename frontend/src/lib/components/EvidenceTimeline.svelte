@@ -1,7 +1,10 @@
 <script lang="ts">
+  import { getContext } from 'svelte';
+  import { CONSOLE_PRESENTATION_CONTEXT, type ConsolePresentationContext } from '../appearance.ts';
   import type { CaseRecord } from '#lib/cases.ts';
   import { evidenceTime } from '#lib/analysis/evidence-time.ts';
   import { currentCaseEvidence } from '../../../../packages/cases/case-evidence-model.mts';
+  import CollectionReceiptReview from './CollectionReceiptReview.svelte';
   import {
     currentEvidenceSummary,
     deriveTimeline,
@@ -13,7 +16,8 @@
     snapshotFieldGroups
   } from '#lib/analysis/evidence-display.ts';
 
-  let { record }: { record: CaseRecord } = $props();
+  let { record, onpincheckpoint }: { record: CaseRecord; onpincheckpoint?: (snapshotId: string) => void } = $props();
+  const presentation = getContext<ConsolePresentationContext | undefined>(CONSOLE_PRESENTATION_CONTEXT);
   let timelineExpanded = $state(true);
   let changedOnly = $state(false);
   let expandedSnapshots = $state(new Set<string>());
@@ -69,7 +73,7 @@
   </dl>
 {/if}
 
-<section class="timeline" aria-labelledby={`timeline-heading-${record.id}`}>
+<section class="timeline" class:journal={presentation?.current === 'journal'} aria-labelledby={`timeline-heading-${record.id}`}>
   <div class="timeline-header">
     <h3 id={`timeline-heading-${record.id}`}>Evidence timeline <small>{timeline.length} snapshot{timeline.length===1?'':'s'}</small></h3>
     {#if timeline.length}
@@ -94,6 +98,7 @@
               <span class="timeline-index">#{entry.displayIndex}</span>
               <time datetime={entry.snapshot.capturedAt}>{entry.hasRepeatedObservation?'Last observed ':'Captured '}{date(entry.snapshot.capturedAt)}</time>
             </button>
+            {#if onpincheckpoint}<button type="button" class="btn small" aria-label={`Pin checkpoint ${entry.snapshot.id} for comparison`} onclick={() => onpincheckpoint?.(entry.snapshot.id)}>Pin checkpoint</button>{/if}
             <span class="timeline-badges">
               {#if entry.hasRepeatedObservation}<span class="timeline-badge timeline-repeat">First observed {date(entry.snapshot.firstCapturedAt)}</span>{/if}
               <span class="timeline-badge">{evidenceSourceLabel(entry.snapshot.source)}</span>
@@ -119,9 +124,11 @@
             </ul>
           {/if}
           {#if entry.hasIncomparableChange}<p class="timeline-incomparable-note">{entry.orderingLimitation ?? incomparableNote(entry.incomparableReasons)}</p>{/if}
+          {#if entry.collectionContextChanged}<p class="timeline-incomparable-note">Collection choices or execution context differ. This does not establish a change in the domain evidence.</p>{/if}
 
           {#if isExpanded}
             <div class="timeline-detail" id={bodyId} role="region" aria-labelledby={snapId}>
+              {#if entry.snapshot.collectionReceipt}<CollectionReceiptReview receipt={entry.snapshot.collectionReceipt} headingLevel={4} />{:else}<p>No original collection receipt is retained for this assessment.</p>{/if}
               {#each snapshotFieldGroups(entry.snapshot) as group}
                 <section class="timeline-group">
                   <h4>{group.name}</h4>
@@ -140,6 +147,7 @@
 </section>
 
 <style>
+  .journal .timeline-list{gap:18px}.journal .timeline-entry{padding:clamp(16px,3vw,26px);background:color-mix(in srgb,var(--panel-raised) 94%,#d5ad64);border-radius:var(--radius-sm)}.journal .timeline-changes{gap:10px}.journal .timeline-change{line-height:1.7}.journal .timeline-incomparable-note{line-height:1.7;max-width:75ch}
   .evidence{display:grid;grid-template-columns:auto 1fr;gap:5px 14px;margin:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:var(--text-xs)}.evidence dt{color:var(--muted)}.evidence dd{margin:0;overflow-wrap:anywhere}.evidence small{display:block;margin-top:3px;color:var(--amber);line-height:1.45}
   .timeline{margin-top:4px}.timeline-header{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px}.timeline-header h3{margin:0;font:700 var(--text-sm) var(--mono)}.timeline-header small{margin-left:8px;color:var(--muted);font-size:var(--text-2xs);font-weight:400}.timeline-controls{display:flex;flex-wrap:wrap;gap:7px}.timeline-controls button,.timeline-toggle{min-height:32px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);font:600 var(--text-2xs) var(--mono)}.timeline-controls button[aria-pressed="true"]{color:var(--interface-accent);border-color:rgb(var(--interface-accent-rgb) / .55);background:rgb(var(--interface-accent-rgb) / .07)}.timeline-empty,.timeline-filter-note,.timeline-incomparable-note{color:var(--muted);font-size:var(--text-xs)}.timeline-empty{padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
   .timeline-list,.timeline-changes{display:grid;gap:10px;margin:0;padding:0;list-style:none}.timeline-entry{padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised)}.timeline-entry-head,.timeline-badges{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.timeline-toggle{display:flex;gap:6px;align-items:center;background:var(--panel);cursor:pointer}.timeline-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:1px}.timeline-toggle time{font-size:var(--text-xs)}.timeline-index{color:var(--muted);font-size:var(--text-2xs);font-weight:700}.timeline-badge{padding:3px 8px;border:1px solid var(--border);border-radius:99px;font:600 var(--text-2xs) var(--mono)}.timeline-baseline{color:var(--accent2)}.timeline-changed{color:var(--danger)}.timeline-incomparable{color:var(--amber)}.timeline-repeat{color:var(--muted)}

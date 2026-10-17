@@ -1,6 +1,8 @@
 <script lang="ts">
   import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import RdapDomainSource from '#lib/components/RdapDomainSource.svelte';
+  import RegistryDateExplanation from './RegistryDateExplanation.svelte';
+  import { registrationSourceNotice, type RegistrationTraceState } from '#lib/analysis/lookup-registry-display.ts';
   import { evidenceStatusTone } from '#lib/analysis/evidence-status-tone.ts';
   import {
     projectEvidenceMatrix,
@@ -9,6 +11,7 @@
   import { buildRdapReverseSearchPreviews } from '#lib/analysis/rdap-reverse-search-preview.ts';
   import { boundedTechnologyText } from '#lib/analysis/lookup-display-shared.ts';
   import { registrarStandingOfficialSourceUrl } from '../../../../lib/registrar-standing-catalogue-contract.mts';
+  import { isSupportedRegistryInsightsVersion } from '../../../../packages/contracts/registry-insights.mts';
 
   type JsonRecord = Record<string, unknown>;
   type DisplayRow = { label: string; value: string; datetime?: string };
@@ -64,11 +67,14 @@
     comparisonRows,
     comparisonHasConflicts,
     rdapError,
+    rdapDetail = '',
     resultType,
     rdapParsed,
     rdapPartialDetail,
     rdapRows,
     whoisError,
+    whoisDetail = '',
+    whoisParsed = {},
     whoisRows,
     whoisContactRoles,
     whoisTruncatedFields,
@@ -81,11 +87,14 @@
     comparisonRows: ComparisonRow[];
     comparisonHasConflicts: boolean;
     rdapError: string;
+    rdapDetail?: string;
     resultType: string;
     rdapParsed: JsonRecord;
     rdapPartialDetail: string;
     rdapRows: DisplayRow[];
     whoisError: string;
+    whoisDetail?: string;
+    whoisParsed?: JsonRecord;
     whoisRows: DisplayRow[];
     whoisContactRoles: ContactRole[];
     whoisTruncatedFields: string[];
@@ -101,6 +110,7 @@
       error: boolean;
       success: boolean;
       parsed: JsonRecord;
+      traceState?: RegistrationTraceState;
       comparisonSummary?: string;
       comparisonRows?: PublicationComparisonRow[];
     };
@@ -135,14 +145,16 @@
   let showRegistrarReversePreview = $state(false);
   const abuseRouting = $derived(asRecords(insights.abuseRouting, 8));
   const registryTraceState = $derived<TraceState>(registrationTrace.registry ?? (rdapError ? 'error' : rdapPartialDetail ? 'partial' : 'unavailable'));
-  const registrarTraceState = $derived<TraceState>(!registrar.visible
+  const registrarTraceState = $derived<TraceState>(registrar.traceState ?? (!registrar.visible
     ? 'not_collected'
     : registrar.success
       ? 'complete'
       : registrar.error
         ? 'unavailable'
-        : 'partial');
+        : 'partial'));
   const whoisTraceState = $derived<TraceState>(registrationTrace.whois ?? (whoisError ? 'error' : 'unavailable'));
+  const rdapNotice = $derived(registrationSourceNotice('RDAP', registryTraceState, rdapDetail));
+  const whoisNotice = $derived(registrationSourceNotice('WHOIS', whoisTraceState, whoisDetail));
   const comparisonLanes = $derived.by((): MatrixInput[] => {
     return [
       ...comparisonRows.map((row, index): MatrixInput => ({
@@ -390,7 +402,7 @@
             <details class="lane-card" open={row.status !== 'equivalent' && row.status !== 'equal'}>
               <summary>
                 <span><strong>{row.label}</strong><small>{row.context}</small></span>
-                <span class="lane-status">{sourceStateLabel(row.status || 'unknown')}</span>
+                <span class="lane-status">{row.assessment || sourceStateLabel(row.status || 'unknown')}</span>
               </summary>
               <div class="lane-card-body">
                 <div class="publication-side">
@@ -423,7 +435,7 @@
   </section>
 {/if}
 
-{#if insights.version === 1}
+{#if isSupportedRegistryInsightsVersion(insights.version)}
   <details class="registry-insights evidence-card card" aria-labelledby="registry-interpretation-title">
     <summary class="evidence-summary">
       <span class="evidence-summary-row">
@@ -528,10 +540,17 @@
   </details>
 {/if}
 
+{#if resultType === 'domain'}
+  <RegistryDateExplanation registry={{ parsed: rdapParsed, state: registryTraceState }}
+    whois={{ parsed: whoisParsed, state: whoisTraceState }}
+    registrar={{ parsed: registrar.parsed, state: registrar.visible ? registrarTraceState : 'not_collected' }} />
+{/if}
+
 <div class="sources">
   <details class="card">
     <summary>RDAP structured data</summary>
     {#if rdapError}<p class="error source-error">{rdapError}</p>
+    {:else if rdapNotice}<p class="callout source-partial">{rdapNotice}</p>
     {:else if resultType === 'domain'}<RdapDomainSource parsed={rdapParsed} source="Registry" />
     {:else}
       {#if rdapPartialDetail}<p class="callout warn source-partial"><strong>Server-declared partial response.</strong> {rdapPartialDetail}</p>{/if}
@@ -541,6 +560,7 @@
   <details class="card">
     <summary>WHOIS structured data</summary>
     {#if whoisError}<p class="error source-error">{whoisError}</p>
+    {:else if whoisNotice}<p class="callout source-partial">{whoisNotice}</p>
     {:else}
       <dl>{#each whoisRows as row}<dt>{row.label}</dt><dd>{row.value}</dd>{/each}</dl>
       {#if whoisContactRoles.length}

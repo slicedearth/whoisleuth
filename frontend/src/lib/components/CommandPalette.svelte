@@ -13,16 +13,20 @@
 
   let {
     onclose,
+    keyboardHints = $bindable(false),
   }: {
     onclose: (restoreFocus?: boolean) => void | Promise<void>;
+    keyboardHints?: boolean;
   } = $props();
 
   let commands = $state<readonly ConsoleCommand[]>([]);
   let destinationsState = $state<'loading' | 'ready' | 'unavailable'>('loading');
   let query = $state('');
   let mode = $state<'pages' | 'saved' | 'documentation'>('pages');
+  let searchFocused = $state(false);
 
   async function selectMode(next: typeof mode) {
+    searchFocused = false;
     mode = next;
     await tick();
     if (next === 'pages') searchInput?.focus();
@@ -54,6 +58,31 @@
   const selectedAnnouncement = $derived(destinationsState !== 'ready' ? '' : selectedCommand
     ? `${selectedCommand.label}, ${selectedCommand.group}${isNavigationItemActive(selectedCommand, page.url) ? ', current page' : ''}${selectedCommand.opensInNewTab ? ', opens in a new tab' : ''}.`
     : 'No matching destination.');
+  const searchShortcuts: readonly {
+    keys: readonly string[];
+    label: string;
+    description: string;
+    hint?: string;
+    minimumHintChoices?: number;
+    run: (key: string) => void;
+  }[] = [
+    {
+      keys: ['ArrowUp', 'ArrowDown'], label: '↑ / ↓',
+      description: 'Select a destination while searching', hint: 'Choose a destination', minimumHintChoices: 2,
+      run: key => selectIndex((selectedIndex + (key === 'ArrowDown' ? 1 : -1) + filteredCommands.length) % filteredCommands.length),
+    },
+    {
+      keys: ['Home', 'End'], label: 'Home / End', description: 'Select the first or last destination',
+      run: key => selectIndex(key === 'Home' ? 0 : filteredCommands.length - 1),
+    },
+    {
+      keys: ['Enter'], label: 'Enter', description: 'Open the selected destination', hint: 'Open selection',
+      run: () => { void activate(filteredCommands[selectedIndex] ?? filteredCommands[0]); },
+    },
+  ];
+  const briefHints = $derived(keyboardHints && mode === 'pages' && searchFocused && destinationsState === 'ready'
+    ? searchShortcuts.filter(shortcut => shortcut.hint && filteredCommands.length >= (shortcut.minimumHintChoices ?? 1))
+    : []);
 
   onMount(() => {
     const controller = new AbortController();
@@ -61,7 +90,7 @@
       if (controller.signal.aborted) return;
       commands = consoleCommandNavigation;
       destinationsState = 'ready';
-      selectedIndex = query ? 0 : Math.max(0, commands.findIndex((command) => isNavigationItemActive(command, page.url)));
+      selectIndex(query ? 0 : Math.max(0, commands.findIndex((command) => isNavigationItemActive(command, page.url))));
     }).catch(() => { if (!controller.signal.aborted) destinationsState = 'unavailable'; });
     void tick().then(() => searchInput?.focus());
     return () => controller.abort();
@@ -102,7 +131,16 @@
   function focusables() {
     if (!dialog) return [];
     return [...dialog.querySelectorAll<HTMLElement>('input,select,textarea,summary,a[href],button:not([disabled]):not([tabindex="-1"])')]
-      .filter((element) => element.getClientRects().length > 0);
+      .filter((element) => {
+        if (!element.getClientRects().length) return false;
+        // Closed disclosures can retain layout boxes for controls that are
+        // not keyboard reachable. Their direct summary remains available.
+        for (let parent = element.parentElement; parent && parent !== dialog; parent = parent.parentElement) {
+          if (parent instanceof HTMLDetailsElement && !parent.open
+            && !parent.querySelector(':scope > summary')?.contains(element)) return false;
+        }
+        return true;
+      });
   }
 
   function keepSelectedVisible(optionId: string, list: HTMLElement, palette: HTMLElement) {
@@ -143,23 +181,13 @@
       close();
       return;
     }
-    if (document.activeElement === searchInput && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
-      event.preventDefault();
-      if (!filteredCommands.length) return;
-      const delta = event.key === 'ArrowDown' ? 1 : -1;
-      selectIndex((selectedIndex + delta + filteredCommands.length) % filteredCommands.length);
-      return;
-    }
-    if (document.activeElement === searchInput && (event.key === 'Home' || event.key === 'End')) {
-      event.preventDefault();
-      if (!filteredCommands.length) return;
-      selectIndex(event.key === 'Home' ? 0 : filteredCommands.length - 1);
-      return;
-    }
-    if (event.key === 'Enter' && document.activeElement === searchInput) {
-      event.preventDefault();
-      void activate(filteredCommands[selectedIndex] ?? filteredCommands[0]);
-      return;
+    if (document.activeElement === searchInput) {
+      const shortcut = searchShortcuts.find(binding => binding.keys.includes(event.key));
+      if (shortcut) {
+        event.preventDefault();
+        if (filteredCommands.length) shortcut.run(event.key);
+        return;
+      }
     }
     if (event.key !== 'Tab') return;
     const available = focusables();
@@ -215,12 +243,18 @@
         aria-controls={destinationsState === 'ready' && filteredCommands.length ? 'command-results' : undefined}
         aria-expanded={destinationsState === 'ready' && filteredCommands.length > 0}
         aria-activedescendant={activeOptionId}
+        aria-describedby={briefHints.length ? 'command-search-hints' : undefined}
         oninput={resetSelection}
+        onfocus={() => { searchFocused = true; selectIndex(selectedIndex); }}
+        onblur={() => searchFocused = false}
         autocomplete="off"
         spellcheck="false"
         placeholder="Search pages and tools…"
       >
     </div>
+    {#if briefHints.length}
+      <p class="brief-hints" id="command-search-hints">{#each briefHints as shortcut}<span><kbd>{shortcut.label}</kbd> {shortcut.hint}</span>{/each}</p>
+    {/if}
     <span class="sr-only" role="status" aria-live="polite">{selectedAnnouncement}</span>
     {#if openError}<p class="open-error" role="alert">{openError}</p>{/if}
     {#if destinationsState === 'loading'}
@@ -259,12 +293,13 @@
       <p class="no-results">No page or tool matches that search.</p>
     {/if}
     {/if}
-    <footer><details class="shortcut-help"><summary>Keyboard shortcuts</summary><dl>
+    <footer><details class="shortcut-help"><summary>Keyboard shortcuts</summary>
+    <label class="hint-choice"><input type="checkbox" bind:checked={keyboardHints} />Show brief keyboard hints</label>
+    <p class="hint-scope">Resets when you reload or leave the Console.</p>
+    <dl>
       <div><dt><kbd>Ctrl</kbd> / <kbd>⌘</kbd> + <kbd>K</kbd></dt><dd>Open or close this palette</dd></div>
       {#if mode === 'pages'}
-        <div><dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>Select a destination while searching</dd></div>
-        <div><dt><kbd>Home</kbd> / <kbd>End</kbd></dt><dd>Select the first or last destination</dd></div>
-        <div><dt><kbd>Enter</kbd></dt><dd>Open the selected destination</dd></div>
+        {#each searchShortcuts as shortcut}<div><dt><kbd>{shortcut.label}</kbd></dt><dd>{shortcut.description}</dd></div>{/each}
       {/if}
       <div><dt><kbd>Tab</kbd> / <kbd>Shift</kbd> + <kbd>Tab</kbd></dt><dd>Move between controls</dd></div>
       <div><dt><kbd>Esc</kbd></dt><dd>Close and return to the previous control</dd></div>
@@ -281,8 +316,13 @@
   header{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px 17px 12px;border-bottom:1px solid var(--border);background:rgb(var(--overlay-rgb) / .025)}
   header p{margin:0}h2{margin:2px 0 0;font:700 var(--text-lg) var(--mono)}
   .palette-close{min-height:30px;padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);color:var(--muted);font:650 var(--text-2xs) var(--mono)}
-  label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
-  .command-search{display:grid;grid-template-columns:34px minmax(0,1fr);align-items:center;margin:14px;border:1px solid var(--border-strong);border-radius:var(--radius-md);overflow:hidden;background:var(--panel-raised);box-shadow:inset 0 1px rgb(var(--overlay-rgb) / .035);transition:border-color .14s ease,box-shadow .14s ease,background-color .14s ease}
+  label[for='command-search']{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+  .brief-hints{display:flex;flex:none;flex-wrap:wrap;gap:4px 14px;margin:-4px 14px 10px;color:var(--muted);font:var(--text-2xs)/1.6 var(--font-sans)}
+  .brief-hints span{min-width:0;overflow-wrap:anywhere}
+  .hint-choice{display:flex;align-items:center;gap:8px;min-height:44px;cursor:pointer;color:var(--text)}
+  .hint-choice input{width:18px;height:18px;flex:none}
+  .hint-scope{margin:0 0 14px}
+  .command-search{display:grid;flex:none;grid-template-columns:34px minmax(0,1fr);align-items:center;margin:14px;border:1px solid var(--border-strong);border-radius:var(--radius-md);overflow:hidden;background:var(--panel-raised);box-shadow:inset 0 1px rgb(var(--overlay-rgb) / .035);transition:border-color .14s ease,box-shadow .14s ease,background-color .14s ease}
   .command-search:focus-within{border-color:var(--interface-accent);background:rgb(var(--panel-rgb) / .98);box-shadow:0 0 0 2px rgb(var(--interface-accent-rgb) / .16),inset 3px 0 var(--interface-accent)}
   .command-search span{align-self:stretch;display:grid;place-items:center;border-right:1px solid var(--border);background:rgb(var(--interface-accent-rgb) / .045);color:var(--interface-accent);font:700 var(--text-sm) var(--mono)}
   .command-search input{width:100%;min-width:0;padding:12px;border:0;background:transparent;font:500 var(--text-sm) var(--font-sans);outline:0}

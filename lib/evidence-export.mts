@@ -20,6 +20,7 @@ import { assertBoundedJsonStructure } from '../packages/analysis/bounded-json.mt
 import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 import {
   LOOKUP_EVIDENCE_SCHEMA, LOOKUP_EVIDENCE_SCHEMA_VERSION,
+  AUTHORITY_AWARE_LOOKUP_EVIDENCE_SCHEMA_VERSION,
 } from '../packages/contracts/lookup-evidence.mts';
 export * from '../packages/contracts/lookup-evidence.mts';
 import { isValidAsciiHostname } from '../packages/contracts/domain-name.mts';
@@ -753,6 +754,7 @@ const LOOKUP_WHOIS_PORTABLE_SCALARS: Readonly<Record<string, ScalarProjector>> =
   failedHop: nullableText(253),
   conflictingHop: nullableText(253),
 });
+const WHOIS_REGISTRATION_STATUS = enumeration(new Set(['registered', 'not_found', 'inconclusive']));
 const LOOKUP_REGISTRY_INSIGHT_PORTABLE_KEYS = new Set([
   'version', 'contactDisclosure', 'lifecycle', 'reconciliation', 'publications',
   'rdapCapabilities',
@@ -866,10 +868,14 @@ export function projectLookupEvidenceRdapPublication(value: unknown): UnknownRec
 }
 
 /** Positive portable projection for normalized WHOIS publication fields. */
-export function projectLookupEvidenceWhoisPublication(value: unknown): UnknownRecord | null {
+export function projectLookupEvidenceWhoisPublication(value: unknown, schemaVersion = LOOKUP_EVIDENCE_SCHEMA_VERSION): UnknownRecord | null {
   const input = recordOrNull(value);
   if (!input) return null;
   const output = projectedKnownScalarRecord(input, LOOKUP_WHOIS_PORTABLE_SCALARS) || {};
+  if (schemaVersion >= AUTHORITY_AWARE_LOOKUP_EVIDENCE_SCHEMA_VERSION && Object.hasOwn(input, 'registrationStatus')) {
+    const status = WHOIS_REGISTRATION_STATUS(input.registrationStatus);
+    if (status !== undefined) output.registrationStatus = status;
+  }
   if (Object.hasOwn(input, 'lifecycle')) {
     output.lifecycle = projectedKnownScalarRecord(input.lifecycle, LOOKUP_RDAP_LIFECYCLE_SCALARS);
   }
@@ -932,7 +938,7 @@ function projectedWhoisChainHop(value: unknown): UnknownRecord | null {
 }
 
 /** Exact positive projection for one current-schema WHOIS source wrapper. */
-export function projectLookupEvidenceWhoisSourcePublication(value: unknown): UnknownRecord | null {
+export function projectLookupEvidenceWhoisSourcePublication(value: unknown, schemaVersion = LOOKUP_EVIDENCE_SCHEMA_VERSION): UnknownRecord | null {
   const source = recordOrNull(value);
   if (!source) return null;
   const status = sourceStatus(source.status, WHOIS_SOURCE_STATUSES, 'error');
@@ -941,7 +947,7 @@ export function projectLookupEvidenceWhoisSourcePublication(value: unknown): Unk
     error: boundedSourceError(source.error, 'WHOIS source reported an error.'),
   };
   const hasPublication = status === 'complete' || status === 'partial';
-  const parsed = hasPublication ? projectLookupEvidenceWhoisPublication(source.parsed) : null;
+  const parsed = hasPublication ? projectLookupEvidenceWhoisPublication(source.parsed, schemaVersion) : null;
   if (status === 'complete' && parsed === null) return null;
   return {
     status,

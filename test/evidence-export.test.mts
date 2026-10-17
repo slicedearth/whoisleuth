@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import * as evidence from '../frontend/src/lib/analysis/evidence-export.ts';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { parseLookupEvidenceReplay } from '../frontend/src/lib/analysis/lookup-evidence-replay.ts';
 import { validateLookupEvidenceArtifactStructure } from '../cli/artifact-validation/lookup-evidence.mts';
 import { analyzeStructuredDataIdentity } from '../lib/structured-data-identity.mts';
 import { analyzeCredentialSurfaceProfile } from '../lib/credential-surface-profile.mts';
@@ -382,6 +384,63 @@ function fixtureResponse(): Record<string, unknown> {
 }
 
 describe('lookup evidence export', () => {
+  test('keeps WHOIS registration authority in new evidence without changing historical verification', async () => {
+    // Frozen pre-repair schema-30 producer output, not recomputed expectations.
+    const historicalBytes = readFileSync(new URL('./fixtures/lookup-evidence-v30-negative-whois.json', import.meta.url));
+    assert.equal(createHash('sha256').update(historicalBytes).digest('hex'), 'cf80c5a301c27c14c25ac44e566ea55cdde21fe15ddac13ee32d8690b95f3542');
+    const historical = JSON.parse(historicalBytes.toString('utf8'));
+    assert.equal(historical.schemaVersion, 30);
+    assert.equal(historical.analysis.registryInsights.version, 1);
+    assert.equal(historical.analysis.registryInsights.lifecycle.stage, 'registered');
+    assert.doesNotThrow(() => validateLookupEvidenceArtifactStructure(historical));
+    assert.equal((await parseLookupEvidenceReplay(historicalBytes.toString('utf8'))).schemaVersion, 30);
+    const relabelled = structuredClone(historical);
+    relabelled.schemaVersion = evidence.LOOKUP_EVIDENCE_SCHEMA_VERSION;
+    assert.throws(() => validateLookupEvidenceArtifactStructure(relabelled), /registry insight derivation/u);
+    await assert.rejects(() => parseLookupEvidenceReplay(JSON.stringify(relabelled)), /registry interpretation.*schema version/u);
+
+    for (const registrationStatus of ['registered', 'not_found', 'inconclusive', undefined]) {
+      const response = fixtureResponse();
+      response.rdap = { error: 'Fixture unavailable' };
+      response.registrarStanding = null;
+      recordValue(response.diagnostics).rdap = { status: 'error', errorCode: 'RDAP_UPSTREAM_FAILED', attempts: [] };
+      recordValue(response.whois).parsed = { ...(registrationStatus === undefined ? {} : { registrationStatus }), statuses: [], chainStatus: 'complete', registrantEmail: 'private-authority@example.test' };
+      const current = evidence.buildLookupEvidence(response);
+      assert.equal(current.schemaVersion, 31);
+      const parsed = recordValue(current.sources.whois.parsed);
+      assert.equal(parsed.registrationStatus, registrationStatus);
+      const insights = recordValue(current.analysis.registryInsights);
+      assert.equal(insights.version, 2);
+      const lifecycle = recordValue(insights.lifecycle);
+      assert.equal(lifecycle.stage, registrationStatus === 'registered' ? 'registered' : 'unknown');
+      assert.equal(recordValue(lifecycle.locks).server, registrationStatus === 'registered' ? false : null);
+      assert.doesNotMatch(JSON.stringify(current), /private-authority/u);
+      assert.doesNotThrow(() => validateLookupEvidenceArtifactStructure(current));
+      assert.equal((await parseLookupEvidenceReplay(JSON.stringify(current))).schemaVersion, 31);
+
+      for (const change of [
+        (value: typeof current) => { value.schemaVersion = 30; },
+        (value: typeof current) => { recordValue(value.sources.whois.parsed).registrationStatus = 'private arbitrary value'; },
+        (value: typeof current) => { value.schemaVersion = 32; },
+        (value: typeof current) => { recordValue(value.analysis.registryInsights).version = 1; },
+      ]) {
+        const altered = structuredClone(current); change(altered);
+        assert.throws(() => validateLookupEvidenceArtifactStructure(altered));
+        await assert.rejects(() => parseLookupEvidenceReplay(JSON.stringify(altered)));
+      }
+    }
+  });
+
+  test('minimised recipient evidence explicitly excludes collection receipts and selection metadata', () => {
+    const response = fixtureResponse();
+    response.collectionReceipt = JSON.parse(readFileSync(new URL('./fixtures/cli-lookup-v3.json', import.meta.url), 'utf8')).collectionReceipt;
+    const exported = evidence.buildLookupEvidence(response, { generatedAt: '2026-09-03T12:00:00.000Z' });
+    const serialized = JSON.stringify(exported);
+    assert.equal(serialized.includes('collectionReceipt'), false);
+    assert.equal(serialized.includes('originalChoices'), false);
+    assert.equal(serialized.includes('prerequisite_unavailable'), false);
+    assert.ok(response.collectionReceipt, 'The original private receipt is not removed.');
+  });
   test('preserves attributed form origins in the new epoch without admitting private controls or historical relabelling', () => {
     const response = fixtureResponse();
     const profile = analyzeCredentialSurfaceProfile({
@@ -391,7 +450,7 @@ describe('lookup evidence export', () => {
     });
     Object.assign(recordValue(response.availability), { credentialSurfaceProfile: profile, hasExternalPasswordForm: true });
     const current = evidence.buildLookupEvidence(response);
-    assert.equal(current.schemaVersion, 30);
+    assert.equal(current.schemaVersion, 31);
     assert.doesNotThrow(() => validateLookupEvidenceArtifactStructure(current));
     const availability = recordValue(current.analysis.availability);
     assert.equal(availability.hasExternalPasswordForm, true);
@@ -688,7 +747,7 @@ describe('lookup evidence export', () => {
     assert.equal(requiredValue(securityFindings[0]).state, 'observed_absence');
     assert.equal(result.analysis.idn, null);
     assert.equal(result.analysis.registryComparison.counts.conflict, 0);
-    assert.equal(registryInsights.version, 1);
+    assert.equal(registryInsights.version, 2);
     assert.equal(Object.hasOwn(registryInsights, 'abuseRouting'), false);
     assert.equal(JSON.stringify(registryInsights).includes('untrusted-registry-insight'), false);
     assert.equal(registrarComparison.counts.conflict, 1);

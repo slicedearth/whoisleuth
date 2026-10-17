@@ -8,6 +8,7 @@
   import { readSelectedConsoleCase, selectConsoleCase, subscribeSelectedConsoleCase } from '#lib/console-workflow-state.ts';
   import { activeProfile } from '#lib/brand-profiles.ts';
   import { loadCases, type CaseRecord } from '#lib/cases.ts';
+  import { formattedCaseNumber } from '../../../../packages/cases/case-workflow-metadata.mts';
 import { isExpectedBrowserLocalDataFailure } from '#lib/browser-local-data-content.ts';
   import type { BrandProfile } from '#lib/analysis/brand-profile-model.ts';
   import { buildInvestigationHandoffReadiness } from '#lib/analysis/investigation-handoff-readiness.ts';
@@ -127,7 +128,7 @@ import { isExpectedBrowserLocalDataFailure } from '#lib/browser-local-data-conte
     !evidenceContextPending && !caseContextPending && evidenceContextAvailable && caseContextAvailable,
   );
   const caseWorkspaceHref = $derived(contextCase
-    ? caseSectionHref(contextCase.id, 'response')
+    ? caseSectionHref(contextCase.id, 'assessment')
     : null);
   const actionPreflight = $derived(actionStage ? buildGuidedCollectionPreflight({
     label: actionStage.label,
@@ -584,6 +585,8 @@ import { isExpectedBrowserLocalDataFailure } from '#lib/browser-local-data-conte
 
 {#if guide && recipe}
   <section class="guide card" aria-labelledby="investigation-guide-title" tabindex="-1" bind:this={guideSection}>
+    {#if localContextError}<p class="local-context-error" role="status">{localContextError}</p>{/if}
+    {#if persistenceError}<p class="local-context-error" role="alert">{persistenceError}</p>{/if}
     <details class="work-plan" bind:open={workPlanOpen}>
       <summary>
         <span class="guide-title" id="investigation-guide-title">{guide.template?.label || recipe.label}: {guide.domain}</span>
@@ -608,7 +611,7 @@ import { isExpectedBrowserLocalDataFailure } from '#lib/browser-local-data-conte
         {#if contextCaseChoices.length}
           <select aria-label="Case for this guide" aria-busy={caseContextPending} bind:this={caseSelector} value={contextCase?.id || ''} onchange={(event) => selectConsoleCase(event.currentTarget.value)}>
             <option value="" disabled>Choose Case</option>
-            {#each contextCaseChoices as choice (choice.id)}<option value={choice.id}>{choice.domain}</option>{/each}
+            {#each contextCaseChoices as choice (choice.id)}<option value={choice.id}>{choice.domain} · {formattedCaseNumber(choice.id)}</option>{/each}
           </select>
         {/if}
         <span role="status">{caseContextPending ? 'Loading…' : contextCaseLabel}</span>
@@ -616,9 +619,6 @@ import { isExpectedBrowserLocalDataFailure } from '#lib/browser-local-data-conte
       <div><dt>Retained evidence time</dt><dd>{evidenceContextPending ? 'Loading…' : evidenceContextAvailable ? evidence.timeLabel : 'Unavailable'}</dd></div>
       <div><dt>Next action</dt><dd>{actionStage?.label || 'Review completed plan'}</dd></div>
     </dl>
-    {#if localContextError}<p class="local-context-error" role="status">{localContextError}</p>{/if}
-    {#if persistenceError}<p class="local-context-error" role="alert">{persistenceError}</p>{/if}
-
     {#if actionStage && actionProgress}
       {#key actionStage.id}
         <article class="current-action" tabindex="-1" bind:this={actionPanel}>
@@ -836,7 +836,7 @@ import { isExpectedBrowserLocalDataFailure } from '#lib/browser-local-data-conte
 {/if}
 
 {#if guide && recipe && actionStage}
-  <button class="guide-return" class:available={!actionVisible} type="button" aria-label={`Return to guided investigation: ${actionStage.label}`} tabindex={actionVisible ? -1 : 0} onclick={revealAction}>
+  <button class="guide-return" class:available={!actionVisible} type="button" tabindex={actionVisible ? -1 : 0} onclick={revealAction}>
     <span>Guided investigation</span>
     <strong>{actionStage.label}</strong>
     <small>Review step ↑</small>

@@ -416,7 +416,7 @@ describe('schema compatibility inventory', () => {
     assert.deepEqual(byId(inventory, 'cli.bulk').supportedVersions, [3]);
     assert.deepEqual(byId(inventory, 'cli.bulk-item').supportedVersions, [3]);
     assert.deepEqual(byId(inventory, 'cli.bulk-checkpoint').supportedVersions, [2]);
-    assert.deepEqual(byId(inventory, 'cli.lookup').supportedVersions, [1, 2]);
+    assert.deepEqual(byId(inventory, 'cli.lookup').supportedVersions, [1, 2, 3]);
     assert.equal(byId(inventory, 'cli.lookup').migration, 'read_only');
     assert.deepEqual(byId(inventory, 'cli.http').supportedVersions, [3]);
     assert.equal(byId(inventory, 'cli.discovery-scan').schema, CLI_DISCOVERY_SCAN_SCHEMA);
@@ -462,7 +462,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'cli.web-capture-comparison').schema, WEB_CAPTURE_COMPARISON_SCHEMA);
     assert.equal(byId(inventory, 'cli.web-capture-comparison').currentVersion, WEB_CAPTURE_COMPARISON_VERSION);
     assert.deepEqual(byId(inventory, 'cli.web-capture-comparison').supportedVersions, [5]);
-    assert.deepEqual(byId(inventory, 'export.lookup-evidence').supportedVersions, [26, 27, 28, 29, LOOKUP_EVIDENCE_SCHEMA_VERSION]);
+    assert.deepEqual(byId(inventory, 'export.lookup-evidence').supportedVersions, [26, 27, 28, 29, 30, LOOKUP_EVIDENCE_SCHEMA_VERSION]);
     assert.deepEqual(byId(inventory, 'export.synthetic-demo').supportedVersions, [5]);
     assert.deepEqual(byId(inventory, 'export.external-findings').supportedVersions, [4, 5]);
     assert.equal(byId(inventory, 'import.external-finding-rows').schema, 'whoisleuth.external-finding-rows');
@@ -495,7 +495,7 @@ describe('schema compatibility inventory', () => {
     assert.equal(byId(inventory, 'browser.bulk-review').byteBudget, MAX_BULK_REVIEW_STORE_BYTES);
     assert.equal(byId(inventory, 'export.workspace-archive').schema, WORKSPACE_ARCHIVE_SCHEMA);
     assert.equal(byId(inventory, 'export.workspace-archive').currentVersion, WORKSPACE_ARCHIVE_VERSION);
-    assert.deepEqual(byId(inventory, 'export.workspace-archive').supportedVersions, [5, 6, 7, 8, 9, WORKSPACE_ARCHIVE_VERSION]);
+    assertPublishedVersions(byId(inventory, 'export.workspace-archive'), [5, 6, 7, 8, 9, 10]);
     assert.equal(byId(inventory, 'export.workspace-archive').byteBudget, MAX_WORKSPACE_ARCHIVE_BYTES);
     assertPublishedVersions(byId(inventory, 'export.case-response-packet'), [6, 7, 8, 9, 10]);
     assert.deepEqual(byId(inventory, 'derived.case-response-review-inputs').supportedVersions, [...SUPPORTED_CASE_RESPONSE_REVIEW_INPUTS_VERSIONS]);

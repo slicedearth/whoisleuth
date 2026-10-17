@@ -10,9 +10,10 @@ import { MAX_SELECTED_FILES, MAX_SELECTED_FILE_TOTAL_BYTES } from '../packages/c
 import type { CaseViewFilters } from '../packages/contracts/case-views-contract.mts';
 import { localCaseReviewPin, type LocalCaseReviewSummary } from '../packages/cases/case-review-summary.mts';
 import {
-  createCaseIncident, editCase, openCase, recordCaseConclusion,
+  createCaseIncident, editCase, editCaseTagBatch, openCase, recordCaseConclusion,
   recordCaseInvestigationContext, recordCaseRecheckOutcome,
 } from '../frontend/src/lib/cases.ts';
+import { prepareCaseTagBatch } from '../packages/cases/case-tag-batch.mts';
 
 const NOW = '2026-09-01T00:00:00.000Z';
 const FILTERS: CaseViewFilters = { status: '', disposition: '', search: '', sort: 'updated' };
@@ -43,6 +44,32 @@ function localStore(t: TestContext, initial: readonly [string, unknown][]) {
   });
   return state;
 }
+
+test('Case tag batches capture the reviewed targets before one provider transaction', async t => {
+  const cases = ['first', 'second', 'other'].map(domain => createCase({ domain: `${domain}.example` }, NOW));
+  const state = localStore(t, [['cases', cases]]);
+  const reviewed = prepareCaseTagBatch(cases, { ids: cases.slice(0, 2).map(row => row.id), operation: 'add', tags: ['reviewed'] });
+  const pending = editCaseTagBatch(reviewed);
+  (reviewed.intent.ids as string[])[0] = cases[2]!.id; (reviewed.intent.tags as string[])[0] = 'later draft';
+  const result = await pending;
+  assert.equal(state.writes, 1); assert.equal(result.changed, 2); assert.equal(result.pruned, 0);
+  assert.equal(result.cases, state.documents.get('cases'));
+  assert.deepEqual(result.cases.map(row => row.tags), [['reviewed'], ['reviewed'], []]);
+  assert.deepEqual(cases.map(row => row.tags), [[], [], []]);
+});
+
+test('a stale member or failed provider prevents every tag change', async t => {
+  const cases = ['first', 'second'].map(domain => createCase({ domain: `${domain}.example` }, NOW));
+  const state = localStore(t, [['cases', cases]]);
+  const reviewed = prepareCaseTagBatch(cases, { ids: cases.map(row => row.id), operation: 'add', tags: ['reviewed'] });
+  const peer = cases.map((row, i) => i ? { ...row, tags: ['peer'] } : row);
+  state.documents.set('cases', peer);
+  await assert.rejects(editCaseTagBatch(reviewed), /changed or became unavailable/iu);
+  assert.equal(state.writes, 0); assert.deepEqual(state.documents.get('cases'), peer);
+  state.documents.set('cases', cases); state.failure = new Error('Fixture write failure');
+  await assert.rejects(editCaseTagBatch(reviewed), /Fixture write failure/u);
+  assert.equal(state.writes, 0); assert.deepEqual(state.documents.get('cases'), cases);
+});
 
 test('Case mutations return the admitted record from the same document sent to persistence', async t => {
   const initial = createCase({ domain: 'example.test' }, NOW);

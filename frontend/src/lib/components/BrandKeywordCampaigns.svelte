@@ -1,19 +1,24 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
+  import { onDestroy, onMount, tick } from 'svelte';
   import { saveBrandKeywordCampaign, type BrandProfile } from '#lib/brand-profiles.ts';
   import {
     keywordCampaignDraft,
     previewKeywordCampaignDraft,
     previewKeywordCampaignHosts,
+    compareKeywordCampaignCorpus,
     type KeywordCampaignDraft,
+    type KeywordCampaignComparison,
   } from '#lib/controllers/brand-keyword-campaign.ts';
   import {
     brandKeywordCampaignState,
+    keywordCampaignCorpusRevision,
     type BrandKeywordCampaign,
   } from '../../../../packages/workspace/brand-keyword-campaign.mts';
   import { WATCH_PRIORITIES } from '../../../../packages/workspace/brand-candidate-workflow.mts';
   import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
-  import { failedLocalMutationOutcome } from '#lib/local-mutation-outcome.ts';
+  import { failedLocalMutationOutcome, LocalRecordConflictError } from '#lib/local-mutation-outcome.ts';
+  import { createDraftRevision, restoreSubmittedFocus } from '#lib/controllers/submitted-draft.ts';
+  import BrandCampaignComparison from './BrandCampaignComparison.svelte';
 
   let {
     active,
@@ -30,8 +35,25 @@
     previewKey = $state('');
   let examples = $state(''),
     exampleRows = $state<ReturnType<typeof previewKeywordCampaignHosts>>([]);
+  let compareRetained = $state(false),
+    comparison = $state<KeywordCampaignComparison | null>(null);
   let status = $state<HTMLParagraphElement>(),
-    heading = $state<HTMLHeadingElement>();
+    heading = $state<HTMLHeadingElement>(),
+    owner = $state<HTMLDetailsElement>();
+  const draftRevision = createDraftRevision(() => active.id);
+  const previewIdentity = () => JSON.stringify([draft, examples, compareRetained]);
+  function clearPreview() {
+    preview = null;
+    comparison = null;
+    exampleRows = [];
+  }
+  function closeDraft() {
+    draftRevision.changed();
+    draft = null;
+    examples = '';
+    compareRetained = false;
+    clearPreview();
+  }
   const campaigns = $derived(active.keywordCampaigns ?? []);
   const current = $derived(
     draft ? (campaigns.find((value) => value.id === draft?.id) ?? null) : null,
@@ -39,8 +61,8 @@
   $effect(() => {
     if (openedProfile !== active.id) {
       openedProfile = active.id;
-      draft = null;
-      preview = null;
+      closeDraft();
+      busy = false;
       unavailable = false;
       message = '';
     }
@@ -48,11 +70,13 @@
   $effect(() => {
     if (
       preview &&
-      (JSON.stringify([draft, examples]) !== previewKey ||
-        (current?.revision ?? null) !== preview.expectedRevision)
+      (previewIdentity() !== previewKey ||
+        (current?.revision ?? null) !== preview.expectedRevision ||
+        (comparison && keywordCampaignCorpusRevision(active) !== comparison.revision))
     )
-      preview = null;
+      clearPreview();
   });
+  onDestroy(() => { draftRevision.changed(); });
   onMount(() => {
     const timer = setInterval(() => {
       now = new Date().toISOString();
@@ -60,16 +84,15 @@
     return () => clearInterval(timer);
   });
   async function edit(value: BrandKeywordCampaign | null) {
+    closeDraft();
+    const isCurrent = draftRevision.capture(), origin = document.activeElement;
     draft = keywordCampaignDraft(value, value?.id ?? crypto.randomUUID(), new Date().toISOString());
-    preview = null;
-    examples = '';
-    exampleRows = [];
     message = '';
     await tick();
-    heading?.focus();
+    if (isCurrent()) restoreSubmittedFocus(origin, heading, owner);
   }
   function review() {
-    preview = null;
+    clearPreview();
     try {
       if (draft) {
         const reviewed = previewKeywordCampaignDraft(draft, current, new Date().toISOString());
@@ -79,8 +102,11 @@
           active,
           reviewed.now,
         );
+        comparison = compareRetained
+          ? compareKeywordCampaignCorpus(active, current, reviewed.campaign, reviewed.now)
+          : null;
         preview = reviewed;
-        previewKey = JSON.stringify([draft, examples]);
+        previewKey = previewIdentity();
         message = '';
       }
     } catch (cause) {
@@ -91,13 +117,15 @@
   async function save() {
     if (!preview || !draft || busy || disabled || unavailable) return;
     const submitted = preview,
-      profileId = active.id;
+      profileId = active.id,
+      isCurrent = draftRevision.capture(), origin = document.activeElement;
     if (
-      JSON.stringify([draft, examples]) !== previewKey ||
-      (current?.revision ?? null) !== submitted.expectedRevision
+      previewIdentity() !== previewKey ||
+      (current?.revision ?? null) !== submitted.expectedRevision ||
+      (comparison && keywordCampaignCorpusRevision(active) !== comparison.revision)
     ) {
-      preview = null;
-      message = 'The campaign draft or saved revision changed. Preview it again.';
+      clearPreview();
+      message = 'The campaign draft, saved revision or retained corpus changed. Preview it again.';
       return;
     }
     busy = true;
@@ -108,15 +136,30 @@
         submitted.input,
         submitted.expectedRevision,
         new Date().toISOString(),
+        comparison?.revision ?? null,
       );
       committed = true;
-      if (active.id !== profileId) return;
+      if (!isCurrent()) return;
       draft = keywordCampaignDraft(saved, saved.id, saved.changedAt);
-      preview = null;
+      clearPreview();
       message = `Keyword campaign revision ${saved.revision} saved locally. No feed query, candidate retention or monitoring was started.`;
       await onrefresh();
     } catch (cause) {
-      if (active.id === profileId) {
+      if (isCurrent()) {
+        if (!committed && cause instanceof LocalRecordConflictError) {
+          clearPreview();
+          message = 'The saved Brand context changed. The campaign was not saved; refreshing the retained context.';
+          try {
+            await onrefresh();
+            if (isCurrent()) message = 'The campaign was not saved because the retained context changed. Your draft is preserved and the Brand has been refreshed. Preview it again before saving.';
+          } catch {
+            if (isCurrent()) {
+              unavailable = true;
+              message = 'The campaign was not saved. The retained context changed, but the Brand could not be refreshed. Your draft is preserved; reload before retrying.';
+            }
+          }
+          return;
+        }
         unavailable = committed || failedLocalMutationOutcome(cause) === 'unknown';
         message = committed
           ? 'The campaign revision was saved, but the visible Brand could not be refreshed. The draft remains available; reload before another edit.'
@@ -127,16 +170,16 @@
               : 'The campaign was not saved.';
       }
     } finally {
-      busy = false;
-      if (active.id === profileId) {
+      if (isCurrent()) {
+        busy = false;
         await tick();
-        status?.focus();
+        if (isCurrent()) restoreSubmittedFocus(origin, status, owner);
       }
     }
   }
 </script>
 
-<details class="keyword-campaigns">
+<details class="keyword-campaigns" bind:this={owner}>
   <summary>Time-bounded keyword campaigns ({campaigns.length})</summary>
   <p
     >Save local matching intent for launches or other review windows. Campaigns never query a feed,
@@ -265,6 +308,8 @@
         >Up to 20 exact hostnames, one per line. This local preview shows canonical hostname text
         and existing exact Brand declarations; it does not generate variants or save these examples.</p
       >
+      <label><input type="checkbox" bind:checked={compareRetained} />
+        Compare this Brand’s retained candidates ({active.candidateObservations.length})</label>
       <button class="btn" onclick={review}>Preview keyword campaign</button>
       {#if preview}<section aria-label="Keyword campaign preview"
           ><h4>Revision {preview.campaign.revision}: {preview.campaign.name}</h4>
@@ -285,7 +330,7 @@
                     ? `vetoed by ${row.excludedTerms.join(', ')}`
                     : row.matched
                       ? `literal match: ${row.terms.join(', ')}`
-                      : 'no literal match'}; {row.active
+                      : `no literal match; positive literals not found: ${row.missingTerms.join(', ')}`}; {row.active
                     ? 'review window active'
                     : 'new nominations disabled by the review window or pause'}. {row.declaration
                     ? `${row.declaration.reason}; declaration remains separate, not a safety verdict.`
@@ -293,18 +338,16 @@
                 >{/each}</ul
             >
           {:else}<p
-              >No example hostnames evaluated. Enter examples to inspect literal, token-boundary and
-              canonical IDN effects before saving.</p
+              >No example hostnames evaluated. Enter examples to inspect literal matching and
+              canonical IDN text before saving.</p
             >{/if}
+          {#if comparison}<BrandCampaignComparison {comparison} />{/if}
           <button class="btn" onclick={() => void save()}>Save reviewed campaign revision</button
           ></section
         >{/if}
       <button
         class="btn"
-        onclick={() => {
-          draft = null;
-          preview = null;
-        }}>Close campaign draft</button
+        onclick={closeDraft}>Close campaign draft</button
       >
     </fieldset>
   {/if}

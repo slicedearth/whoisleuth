@@ -97,7 +97,7 @@
       const output=buildRelationshipGraphExport(summary,{format:exportFormat,...query});
       const blob=new Blob([output.content],{type:output.mimeType});
       downloadLocalFile(blob, output.filename);
-      exportMessage=`Downloaded ${output.nodeCount} nodes and ${output.edgeCount} edges${output.truncated?' from a bounded partial graph':''}.`;
+      exportMessage=`Prepared ${output.nodeCount} nodes and ${output.edgeCount} edges${output.truncated?' from a bounded partial graph':''} for download.`;
     }catch(cause){exportMessage=cause instanceof Error?cause.message:'Could not export the relationship graph.';}
   }
 </script>

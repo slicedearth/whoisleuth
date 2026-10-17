@@ -2,7 +2,7 @@ import {
   ANALYST_REVIEW_AGES, ANALYST_REVIEW_DISPOSITIONS, ANALYST_REVIEW_EVIDENCE_FAMILIES, ANALYST_REVIEW_KINDS, MAX_ANALYST_REVIEW_ITEMS, MAX_ANALYST_REVIEW_RATIONALE_LENGTH,
   ANALYST_REVIEW_LIFECYCLE_STATES, ANALYST_REVIEW_NEXT_ACTIONS, ANALYST_REVIEW_PRIORITIES, ANALYST_REVIEW_QUEUE_OPTIONS,
 } from '../contracts/analyst-review-state-contract.mts';
-import { MAX_REVIEW_SESSION_BYTES, REVIEW_SESSION_SCHEMA, REVIEW_SESSION_VERSION, type ReviewFormDraft, type ReviewSessionFilters, type ReviewSessionPosition, type ReviewSessionRecord, type ReviewSessionStore } from '../contracts/review-session-contract.mts';
+import { MAX_REVIEW_SESSION_BYTES, REVIEW_SESSION_SCHEMA, REVIEW_SESSION_VERSION, type ReviewFormDraft, type ReviewSessionBaseline, type ReviewSessionBaselineItem, type ReviewSessionFilters, type ReviewSessionPosition, type ReviewSessionRecord, type ReviewSessionStore } from '../contracts/review-session-contract.mts';
 import { assertWorkspaceInputGraph, ordinaryWorkspaceRecord } from './hostile-input.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 
@@ -33,7 +33,7 @@ function filters(raw: unknown): ReviewSessionFilters {
 }
 export function normalizeReviewSessionPosition(raw: unknown): ReviewSessionPosition {
   assertWorkspaceInputGraph(raw, 'Review position', { maximumBytes: MAX_REVIEW_SESSION_BYTES });
-  const value = object(raw, ['filters', 'selected', 'drafts']);
+  const value = object(raw, ['filters', 'selected', 'drafts', 'question', 'baseline']);
   let selected: ReviewSessionPosition['selected'] = null;
   if (value.selected !== null) {
     const item = object(value.selected, ['id', 'subjectKey', 'materialFingerprint', 'caseId']);
@@ -48,7 +48,63 @@ export function normalizeReviewSessionPosition(raw: unknown): ReviewSessionPosit
     ids.add(draft.id);
     return draft;
   });
-  return { filters: filters(value.filters), selected, drafts };
+  return { filters: filters(value.filters), selected, drafts,
+    question: value.question === null ? null : text(value.question, MAX_ANALYST_REVIEW_RATIONALE_LENGTH),
+    baseline: value.baseline === null ? null : normalizeReviewSessionBaseline(value.baseline) };
+}
+
+function normalizeReviewSessionBaseline(raw: unknown): ReviewSessionBaseline {
+  const value = object(raw, ['sourcesAvailable', 'truncated', 'items']);
+  if (typeof value.sourcesAvailable !== 'boolean' || typeof value.truncated !== 'boolean'
+    || !Array.isArray(value.items) || value.items.length > MAX_ANALYST_REVIEW_ITEMS) throw new Error('Review baseline exceeds or misstates the admitted queue.');
+  const ids = new Set<string>();
+  const items = value.items.map(rawItem => {
+    const item = object(rawItem, ['id', 'subjectKey', 'materialFingerprint', 'sourceIds', 'completeness']);
+    const id = text(item.id), subjectKey = text(item.subjectKey), materialFingerprint = text(item.materialFingerprint);
+    if (!id || !subjectKey || !materialFingerprint || ids.has(id)) throw new Error('Review baseline has an incomplete or duplicate identity.');
+    ids.add(id);
+    if (!Array.isArray(item.sourceIds) || item.sourceIds.length > MAX_ANALYST_REVIEW_ITEMS) throw new Error('Review baseline source identities exceed the admitted queue.');
+    const sourceIds = item.sourceIds.map(value => text(value));
+    if (sourceIds.some(value => !value) || new Set(sourceIds).size !== sourceIds.length) throw new Error('Review baseline source identities are invalid.');
+    return { id, subjectKey, materialFingerprint, sourceIds: sourceIds.sort(),
+      completeness: option(item.completeness, ['complete', 'partial', 'inconclusive'] as const) };
+  });
+  return { sourcesAvailable: value.sourcesAvailable, truncated: value.truncated, items };
+}
+
+/** Copy only comparison context from the same admitted, filtered view being saved. */
+export function createReviewSessionBaseline(items: readonly ReviewSessionBaselineItem[], coverage: Pick<ReviewSessionBaseline, 'sourcesAvailable' | 'truncated'>): ReviewSessionBaseline {
+  return { ...coverage, items: items.map(item => ({
+    id: item.id, subjectKey: item.subjectKey, materialFingerprint: item.materialFingerprint,
+    sourceIds: [...item.sourceIds].sort(), completeness: item.completeness,
+  })) };
+}
+
+/** Membership is relative to two retained views, never newly collected or deleted evidence. */
+export function compareReviewSessionBaseline(saved: ReviewSessionBaseline | null, current: ReviewSessionBaseline | null) {
+  const result = { state: 'unknown' as 'unknown' | 'comparable' | 'qualified', unchanged: 0, changed: 0, newlyMatching: 0, ambiguous: 0, unavailable: 0 };
+  if (!saved || !current) return result;
+  const bySubject = (items: readonly ReviewSessionBaselineItem[]) => {
+    const groups = new Map<string, ReviewSessionBaselineItem[]>();
+    for (const item of items) groups.set(item.subjectKey, [...groups.get(item.subjectKey) ?? [], item]);
+    return groups;
+  };
+  const before = bySubject(saved.items), after = bySubject(current.items);
+  result.state = saved.sourcesAvailable && current.sourcesAvailable && !saved.truncated && !current.truncated ? 'comparable' : 'qualified';
+  for (const subject of new Set([...before.keys(), ...after.keys()])) {
+    const earlier = before.get(subject) ?? [], later = after.get(subject) ?? [];
+    if (earlier.length > 1 || later.length > 1) { result.ambiguous++; continue; }
+    if (!current.sourcesAvailable || !later.length) { result.unavailable++; continue; }
+    if (!earlier.length) { result.newlyMatching++; continue; }
+    const a = earlier[0]!, b = later[0]!;
+    if (!saved.sourcesAvailable || JSON.stringify(a.sourceIds) !== JSON.stringify(b.sourceIds)) {
+      result.state = 'qualified'; result.unavailable++; continue;
+    }
+    if (a.completeness !== 'complete' || b.completeness !== 'complete') result.state = 'qualified';
+    if (a.materialFingerprint === b.materialFingerprint && a.completeness === b.completeness) result.unchanged++;
+    else result.changed++;
+  }
+  return result;
 }
 export function normalizeReviewFormDraft(raw: unknown): ReviewFormDraft {
   const value = object(raw, ['id', 'subjectKey', 'materialFingerprint', 'disposition', 'rationale', 'expiresAt', 'reviewDueAt', 'uncertain']);
@@ -69,15 +125,19 @@ export function normalizeReviewSessionStore(raw: unknown): ReviewSessionStore {
   if (raw === null || raw === undefined) return emptyReviewSessionStore();
   assertWorkspaceInputGraph(raw, 'Review session', { maximumBytes: MAX_REVIEW_SESSION_BYTES });
   const root = object(raw, ['schema', 'version', 'records']);
-  if (root.schema !== REVIEW_SESSION_SCHEMA || root.version !== REVIEW_SESSION_VERSION) throw new Error('Unsupported review session format. Saved positions were not changed.');
+  if (root.schema !== REVIEW_SESSION_SCHEMA || ![1, REVIEW_SESSION_VERSION].includes(root.version as number)) throw new Error('Unsupported review session format. Saved positions were not changed.');
   if (!Array.isArray(root.records) || root.records.length > 1) throw new Error('The review session keeps one explicitly saved inbox position.');
   const records: ReviewSessionRecord[] = root.records.map(rawRecord => {
-    const record = object(rawRecord, ['id', 'revision', 'updatedAt', 'filters', 'selected', 'drafts']);
+    const record = object(rawRecord, ['id', 'revision', 'updatedAt', 'filters', 'selected', 'drafts', ...(root.version === 1 ? [] : ['question', 'baseline'])]);
     const updatedAt = normalizeExplicitIsoTimestamp(record.updatedAt);
     if (record.id !== 'inbox' || typeof record.revision !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(record.revision) || !updatedAt) throw new Error('Review session identity or time is invalid.');
-    return { id: 'inbox', revision: record.revision, updatedAt, ...normalizeReviewSessionPosition({ filters: record.filters, selected: record.selected, drafts: record.drafts }) };
+    return { id: 'inbox', revision: record.revision, updatedAt, ...normalizeReviewSessionPosition({ filters: record.filters, selected: record.selected, drafts: record.drafts,
+      question: root.version === 1 ? null : record.question, baseline: root.version === 1 ? null : record.baseline }) };
   });
-  return { ...emptyReviewSessionStore(), records };
+  const normal = { ...emptyReviewSessionStore(), records };
+  if (new TextEncoder().encode(JSON.stringify(normal)).byteLength > MAX_REVIEW_SESSION_BYTES)
+    throw new Error('The saved question, baseline and forms exceed the review checkpoint storage limit. The previous checkpoint was not replaced; no drafts were removed.');
+  return normal;
 }
 export function serializeReviewSessionStore(raw: unknown): string {
   return JSON.stringify(normalizeReviewSessionStore(raw));
@@ -92,3 +152,27 @@ export function resolveReviewSessionSelection<T extends { id: string; subjectKey
   const index = candidates[0]!;
   return { state: items[index]!.materialFingerprint === position.selected.materialFingerprint ? 'unchanged' as const : 'changed' as const, index };
 }
+
+/** Existing open forms win; resuming a checkpoint never submits or prunes them. */
+export function mergeReviewSessionDrafts(saved: readonly ReviewFormDraft[], current: readonly ReviewFormDraft[]) {
+  const retained = new Map(current.map(draft => [draft.id, draft]));
+  const keptOpen = retained.size;
+  for (const draft of saved) if (!retained.has(draft.id)) retained.set(draft.id, draft);
+  if (retained.size > MAX_ANALYST_REVIEW_ITEMS) return null;
+  return { drafts: [...retained.values()], keptOpen, restored: retained.size - keptOpen };
+}
+
+/** A readback of admitted results at resume, not a retained history or live tally. */
+export function describeReviewSessionResume<T extends { id: string; subjectKey: string; materialFingerprint: string; title: string }>(
+  position: ReviewSessionPosition, items: readonly T[], merged: NonNullable<ReturnType<typeof mergeReviewSessionDrafts>>,
+  currentBaseline: ReviewSessionBaseline | null = null,
+) {
+  const selected = resolveReviewSessionSelection(position, items);
+  return {
+    selected, currentTitle: items[selected.index]?.title ?? null, matchingItems: items.length,
+    comparison: compareReviewSessionBaseline(position.baseline, currentBaseline),
+    restoredDrafts: merged.restored, keptOpenDrafts: merged.keptOpen,
+    uncertainDrafts: merged.drafts.filter(draft => draft.uncertain).length,
+  };
+}
+export type ReviewSessionResumeBriefing = ReturnType<typeof describeReviewSessionResume>;

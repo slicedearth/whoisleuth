@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import type { CaseResponsePacket } from '#lib/analysis/case-response-packet.ts';
+  import PreparedPacketTimeline from './PreparedPacketTimeline.svelte';
   import './print-surface.css';
 
   let { packet, onvalidate, onclose }: {
@@ -11,15 +12,30 @@
 
   let dialog: HTMLDialogElement;
   let heading: HTMLHeadingElement;
+  let readingGuide: HTMLDetailsElement;
   let includeAppendix = $state(false);
   let busy = $state(false);
   let printing = $state(false);
   let error = $state('');
+  let readingView = $state<'full' | 'brief' | 'evidence' | 'timeline'>('full');
+  const readingViewLabel = 'Recipient reading view';
   const correction = $derived(packet.escalationHistory.find(action => action.actionId === packet.actionBinding.selectedActionId)?.correction);
   let mounted = false;
 
+  async function startReading(section: 'evidence' | 'incident' | 'quality') {
+    readingView = 'full'; await tick();
+    if (!mounted || !dialog.open) return;
+    const target = dialog.querySelector<HTMLHeadingElement>(`#packet-report-${section}`);
+    if (!target) return;
+    readingGuide.open = false;
+    target.scrollIntoView({ block: 'center' });
+    target.focus({ preventScroll: true });
+  }
+
   onMount(() => {
     mounted = true;
+    const handleClose = onclose;
+    dialog.addEventListener('close', handleClose);
     dialog.showModal();
     heading.focus({ preventScroll: true });
     const afterPrint = () => { printing = false; };
@@ -27,6 +43,7 @@
     return () => {
       mounted = false;
       window.removeEventListener('afterprint', afterPrint);
+      dialog.removeEventListener('close', handleClose);
       dialog.close();
     };
   });
@@ -55,13 +72,7 @@
   {#if value}<time datetime={value}>{value.replace('T', ' ').replace(/Z$/u, ' UTC')}</time>{:else}<span>Time unavailable</span>{/if}
 {/snippet}
 
-<dialog class="packet-print" data-print-surface class:print-approved={printing} bind:this={dialog} aria-labelledby="packet-report-title" onclose={onclose}>
-  <div class="print-controls">
-    <div><button type="button" class="btn" onclick={() => void printReport()} disabled={busy || printing}>{busy ? 'Checking packet…' : 'Print or save PDF'}</button><button type="button" class="btn" onclick={() => dialog.close()}>Close report</button></div>
-    <label><input type="checkbox" bind:checked={includeAppendix} disabled={printing}> Include exact packet JSON as a technical appendix</label>
-    <p>The print dialog does not confirm that a file was saved or delivered.</p>
-    {#if error}<p role="alert">{error}</p>{/if}
-  </div>
+<dialog class="packet-print" data-print-surface class:print-approved={printing} bind:this={dialog} aria-labelledby="packet-report-title">
   <p class="print-guard">Use “Print or save PDF” in the report to check the prepared packet before printing.</p>
   <article class="report-content">
     <header>
@@ -71,15 +82,32 @@
       <p class="status">{packet.authorisation.status === 'authorised' ? 'Authorised packet' : 'Draft — authorisation incomplete'}</p>
       <dl class="report-facts"><div><dt>Case ID</dt><dd>{packet.case.id}</dd></div><div><dt>Prepared</dt><dd>{@render timestamp(packet.generatedAt)}</dd></div><div><dt>Audience</dt><dd>{packet.profile.audience}</dd></div><div><dt>Analyst disposition</dt><dd>{packet.case.disposition.replaceAll('_', ' ')}</dd></div></dl>
     </header>
-
+  <div class="print-controls">
+    <div><button type="button" class="btn" onclick={() => void printReport()} disabled={busy || printing}>{busy ? 'Checking packet…' : 'Print or save PDF'}</button><button type="button" class="btn" onclick={() => dialog.close()}>Close report</button></div>
+    <label><input type="checkbox" bind:checked={includeAppendix} disabled={printing}> Include exact packet JSON as a technical appendix</label>
+    <p>The print dialog does not confirm that a file was saved or delivered.</p>
+    <label>{readingViewLabel}<select aria-label={readingViewLabel} bind:value={readingView} disabled={printing}><option value="full">Full prepared report</option><option value="brief">Brief reading emphasis</option><option value="evidence">Selected evidence</option><option value="timeline">Selected packet timeline</option></select></label>
+    <p>Reading choices use this packet only. Printing includes the complete prepared report regardless of the screen view.</p>
+    <details class="reading-guide" bind:this={readingGuide}>
+      <summary>Reading guide</summary>
+      <p>Choose a starting point. The audience, complete report and exported files stay the same.</p>
+      <nav aria-label="Report reading starting points">
+        <button type="button" class="btn" onclick={() => startReading('evidence')}><strong>Analyst</strong><span>Start with selected evidence and its sources</span></button>
+        <button type="button" class="btn" onclick={() => startReading('incident')}><strong>Domain manager</strong><span>Start with the incident and affected URLs</span></button>
+        <button type="button" class="btn" onclick={() => startReading('quality')}><strong>External reviewer</strong><span>Start with readiness and unresolved evidence</span></button>
+      </nav>
+    </details>
+    {#if error}<p role="alert">{error}</p>{/if}
+  </div>
     {#if correction}<section aria-labelledby="packet-report-correction"><h3 id="packet-report-correction">{correction.purpose === 'correction' ? 'Correction request' : 'Retraction request'}</h3><p>Original delivery event {correction.deliveryEventId} · canonical packet v{correction.packetVersion}</p><p class="identifier">Original SHA-256: {correction.packetDigestSha256}</p><h4>Analyst reason</h4><p class="prose">{correction.reason}</p><h4>Previous statement</h4><p class="prose">{correction.previousStatement}</p><h4>Corrected statement</h4><p class="prose">{correction.correctedStatement || 'Request to retract the previous statement'}</p><p>Corrected evidence references: {correction.evidencePinIds.join(', ')}</p><p>This new request does not establish sending, acceptance, reversal, restoration or independent recheck.</p></section>{/if}
-    <section aria-labelledby="packet-report-incident"><h3 id="packet-report-incident">{correction ? 'Retained incident context' : 'Incident'}</h3>
+    {#if readingView === 'timeline'}<div class="screen-timeline"><PreparedPacketTimeline {packet} /></div>{/if}
+    <section class="full-print-section" hidden={readingView === 'evidence' || readingView === 'timeline'} aria-labelledby="packet-report-incident"><h3 id="packet-report-incident" tabindex="-1">{correction ? 'Retained incident context' : 'Incident'}</h3>
       <dl class="report-facts"><div><dt>Category</dt><dd>{packet.incident.category}</dd></div><div><dt>Affected party</dt><dd>{packet.incident.affectedParty}</dd></div><div><dt>Observed</dt><dd>{@render timestamp(packet.incident.observedAt)}</dd></div></dl>
       <p class="prose">{packet.incident.observedHarm}</p>
       <h4>Selected URLs</h4><ul>{#each packet.incident.abusiveUrls as url}<li class="identifier">{url}</li>{/each}</ul>
     </section>
 
-    <section aria-labelledby="packet-report-evidence"><h3 id="packet-report-evidence">Selected evidence · {packet.selectedEvidence.length}</h3>
+    <section class="full-print-section" hidden={readingView === 'timeline'} aria-labelledby="packet-report-evidence"><h3 id="packet-report-evidence" tabindex="-1">Selected evidence · {packet.selectedEvidence.length}</h3>
       {#if packet.selectedEvidence.length}<ol class="evidence-list">{#each packet.selectedEvidence as evidence}<li>
         <h4>{evidence.label}</h4><p>{evidence.source} · {evidence.completeness.replaceAll('_', ' ')}</p>
         <p>{@render timestamp(evidence.observedAt)}{#if evidence.observationHostname} · {evidence.observationHostname}{/if}</p>
@@ -88,7 +116,7 @@
       </li>{/each}</ol>{:else}<p>No evidence was selected for this packet.</p>{/if}
     </section>
 
-    <section aria-labelledby="packet-report-recipient"><h3 id="packet-report-recipient">Recipient and response</h3>
+    <section class="full-print-section" hidden={readingView !== 'full'} aria-labelledby="packet-report-recipient"><h3 id="packet-report-recipient">Recipient and response</h3>
       {#if packet.recipientRoute}<dl class="report-facts"><div><dt>Selected recipient</dt><dd>{packet.recipientRoute.contact}</dd></div><div><dt>Route source</dt><dd>{packet.recipientRoute.source}</dd></div><div><dt>Route observed</dt><dd>{@render timestamp(packet.recipientRoute.observedAt)}</dd></div><div><dt>Route freshness at preparation</dt><dd>{packet.recipientRoute.freshness}</dd></div></dl>
         {#if packet.recipientRoute.limitations.length}<ul>{#each packet.recipientRoute.limitations as limitation}<li>{limitation}</li>{/each}</ul>{/if}
       {:else}<p>No recipient route is selected.</p>{/if}
@@ -97,29 +125,32 @@
       {#if packet.responseLifecycle.limitations.length}<ul>{#each packet.responseLifecycle.limitations as limitation}<li>{limitation}</li>{/each}</ul>{/if}
     </section>
 
-    <section aria-labelledby="packet-report-quality"><h3 id="packet-report-quality">Readiness and unresolved evidence</h3>
+    <section class="full-print-section" aria-labelledby="packet-report-quality"><h3 id="packet-report-quality" tabindex="-1">Readiness and unresolved evidence</h3>
       <dl class="readiness">{#each packet.readiness.rows as row}<div><dt>{row.label} · {row.state.replaceAll('_', ' ')}</dt><dd>{row.detail}{#if row.limitations.length}<ul>{#each row.limitations as limitation}<li>{limitation}</li>{/each}</ul>{/if}</dd></div>{/each}</dl>
       {#if packet.contradictions.length}<h4>Contradictions retained for review</h4><ul>{#each packet.contradictions as contradiction}<li>{contradiction.statement} · {contradiction.state}{#if contradiction.limitations.length}<ul>{#each contradiction.limitations as limitation}<li>{limitation}</li>{/each}</ul>{/if}</li>{/each}</ul>{/if}
       {#if packet.authorisation.limitations.length}<div class="limitations-group"><h4>Authorisation limitations</h4><ul>{#each packet.authorisation.limitations as limitation}<li>{limitation}</li>{/each}</ul></div>{/if}
     </section>
 
-    {#if packet.artefactReferences.length}<section aria-labelledby="packet-report-files"><h3 id="packet-report-files">Referenced files · {packet.artefactReferences.length}</h3><ol class="evidence-list">{#each packet.artefactReferences as file}<li><h4>{file.label}</h4><p>{file.source} · {file.mediaType} · {file.byteLength === null ? 'Byte length unavailable' : `${file.byteLength.toLocaleString('en-AU')} bytes`}</p><p>{@render timestamp(file.capturedAt)}</p><p class="identifier">SHA-256: {file.digestSha256}</p>{#if file.limitations.length}<ul>{#each file.limitations as limitation}<li>{limitation}</li>{/each}</ul>{/if}</li>{/each}</ol></section>{/if}
+    {#if packet.artefactReferences.length}<section class="full-print-section" hidden={readingView !== 'full'} aria-labelledby="packet-report-files"><h3 id="packet-report-files">Referenced files · {packet.artefactReferences.length}</h3><ol class="evidence-list">{#each packet.artefactReferences as file}<li><h4>{file.label}</h4><p>{file.source} · {file.mediaType} · {file.byteLength === null ? 'Byte length unavailable' : `${file.byteLength.toLocaleString('en-AU')} bytes`}</p><p>{@render timestamp(file.capturedAt)}</p><p class="identifier">SHA-256: {file.digestSha256}</p>{#if file.limitations.length}<ul>{#each file.limitations as limitation}<li>{limitation}</li>{/each}</ul>{/if}</li>{/each}</ol></section>{/if}
+    <details class="screen-timeline"><summary>Packet profile guidance and omissions</summary><p>The selected profile's guidance is not proof that secrets were removed. Inspect the actual packet before sharing.</p><ul>{#each packet.profile.excludedEvidence as item}<li>{item}</li>{/each}{#each packet.profile.redactions as item}<li>{item}</li>{/each}</ul><p>{packet.escalationHistoryOmitted} response actions outside the selected lineage are not represented; their Case records are unchanged.</p></details>
 
     <section class="limitations-group"><h3>Packet limitations</h3><ul>{#each packet.provenance.limitations as limitation}<li>{limitation}</li>{/each}</ul></section>
     <footer><h3>Packet reference</h3><p class="identifier">SHA-256: {packet.integrity.digestSha256}</p><p>{packet.schema} · version {packet.schemaVersion}. The digest identifies the canonical packet JSON, not this printed layout or the truth of its evidence. No submission is performed.</p></footer>
-    {#if includeAppendix}<section class="technical-appendix" aria-labelledby="packet-report-appendix"><h3 id="packet-report-appendix">Technical appendix — exact packet JSON</h3><pre>{JSON.stringify(packet, null, 2)}</pre></section>{/if}
+    {#if includeAppendix}<section class="technical-appendix full-print-section" hidden={readingView !== 'full'} aria-labelledby="packet-report-appendix"><h3 id="packet-report-appendix">Technical appendix — exact packet JSON</h3><pre>{JSON.stringify(packet, null, 2)}</pre></section>{/if}
   </article>
 </dialog>
 
 <style>
   .packet-print{box-sizing:border-box;width:min(960px,calc(100% - 24px));max-width:none;max-height:calc(100dvh - 24px);margin:auto;padding:0;border:1px solid var(--border-strong);border-radius:var(--radius-lg);background:var(--panel);color:var(--text);overflow:auto;overscroll-behavior:contain}
   .packet-print::backdrop{background:rgb(0 0 0 / .58)}
-  .print-controls{position:sticky;top:0;z-index:1;display:grid;gap:9px;padding:14px 24px;border-bottom:1px solid var(--border);background:var(--panel)}
+  .print-controls{position:sticky;top:0;z-index:1;display:grid;gap:9px;margin:20px -36px 0;padding:14px 36px;border-block:1px solid var(--border);background:var(--panel)}
   .print-controls>div{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between}
   .print-controls label{display:flex;align-items:center;gap:9px;min-height:44px;font-size:var(--text-sm)}
   .print-controls input{flex:none;width:18px;height:18px}
+  .print-controls select{min-width:0;max-width:100%;min-height:44px}.screen-timeline{margin-top:1rem;min-width:0}.screen-timeline summary{min-height:44px;cursor:pointer;align-content:center}
   .print-controls p{margin:0;color:var(--muted);font-size:var(--text-xs)}
   .print-controls [role='alert']{color:var(--danger)}
+  .reading-guide{min-width:0}.reading-guide summary{cursor:pointer;min-height:32px;align-content:center;font-size:var(--text-sm);font-weight:650}.reading-guide nav{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.reading-guide button{display:grid;gap:3px;min-width:0;max-width:100%;flex:1 1 200px;align-content:start;align-items:start;justify-content:stretch;justify-items:start;padding:8px 12px;text-align:left;white-space:normal}.reading-guide button span{font-size:var(--text-xs);font-weight:400;line-height:1.4}
   .print-guard{display:none}
   .report-content{padding:30px 36px;min-width:0;font:400 var(--text-sm)/1.65 var(--font-sans);overflow-wrap:anywhere}
   h2,h3,h4,p{margin:0}h2{font-size:clamp(1.6rem,4vw,2.3rem);line-height:1.2;font-family:var(--font-sans)}h3{margin-bottom:12px;font:700 var(--text-lg)/1.35 var(--font-sans)}h4{font:650 var(--text-sm)/1.5 var(--font-sans)}
@@ -129,8 +160,9 @@
   ul,ol{padding-left:22px;margin:8px 0}.prose{white-space:pre-wrap;margin:14px 0}.identifier,.reference{font-family:var(--mono);font-size:var(--text-xs);overflow-wrap:anywhere}
   .evidence-list>li{padding:0 0 15px 3px}.evidence-list p{margin-top:3px}.reference{color:var(--muted)}.readiness{display:grid;gap:12px;margin:0}.readiness ul{margin-bottom:0}
   footer p{margin-top:8px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:400 var(--text-xs)/1.5 var(--mono);max-width:100%;margin:12px 0 0}
-  @media(max-width:600px){.packet-print{width:calc(100% - 12px);max-height:calc(100dvh - 12px)}.print-controls{position:static;padding:12px}.report-content{padding:22px 16px}.report-facts{grid-template-columns:minmax(0,1fr)}}
+  @media(max-width:600px){.packet-print{width:calc(100% - 12px);max-height:calc(100dvh - 12px)}.print-controls{position:static;margin:12px -16px 0;padding:12px 16px}.report-content{padding:22px 16px}.report-facts{grid-template-columns:minmax(0,1fr)}}
   @media print {
+    .full-print-section[hidden]{display:block!important}.screen-timeline{display:none!important}
     .packet-print{position:static!important;inset:auto!important;display:block!important;width:100%!important;max-width:none!important;height:auto!important;max-height:none!important;margin:0!important;padding:0!important;overflow:visible!important;border:0!important;border-radius:0!important;background:white!important;color:#111!important;--muted:#333;--border:#aaa;box-shadow:none!important}
     .packet-print::backdrop,.print-controls{display:none!important}.report-content{padding:0;font-size:10pt}.report-facts{grid-template-columns:repeat(2,minmax(0,1fr))}
     h2{font-size:22pt}h3{font-size:14pt}h4{font-size:11pt}h2,h3,h4,dt{break-after:avoid}.evidence-list>li,.report-facts>div,.readiness>div{break-inside:avoid}.identifier,.reference,pre{font-size:8pt}

@@ -12,14 +12,17 @@ test('shared copy control announces exact values and preserves keyboard focus', 
   } }));
   await page.goto('/cli');
   const command = page.locator('.start-steps .copyable-command').first();
-  const button = command.getByRole('button', { name: 'Copy run-once help command', exact: true });
+  const button = command.getByRole('button');
+  await expect(button).toHaveCount(1);
+  await expect(button).toHaveAccessibleName('Copy run-once help command');
   const expected = await command.locator('code').textContent();
   expect(expected).toBeTruthy();
   await button.focus(); await button.press('Enter');
   await expect.poll(() => copied).toBe(expected);
-  await expect(button).toHaveText('Copied');
+  await expect(button).toHaveAccessibleName('Copied run-once help command');
   await expect(button).toBeFocused();
   await expect(command.locator('[aria-live="polite"]')).toHaveText('Copy run-once help command: copied.');
+  expect((await new AxeBuilder({ page }).include('.start-steps').analyze()).violations).toEqual([]);
 });
 
 test('shared copy failure retains selectable text across layouts and themes', async ({ page }) => {
@@ -58,6 +61,6 @@ test('shared copy control rejects stale completion after its value changes', asy
   await target.fill('second.example');
   await expect(builder.locator('.copyable-command code')).toContainText('second.example');
   await page.evaluate(() => (window as unknown as { completeFixtureCopy(): void }).completeFixtureCopy());
-  await expect(button).toHaveText('Copy');
+  await expect(button).toHaveAccessibleName('Copy Prepared lookup command');
   await expect(builder.locator('[aria-live="polite"]')).toBeEmpty();
 });

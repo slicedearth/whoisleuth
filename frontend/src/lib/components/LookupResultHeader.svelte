@@ -51,7 +51,7 @@
   <div>
     <p class="eyebrow">Result</p>
     <h2>{title}</h2>
-    <p class="result-context"><span>{depth === 'deep' ? 'Deep' : 'Fast'} lookup</span>{#if observationTime}<time datetime={observationTime}>Observed {formatEvidenceDate(observationTime)}</time>{:else}<span>Observation time unavailable</span>{/if}</p>
+    <p class="result-context"><span>{depth === 'deep' ? 'Deep' : 'Fast'} lookup</span>{#if observationTime}<time datetime={observationTime}>Latest recorded time {formatEvidenceDate(observationTime)}</time>{:else}<span>Source and response times unavailable</span>{/if}</p>
     {#if isSubdomain}
       <p>Registration: {registrableDomain}.{' '}{#if depth === 'deep' && observationHostname}DNS, TLS and web observation target: {observationHostname}.{:else}Submitted hostname: {inputHostname}.{/if}</p>
     {/if}

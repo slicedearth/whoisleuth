@@ -2,11 +2,19 @@ import {
   reviseBrandKeywordCampaign,
   matchBrandKeywordTerms,
   brandKeywordCampaignState,
+  keywordCampaignCorpusRevision,
+  type KeywordCampaignCorpus,
   type BrandKeywordCampaign,
   type BrandKeywordCampaignInput,
+  type BrandKeywordCampaignSnapshot,
 } from '../../../../packages/workspace/brand-keyword-campaign.mts';
-import type { WatchPriority } from '../../../../packages/workspace/brand-candidate-workflow.mts';
 import {
+  candidateExceptionState,
+  MAX_CANDIDATE_OBSERVATIONS,
+  type WatchPriority,
+} from '../../../../packages/workspace/brand-candidate-workflow.mts';
+import {
+  profileDomainMatch,
   previewBrandDomainExclusions,
   type BrandProfileSignalProfile,
 } from '../analysis/brand-profile-signals.ts';
@@ -39,6 +47,68 @@ export function keywordCampaignDraft(
     defaultPriority: value?.defaultPriority ?? 'unassigned',
   };
 }
+
+/** Matching is independent of the campaign window, declarations and previous analyst reviews. */
+export function explainKeywordCampaignMatch(
+  hostname: string,
+  campaign: BrandKeywordCampaignSnapshot,
+  now: string,
+) {
+  const match = matchBrandKeywordTerms(hostname, campaign.positiveTerms, campaign.negativeTerms);
+  return {
+    ...match,
+    outcome: match.excludedTerms.length ? 'vetoed' as const : match.matched ? 'matched' as const : 'missing_positive' as const,
+    missingTerms: campaign.positiveTerms.filter((term) => !match.terms.includes(term)),
+    state: brandKeywordCampaignState(campaign, now),
+  };
+}
+
+/** Compare the explicitly selected, already validated Brand corpus without changing its records. */
+export function compareKeywordCampaignCorpus(
+  profile: KeywordCampaignCorpus,
+  before: BrandKeywordCampaign | null,
+  after: BrandKeywordCampaign,
+  now: string,
+) {
+  const revision = keywordCampaignCorpusRevision(profile);
+  if (before && before.id !== after.id)
+    throw new TypeError('Compare revisions of the same keyword campaign.');
+  const rows = profile.candidateObservations.map((candidate) => {
+    const previous = before ? explainKeywordCampaignMatch(candidate.domain, before, now) : null;
+    const proposed = explainKeywordCampaignMatch(candidate.domain, after, now);
+    const change = previous === null ? 'no_baseline' : previous.matched === proposed.matched
+      ? proposed.matched ? 'unchanged_match' : 'unchanged_nonmatch'
+      : proposed.matched ? 'added' : 'removed';
+    return {
+      domain: candidate.domain, before: previous, after: proposed, change,
+      declaration: profileDomainMatch(candidate.domain, profile),
+      sources: candidate.sources.map((source) => ({ ...source })),
+      reviews: profile.candidateExceptions.filter((review) => review.domain === candidate.domain)
+        .map((review) => ({
+          purpose: review.purpose, ruleKey: review.ruleKey, reason: review.reason,
+          revision: review.revision, reviewedAt: review.reviewedAt, expiresAt: review.expiresAt,
+          state: candidateExceptionState(review, candidate, profile.id, now),
+          previousRevisions: review.history.length, omittedRevisions: review.historyOmitted,
+        })),
+    } as const;
+  });
+  return {
+    profileId: profile.id, profileName: profile.name, profileUpdatedAt: profile.updatedAt,
+    revision, comparedAt: now, maximum: MAX_CANDIDATE_OBSERVATIONS,
+    beforeRevision: before?.revision ?? null, afterRevision: after.revision, rows,
+    beforeHistoryOmitted: before?.historyOmitted ?? null,
+    beforeMatches: before ? rows.filter((row) => row.before?.matched).length : null,
+    afterMatches: rows.filter((row) => row.after.matched).length,
+    counts: {
+      added: rows.filter((row) => row.change === 'added').length,
+      removed: rows.filter((row) => row.change === 'removed').length,
+      unchanged_match: rows.filter((row) => row.change === 'unchanged_match').length,
+      unchanged_nonmatch: rows.filter((row) => row.change === 'unchanged_nonmatch').length,
+      no_baseline: rows.filter((row) => row.change === 'no_baseline').length,
+    },
+  };
+}
+export type KeywordCampaignComparison = ReturnType<typeof compareKeywordCampaignCorpus>;
 /** Preview and persistence consume the same detached, fully validated submission. */
 export function previewKeywordCampaignDraft(
   draft: KeywordCampaignDraft,
@@ -88,7 +158,7 @@ export function previewKeywordCampaignHosts(
   return preview.rows.map((row) => ({
     domain: row.domain,
     declaration: row.after,
-    ...matchBrandKeywordTerms(row.domain, campaign.positiveTerms, campaign.negativeTerms),
+    ...explainKeywordCampaignMatch(row.domain, campaign, now),
     active,
   }));
 }

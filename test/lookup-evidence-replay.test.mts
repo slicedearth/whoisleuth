@@ -100,7 +100,7 @@ function evidence(overrides: Record<string, unknown> = {}): Record<string, unkno
       registryComparison: {
         fields: [{ label: 'Statuses', status: 'conflict' }],
       },
-      registryInsights: {},
+      registryInsights: { version: 2 },
       registrarPublicationComparison: null,
     },
     ...overrides,

@@ -8,7 +8,7 @@
   const metrics = $derived([
     { label: 'Attention needed', value: summary.attentionNeeded, detail: 'Current Review Items not covered by a current expected, suppressed, or resolved decision.' },
     { label: 'Overdue', value: summary.overdue, detail: 'Review Items whose explicit due time has arrived.' },
-    { label: 'Changed since review', value: summary.changedSinceReview, detail: 'Current fingerprints differ from an explicit reviewed fingerprint, or an explicit review-due time has arrived.' },
+    { label: 'Needs re-review', value: summary.changedSinceReview, detail: 'Previous decisions need another review after evidence or eligibility changes, a due or expired decision, or an unavailable review clock.' },
     { label: 'Expired decisions', value: summary.expired, detail: 'Time-bounded expectations or suppressions that have returned to review.' },
     { label: 'Open Cases', value: summary.openCases, detail: 'Saved Cases whose Case status is not resolved.' },
     { label: 'Watchlists', value: summary.watchlists, detail: 'Saved change-tracking lists, whether or not they currently project a change.' },
@@ -44,7 +44,7 @@
           </li>
         {/each}
       </ol>
-      {#if summary.truncated}<p>Showing the first 20 items. Open the review inbox for the remaining admitted items.</p>{/if}
+      {#if summary.truncated}<p>Showing the first 20 items. Open the review inbox for the remaining review items.</p>{/if}
     {:else}
       <p>No current Review Item requires attention. Open Case and watchlist counts are shown separately because they do not imply a finding.</p>
     {/if}

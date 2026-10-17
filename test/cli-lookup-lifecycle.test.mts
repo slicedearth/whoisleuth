@@ -9,6 +9,7 @@ import {
   CLI_LOOKUP_SCHEMA_LIFECYCLE,
   CLI_LOOKUP_VERSION,
   PUBLIC_CLI_LOOKUP_VERSION,
+  HOMEPAGE_CLI_LOOKUP_VERSION,
   MAX_CLI_LOOKUP_BYTES,
 } from '../packages/contracts/cli-lookup.mts';
 import { SCHEMA_LIFECYCLE_REGISTRY } from '../packages/contracts/schema-lifecycle-registry.mts';
@@ -25,8 +26,10 @@ import {
 const FIXTURE_URLS = {
   legacy: new URL('./fixtures/cli-lookup-v1.json', import.meta.url),
   legacyAsn: new URL('./fixtures/cli-lookup-asn-v1.json', import.meta.url),
-  currentDomain: new URL('./fixtures/cli-lookup-v2.json', import.meta.url),
-  currentAsn: new URL('./fixtures/cli-lookup-asn-v2.json', import.meta.url),
+  homepageDomain: new URL('./fixtures/cli-lookup-v2.json', import.meta.url),
+  homepageAsn: new URL('./fixtures/cli-lookup-asn-v2.json', import.meta.url),
+  currentDomain: new URL('./fixtures/cli-lookup-v3.json', import.meta.url),
+  currentAsn: new URL('./fixtures/cli-lookup-asn-v3.json', import.meta.url),
 };
 const ENVELOPE_KEYS = new Set([
   'schema',
@@ -79,7 +82,8 @@ describe('CLI Lookup schema lifecycle', () => {
       })),
       [
         { version: 1, lifecycle: 'legacy', readable: true, emitted: false, exactKeys: false, extensionPolicy: 'preserve_bounded' },
-        { version: 2, lifecycle: 'current', readable: true, emitted: true, exactKeys: false, extensionPolicy: 'preserve_bounded' },
+        { version: 2, lifecycle: 'legacy', readable: true, emitted: false, exactKeys: false, extensionPolicy: 'preserve_bounded' },
+        { version: 3, lifecycle: 'current', readable: true, emitted: true, exactKeys: false, extensionPolicy: 'preserve_bounded' },
       ],
     );
     assert.deepEqual(
@@ -117,20 +121,24 @@ describe('CLI Lookup schema lifecycle', () => {
       },
       {
         id: 'cli-lookup-v2',
-        raw: await fixture(FIXTURE_URLS.currentDomain),
+        raw: await fixture(FIXTURE_URLS.homepageDomain),
         bytes: 4_410,
         digest: 'd98356ede18ddd12fde8cf10b0cfa43c42f6c9a09f1951e0605e1ec912892778',
-        version: CLI_LOOKUP_VERSION,
+        version: HOMEPAGE_CLI_LOOKUP_VERSION,
         type: 'domain',
       },
       {
         id: 'cli-lookup-asn-v2',
-        raw: await fixture(FIXTURE_URLS.currentAsn),
+        raw: await fixture(FIXTURE_URLS.homepageAsn),
         bytes: 714,
         digest: 'a3ee74df02050d6efd935784734c8c4cfd5fcb9833393de68935f5040faf2856',
-        version: CLI_LOOKUP_VERSION,
+        version: HOMEPAGE_CLI_LOOKUP_VERSION,
         type: 'asn',
       },
+      { id: 'cli-lookup-v3', raw: await fixture(FIXTURE_URLS.currentDomain), bytes: 7151,
+        digest: 'ee06201deb99ef1cdc5e79dc026a733fb14494593ee7ffdff3035b1fbc19d61e', version: CLI_LOOKUP_VERSION, type: 'domain' },
+      { id: 'cli-lookup-asn-v3', raw: await fixture(FIXTURE_URLS.currentAsn), bytes: 3506,
+        digest: 'c0a3dfe9d9c13d3f03079c6c76b33b353a6029b9a9893cbdb743b3f4d864c74e', version: CLI_LOOKUP_VERSION, type: 'asn' },
     ] as const;
 
     for (const item of cases) {
@@ -191,8 +199,28 @@ describe('CLI Lookup schema lifecycle', () => {
     assert.equal(serializeCliLookupDocument(asn), asnRaw);
   });
 
+  test('retains a validated receipt only under its saved-document epoch and rejects altered bindings', async () => {
+    const source = JSON.parse(await fixture(FIXTURE_URLS.currentDomain));
+    const before = JSON.stringify(source);
+    const parsed = parseCliLookupDocument(JSON.stringify(source));
+    assert.deepEqual(parsed.collectionReceipt, source.collectionReceipt);
+    assert.equal(JSON.stringify(source), before);
+    for (const version of [1, 2]) {
+      assert.throws(() => normalizeCliLookupDocument({ ...source, version }), /collection receipt requires/);
+    }
+    for (const receipt of [
+      null, { ...source.collectionReceipt, version: 2 },
+      { ...source.collectionReceipt, targetClass: 'asn', webSelection: 'not_applicable' },
+      { ...source.collectionReceipt, requestedDepth: 'fast' },
+      { ...source.collectionReceipt, privateTarget: 'private-sentinel' },
+    ]) assert.throws(() => normalizeCliLookupDocument({ ...source, collectionReceipt: receipt }));
+    for (const legacy of [FIXTURE_URLS.legacy, FIXTURE_URLS.homepageDomain]) {
+      assert.equal(parseCliLookupDocument(await fixture(legacy)).collectionReceipt, undefined);
+    }
+  });
+
   test('reads every emitted query type while retaining the domain-only compatibility facade', async () => {
-    const source = JSON.parse(await fixture(FIXTURE_URLS.currentAsn)) as UnknownRecord;
+    const source = JSON.parse(await fixture(FIXTURE_URLS.homepageAsn)) as UnknownRecord;
     for (const [query, classified] of [
       ['192.0.2.8', { type: 'ipv4' as const, value: '192.0.2.8' }],
       ['2001:db8::8', { type: 'ipv6' as const, value: '2001:db8::8' }],
@@ -212,7 +240,7 @@ describe('CLI Lookup schema lifecycle', () => {
   });
 
   test('preserves bounded extensions on a detached frozen snapshot without invoking accessors', async () => {
-    const domainFixtureForHostileInputs = await fixture(FIXTURE_URLS.currentDomain);
+    const domainFixtureForHostileInputs = await fixture(FIXTURE_URLS.homepageDomain);
     const source = JSON.parse(domainFixtureForHostileInputs) as UnknownRecord;
     source.extensionProbe = { values: ['first'] };
     const normalized = normalizeCliLookupDocument(source);
@@ -261,7 +289,7 @@ describe('CLI Lookup schema lifecycle', () => {
     assert.equal(resultGetterCalls, 0);
 
     const ordinaryResult = resultPortion(JSON.parse(
-      await fixture(FIXTURE_URLS.currentDomain),
+      await fixture(FIXTURE_URLS.homepageDomain),
     ) as UnknownRecord);
     ordinaryResult.extensionProbe = { values: ['first'] };
     ordinaryResult.collectionContext = { observerLabel: 'upstream-spoof' };
@@ -362,8 +390,8 @@ describe('CLI Lookup schema lifecycle', () => {
     assert.equal(tailGetterCalls, 0);
     assert.equal(largestStringifiedInput, 0);
     assert.throws(
-      () => normalizeCliLookupDocument({ ...source, version: 3 }),
-      /version 1 or 2/u,
+      () => normalizeCliLookupDocument({ ...source, version: CLI_LOOKUP_VERSION + 1 }),
+      /version 1 or 2 or 3/u,
     );
     assert.throws(
       () => normalizeCliLookupDocument({ ...source, type: 'asn' }),

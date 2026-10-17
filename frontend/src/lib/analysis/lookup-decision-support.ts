@@ -172,7 +172,7 @@ const SOURCE_DESCRIPTION: Readonly<Record<string, string>> = Object.freeze({
   dns: 'Point-in-time delegation, address, mail, and service records from bounded DNS collection.',
   'reverse-dns': 'Operator-published PTR context for an observed public address.',
   'network-context': 'Point-in-time IP registration and routing context for an observed endpoint.',
-  http: 'A bounded homepage request covering redirects, response metadata, and a capped body prefix.',
+  http: 'A bounded page request covering redirects, response metadata, and a capped body prefix.',
   tls: 'A point-in-time TLS handshake to one validated public address for the requested hostname.',
   'page-identity': 'Static identity, form, resource, and page-component signals from retained HTML.',
   technology: 'Curated technology signatures evaluated against already observed page evidence.',

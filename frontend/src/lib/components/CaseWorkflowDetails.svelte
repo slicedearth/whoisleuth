@@ -126,7 +126,7 @@
       try {
         committed = await editCase(record.id, patch);
       } catch (cause) {
-        onmessage(cause instanceof Error ? cause.message : 'Could not update the Case.');
+        onmessage(cause instanceof Error ? cause.message : 'Could not update the case.');
         return false;
       }
       try {
@@ -135,7 +135,7 @@
       } catch {
         try {
           oncommitted(committed.cases);
-          onmessage(`${success} The change was saved, but Cases could not be reread. The committed Case snapshot is shown locally; reload to retry.${prunedNote(committed.pruned)}`);
+          onmessage(`${success} The change was saved, but cases could not be reread. The committed case snapshot is shown locally; reload to retry.${prunedNote(committed.pruned)}`);
         } catch {
           onmessage(`${success} The change was saved, but this view could not be reconciled. Reload before recording another change.${prunedNote(committed.pruned)}`);
         }
@@ -150,7 +150,7 @@
 
   async function saveTypes() {
     const unchanged = typeDraft.capture();
-    if (!await persist({ caseTypes: selectedTypes, expectedCaseTypes: expectedTypes }, `Saved Case types for ${record.domain}.`) || !unchanged()) return;
+    if (!await persist({ caseTypes: selectedTypes, expectedCaseTypes: expectedTypes }, `Saved case types for ${record.domain}.`) || !unchanged()) return;
     typesDirty = false;
     typesOpen = false;
   }
@@ -158,7 +158,7 @@
   async function addIncidentTarget() {
     const unchanged = targetDraft.capture();
     if (incidentTargets.length >= MAX_CASE_INCIDENT_TARGETS) {
-      onmessage(`A Case can retain at most ${MAX_CASE_INCIDENT_TARGETS} active incident links. Resolve one before adding another.`);
+      onmessage(`A case can retain at most ${MAX_CASE_INCIDENT_TARGETS} active incident links. Remove one from active scope before adding another.`);
       return;
     }
     const url = normalizeCaseIncidentTargetUrl(targetUrl);
@@ -167,7 +167,7 @@
       return;
     }
     if (incidentTargets.some((target) => target.url === url)) {
-      onmessage('That exact incident URL is already active in this Case.');
+      onmessage('That exact incident URL is already active in this case.');
       return;
     }
     if (!await persist({ incidentTarget: url }, `Added an exact incident target to ${record.domain}.`) || !unchanged()) return;
@@ -177,7 +177,7 @@
   async function resolveIncidentTarget(id: string) {
     await persist(
       { incidentTargetResolution: id },
-      `Removed the incident target from the active reporting scope for ${record.domain}; its Case history remains retained.`,
+      `Removed the incident target from the active reporting scope for ${record.domain}; its case history remains retained.`,
       `incident-targets-${record.id}`,
     );
   }
@@ -216,9 +216,9 @@
   async function copyCaseNumber() {
     try {
       await navigator.clipboard.writeText(completeCaseNumber);
-      onmessage('Copied the complete Case number.');
+      onmessage('Copied the complete case number.');
     } catch {
-      onmessage('Clipboard access was unavailable. Select and copy the Case number manually.');
+      onmessage('Clipboard access was unavailable. Select and copy the case number manually.');
     }
   }
 
@@ -251,7 +251,7 @@
 
   {#if typeReadiness.rows.length}
     <section class="type-readiness" aria-labelledby={`type-readiness-title-${record.id}`}>
-      <div class="section-heading"><div><h5 id={`type-readiness-title-${record.id}`}>Evidence readiness by Case type</h5><p>Checks the retained Case record against the selected investigation types.</p></div><span>{typeReadiness.counts.missingRequired} required missing · {typeReadiness.counts.missingRecommended} recommended missing</span></div>
+      <div class="section-heading"><div><h5 id={`type-readiness-title-${record.id}`}>Evidence readiness by Case type</h5><p>Checks the retained case record against the selected investigation types.</p></div><span>{typeReadiness.counts.missingRequired} required missing · {typeReadiness.counts.missingRecommended} recommended missing</span></div>
       <ul>
         {#each typeReadiness.rows as row}
           <li data-state={row.state}>
@@ -265,7 +265,7 @@
   {/if}
 
   <section id={`incident-targets-${record.id}`} class="incident-targets" tabindex="-1" aria-labelledby={`incident-targets-title-${record.id}`}>
-    <div class="section-heading"><div><h5 id={`incident-targets-title-${record.id}`}>Incident links</h5><p>Retain exact social, platform or web content links that belong in this Case.</p></div><span>{incidentTargets.length} active{resolvedTargetCount ? ` · ${resolvedTargetCount} resolved` : ''}</span></div>
+    <div class="section-heading"><div><h5 id={`incident-targets-title-${record.id}`}>Incident links</h5><p>Retain exact social, platform or web content links that belong in this case.</p></div><span>{incidentTargets.length} active{resolvedTargetCount ? ` · ${resolvedTargetCount} resolved` : ''}</span></div>
     <form class="target-form" oninput={targetDraft.changed} onchange={targetDraft.changed} onsubmit={(event) => { event.preventDefault(); void addIncidentTarget(); }}>
       <label class="field">Exact HTTP(S) URL <small>Do not include credentials or private access tokens</small><input type="url" bind:value={targetUrl} maxlength={MAX_CASE_INCIDENT_TARGET_URL_LENGTH} placeholder="https://social.example/post/123" required></label>
       <button class="btn" type="submit" disabled={busy || !targetUrl.trim() || incidentTargets.length >= MAX_CASE_INCIDENT_TARGETS}>Add incident link</button>
@@ -273,11 +273,11 @@
     {#if incidentTargets.length}
       <ol class="target-list">
         {#each incidentTargets as target}
-          <li><div class="target-context"><a href={target.url} target="_blank" rel="noopener noreferrer">{target.url}<span class="sr-only"> (opens in a new tab)</span></a><label>Reporting platform for this incident<select aria-label={`Reporting platform for ${target.url}`} value={manualPlatforms[target.id] ?? ''} onchange={event => manualPlatforms[target.id] = event.currentTarget.value as IncidentPlatformId | ''}><option value="">Match the exact hostname</option>{#each INCIDENT_PLATFORMS as platform}<option value={platform.id}>{platform.label} · analyst-selected</option>{/each}</select></label></div><button class="btn small" type="button" disabled={busy} onclick={() => void resolveIncidentTarget(target.id)}>Resolve</button></li>
+          <li><div class="target-context"><a href={target.url} target="_blank" rel="noopener noreferrer">{target.url}<span class="sr-only"> (opens in a new tab)</span></a><label>Reporting platform for this incident<select aria-label={`Reporting platform for ${target.url}`} value={manualPlatforms[target.id] ?? ''} onchange={event => manualPlatforms[target.id] = event.currentTarget.value as IncidentPlatformId | ''}><option value="">Match the exact hostname</option>{#each INCIDENT_PLATFORMS as platform}<option value={platform.id}>{platform.label} · analyst-selected</option>{/each}</select></label></div><button class="btn small" type="button" disabled={busy} onclick={() => void resolveIncidentTarget(target.id)}>Remove from active scope</button></li>
         {/each}
       </ol>
     {:else}
-      <p class="empty">No exact incident link is active. The Case domain remains available for domain-level investigation.</p>
+      <p class="empty">No exact incident link is active. The case domain remains available for domain-level investigation.</p>
     {/if}
   </section>
 
@@ -285,7 +285,7 @@
 
   {#if routeGroups.length}
     <section class="reporting-routes" aria-labelledby={`reporting-routes-title-${record.id}`}>
-      <div class="section-heading"><div><h5 id={`reporting-routes-title-${record.id}`}>Official platform routes</h5><p>Matched from incident hostnames or your explicit platform choice and the selected Case types. A manual choice is not provider evidence, is not saved and does not contact anyone.</p></div></div>
+      <div class="section-heading"><div><h5 id={`reporting-routes-title-${record.id}`}>Official platform routes</h5><p>Matched from incident hostnames or your explicit platform choice and the selected case types. A manual choice is not provider evidence, is not saved and does not contact anyone.</p></div></div>
       <p class="empty">Retained catalogue: {catalogueHealth.state} · reviewed {catalogueHealth.reviewedAt.slice(0, 10)} to {catalogueHealth.latestReviewedAt.slice(0, 10)} · earliest review deadline {catalogueHealth.reviewAfter.slice(0, 10)}. {catalogueHealth.currentRouteCount} within review windows · {catalogueHealth.staleRouteCount} stale · {catalogueHealth.unavailableRouteCount} not yet reviewable. No live route check is performed.</p>
       <div class="route-groups">
         {#each routeGroups as group (JSON.stringify([record.id, group.key, group.targets]))}

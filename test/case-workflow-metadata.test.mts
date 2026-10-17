@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { createCase, updateCase, normalizeCaseStore, mergeCases, CASE_SCHEMA_VERSION, projectCaseForAudience } from '../packages/cases/case-model.mts';
 import { buildCliCasePack, verifyCliCasePack } from '../cli/case-pack.mts';
-import { caseIncidentTargets, caseNumber, caseResponseIncidentUrls, caseTypeIds, caseTypeSummary,
+import { caseTypeSummary } from '../packages/cases/case-type-presentation.mts';
+import { caseIncidentTargets, caseNumber, caseResponseIncidentUrls, caseTypeIds,
   buildCaseIncidentCoverage,
   formattedCaseNumber, normalizeCaseIncidentTargetUrl, readCaseWorkflowMetadata,
   MAX_CASE_INCIDENT_TARGETS, MAX_CASE_INCIDENT_TARGET_HISTORY } from '../packages/cases/case-workflow-metadata.mts';

@@ -16,7 +16,7 @@ async function openReview(page: Page, name: string) {
   const entry = page.locator('.context-entry'); await entry.locator(':scope > summary').click();
   const tasks: Record<string, string> = {
     'Connector and MCP configuration provenance': 'Review connector configuration',
-    'Platform objects and version continuity': 'Track platform objects',
+    'Platform objects and version continuity': 'Review platform continuity',
     'Storefront and official-site comparison': 'Compare a storefront',
     'Domain history and retired dependencies': 'Check domain history',
     'Incident sequence and reported actions': 'Trace an incident',
@@ -85,7 +85,7 @@ test('platform continuity reloads editable observations and keeps provider claim
   await expect(report).toContainText('Recorded observations: 2; distinct platform objects: 1');
   await expect(report).toContainText('provider reports resolved'); await expect(report).toContainText('not reproduced'); await expect(report).toContainText('still observed');
   await page.getByRole('button', { name: 'Check domain history', exact: true }).click();
-  await page.getByRole('button', { name: 'Track platform objects', exact: true }).click();
+  await page.getByRole('button', { name: 'Review platform continuity', exact: true }).click();
   await expect(report).toBeVisible();
   await report.getByRole('button', { name: 'Print review', exact: true }).click();
   const preview = page.getByRole('dialog', { name: 'Platform object continuity', exact: true });
@@ -200,8 +200,16 @@ test('domain-history scopes survive report download, print, retention and relate
   await expect(page).toHaveURL(/\/lookup\?q=login.example.test&case=/u);
 });
 
-test('domain-history declarations remain qualified and an empty Case does not claim unchanged evidence', async ({ page }) => {
+test('domain-history declarations remain qualified and an empty Case does not claim unchanged evidence', async ({ page }, testInfo) => {
   const review = await openReview(page, 'Domain history and retired dependencies');
+  const before = await readBrowserLocalCollection(page, 'cases');
+  const requests: string[] = []; page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/')) requests.push(request.url()); });
+  const checklist = review.getByText('Retirement review checklist', { exact: true });
+  await checklist.focus(); await page.keyboard.press('Enter');
+  await expect(review.getByText(/^DNS aliases:/)).toBeVisible();
+  await expect(review.getByText(/^Recovery email:/)).toBeVisible();
+  await expect(review.getByText(/^Integration references:/)).toBeVisible();
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before); expect(await retainedJson(page)).toEqual([]);
   await review.getByRole('button', { name: 'Review retained history', exact: true }).click();
   const report = review.getByRole('region', { name: 'Domain history and retired dependencies', exact: true });
   await expect(report).toContainText('Retained snapshots: 0'); await expect(report).toContainText('Some comparison evidence is unavailable');
@@ -209,11 +217,46 @@ test('domain-history declarations remain qualified and an empty Case does not cl
   await review.getByRole('checkbox', { name: 'I own or am authorised to review the affected assets.', exact: true }).check();
   await review.getByLabel('Owned asset hostname').fill('www.example.test'); await review.getByLabel('Dependency hostname').fill('retired.example.test');
   await review.getByLabel('Retirement time (local)').fill('2026-09-20T10:00'); await review.getByLabel('Source or change reference', { exact: true }).fill('Owned asset register');
-  await review.getByRole('button', { name: 'Add retired dependency' }).click(); await review.getByRole('button', { name: 'Review retained history', exact: true }).click();
+  await review.getByRole('button', { name: 'Add retired dependency' }).click();
+  const declarations = review.getByRole('list', { name: 'Retired dependency declarations', exact: true });
+  await expect(declarations).toContainText('Declared web dependency · Owned asset register');
+  await expect(declarations.locator('time')).toHaveAttribute('datetime', /2026-09-20T/u);
+  await review.getByRole('button', { name: 'Review retained history', exact: true }).click();
   await expect(report).toContainText('Declared retired web dependency · reported'); await expect(report).toContainText('www.example.test depended on retired.example.test');
+  await expect(report.getByText(/^DNS aliases:/)).toBeVisible();
+  expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before);
   await report.getByRole('button', { name: 'Save review in Case' }).click(); await expect(report.getByRole('status')).toContainText('Review saved');
-  expect(await retainedJson(page)).toHaveLength(1);
-  for (const theme of ['light', 'dark'] as const) { await useTheme(page, theme); for (const width of [320, 390, 1024, 1280]) { await page.setViewportSize({ width, height: 900 }); await expectNoHorizontalOverflow(page); } }
+  const files = await retainedJson(page); expect(files).toHaveLength(1);
+  const saved = JSON.parse(files[0]!);
+  expect(saved.observations.map((row: { state: string }) => row.state)).toEqual(['reported']);
+  expect(saved.nextSteps.filter((step: string) => /^(DNS aliases|Recovery email|Integration references):/u.test(step))).toHaveLength(3);
+  expect(requests).toEqual([]);
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 1024, 1280, 2560]) {
+      await page.setViewportSize({ width, height: 900 }); await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled() && [320, 1280].includes(width)) {
+        await checklist.scrollIntoViewIfNeeded(); await page.screenshot({ path: testInfo.outputPath(`retirement-${theme}-${width}.png`) });
+        if (width === 320) await checklist.locator('..').screenshot({ path: testInfo.outputPath(`retirement-guide-${theme}.png`) });
+        await declarations.screenshot({ path: testInfo.outputPath(`retirement-declarations-${theme}-${width}.png`) });
+      }
+    }
+    // Re-enter the declaration using the keyboard before auditing its controls.
+    // Optional screenshots must not determine the accessibility scan position.
+    const removal = review.getByRole('button', { name: 'Remove dependency 1', exact: true });
+    await review.getByText('Declare a registration-lifecycle review boundary', { exact: true }).focus();
+    await page.keyboard.press('Shift+Tab');
+    await expect(removal).toBeFocused(); await expect(removal).toBeInViewport({ ratio: 1 });
+    const caseSections = page.getByRole('navigation', { name: 'Case sections', exact: true });
+    await expect(caseSections).toBeVisible();
+    await expect.poll(async () => {
+      const [control, navigation] = await Promise.all([removal.boundingBox(), caseSections.boundingBox()]);
+      if (!control || !navigation) throw new Error('Case control geometry is unavailable.');
+      return control.y - (navigation.y + navigation.height);
+    }).toBeGreaterThanOrEqual(0);
+    if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`retirement-focused-${theme}.png`) });
+    expect((await new AxeBuilder({ page }).include('.context-entry').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+  }
 });
 
 test('incident sequence keeps source provenance, unknown times and chosen order through a Case save', async ({ page }, testInfo) => {
@@ -251,7 +294,8 @@ test('incident sequence keeps source provenance, unknown times and chosen order 
         await expect(control).toBeFocused();
         await expect.poll(async () => {
           const box = await control.boundingBox(), nav = await navigation.boundingBox();
-          return Boolean(box && nav && box.height >= 24 && box.y >= nav.y + nav.height && box.y + box.height <= 900);
+          // Native scrolling uses whole CSS pixels; layout edges can be fractional.
+          return Boolean(box && nav && box.height >= 24 && box.y >= nav.y + nav.height && Math.round(box.y + box.height) <= 900);
         }).toBe(true);
       }
     }

@@ -59,7 +59,7 @@
       token='';
       if (!response.ok) throw new Error('Invalid launch link.');
       window.location.replace('/dashboard');
-    } catch { error='This launch link is no longer valid. Use the link shown by the running local application.'; }
+    } catch { error='The local session could not be opened. Check that the application is running, then use its current private launch link.'; }
     finally { token=''; checking=false; openingLocal=false; }
   }
 

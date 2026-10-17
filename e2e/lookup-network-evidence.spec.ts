@@ -11,7 +11,11 @@ import {
 import { TLS_PROFILE_VERSION } from '../lib/lookup-network-evidence-bounds.mts';
 import { analyzeWebsiteTechnology } from '../lib/website-technology.mts';
 import { analyzeWebsiteSecurityPosture } from '../lib/website-security-posture.mts';
-import { expectLookupTargetAligned } from './lookup-design-fixtures';
+import { expectLookupTargetAligned, sectionedLookupFixture } from './lookup-design-fixtures';
+import { buildHttpObservation, failedHttpObservation } from '../lib/http-intelligence.mts';
+import { createLookupViewModel, parseLookupHttpResponse } from '../lib/lookup-response-contract.mts';
+import { buildTlsObservation } from '../lib/tls-intelligence.mts';
+import { MAX_WHOIS_QUERY_HOPS } from '../lib/whois-contracts.mts';
 
 // Lookup fixtures use injected protocol responses or locally rejected inputs. The shared
 // browser and server guards prevent live collection.
@@ -25,6 +29,90 @@ test.beforeEach(async ({ page }) => {
     }));
   });
   await page.goto('/lookup');
+});
+
+test('source scope keeps completed identities separate from query drafts and replacement results', async ({ page }, testInfo) => {
+  let requests = 0;
+  const base = sectionedLookupFixture('example.test');
+  const http = { ...base.availability.http,
+    requestUrl: 'https://portal.example.test/selected', finalUrl: 'https://landing.example.test/destination',
+    redirects: [], redirectCount: 0,
+  };
+  const dns = { status: 'partial', observedAt: '2026-01-01T05:00:00.000Z',
+    records: { a: [], aaaa: ['2001:db8::1'], mx: [], dmarc: [] },
+    diagnostics: { a: { status: 'not_found', detail: 'no_data' }, aaaa: { status: 'success', detail: 'records' },
+      mx: { status: 'error', detail: 'timeout' } },
+  };
+  const fixture = { ...base, query: 'portal.example.test', inputHostname: 'portal.example.test', isSubdomain: true,
+    diagnostics: { ...base.diagnostics, whois: { ...base.diagnostics.whois, status: 'partial' } },
+    availability: { ...base.availability, observationHostname: 'portal.example.test', webObservationMode: 'selected_url', http, dns,
+      tls: buildTlsObservation({ sniHost: 'portal.example.test', peerCertificate: { subjectaltname: 'DNS:*.example.test' } },
+        { observedAt: '2026-01-01T07:00:00.000Z', now: new Date('2026-01-01T07:00:00.000Z') }),
+    },
+    rdap: { ...base.rdap, parsed: { domain: 'registry.example.test', entitiesByRole: {} }, fetchedAt: '2026-01-01T01:00:00.000Z' },
+    whois: { parsed: { domainName: 'whois.example.test' }, chain: [
+      { server: 'whois.registry.example.test', queriedAt: '2026-01-01T03:00:00.000Z' },
+      { server: 'whois.registrar.example.test', queriedAt: '2026-01-01T04:00:00.000Z' },
+      ...Array.from({ length: MAX_WHOIS_QUERY_HOPS - 2 }, (_, index) => ({ server: `whois.hop${index + 3}.example.test` })),
+      { server: 'whois.unissued.example.test', queryProfile: 'not-issued' },
+    ] },
+  };
+  const admitted = parseLookupHttpResponse(fixture);
+  expect(admitted.ok).toBe(true);
+  if (!admitted.ok) throw new Error('The synthetic Lookup must be admitted before exercising the view.');
+  expect(createLookupViewModel(admitted.value).tlsAltNames.dnsNames).toEqual(['*.example.test']);
+  await page.route('**/api/lookup?*', async route => {
+    requests += 1;
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(fixture) });
+  });
+  await page.locator('#query').fill('portal.example.test');
+  await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
+  await expandLookupFamilies(page);
+  const scope = page.locator('details').filter({ has: page.locator(':scope > summary', { hasText: 'What each source describes' }) });
+  const summary = scope.locator(':scope > summary');
+  await expect(summary).toHaveCount(1);
+  await summary.focus();
+  await page.keyboard.press('Enter');
+  await expect(scope).toHaveAttribute('open', '');
+  const value = (source: string, label: string) => scope.getByRole('region', { name: `${source} scope`, exact: true })
+    .locator('dl > div').filter({ has: page.getByText(label, { exact: true }) }).getByRole('definition');
+  await expect(value('Registry RDAP', 'Returned domain')).toHaveText('registry.example.test');
+  await expect(value('WHOIS', 'Returned domain')).toHaveText('whois.example.test');
+  await expect(value('WHOIS', 'Hop 2 · whois.registrar.example.test')).toContainText('04:00:00 UTC');
+  await expect(value('WHOIS', 'Hop 3 · whois.hop3.example.test')).toHaveText('Query time not retained');
+  await expect(value('WHOIS', `Hop ${MAX_WHOIS_QUERY_HOPS + 1} · whois.unissued.example.test`)).toHaveText('Not queried');
+  await expect(value('DNS', 'Collection hostname')).toHaveText('portal.example.test');
+  await expect(value('DNS', 'A outcome')).toHaveText('No data for this record type (NODATA)');
+  await expect(value('DNS', 'AAAA outcome')).toHaveText('Records returned');
+  await expect(value('DNS', 'MX outcome')).toHaveText('DNS query timed out');
+  await expect(value('DNS', 'TXT (DMARC) outcome')).toHaveText('Exact outcome not retained');
+  await expect(value('HTTP', 'Final URL')).toHaveText('https://landing.example.test/destination');
+  await expect(value('TLS connection and certificate', 'Certificate DNS names')).toHaveText('*.example.test');
+
+  await page.locator('#query').fill('https://different.example.test/private-draft?secret=sentinel#private');
+  await expect(value('DNS', 'Collection hostname')).toHaveText('portal.example.test');
+  await expect(scope).not.toContainText('private-draft');
+  await expect(scope).not.toContainText('sentinel');
+  for (const viewport of [{ width: 1280, height: 720 }, { width: 320, height: 700 }]) {
+    await page.setViewportSize(viewport);
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await scope.scrollIntoViewIfNeeded();
+      await expectNoHorizontalOverflow(page);
+      await expect(value('HTTP', 'Final URL')).toBeVisible();
+      if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`source-scope-${viewport.width}-${theme}.png`) });
+    }
+  }
+  expect(requests).toBe(1);
+  Object.assign(http, { status: 'error', complete: false, finalUrl: null, response: null });
+  expect(parseLookupHttpResponse(fixture).ok).toBe(true);
+  await page.locator('#query').fill('portal.example.test');
+  await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
+  await expandLookupFamilies(page);
+  if (await scope.getAttribute('open') === null) await summary.click();
+  await expect(value('HTTP', 'Final URL')).toHaveText('Not retained');
+  await expect(scope).not.toContainText('https://landing.example.test/destination');
+  expect(requests).toBe(2);
 });
 
 test('DNS review separates IPv4 negative answers from working IPv6 and failed queries', async ({ page }, testInfo) => {
@@ -380,6 +468,64 @@ test('DNS rehearsal retains null MX and exposes incomplete intent in the view an
   }
 });
 
+test('HTTP scope separates failed requests from retained final destinations', async ({ page }, testInfo) => {
+  const requested = 'https://scope.example.test/';
+  const final = 'https://destination.example.test/a-retained-path-with-several-components';
+  const observedAt = '2026-09-01T00:00:00.000Z';
+  let failed = false;
+  let requests = 0;
+  await page.route('**/api/lookup?*', route => {
+    requests += 1;
+    expect(new URL(route.request().url()).searchParams.get('q')).toBe('scope.example.test');
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      query: 'scope.example.test', type: 'domain', inputHostname: 'scope.example.test', registrableDomain: 'example.test', isSubdomain: true,
+      rdap: { parsed: {} }, whois: { parsed: {}, chain: [] },
+      diagnostics: { rdap: { status: 'success' }, whois: { status: 'skipped' } },
+      availability: {
+        state: 'registered', domain: 'example.test', observationHostname: 'scope.example.test',
+        http: failed
+          ? failedHttpObservation([{ url: requested, error: 'Fixture timeout' }], { observedAt })
+          : buildHttpObservation({ requestedUrl: requested, finalUrl: final, response: new Response('', { status: 200 }) }, { observedAt }),
+      },
+    }) });
+  });
+  for (const shouldFail of [false, true]) {
+    failed = shouldFail;
+    await page.locator('#query').fill('https://scope.example.test/private-input?token=input-sentinel');
+    await page.getByRole('radio', { name: /Deep/u }).check();
+    await Promise.all([
+      page.waitForResponse(response => new URL(response.url()).pathname === '/api/lookup'),
+      page.getByRole('button', { name: 'Run lookup', exact: true }).click(),
+    ]);
+    await expect(page.getByRole('heading', { name: 'scope.example.test', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Run lookup', exact: true })).toBeEnabled();
+    const expand = page.getByRole('button', { name: 'Expand details: Web and DNS evidence' });
+    if (await expand.isVisible()) await expand.click();
+    const card = page.locator('.http-card');
+    await expect(card.locator(':scope > summary .evidence-status')).toHaveText(shouldFail ? 'error' : 'success');
+    await card.locator(':scope > summary').focus();
+    if (await card.getAttribute('open') === null) await card.locator(':scope > summary').press('Enter');
+    const rows = card.locator('.http-grid > article');
+    await expect(rows.filter({ has: page.getByText('Requested URL', { exact: true }) }).locator('strong')).toHaveText(requested);
+    await expect(rows.filter({ has: page.getByText('Final URL', { exact: true }) }).locator('strong')).toHaveText(shouldFail ? 'Not retained' : final);
+    await expect(card).not.toContainText('private-input');
+    await expect(card).not.toContainText('input-sentinel');
+    if (shouldFail) await expect(card).not.toContainText(final);
+    for (const width of [320, 1280]) for (const theme of ['light', 'dark'] as const) {
+      await page.setViewportSize({ width, height: 800 });
+      await useTheme(page, theme);
+      await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) {
+        await card.locator(':scope > summary').focus();
+        await rows.filter({ has: page.getByText('Final URL', { exact: true }) })
+          .evaluate(element => element.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.screenshot({ path: testInfo.outputPath(`http-scope-${shouldFail ? 'failed' : 'complete'}-${width}-${theme}.png`) });
+      }
+    }
+  }
+  expect(requests).toBe(2);
+});
+
 test('HTTP evidence presents bounded redirect provenance and response metadata', async ({ page }) => {
   test.slow();
   await page.evaluate((profileVersion) => {
@@ -645,7 +791,7 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   await page.getByRole('radio', { name: /Deep/u }).check();
   await page.getByRole('button', { name: 'Run lookup' }).click();
   await expect(page.getByRole('heading', { name: 'http-evidence.test' })).toBeVisible();
-  await holdBrowserLocalReads(page, 8_000, '.family-web button.family-summary');
+  await holdBrowserLocalReads(page, 8_000, '.family-web .family-summary > button');
   const snapshots = page.locator('.snapshot-manager');
   await expect(snapshots.getByRole('button', { name: 'Save current snapshot' })).toBeDisabled();
   await expect(snapshots).toHaveAttribute('aria-busy', 'true');
@@ -749,7 +895,7 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   await publication.locator(':scope > summary').press('Enter');
   await expect(publication.getByText('index, nofollow', { exact: true })).toBeVisible();
   await expect(publication.getByText(/3 images · missing 1 · empty 1 · non-empty 1/u)).toBeVisible();
-  await expect(publication.getByText(/Static homepage declarations and candidates do not prove indexing/u)).toBeVisible();
+  await expect(publication.getByText(/Static page declarations and candidates do not prove indexing/u)).toBeVisible();
   await expect(publication).not.toContainText('private-twitter-title');
 
   const roleBehaviorCard = page.locator('details').filter({ has: page.getByRole('heading', { name: 'Page role and client behaviour' }) });
@@ -1072,12 +1218,13 @@ test('completed technology analysis distinguishes an unmatched catalogue from so
   await expectNoHorizontalOverflow(page);
 });
 
-test('TLS evidence presents one-connection certificate evidence without narrow-width overflow', async ({ page }) => {
+test('TLS evidence presents one-connection certificate evidence without narrow-width overflow', async ({ page }, testInfo) => {
   await page.route('**/api/lookup?*', async (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
     body: JSON.stringify({
       query: 'tls-evidence.test', type: 'domain', registrableDomain: 'tls-evidence.test',
+      fetchedAt: '2026-07-20T00:00:00.000Z',
       availability: {
         state: 'registered', confidence: 'high', domain: 'tls-evidence.test',
         tls: {
@@ -1133,6 +1280,10 @@ test('TLS evidence presents one-connection certificate evidence without narrow-w
   await expect(card.getByText('192.0.2.34', { exact: true })).toBeVisible();
   await expect(card.getByText('TLSv1.3', { exact: true })).toBeVisible();
   await expect(card.getByText('Not authorised', { exact: true })).toBeVisible();
+  await expect(card.getByText('Valid at observation', { exact: true })).toBeVisible();
+  await expect(page.locator('.result-context time')).toHaveAttribute('datetime', '2026-07-20T00:00:00.000Z');
+  await expect(card.getByRole('img', { name: /Certificate validity from/u })).toHaveAttribute('aria-label',
+    'Certificate validity from 2026-07-01T00:00:00.000Z to 2026-08-01T00:00:00.000Z, observed 2026-07-13T00:00:00.000Z');
   await expect(card.getByText('Certificate not authorised', { exact: true })).toBeVisible();
   const leafCertificate = card.locator('.tls-detail').nth(0);
   await leafCertificate.locator('summary').click();
@@ -1154,8 +1305,19 @@ test('TLS evidence presents one-connection certificate evidence without narrow-w
   await expect(policyCard.getByText('CAA collection was incomplete, unavailable, or truncated, so no current-policy comparison is available.', { exact: true })).toBeVisible();
   await expect(policyCard.getByText('Partial', { exact: true })).toBeVisible();
 
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expectNoHorizontalOverflow(page);
+  for (const theme of ['dark', 'light'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 1280, 2560]) {
+      await page.setViewportSize({ width, height: width === 320 ? 844 : 900 });
+      await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) {
+        await card.evaluate(element => {
+          window.scrollTo(0, element.getBoundingClientRect().top + window.scrollY - 180);
+        });
+        await page.screenshot({ path: testInfo.outputPath(`tls-${theme}-${width}.png`) });
+      }
+    }
+  }
 });
 
 test('IP results use network-specific RDAP labels instead of domain fields', async ({ page }) => {

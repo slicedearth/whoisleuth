@@ -273,7 +273,7 @@ export const PUBLIC_CLI_INDEX = {
     },
     {
       "id": "case",
-      "summary": "Review and update ordinary local Case files",
+      "summary": "Review and update ordinary local case files",
       "group": "respond",
       "common": true,
       "mode": "offline"

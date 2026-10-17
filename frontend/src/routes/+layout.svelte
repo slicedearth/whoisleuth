@@ -15,6 +15,6 @@
   :global(button:disabled){cursor:not-allowed;opacity:.58}
   @media(prefers-reduced-motion:reduce){
     :global(html){scroll-behavior:auto}
-    :global(*),:global(*::before),:global(*::after){scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}
+    :global(*),:global(*::before),:global(*::after){scroll-behavior:auto!important;transition-duration:0s!important;animation-duration:.01ms!important;animation-iteration-count:1!important}
   }
 </style>

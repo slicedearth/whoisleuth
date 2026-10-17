@@ -74,8 +74,8 @@
     );
     message =
       page.state === 'gap'
-        ? 'Gap acknowledged in the downloaded progress cursor. No missing membership was inferred.'
-        : 'Progress after this reviewed page downloaded. No browser cursor or candidates were saved automatically.';
+        ? 'Prepared a progress cursor recording this gap acknowledgement. Confirm the download; no missing membership was inferred.'
+        : 'Prepared a progress cursor after this reviewed page. Confirm the download; no browser cursor or candidates were saved automatically.';
   }
   async function cancel() {
     controller.cancel();
@@ -142,7 +142,7 @@
           advancing. Existing retained and dismissed candidates are not removed.</p
         >
       {:else}<p
-          >All pages in this reviewed retained range are complete, not a claim of complete source
+          >No further pages remain in this retained range. This does not establish complete source
           coverage. Check explicitly for newer retained editions when ready.</p
         >{/if}
       <details

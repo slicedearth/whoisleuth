@@ -9,6 +9,7 @@ import {
   LOCAL_DATA_OPERATION_TIMEOUT_MS, MAX_LOCAL_DATA_OPERATION_TIMEOUT_MS,
   MAX_LOCAL_DATA_CODEC_ID_LENGTH, MAX_LOCAL_DATA_COLLECTIONS,
   MAX_LOCAL_DATA_RECORD_ID_LENGTH, MAX_LOCAL_DATA_UPDATE_ATTEMPTS,
+  LOCAL_DATA_WORKER_MINIMUM_BYTES,
   type BrowserStorage, type BrowserLocalDataCodec, type BrowserLocalDataCommitListener,
   type BrowserLocalDataSnapshotDecoder, type BrowserLocalDataPreparer,
   type BrowserLocalDataInitializationOptions, type BrowserLocalDataInitialization,
@@ -263,7 +264,7 @@ export class BrowserLocalDataProvider {
       requirePendingLocalDataUpdate(options.signal);
       this.#requireConfirmedCommitState();
       if (!files.size && before !== null && definition.serialize(document) === before) return updated.result;
-      const prepared = await this.#prepare(definition, document, 'application', snapshot.manifest.legacyDigest, options);
+      const prepared = await this.#prepare(definition, document, 'application', snapshot.manifest.legacyDigest, options, snapshot.manifest.serializedBytes);
       const binaries = await this.#binaryChanges(definition, snapshot.document, document, files);
       requirePendingLocalDataUpdate(options.signal);
       this.#requireConfirmedCommitState();
@@ -338,7 +339,7 @@ export class BrowserLocalDataProvider {
         const document = definition.normalize(updated.documents.get(definition.id));
         const files = filesByCollection.get(definition.id)!;
         prepared.push(!files.size && before[index] !== null && definition.serialize(document) === before[index]
-          ? null : await this.#prepare(definition, document, 'application', snapshot.manifest.legacyDigest));
+          ? null : await this.#prepare(definition, document, 'application', snapshot.manifest.legacyDigest, {}, snapshot.manifest.serializedBytes));
         binaries.push(await this.#binaryChanges(definition, snapshot.document, document, files));
       }
       const expectedManifests = new Map<string, ExpectedManifest>();
@@ -574,8 +575,13 @@ export class BrowserLocalDataProvider {
     source: BrowserLocalCollectionManifest['source'],
     legacyDigest: string | null,
     options: BrowserLocalDataUpdateOptions = {},
+    retainedBytes = 0,
   ): Promise<PreparedCollection> {
-    const prepare = options.preparation === 'background' ? this.#prepareInBackground : prepareLocalDataContent;
+    // The decoded snapshot's verified size selects scheduling, never validity.
+    // Keep small and keyed/custom-codec updates local; no key crosses a worker.
+    const background = options.preparation === 'background'
+      || (this.codec === plaintextJsonCodec && retainedBytes >= LOCAL_DATA_WORKER_MINIMUM_BYTES);
+    const prepare = background ? this.#prepareInBackground : prepareLocalDataContent;
     const content = await prepare(definition, input, this.codec, options);
     return Object.freeze({
       ...content,

@@ -7,9 +7,13 @@ import { appendCaseAction, appendCaseActionTransition } from '../../../../packag
 import { countEvidenceLinkedCaseDecisions } from '../../../../packages/cases/case-response-model.mts';
 import { buildCaseResponseReviewInputs } from '../../../../packages/cases/case-response-packet.mts';
 import { caseIncidentTargets } from '../../../../packages/cases/case-workflow-metadata.mts';
+import { caseResponseObjectChoices } from '../../../../packages/cases/case-response-object.mts';
 import { caseRecheckAnswerContext } from '../../../../packages/cases/case-recheck-model.mts';
 import { PLATFORM_REPORTING_ROUTES } from '../../../../packages/cases/platform-reporting-routes.mts';
 import { readIncidentStages, reviewIncidentSequence } from '../../../../packages/investigation/incident-sequence-review.mts';
+import type { CaptureManifestContext } from '../../../../packages/interchange/web-capture-import.mts';
+import type { CaseHandoffCopy } from '../../../../packages/cases/case-handoff-comparison.mts';
+import { readCaseAttachment, reviewCaseImageDerivation } from '../../../../packages/cases/case-attachment-model.mts';
 
 export const CASE_PRACTICE_OBSERVED_AT = '2026-09-01T12:00:00.000Z';
 export const CASE_PRACTICE_LATER_AT = '2026-09-02T12:00:00.000Z';
@@ -46,6 +50,55 @@ export async function previewCasePracticeContainment(record: CaseRecord, audienc
     evidencePinIds: includeSupportingPin ? [source.id] : [] }, CASE_PRACTICE_JOURNEY_AT);
 }
 
+/** Two detached draft selections, not changes to practice or its simulated deliveries. */
+export async function previewCasePracticePackets(supplied: CaseRecord, signal?: AbortSignal): Promise<readonly [CaseHandoffCopy, CaseHandoffCopy]> {
+  signal?.throwIfAborted();
+  const source = structuredClone(supplied);
+  const page = source.evidencePins[0]?.responseObject, advertisement = source.evidencePins[3]?.responseObject;
+  const urls = casePracticeDefinition('credential-form').urls;
+  if (source.domain !== 'case-practice.example' || page?.kind !== 'page' || page.identifier !== urls[0]
+    || advertisement?.kind !== 'advertisement' || advertisement.identifier !== urls[1] || !source.evidencePins[2]) {
+    throw new TypeError('Use the supplied offer-page practice record.');
+  }
+  const [{ buildCaseResponsePacket }, { readCaseHandoffCopy }] = await Promise.all([
+    import('../../../../packages/cases/case-response-packet.mts'),
+    import('../../../../packages/cases/case-handoff-comparison.mts'),
+  ]);
+  signal?.throwIfAborted();
+  let detached = updateCase([source], source.id, { action: {
+    type: 'internal_review', recipient: 'earlier-desk@example.invalid',
+    contactSource: 'Fictional internal comparison only', routeObservedAt: CASE_PRACTICE_OBSERVED_AT,
+    responseObjects: [page], contactLimitations: ['Reserved fictional recipient. No delivery or authority is claimed.'],
+  } }, CASE_PRACTICE_JOURNEY_AT).record;
+  const actionId = detached.actions.at(-1)!.id;
+  const common = {
+    profile: 'internal_soc', actionId, category: 'Fictional review comparison', affectedParty: 'Fictional example service',
+    observedHarm: 'Supplied example only; no live observation, legal authority or external use is claimed.',
+    observedAt: CASE_PRACTICE_OBSERVED_AT,
+  };
+  async function readDraft(record: CaseRecord, url: string, selectedEvidencePinIds: string[]) {
+    signal?.throwIfAborted();
+    const packet = (await buildCaseResponsePacket(record, { ...common, abusiveUrls: [url], selectedEvidencePinIds }, CASE_PRACTICE_JOURNEY_AT)).json;
+    signal?.throwIfAborted();
+    const bytes = new TextEncoder().encode(JSON.stringify(packet));
+    try {
+      const copy = await readCaseHandoffCopy(bytes);
+      signal?.throwIfAborted();
+      return copy;
+    } finally { bytes.fill(0); }
+  }
+  const baseline = await readDraft(detached, page.identifier, [source.evidencePins[0]!.id, source.evidencePins[2]!.id]);
+  detached = updateCase([detached], detached.id, { actionUpdate: {
+    id: actionId, recipient: 'later-desk@example.invalid', responseObjects: [advertisement],
+  } }, CASE_PRACTICE_JOURNEY_AT).record;
+  const comparison = await readDraft(detached, advertisement.identifier, [source.evidencePins[3]!.id]);
+  return [baseline, comparison];
+}
+
+export type CasePracticeInference = Readonly<{
+  statements: readonly Readonly<{ text: string; exceedsEvidence: boolean; explanation: string }>[];
+}>;
+
 export const CASE_PRACTICE_SCENARIOS = [
   { id: 'credential-form', title: 'An ordinary-looking sign-in page',
     observation: 'A supplied lookalike page repeats a reference page’s original offer text, without a logo or brand name, then asks for an email address and password. The supplied form action points to https://case-practice.example/collect; no credentials were entered.',
@@ -73,12 +126,20 @@ export const CASE_PRACTICE_SCENARIOS = [
     inadequate: '“New domain plus MX proves phishing.” Neither signal shows a sent message or a credential lure.' },
   { id: 'related-hosts', title: 'Related hosts with different affected identities',
     observation: 'Supplied captures show accounts.parent.example/service-a and jobs.parent.example/service-b making different identity claims. They share a parent domain and an edge address; each affected identity and page is distinct.',
-    assessment: 'Retain exact incident links and separate Brand Profile associations or related Cases. Shared infrastructure is a lead, not common ownership or one universal incident.',
+    assessment: 'Retain exact incident links and separate brand profile associations or related cases. Shared infrastructure is a lead, not common ownership or one universal incident.',
     recheck: 'The service-a recheck failed. It says nothing about service-b.',
     question: 'Is the service-a claim still observable?', conditions: 'Exact service-a page and claimed identity, not any sibling hostname.',
     source: 'Fictional separately scoped page captures', urls: ['https://accounts.parent.example/service-a', 'https://jobs.parent.example/service-b'], routes: [],
     adequate: 'List each host, affected identity, observation and source link separately, with the shared-parent relationship qualified.',
-    inadequate: '“One IP, one actor, one brand.” This collapses distinct incidents and overstates infrastructure evidence.' },
+    inadequate: '“One IP, one actor, one brand.” This collapses distinct incidents and overstates infrastructure evidence.',
+    inference: { statements: [
+      { text: 'The supplied captures show two different affected identities.', exceedsEvidence: false,
+        explanation: 'This describes the two attributed page accounts without turning a shared parent or address into common control.' },
+      { text: 'The shared parent and edge address prove one operator controls both pages.', exceedsEvidence: true,
+        explanation: 'Shared infrastructure is a lead, not proof of common control. Each page and affected identity still needs its own evidence.' },
+      { text: 'The failed service-a recheck does not establish the later state of service-b.', exceedsEvidence: false,
+        explanation: 'The incomplete attempt concerns service-a. It supplies neither a later observation nor a removal finding for service-b.' },
+    ] } satisfies CasePracticeInference },
   { id: 'fake-shop', title: 'A storefront promise and copied listing',
     observation: 'A supplied shop listing uses copied product prose and an unusually strong delivery promise. A customer alleges non-delivery; no purchase, counterfeit inspection or test payment occurred.',
     assessment: 'Keep observed listing content separate from the customer allegation. Fraud, copyright, trademark and trade-dress grounds need different evidence and authority.',
@@ -149,7 +210,7 @@ export const CASE_PRACTICE_SCENARIOS = [
     recheck: 'The later capture failed; that gap belongs in the amendment, not in an invented complete observation.',
     question: 'Is a complete later exact-page observation available?', conditions: 'Exact requested page and time scope; do not claim unavailable evidence was supplied.',
     source: 'Fictional recipient request and delivery record', urls: ['https://case-practice.example/offer'], routes: [],
-    adequate: 'Use Requested evidence in a real Case to select retained references, state limitations and create a separately reviewed drafting amendment.',
+    adequate: 'Use Requested evidence in a real case to select retained references, state limitations and create a separately reviewed drafting amendment.',
     inadequate: '“Overwrite the first packet with the latest evidence.” This loses the original recipient-material lineage.' },
   { id: 'restored-dispute', title: 'A disputed report and a restored page',
     observation: 'A fictional provider reports that content was restored after a dispute. The procedure is attributed to the provider; no independent later page capture completed.',
@@ -190,7 +251,15 @@ export const CASE_PRACTICE_SCENARIOS = [
     question: 'Does an authorised source confirm this exact campaign relationship?', conditions: 'Exact claimed campaign and reference period; use supplied evidence only and leave missing authority unresolved.',
     source: 'Fictional supplied offer-page text', urls: ['https://offer.example/campaign'], routes: [],
     adequate: 'Cite the directory entry only for its stated scope, retain the conflicting page accounts and record the unconfirmed relationship explicitly.',
-    inadequate: '“The organisation exists, so the campaign must be official.” Existence does not establish authority for a separate offer or partnership.' },
+    inadequate: '“The organisation exists, so the campaign must be official.” Existence does not establish authority for a separate offer or partnership.',
+    inference: { statements: [
+      { text: 'The directory entry proves that this separate campaign is authorised.', exceedsEvidence: true,
+        explanation: 'The entry concerns organisation existence, not authority for this campaign. The conflicting organiser accounts and unavailable partnership confirmation remain unresolved.' },
+      { text: 'The supplied text and image describe different organisers.', exceedsEvidence: false,
+        explanation: 'This is the stated difference between the supplied accounts. It does not decide which organiser or campaign claim is correct.' },
+      { text: 'The claimed partnership has not been independently confirmed.', exceedsEvidence: false,
+        explanation: 'Confirmation is unavailable in this fictional record. That is an evidence gap, not a finding of fraud or an endorsement.' },
+    ] } satisfies CasePracticeInference },
   { id: 'dependent-sources', title: 'A submitted report and a later provider result',
     observation: 'An analyst supplied a report. A later provider response explicitly says it reused that report. A separately documented page observation has its own source and time; another provider result does not explain its method.',
     assessment: 'Retain known reuse without calling it independent corroboration. Separately documented observations keep their own attribution, while unknown provider methods remain unknown. Who submitted material alone establishes neither dependence nor independence.',
@@ -198,21 +267,75 @@ export const CASE_PRACTICE_SCENARIOS = [
     question: 'Is a complete later exact-page observation available?', conditions: 'Exact supplied page and comparable conditions; repeating the report is not another observation.',
     source: 'Fictional original analyst report', urls: ['https://reported.example/offer'], routes: [],
     adequate: 'Record the provider’s stated reuse, retain the distinct observation separately and carry source qualifications into any selected handoff.',
-    inadequate: '“My report and the response are two independent confirmations.” This counts a documented reuse as new support.' },
+    inadequate: '“My report and the response are two independent confirmations.” This counts a documented reuse as new support.',
+    inference: { statements: [
+      { text: 'The report and the response that reused it are independent observations.', exceedsEvidence: true,
+        explanation: 'The response explicitly states that it reused the submitted report. Repetition is not a separate observation; the other documented source keeps its own attribution.' },
+      { text: 'One provider response declares reuse of the submitted report.', exceedsEvidence: false,
+        explanation: 'This records the provider’s stated method without extending that method to other results.' },
+      { text: 'The method of the other provider result remains unknown.', exceedsEvidence: false,
+        explanation: 'No method is supplied for that result. Its source grouping alone establishes neither dependence nor independence.' },
+    ] } satisfies CasePracticeInference },
   { id: 'contradictory-sources', title: 'Two sources disagree',
     observation: 'A complete fictional capture shows a credential form. A separate supplied review says no form was seen; its path and viewport were not recorded.',
     assessment: 'Link both sources to the conclusion. Their scope differs, so do not silently pick a winner or count them as independent corroboration.',
     recheck: 'The next capture timed out. It cannot resolve the earlier disagreement.', question: 'Is the credential form still present?', conditions: 'Same exact page and viewport for both source accounts.',
     source: 'Fictional supplied capture', urls: ['https://case-practice.example/offer'], routes: [],
-    adequate: 'Link both attributed accounts and explain the difference in scope.', inadequate: '“Pick the account that supports the conclusion.” This hides contradictory evidence.' },
+    adequate: 'Link both attributed accounts and explain the difference in scope.', inadequate: '“Pick the account that supports the conclusion.” This hides contradictory evidence.',
+    inference: { statements: [
+      { text: 'The review that saw no form proves the complete capture was wrong.', exceedsEvidence: true,
+        explanation: 'The review has no recorded path or viewport. These accounts cannot resolve each other without comparable scope; retain both and the uncertainty.' },
+      { text: 'One supplied capture includes a credential form.', exceedsEvidence: false,
+        explanation: 'This is limited to the attributed capture. It does not claim that every page or later visit shows the same form.' },
+      { text: 'The later timeout leaves the earlier disagreement unresolved.', exceedsEvidence: false,
+        explanation: 'A failed later capture adds no page content with which to decide between the earlier accounts.' },
+    ] } satisfies CasePracticeInference },
   { id: 'provider-resolved', title: 'A provider says the report is resolved',
     observation: 'A fictional provider acknowledged the earlier complaint and reported resolution. The only later capture timed out.',
     assessment: 'Keep the provider statement separate from the independent technical observation. A provider outcome is not evidence that the page was removed.',
     recheck: 'Review whether the original page condition was independently observed again. An incomplete capture cannot establish removal.', question: 'Is the reported page condition still observable?', conditions: 'Exact reported page with a complete comparable capture.',
     source: 'Fictional provider statement and page summary', urls: ['https://case-practice.example/offer'], routes: [],
-    adequate: 'Keep the provider statement and unavailable independent review separate.', inadequate: '“Closed ticket proves removal.” A provider workflow status is not an independent observation.' },
+    adequate: 'Keep the provider statement and unavailable independent review separate.', inadequate: '“Closed ticket proves removal.” A provider workflow status is not an independent observation.',
+    inference: { statements: [
+      { text: 'The provider reported resolution.', exceedsEvidence: false,
+        explanation: 'This attributes the statement to the provider. It does not turn that statement into an independent observation.' },
+      { text: 'The timeout supplies no independent later page content.', exceedsEvidence: false,
+        explanation: 'The retained later capture is unavailable. Missing page content does not establish that the page or reported condition has disappeared.' },
+      { text: 'The provider’s resolution confirms that the page has been removed.', exceedsEvidence: true,
+        explanation: 'The provider reported an outcome, but the independent capture failed. A complete, comparable observation is still needed to assess the exact page condition.' },
+    ] } satisfies CasePracticeInference },
 ] as const;
 export type CasePracticeScenario = typeof CASE_PRACTICE_SCENARIOS[number]['id'];
+
+/** Fictional metadata only, deliberately separate from the practice Case and original-file store. */
+export function casePracticeImageLineage() {
+  const base = readCaseAttachment({ id: 'fictional-image-base', fileName: 'fictional-base.png', mediaType: 'image/png',
+    source: null, observedAt: null, retainedAt: CASE_PRACTICE_OBSERVED_AT, digestSha256: `sha256:${'a'.repeat(64)}`, byteLength: 100 });
+  const redacted = readCaseAttachment({ ...base, id: 'fictional-image-redacted', fileName: 'fictional-redacted.png', digestSha256: `sha256:${'b'.repeat(64)}`, byteLength: 110,
+    derivation: { method: 'png-regions-v1', sourceAttachmentId: base.id, source: { digestSha256: base.digestSha256, byteLength: base.byteLength },
+      plan: { width: 20, height: 20, regions: [{ kind: 'redact', x: 2, y: 3, width: 5, height: 6 }] } } });
+  const outlined = readCaseAttachment({ ...redacted, id: 'fictional-image-outlined', fileName: 'fictional-outlined.png', digestSha256: `sha256:${'c'.repeat(64)}`, byteLength: 120,
+    derivation: { ...redacted.derivation!, sourceAttachmentId: redacted.id, source: { digestSha256: redacted.digestSha256, byteLength: redacted.byteLength },
+      plan: { width: 20, height: 20, regions: [{ kind: 'outline', x: 1, y: 1, width: 10, height: 10 }] } } });
+  return reviewCaseImageDerivation(outlined, [base, redacted, outlined])!;
+}
+
+/** Declared fictional capture context; no image bytes or page observations are supplied. */
+export function casePracticeCaptureContexts(scenario: CasePracticeScenario): { first: CaptureManifestContext[]; second: CaptureManifestContext[] } | null {
+  if (scenario !== 'conditional-presentation') return null;
+  const context = (observedAt: string, vantageLabel: string | null, viewport: { width: number; height: number } | null): CaptureManifestContext => ({
+    domain: 'conditional.example', observedAt, observerLabel: null, vantageLabel,
+    completeness: viewport ? 'complete' : 'partial', pageBehaviour: null,
+    conditions: viewport ? { browser: 'Fictional browser', browserVersion: '1.0', viewport, deviceScaleFactor: 1,
+      locale: 'en-AU', timezone: 'UTC', colourScheme: 'light' } : null,
+  });
+  return {
+    first: [context(CASE_PRACTICE_OBSERVED_AT, 'Fictional mobile location', { width: 390, height: 844 })],
+    second: [context(CASE_PRACTICE_LATER_AT, 'Different fictional desktop location', { width: 1280, height: 720 }),
+      context(CASE_PRACTICE_LATER_AT, null, null)],
+  };
+}
+
 export function casePracticeDefinition(scenario: CasePracticeScenario) {
   const definition = CASE_PRACTICE_SCENARIOS.find(item => item.id === scenario);
   if (!definition) throw new TypeError('Unknown practice scenario.');
@@ -309,8 +432,10 @@ function addPracticeScopeEvidence(record: CaseRecord, scenario: CasePracticeScen
 export function createCasePracticeRecord(scenario: CasePracticeScenario = 'credential-form'): CaseRecord {
   const definition = casePracticeDefinition(scenario);
   const domain = definition.urls.length ? new URL(definition.urls[0]!).hostname : 'case-practice.example';
-  const initial = createCase({ domain, title: definition.title,
+  let initial = createCase({ domain, title: definition.title,
     note: 'Practice material only. No domain was contacted and no external report was submitted.' }, CASE_PRACTICE_OBSERVED_AT);
+  for (const url of definition.urls) initial = updateCase([initial], initial.id, { incidentTarget: url }, CASE_PRACTICE_LATER_AT).record;
+  const objects = scenario === 'credential-form' ? practiceJourneyObjects(initial) : [];
   const primaryLabel = scenario === 'requested-amendment' ? 'Original request and delivery context'
     : scenario === 'identity-actions' ? 'Supplied incident accounts'
       : scenario === 'dependent-sources' ? 'Original supplied report'
@@ -318,18 +443,20 @@ export function createCasePracticeRecord(scenario: CasePracticeScenario = 'crede
   const observed = updateCase([initial], initial.id, { evidencePins: [
     { label: primaryLabel, value: definition.observation,
       source: definition.source, observedAt: CASE_PRACTICE_OBSERVED_AT, observationHostname: initial.domain,
+      ...(objects[0] ? { responseObject: objects[0] } : {}),
       completeness: 'complete', sourceState: 'complete', limitations: [definition.assessment, 'Complete supplied summary, not comprehensive collection or proof of an allegation.'] },
     { label: 'Later capture did not complete', value: definition.recheck,
       source: 'Fictional later capture', observedAt: CASE_PRACTICE_LATER_AT, observationHostname: initial.domain,
+      ...(objects[0] ? { responseObject: objects[0] } : {}),
       completeness: 'partial', sourceState: 'unavailable', limitations: ['No later page content is available. This cannot establish absence.'] },
   ] }, CASE_PRACTICE_LATER_AT);
   let result = updateCase(observed.cases, initial.id, { assertion: { kind: 'next_step',
       statement: definition.question, state: 'open',
     ...(scenario === 'credential-form' ? { evidenceRelations: [{ evidencePinId: observed.record.evidencePins[0]!.id, stance: 'unresolved' }] } : {}),
     recheck: { targetHostname: initial.domain, baselinePinId: observed.record.evidencePins[0]!.id,
+      ...(objects[0] ? { responseObject: objects[0] } : {}),
       conditions: definition.conditions },
   } }, CASE_PRACTICE_LATER_AT).record;
-  for (const url of definition.urls) result = updateCase([result], result.id, { incidentTarget: url }, CASE_PRACTICE_LATER_AT).record;
   if (scenario === 'credential-form') {
     result = updateCase([result], result.id, { evidencePins: [
       { label: 'Reference offer text', value: 'The original fictional reference says “Review your account tools before the offer expires”. The candidate repeats this prose without a logo or brand name.',
@@ -337,6 +464,7 @@ export function createCasePracticeRecord(scenario: CasePracticeScenario = 'crede
         completeness: 'complete', sourceState: 'complete', limitations: ['Text correspondence is analyst supplied, not an automated similarity score or proof of copyright entitlement.'] },
       { label: 'Advertisement distribution object', value: 'Supplied ad creative seven leads to the candidate offer; one intermediate hop is unobserved.',
         source: 'Fictional supplied advertisement', observedAt: CASE_PRACTICE_OBSERVED_AT, observationHostname: 'distribution.example',
+        responseObject: objects[1],
         completeness: 'partial', sourceState: 'complete', limitations: ['Later distribution has not been reviewed; unknown hops and advertiser control remain unestablished.'] },
     ] }, CASE_PRACTICE_LATER_AT).record;
   }
@@ -380,6 +508,15 @@ export function createCasePracticeRecord(scenario: CasePracticeScenario = 'crede
 }
 
 const JOURNEY_SOURCE = 'Fictional practice recipient';
+function practiceJourneyObjects(record: CaseRecord) {
+  const choices = caseResponseObjectChoices(record);
+  return casePracticeDefinition('credential-form').urls.map((identifier, index) => {
+    const kind = index === 0 ? 'page' : 'advertisement';
+    const object = choices.find(choice => choice.object.kind === kind && choice.object.identifier === identifier)?.object;
+    if (!object) throw new Error('The exact fictional response object is no longer retained.');
+    return object;
+  });
+}
 export function casePracticeJourneyActions(record: CaseRecord) {
   return record.actions.filter(action => action.contactSource === JOURNEY_SOURCE)
     .sort((left, right) => Number(left.type !== 'security_contact_report') - Number(right.type !== 'security_contact_report'));
@@ -398,11 +535,12 @@ export function casePracticeJourneyMaterials(record: CaseRecord) {
 function advancePracticeJourney(record: CaseRecord, operation: 'prepare' | 'deliver' | 'close-page', reviewed?: string): CaseRecord {
   const apply = (patch: CasePatch) => { record = updateCase([record], record.id, patch, CASE_PRACTICE_JOURNEY_AT).record; };
   const actions = casePracticeJourneyActions(record);
+  const objects = practiceJourneyObjects(record);
   if (operation === 'prepare') {
     if (actions.length) throw new Error('The fictional recipient actions are already prepared.');
     if (!countEvidenceLinkedCaseDecisions(record.decisions, record.evidencePins)) throw new Error('Record an evidence-linked conclusion before preparing the fictional copies.');
-    for (const [type, recipient] of [['security_contact_report', 'page-review@example.invalid'], ['platform_report', 'ad-review@example.invalid']] as const) apply({ action: {
-      type, recipient, contactSource: JOURNEY_SOURCE, routeObservedAt: CASE_PRACTICE_OBSERVED_AT,
+    for (const [index, [type, recipient]] of ([['security_contact_report', 'page-review@example.invalid'], ['platform_report', 'ad-review@example.invalid']] as const).entries()) apply({ action: {
+      type, recipient, contactSource: JOURNEY_SOURCE, routeObservedAt: CASE_PRACTICE_OBSERVED_AT, responseObjects: [objects[index]!],
       contactLimitations: ['Reserved fictional recipient, not a verified official route. No external authority or submission is claimed.'],
     } });
   } else if (operation === 'deliver') {
@@ -421,10 +559,11 @@ function advancePracticeJourney(record: CaseRecord, operation: 'prepare' | 'deli
     const existingPinIds = new Set(record.evidencePins.map(pin => pin.id));
     apply({ evidencePin: { label: 'Complete later exact-page review', value: 'The supplied later offer page contains ordinary text and no credential form under the same unauthenticated viewport. The advertisement was not reviewed.',
       source: record.evidencePins[0]!.source, observedAt: CASE_PRACTICE_JOURNEY_AT, observationHostname: record.domain,
+      responseObject: objects[0],
       completeness: 'complete', sourceState: 'complete', limitations: ['One exact page under supplied comparable conditions; no inference about ads, mail, ownership or safety.'] } });
     const pin = record.evidencePins.find(pin => !existingPinIds.has(pin.id))!;
     apply({ observedEffectReview: { state: 'not_reproduced', observedAt: pin.observedAt!, sourceClass: 'analyst', source: pin.source,
-      completeness: pin.completeness, evidencePinId: pin.id, limitations: pin.limitations,
+      completeness: pin.completeness, evidencePinId: pin.id, limitations: pin.limitations, responseObject: objects[0],
       recheck: caseRecheckAnswerContext(record.assertions[0]!, 'comparable') } });
     apply({ actionUpdate: { id: actions[0]!.id, transition: { nextState: 'terminal', sourceClass: 'analyst', provenance: 'fictional_independent_page_review',
       rationale: 'Close only the page action after the supplied complete comparable review. Advertisement distribution remains unresolved.' } } });
@@ -445,7 +584,7 @@ export function createCasePracticeSession(scenario: CasePracticeScenario = 'cred
     update: async change => {
       const id = current().id;
       const next = normalizeCaseDraftStore(change(structuredClone(drafts)));
-      if (next.records.some(draft => draft.caseId !== id)) throw new Error('Practice drafts belong only to the fictional Case.');
+      if (next.records.some(draft => draft.caseId !== id)) throw new Error('Practice drafts belong only to the fictional case.');
       drafts = next;
     },
   };

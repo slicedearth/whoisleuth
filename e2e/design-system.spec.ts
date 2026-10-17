@@ -1,5 +1,7 @@
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, openLookupOptionalSources } from './helpers';
+import { expectNoHorizontalOverflow, openLookupOptionalSources, useTheme } from './helpers';
+import AxeBuilder from '@axe-core/playwright';
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { protectedDestinations } from '../frontend/src/lib/workspaces';
 import { consoleCommandNavigation } from '../frontend/src/lib/console-command-navigation';
 import { INTELLIGENCE_CAPABILITIES, sectionedLookupFixture } from './lookup-design-fixtures';
@@ -110,7 +112,8 @@ test('the console command palette filters destinations and remains keyboard oper
   const trigger = page.getByRole('button', { name: 'Search console navigation' });
   await expect(trigger).toBeVisible();
   await expect(trigger.locator('.shortcut-wide')).toBeVisible();
-  await expect(trigger.locator('.shortcut-wide')).toHaveText('Ctrl/⌘ K');
+  await expect(trigger.locator('.shortcut-wide')).toHaveText('(Ctrl/⌘ K)');
+  await expect(trigger).toHaveAttribute('aria-keyshortcuts', 'Control+k Meta+k');
   await expect(trigger.locator('.command-icon')).toHaveCount(1);
   await expect(trigger.locator('.command-icon')).toBeHidden();
 
@@ -270,6 +273,105 @@ test('the console command palette filters destinations and remains keyboard oper
   await expect(publicPage).toHaveURL(/\/contact$/u);
   await expect(page).toHaveURL(/\/lookup$/u);
   await publicPage.close();
+});
+
+test('command palette hints are optional, context-aware and limited to the Console visit', async ({ page }, testInfo) => {
+  const collections: string[] = [];
+  page.on('request', request => {
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith('/api/') && !['/api/session', '/api/capabilities'].includes(path)) collections.push(path);
+  });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/dashboard');
+  const trigger = page.getByRole('button', { name: 'Search console navigation' });
+  await trigger.click();
+  const dialog = page.getByRole('dialog', { name: 'Go to', exact: true });
+  const query = dialog.getByRole('combobox', { name: 'Search pages and tools' });
+  const help = dialog.getByText('Keyboard shortcuts', { exact: true });
+  const choice = dialog.getByRole('checkbox', { name: 'Show brief keyboard hints' });
+  const hints = dialog.locator('#command-search-hints');
+  await expect(query).toBeFocused();
+  await expect(dialog.getByRole('option')).not.toHaveCount(0);
+  await expect(hints).toHaveCount(0);
+  const storedBefore = await page.evaluate(() => ({ local: Object.entries(localStorage).sort(), session: Object.entries(sessionStorage).sort() }));
+  await help.click();
+  await expect(choice).not.toBeChecked();
+  await choice.focus(); await choice.press('Space');
+  await expect(choice).toBeChecked();
+  await choice.press('Tab');
+  await expect(dialog.getByRole('button', { name: 'Close command palette' })).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(choice).toBeFocused();
+  await help.click(); await query.focus();
+  await expect(hints.locator('kbd')).toHaveText(['↑ / ↓', 'Enter']);
+  await expect(query).toHaveAttribute('aria-describedby', 'command-search-hints');
+  await query.fill('tld');
+  await expect(dialog.getByRole('option')).toHaveCount(1);
+  await expect(hints.locator('kbd')).toHaveText(['Enter']);
+  await query.fill('private-keyboard-example');
+  await expect(dialog.getByRole('option')).toHaveCount(0);
+  await expect(hints).toHaveCount(0);
+  await query.press('Enter');
+  await expect(dialog).toBeVisible();
+  await expect(page).toHaveURL('/dashboard');
+  await query.fill('');
+  await dialog.getByRole('button', { name: 'Close command palette' }).focus();
+  await expect(hints).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Documentation', exact: true }).click();
+  const documentationQuery = dialog.getByRole('searchbox', { name: 'Command, task or term' });
+  await expect(documentationQuery).toBeFocused();
+  await documentationQuery.fill('private-keyboard-example');
+  await expect(documentationQuery).toHaveValue('private-keyboard-example');
+  await expect(hints).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Pages and tools', exact: true }).click();
+  await expect(query).toBeFocused();
+  await expect(hints).toBeVisible();
+  expect(await page.evaluate(() => ({ local: Object.entries(localStorage).sort(), session: Object.entries(sessionStorage).sort() }))).toEqual(storedBefore);
+  await query.fill('review inbox'); await query.press('Enter');
+  await expect(page).toHaveURL('/monitor');
+  await expect(page.locator('#main-content')).toBeFocused();
+  await trigger.click();
+  await expect(hints).toBeVisible();
+  await help.click(); await choice.uncheck(); await help.click(); await query.focus();
+  await expect(hints).toHaveCount(0);
+  await query.press('Escape'); await trigger.click();
+  await expect(hints).toHaveCount(0);
+  await help.click(); await choice.check(); await help.click();
+
+  for (const density of ['comfortable', 'compact'] as const) for (const width of [320, 1280]) for (const theme of ['light', 'dark'] as const) {
+    await page.keyboard.press('Escape');
+    await page.setViewportSize({ width, height: width === 320 ? 700 : 720 });
+    await useTheme(page, theme);
+    const appearance = page.getByRole('button', { name: /^Colour theme,/u });
+    const navigation = page.getByRole('button', { name: 'Toggle navigation', exact: true });
+    const mobileNavigation = !await appearance.isVisible();
+    if (mobileNavigation) await navigation.click();
+    await appearance.click();
+    await page.getByLabel('Reading density').selectOption(density);
+    await page.getByLabel('Reading density').press('Escape');
+    if (mobileNavigation) {
+      if (await navigation.getAttribute('aria-expanded') === 'true') await navigation.click();
+      await expect(navigation).toHaveAttribute('aria-expanded', 'false');
+    }
+    await trigger.click();
+    await expect(query).toBeFocused();
+    await expect(query).toBeInViewport();
+    await expect(hints).toBeVisible();
+    await expect.poll(() => query.evaluate(input => {
+      const control = input.getBoundingClientRect();
+      const container = input.parentElement!.getBoundingClientRect();
+      return control.top >= container.top && control.bottom <= container.bottom;
+    })).toBe(true);
+    await expect(dialog.getByRole('option', { selected: true })).toBeInViewport({ ratio: 1 });
+    await expectNoHorizontalOverflow(page);
+    expect((await new AxeBuilder({ page }).include('[role="dialog"]').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
+    if (captureVisualEvidenceEnabled()) await dialog.screenshot({ path: testInfo.outputPath(`palette-hints-${density}-${theme}-${width}.png`) });
+  }
+  await page.reload();
+  await trigger.click();
+  await expect(hints).toHaveCount(0);
+  await help.click(); await expect(choice).not.toBeChecked();
+  expect(collections).toEqual([]);
 });
 
 test('the console command palette keeps every destination heading readable on mobile', async ({ page }) => {

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { caseRequestedEvidenceQueue, caseResponseQueue } from '../packages/cases/case-response-queue.mts';
 import { createCase } from '../packages/cases/case-model.mts';
+import { buildCaseCompletionReview } from '../packages/cases/case-decision-overview.mts';
 import type { CaseActionRecord, CaseObservedEffectReview } from '../packages/cases/case-response-records.mts';
 
 const NOW = '2026-09-10T10:00:00.000Z';
@@ -74,8 +75,13 @@ test('evidence follow-ups preserve deadlines, concurrent preparations and actual
   const pending = caseRequestedEvidenceQueue(record, NOW)[0]!;
   assert.equal(pending.due, true);
   assert.equal(pending.label, 'Evidence requested');
+  assert.equal(pending.owner, record.actions[0]);
+  assert.equal(pending.event, baseEvent, 'the requirement retains its exact source event, not a reconstructed request');
   assert.equal(pending.deliveries.length, 0);
   assert.equal(caseRequestedEvidenceQueue(record, 'unknown')[0]?.due, null);
+  const completion = buildCaseCompletionReview(record, NOW);
+  assert.deepEqual(completion.requests.map(item => [item.eventId, item.deadline, item.due]), [['request', NOW, true]]);
+  assert.deepEqual(completion.reviews.map(item => [item.id, item.at, item.due]), [['action:active:follow-up', '2026-09-10T10:01:00.000Z', false]]);
   assert.deepEqual(record, before);
   const prepared = { ...baseEvent, id: 'prepared', sourceClass: 'analyst' as const,
     evidenceRequest: { ...baseEvent.evidenceRequest, state: 'prepared' as const, evidencePinIds: ['pin'], previousEventIds: ['request'] } };
@@ -90,6 +96,7 @@ test('evidence follow-ups preserve deadlines, concurrent preparations and actual
   delete deliveryEvent.evidenceRequest;
   record.actions[1]!.history.push(deliveryEvent);
   assert.equal(caseRequestedEvidenceQueue(record, NOW)[0]?.label, 'Delivery recorded');
+  assert.deepEqual(buildCaseCompletionReview(record, NOW).requests, []);
   record.actions[0]!.history.push({ ...prepared, id: 'conflicting-preparation', evidenceRequest: {
     ...prepared.evidenceRequest, state: 'unavailable', evidencePinIds: [], rationale: 'Source is no longer retained',
   } });
@@ -98,6 +105,8 @@ test('evidence follow-ups preserve deadlines, concurrent preparations and actual
   assert.ok(conflict.every(item => item.concurrent));
   assert.equal(conflict[0]?.eventId, 'conflicting-preparation');
   assert.equal(conflict[0]?.deliveries.length, 0, 'delivery of one branch cannot settle the other');
+  assert.deepEqual(buildCaseCompletionReview(record, NOW).requests.map(item => item.eventId), ['conflicting-preparation']);
   record.actions[0]!.state = 'terminal';
   assert.ok(caseRequestedEvidenceQueue(record, NOW).every(item => !item.editable));
+  assert.deepEqual(buildCaseCompletionReview(record, NOW).requests, []);
 });

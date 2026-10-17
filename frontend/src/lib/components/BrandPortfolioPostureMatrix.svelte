@@ -42,15 +42,15 @@
 <section class="card posture-matrix" aria-labelledby="portfolio-posture-matrix-title">
   <header class="section-head">
     <div>
-      <p class="eyebrow">Owned domains</p>
-      <h2 id="portfolio-posture-matrix-title">Owned-domain comparison</h2>
+      <p class="eyebrow">Declared official domains</p>
+      <h2 id="portfolio-posture-matrix-title">Official-domain settings comparison</h2>
       <p>Compare expected settings with the latest saved observation for each official domain.</p>
     </div>
-    <span class="scope">{matrix.baselineCount}/{matrix.rows.length} configured · {matrix.observationCount} observed</span>
+    <span class="scope">{matrix.baselineCount}/{matrix.rows.length} configured · {matrix.observationCount} with retained observations</span>
   </header>
 
   {#if matrix.rows.length}
-    <div class="state-summary" aria-label="Owned-domain comparison state counts">
+    <div class="state-summary" aria-label="Official-domain settings comparison state counts">
       {#each Object.entries(matrix.stateCounts).filter(([, count]) => count > 0) as [state, count]}
         <span class={`state-${state}`}>{stateLabel(state as DomainPostureMatrixState)} <strong>{count}</strong></span>
       {/each}

@@ -10,9 +10,9 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
   import { CalibrationExportWorkspace } from '#lib/controllers/calibration-export-workspace.ts';
   import { hasUnprotectedCaseDrafts, trackTransientCaseDraft } from '#lib/controllers/case-draft.svelte.ts';
   import { preloadBestEffort } from '#lib/idle-preload.ts';
-  import { readCaseNavigationContext, selectConsoleCase } from '#lib/console-workflow-state.ts';
+  import { readCaseNavigationContext, selectConsoleCase, recordVisitedConsoleCase } from '#lib/console-workflow-state.ts';
   import { monitorRouteKey, monitorRouteTarget } from '#lib/controllers/monitor-route-controller.ts';
-  import { caseWorkspaceHref } from '#lib/analysis/case-response-stage.ts';
+  import { caseWorkspaceHref, caseWorkspaceSection } from '#lib/analysis/case-response-stage.ts';
   import { casesForDomain } from '../../../../packages/cases/case-selection.mts';
   import type { CaseIncidentInput } from '../analysis/case-model.ts';
   import { filterCaseList } from '../../../../packages/cases/case-list-view.mts';
@@ -26,6 +26,7 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
     deleteCase,
     editCase,
     editCaseTags,
+    editCaseTagBatch,
     restoreCaseTags,
     exportCases,
     exportRiskCalibrationDataset,
@@ -55,6 +56,9 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
   import CaseFilters from '#lib/components/CaseFilters.svelte';
   import CaseSavedViews from '#lib/components/CaseSavedViews.svelte';
   import CaseList from '#lib/components/CaseList.svelte';
+  import CaseTagBatch from '#lib/components/CaseTagBatch.svelte';
+  import { prepareCaseTagBatch, type CaseTagBatchIntent, type CaseTagBatchPreview } from '../../../../packages/cases/case-tag-batch.mts';
+  import { MAX_CASE_BATCH_MUTATIONS } from '../../../../packages/cases/case-batch-limits.mts';
   import CaseStorageReview from '#lib/components/CaseStorageReview.svelte';
   import PageHeading from '#lib/components/PageHeading.svelte';
   let { initialCases = null, initialMessage = '', onchange }: {
@@ -84,11 +88,14 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
     if (associationRetention && selectedCase?.id !== associationRetention.id && !retentionSaving) associationRetention = null;
   });
   let calibrationMode = $state(false);
+  let tagMode = $state(false), tagCaseIds = $state<string[]>([]);
+  const tagSelectionRevision = createDraftRevision(() => JSON.stringify(tagCaseIds));
   let noteDraft = $state('');
   let tagDraft = $state('');
   let tagExpected = $state<string[]>([]);
   let newDomain = $state('');
   let openingCase = $state(false);
+  let draftInventoryOpen = $state(false);
   let incidentDraftDirty = $state(false);
   trackTransientCaseDraft(() => incidentDraftDirty || Boolean(expandedId && (
     noteDraft.length || tagDraft !== tagExpected.join(', ')
@@ -112,7 +119,7 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
     const sameCase = !willUnload && from?.url.pathname === to?.url.pathname
       && from?.url.searchParams.get('case') && from.url.searchParams.get('case') === to?.url.searchParams.get('case');
     if (!sameCase && (hasUnprotectedCaseDrafts() || incidentDraftDirty)
-      && (willUnload || !window.confirm('Some Case edits are not saved. Leave and lose those edits?'))) {
+      && (willUnload || !window.confirm('Some case edits are not saved. Leave and lose those edits?'))) {
       navigationCancelled = true;
       cancel();
     }
@@ -243,15 +250,15 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
     clearCaseFilters();
     caseSearch = matches[0]!.domain;
     casePage = 1;
-    caseMessage = `${matches.length} Cases use ${matches[0]!.domain}. Choose the intended incident below, or create a separate Case.`;
+    caseMessage = `${matches.length} cases use ${matches[0]!.domain}. Choose the intended incident below, or create a separate case.`;
     return true;
   }
   async function createIncident(input: CaseIncidentInput): Promise<CaseRecord | null> {
     incidentOpeningIntent = captureCaseOpeningIntent();
     let committed: Awaited<ReturnType<typeof createCaseIncident>>;
     try { committed = await createCaseIncident(input); }
-    catch (cause) { caseMessage = cause instanceof Error ? cause.message : 'Could not create the incident Case.'; return null; }
-    await reconcileCommittedCaseSnapshot(committed, 'Created a separate incident Case.');
+    catch (cause) { caseMessage = cause instanceof Error ? cause.message : 'Could not create the incident case.'; return null; }
+    await reconcileCommittedCaseSnapshot(committed, 'Created a separate incident case.');
     return committed.record;
   }
   async function openCreatedIncident(record: CaseRecord) {
@@ -301,18 +308,18 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
     }
     catch (cause) {
       if (cause instanceof CaseAssociationCapacityError) associationRetention = cause.retention;
-      caseMessage = cause instanceof Error ? cause.message : `Could not ${operation} the Brand Profile association.`;
+      caseMessage = cause instanceof Error ? cause.message : `Could not ${operation} the brand profile association.`;
       return false;
     }
     try {
       await refreshCases();
       if (expandedId === persisted.id) showCasePage(persisted);
-      caseMessage = `${operation === 'add' ? 'Added' : 'Removed'} an explicit Brand Profile association for ${persisted.domain}.${prunedNote(pruned)}`;
+      caseMessage = `${operation === 'add' ? 'Added' : 'Removed'} an explicit brand profile association for ${persisted.domain}.${prunedNote(pruned)}`;
     }
     catch {
       installCommittedCaseSnapshot(committedCases, 'partial');
       if (expandedId === persisted.id) showCasePage(persisted);
-      caseMessage = `Brand Profile association saved for ${persisted.domain}, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the workspace read.${prunedNote(pruned)}`;
+      caseMessage = `Brand profile association saved for ${persisted.domain}, but cases could not be reread. The complete committed case snapshot is shown locally; reload to retry the workspace read.${prunedNote(pruned)}`;
     }
     associationRetention = null;
     return true;
@@ -328,7 +335,7 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
     if (!associationRetention || retentionSaving) return;
     const id = associationRetention.id;
     associationRetention = null;
-    caseMessage = 'Association change cancelled. Saved Cases were not changed.';
+    caseMessage = 'Association change cancelled. Saved cases were not changed.';
     await restoreAssociationFocus(id);
   }
   async function confirmAssociationRetention() {
@@ -343,8 +350,8 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
   }
   function exportRetentionSnapshot() {
     if (!associationRetention) return;
-    try { exportCaseSnapshot(associationRetention.preview.current); caseMessage = 'Exported the reviewed Case snapshot, including evidence awaiting your decision.'; }
-    catch { caseMessage = 'The Case export could not be downloaded. Saved Cases were not changed.'; }
+    try { exportCaseSnapshot(associationRetention.preview.current); caseMessage = 'Exported the reviewed case snapshot, including evidence awaiting your decision.'; }
+    catch { caseMessage = 'The case export could not be downloaded. Saved cases were not changed.'; }
   }
   function addBrandProfileAssociation(record: CaseRecord, profileId: string) {
     return changeBrandProfileAssociation(record, profileId, 'add');
@@ -427,7 +434,7 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
   const reviewCalibrationDataset = () => calibrationWorkspace.review(calibrationCaseIds);
   const downloadCalibrationDataset = () => calibrationWorkspace.confirm();
   async function removeCase(record: CaseRecord) {
-    if (!confirm(`Delete the case for ${record.domain}? Its notes are removed unless you exported them.`))
+    if (!confirm(`Delete the case for ${record.domain}? Its saved records and unsaved temporary work will be removed. Export anything you need first.`))
       return;
     const previousIndex = pagedCases.findIndex(item => item.id === record.id);
     const previousPage = currentCasePage;
@@ -446,7 +453,7 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
     }
     catch {
       installCommittedCaseSnapshot(committed.cases, 'partial');
-      caseMessage = `Deleted the case for ${record.domain}. The change was saved, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the workspace read.`;
+      caseMessage = `Deleted the case for ${record.domain}. The change was saved, but cases could not be reread. The complete committed case snapshot is shown locally; reload to retry the workspace read.`;
     }
     if (mounted && returnAfterDeletion && (!expandedId || expandedId === record.id)) {
       const next = currentCasePage < previousPage ? pagedCases.at(-1) : pagedCases[Math.min(Math.max(0, previousIndex), pagedCases.length - 1)];
@@ -467,7 +474,7 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
       if (file.size > MAX_CASE_IMPORT_BYTES)
         throw new Error(`Case imports are limited to ${MAX_CASE_IMPORT_BYTES} bytes.`);
       const result = await importCases(parseBoundedJson(await file.text(), { label: 'Case import', maximumBytes: MAX_CASE_IMPORT_BYTES }));
-      const success = `Imported ${result.added} new and ${result.updated} merged cases${result.skipped ? `; skipped ${result.skipped} invalid or over-limit record${result.skipped === 1 ? '' : 's'}` : ''}${result.brandProfileReferencesOmitted ? `; omitted ${result.brandProfileReferencesOmitted} Brand Profile reference${result.brandProfileReferencesOmitted === 1 ? '' : 's'} beyond the retained bounds` : ''}${result.authoredHistoryOmitted ? `; omitted ${result.authoredHistoryOmitted} malformed, duplicate or over-limit authored-history record${result.authoredHistoryOmitted === 1 ? '' : 's'}` : ''}${result.evidenceHistoryOmitted ? `; omitted ${result.evidenceHistoryOmitted} imported evidence snapshot${result.evidenceHistoryOmitted === 1 ? '' : 's'} to preserve local history` : ''}.`;
+      const success = `Imported ${result.added} new and ${result.updated} merged cases${result.skipped ? `; skipped ${result.skipped} invalid or over-limit record${result.skipped === 1 ? '' : 's'}` : ''}${result.brandProfileReferencesOmitted ? `; omitted ${result.brandProfileReferencesOmitted} brand profile reference${result.brandProfileReferencesOmitted === 1 ? '' : 's'} beyond the retained bounds` : ''}${result.authoredHistoryOmitted ? `; omitted ${result.authoredHistoryOmitted} malformed, duplicate or over-limit authored-history record${result.authoredHistoryOmitted === 1 ? '' : 's'}` : ''}${result.evidenceHistoryOmitted ? `; omitted ${result.evidenceHistoryOmitted} imported evidence snapshot${result.evidenceHistoryOmitted === 1 ? '' : 's'} to preserve local history` : ''}.`;
       await reconcileCommittedCaseSnapshot(result, success);
     }
     catch (cause) {
@@ -505,7 +512,7 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
       await goto(destination, { reset: false });
       return monitorRouteKey(new URL(page.url.href)) === monitorRouteKey(new URL(destination, page.url.href));
     } catch {
-      if (!navigationCancelled) caseMessage = 'Could not open the requested Case view. Your current form remains available.';
+      if (!navigationCancelled) caseMessage = 'Could not open the requested case view. Your current form remains available.';
       return false;
     }
   }
@@ -551,11 +558,30 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
       installCommittedCaseSnapshot(committed.cases, 'partial');
       if (record && expandedId === record.id)
         showCasePage(record);
-      caseMessage = `${success} The change was saved, but Cases could not be reread. The complete committed Case snapshot is shown locally; reload to retry the workspace read.${prunedNote(committed.pruned)}`;
+      caseMessage = `${success} The change was saved, but cases could not be reread. The complete committed case snapshot is shown locally; reload to retry the workspace read.${prunedNote(committed.pruned)}`;
     }
   }
   async function reconcileCommittedCaseMutation(committed: Awaited<ReturnType<typeof editCase>>, success: string) {
     await reconcileCommittedCaseSnapshot(committed, success, committed.record);
+  }
+  function toggleTagCase(record: CaseRecord, selected: boolean) {
+    if (casesRefreshing) return;
+    tagSelectionRevision.changed();
+    if (!selected) tagCaseIds = tagCaseIds.filter(id => id !== record.id);
+    else if (!tagCaseIds.includes(record.id) && tagCaseIds.length < MAX_CASE_BATCH_MUTATIONS) tagCaseIds = [...tagCaseIds, record.id];
+  }
+  function clearTagSelection() { tagSelectionRevision.changed(); tagCaseIds = []; }
+  async function previewTagBatch(intent: CaseTagBatchIntent) {
+    await refreshCases();
+    return prepareCaseTagBatch(cases, intent);
+  }
+  async function applyTagBatch(preview: CaseTagBatchPreview) {
+    const committed = await editCaseTagBatch(preview);
+    if (mounted) {
+      try { await reconcileCommittedCaseSnapshot(committed, `Tags saved for ${committed.changed} cases; ${committed.unchanged} already matched.`); }
+      catch { caseMessage = `Tags saved for ${committed.changed} cases, but the visible workspace could not be reconciled. Reload to review the saved records; do not repeat the write.`; }
+    }
+    return committed;
   }
   let appliedRouteKey = '';
   async function applyCaseTarget(currentUrl: URL, routeKey: string) {
@@ -571,10 +597,13 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
       if (!record) {
         expandedId = '';
         selectConsoleCase(null);
-        caseMessage = 'That Case is not available in this workspace. Choose a retained Case or import its workspace archive.';
+        caseMessage = 'That case is not available in this workspace. Choose a retained case or import its workspace archive.';
         return;
       }
-      if (expandedId === record.id) return;
+      if (expandedId === record.id) {
+        if (monitorRouteKey(new URL(page.url.href)) === routeKey) recordVisitedConsoleCase(record.id, caseWorkspaceSection(currentUrl));
+        return;
+      }
       selectConsoleCase(record.id);
       showCasePage(record);
       if (expandedId !== record.id) {
@@ -585,6 +614,7 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
       await tick();
       if (monitorRouteKey(new URL(page.url.href)) !== routeKey)
         return;
+      recordVisitedConsoleCase(record.id, caseWorkspaceSection(currentUrl));
       await focusCase(record);
       return;
     }
@@ -621,7 +651,7 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
     const preloadController = new AbortController();
     preloadBestEffort(() => import('#lib/components/CaseDetail.svelte'), preloadController.signal);
     void refreshCases().catch(cause => {
-      caseMessage = cause instanceof Error ? cause.message : 'Could not read saved Cases.';
+      caseMessage = cause instanceof Error ? cause.message : 'Could not read saved cases.';
     });
     void loadProfiles().then(profiles => {
       brandProfiles = profiles;
@@ -644,24 +674,29 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
       cancel={cancelAssociationRetention} exportSnapshot={exportRetentionSnapshot} />
   {/if}
   {#if casesSourceState === 'ready'}
+    <details class="draft-inventory-disclosure" bind:open={draftInventoryOpen}>
+      <summary>Draft inventory</summary>
+      {#if draftInventoryOpen}<DeferredSurface load={() => import('#lib/components/CaseDraftInventory.svelte')} props={{}}
+        loadingLabel="Opening draft inventory…" unavailableLabel="The draft inventory could not be opened. Saved drafts have not changed." />{/if}
+    </details>
     {#if casesRefreshing}
-      <p class="refresh-status" role="status" aria-live="polite">Refreshing Cases while the last readable snapshot remains available.</p>
+      <p class="refresh-status" role="status" aria-live="polite">Refreshing cases while the last readable snapshot remains available.</p>
     {/if}
     {#if selectedCase}
       {#key selectedCase.id}
         <DeferredSurface load={() => import('#lib/components/CaseDetail.svelte')}
-          loadingLabel="Opening Case…" unavailableLabel="The Case detail could not be loaded. Your saved Case has not changed."
+          loadingLabel="Opening case…" unavailableLabel="The case detail could not be loaded. Your saved case has not changed."
           onready={() => selectedCase && focusCase(selectedCase)}
           props={{ record: selectedCase, allRecords: cases, tagDraft, setTagDraft: (value: string) => { tagRevision.changed(); tagDraft = value; },
             noteDraft, setNoteDraft: (value: string) => { noteRevision.changed(); noteDraft = value; }, pendingNoteCaseIds,
             selectCase, returnToList, setStatus, setDisposition, setReviewReason, addBrandProfileAssociation, removeBrandProfileAssociation,
             saveTags, addNote, removeCase, refreshCases, installCommittedCaseSnapshot, setMessage: (value: string) => caseMessage = value,
-            formatDate: date, brandProfiles, brandProfilesUnavailable }} />
+            brandProfiles, brandProfilesUnavailable }} />
       {/key}
     {:else}
     {#if guidedDomains.length}
       <DeferredSurface load={() => import('#lib/components/GuidedCaseQueue.svelte')}
-        loadingLabel="Loading guided Case queue…" unavailableLabel="The guided Case queue could not be loaded."
+        loadingLabel="Loading guided case queue…" unavailableLabel="The guided case queue could not be loaded."
         onready={restoreGuidedQueueTarget}
         props={{ domains: guidedDomains, existingDomains: existingCaseDomains, truncated: guidedDomainsTruncated, openDomain: openGuidedCase }} />
     {/if}
@@ -687,9 +722,14 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
     <CaseSavedViews filters={currentFilters} onapply={(view) => changeCaseView(() => {
       statusFilter = view.status; dispositionFilter = view.disposition; caseSearch = view.search; caseSort = view.sort;
     })} />
+    <details class="advanced-case-tools" bind:open={tagMode}>
+      <summary>Organise Case tags{tagCaseIds.length ? ` · ${tagCaseIds.length} selected` : ''}</summary>
+      <CaseTagBatch selectedIds={tagCaseIds} disabled={casesRefreshing} onclear={clearTagSelection} captureSelection={tagSelectionRevision.capture} onpreview={previewTagBatch} onapply={applyTagBatch} />
+    </details>
     {#if cases.length}
       <CaseList
         records={pagedCases} {selectCase} {calibrationMode} {calibrationCaseIds} {toggleCalibrationCase} formatDate={date}
+        {tagMode} {tagCaseIds} {toggleTagCase} tagSelectionDisabled={casesRefreshing}
         currentPage={currentCasePage} pageCount={casePageCount} setPage={setCasePage} />
     {:else}
       <section class="empty-state card">
@@ -709,7 +749,9 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
       props={{ cases, oncomplete: refreshCases, oncommitted: installCommittedCaseSnapshot, onmessage: (value: string) => caseMessage = value }} />
     {/if}
   {:else}
-    <LocalCollectionState state={casesSourceState} title="Cases unavailable" detail="Saved cases could not be read, so the count, empty state, imports, and mutations remain unavailable. Reload to retry without overwriting unknown saved work." />
+    <LocalCollectionState state={casesSourceState}
+      loadingTitle="Opening saved cases" loadingDetail="Reading case records from this workspace."
+      title="Cases unavailable" detail="Saved cases could not be read, so the count, empty state, imports, and mutations remain unavailable. Reload to retry without overwriting unknown saved work." />
   {/if}
 </section>
 
@@ -719,5 +761,6 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
   .advanced-case-tools { margin: 16px 0; padding-block: 12px; border-block: 1px solid var(--border); }
   .advanced-case-tools summary { cursor: pointer; font: 650 var(--text-sm) var(--mono); }
   .advanced-case-tools > button { margin-top: 12px; }
+  .draft-inventory-disclosure{margin-block:12px;min-width:0}.draft-inventory-disclosure>summary{cursor:pointer;min-height:44px;display:list-item;align-content:center;font-weight:650}
   .message { color: var(--accent); font-size: var(--text-sm); overflow-wrap: anywhere; }
 </style>
