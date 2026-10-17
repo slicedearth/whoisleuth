@@ -22,7 +22,6 @@
     type DashboardAttentionSummary as DashboardAttentionSummaryModel,
     type DashboardWorkspaceState,
   } from '#lib/analysis/dashboard-workspace-state.ts';
-  import { publicHomepage } from '#lib/workspaces.ts';
   import { statusLabel } from '#lib/analysis/case-record-decisions.ts';
   import { ANALYST_REVIEW_REQUIRED_COLLECTION_IDS } from '#lib/analysis/analyst-review-source-state.ts';
   import { restoreSubmittedFocus } from '#lib/controllers/submitted-draft.ts';
@@ -214,9 +213,7 @@
   <meta name="description" content="Start or continue a WHOISleuth domain investigation from the protected console's Dashboard.">
 </svelte:head>
 
-<PageHeading eyebrow="Console" title="Dashboard" description="Continue your work or investigate a new target.">
-  <a class="btn" href={publicHomepage.href} target="_blank" rel="noopener noreferrer" aria-label="View public homepage. Opens in a new tab.">View public homepage</a>
-</PageHeading>
+<PageHeading eyebrow="Console" title="Dashboard" description="Continue your work or investigate a new target." />
 <form class="dashboard-lookup" onsubmit={openLookup}>
   <label for="dashboard-target">Investigate a target</label>
   <div><input id="dashboard-target" bind:value={lookupTarget} maxlength="253" placeholder="Domain, IP address or ASN" autocomplete="off" autocapitalize="none" spellcheck="false"><button class="primary" type="submit" disabled={!lookupTarget.trim()}>Open Lookup</button></div>

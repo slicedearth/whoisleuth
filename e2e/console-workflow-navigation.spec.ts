@@ -422,6 +422,8 @@ test('tab favourites resolve exact retained Cases and canonical destinations wit
     return favourites;
   };
   let favourites = await open();
+  await expect(favourites).toContainText('Keep shortcuts to frequently used tools, views and Case sections while you work.');
+  await expect(favourites).toContainText('These links last only in this tab.');
   await expect(favourites.getByRole('button', { name: 'Add selected Case favourite', exact: true })).toBeEnabled();
   await favourites.getByRole('combobox', { name: 'Case section', exact: true }).selectOption('evidence');
   await favourites.getByRole('button', { name: 'Add selected Case favourite', exact: true }).click();
@@ -482,6 +484,22 @@ test('tab favourites resolve exact retained Cases and canonical destinations wit
     for (const width of [320, 390, 1280, 2560]) {
       await page.setViewportSize({ width, height: 844 }); favourites = await open();
       await expectNoHorizontalOverflow(page);
+      const geometry = await favourites.evaluate(element => {
+        const drawer = element.closest('aside');
+        if (!drawer) throw new Error('Favourites must be inside the navigation drawer.');
+        // Read both bounds together while the mobile drawer is sliding open.
+        const sidebarBounds = drawer.getBoundingClientRect();
+        const favouriteBounds = element.getBoundingClientRect();
+        return {
+          left: favouriteBounds.left - sidebarBounds.left,
+          right: sidebarBounds.right - favouriteBounds.right,
+          controlHeights: Array.from(element.querySelectorAll('button, select'), control => control.getBoundingClientRect().height),
+        };
+      });
+      expect(geometry.left).toBeGreaterThanOrEqual(12);
+      expect(geometry.right).toBeGreaterThanOrEqual(12);
+      expect(geometry.controlHeights.length).toBeGreaterThan(0);
+      for (const height of geometry.controlHeights) expect(height).toBeGreaterThanOrEqual(44);
       if (captureVisualEvidenceEnabled()) await favourites.screenshot({ path: testInfo.outputPath(`favourites-${theme}-${width}.png`) });
     }
     expect((await new AxeBuilder({ page }).include('.sidebar-favourites').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);

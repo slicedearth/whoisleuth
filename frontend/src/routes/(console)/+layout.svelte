@@ -6,6 +6,7 @@
     consoleNavigationGroups,
     isNavigationItemActive,
     isProtectedDestination,
+    publicHomepage,
     referenceNavigation,
   } from '#lib/workspaces.ts';
   import { preloadBestEffort, preloadOnIdle } from '#lib/idle-preload.ts';
@@ -310,6 +311,7 @@
     <header class="site-header" bind:this={consoleHeader} inert={commandOpen} aria-hidden={commandOpen?'true':undefined}>
       <a href="/dashboard"><span class="mark small"><BrandMark /></span><span class="console-brand-copy"><strong><BrandWordmark /><span class="sr-only"> Dashboard</span></strong><small>Domain intelligence console</small></span></a>
       <div class="console-header-actions">
+        <a class="public-homepage" href={publicHomepage.href} target="_blank" rel="noopener noreferrer" aria-label="View public homepage. Opens in a new tab.">View public homepage</a>
         <button class="command-trigger" type="button" aria-label="Search console navigation" aria-keyshortcuts="Control+k Meta+k" bind:this={commandTrigger} onpointerenter={() => preloadBestEffort(() => import('#lib/console-command-navigation.ts'))} onfocus={() => preloadBestEffort(() => import('#lib/console-command-navigation.ts'))} onclick={()=>void openCommandPalette()}><span class="shortcut-wide" aria-hidden="true">(Ctrl/⌘ K)</span><span class="command-icon" aria-hidden="true"><IntelligenceIcon name="command" size={18} /></span><strong>Search</strong></button>
         <span class="sign-out-control">
           <button class="console-sign-out" type="button" disabled={signingOut} onclick={logout}>{signingOut?'Signing out…':'Sign out'}</button>
@@ -407,13 +409,14 @@
     [data-presentation='bench'] .presentation-workspace.references-open>.tab-references{grid-column:2;grid-row:1}
   }
   @media print{.presentation-options,.tab-references{display:none!important}.presentation-workspace{display:block!important}}
-  .console-context{min-width:0;margin-bottom:18px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+  .console-context{min-width:0;margin-bottom:18px;padding:12px 14px 4px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel);font:400 var(--text-xs)/1.5 var(--font-sans)}
   .context-bar{display:flex;align-items:center;gap:8px 20px;flex-wrap:wrap;min-width:0}
-  .context-task{display:flex;align-items:baseline;gap:8px;margin:0;font-size:var(--text-xs)}
+  .context-task{display:flex;align-items:baseline;gap:6px;margin:0;font:inherit}
   .context-task>span{color:var(--muted)}
-  .context-backend{max-width:100%;font:600 var(--text-xs) var(--mono);color:var(--muted);white-space:nowrap;text-overflow:clip}
-  .context-storage{margin-top:4px;font-size:var(--text-xs);color:var(--muted)}
-  .context-details{display:flex;flex-wrap:wrap;gap:0 16px;align-items:start;min-width:0}
+  .context-task>strong{font-weight:600}
+  .context-backend{max-width:100%;font:inherit;color:var(--muted);white-space:nowrap;text-overflow:clip}
+  .context-storage{margin-top:0;font:inherit;color:var(--muted)}
+  .context-details{display:flex;flex-wrap:wrap;gap:0 16px;align-items:start;min-width:0;margin-top:8px;padding-top:2px;border-top:1px solid var(--border)}
   .context-details>details{min-width:0;max-width:100%;flex:0 1 auto}
   .context-details>details[open]{flex:1 1 100%}
   .context-storage>summary{min-height:44px;display:list-item;align-content:center;cursor:pointer;width:fit-content;max-width:100%;padding-block:8px}
@@ -424,14 +427,32 @@
   .login-links{display:flex;justify-content:center;gap:8px;margin:18px 0 0;color:var(--muted);font-size:var(--text-xs)}
   .login-links a{color:var(--accent)}
   .reference-nav{margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
-  .sidebar-favourites{margin-top:18px;min-width:0}.sidebar-favourites>summary{min-height:44px;align-content:center;cursor:pointer;overflow-wrap:anywhere;font-size:var(--text-xs)}
+  .sidebar-favourites{flex:none;margin:18px 16px 0;padding-top:10px;border-top:1px solid var(--border);min-width:0}
+  .sidebar-favourites>summary{min-height:44px;display:list-item;list-style-position:inside;align-content:center;cursor:pointer;overflow-wrap:anywhere;color:var(--text);font:600 var(--text-sm)/1.5 var(--font-sans)}
+  .public-homepage{display:inline-flex;align-items:center;min-height:44px;padding-inline:4px;color:var(--accent);font:600 var(--text-xs)/1.5 var(--font-sans);text-decoration:none;white-space:nowrap}
+  .public-homepage:hover,.public-homepage:focus-visible{text-decoration:underline;text-underline-offset:3px}
   .sign-out-control{position:relative;display:inline-flex}
   .sign-out-error{position:absolute;z-index:20;top:calc(100% + 8px);right:0;width:min(300px,calc(100vw - 32px));padding:9px 11px;border:1px solid var(--danger);border-radius:var(--radius-sm);background:var(--panel);box-shadow:0 8px 24px rgb(var(--shadow-rgb) / .28);color:var(--danger);font-size:var(--text-2xs);line-height:1.4}
   .console-nav-group+.console-nav-group{margin-top:14px;padding-top:0}
-  .command-trigger{display:flex;min-height:var(--console-control-height);align-items:center;gap:7px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);color:var(--muted);font:650 var(--text-2xs) var(--mono);white-space:nowrap}
+  .command-trigger{display:flex;min-height:var(--console-control-height);align-items:center;gap:7px;padding:0 10px;border:1px solid var(--quiet-control-border);border-radius:var(--radius-sm);background:var(--panel);color:var(--text);font:600 var(--text-xs) var(--font-sans);white-space:nowrap}
   .command-trigger:hover,.command-trigger:focus-visible{border-color:var(--accent);color:var(--accent);background:rgb(var(--accent-rgb) / .07)}
-  .command-trigger span{padding:2px 4px;border:1px solid var(--border);border-radius:4px;color:var(--text);font:inherit}
+  .command-trigger span{padding:2px 4px;border:1px solid var(--border);border-radius:4px;color:var(--text);font:var(--text-2xs) var(--mono)}
   .command-trigger .command-icon{display:none;padding:0;border:0;color:currentColor}
   .command-trigger strong{font:inherit}
   @media(max-width:900px){.command-trigger{width:var(--console-icon-control-width);padding:0;justify-content:center}.command-trigger span{padding:0;border:0}.command-trigger .shortcut-wide,.command-trigger strong{display:none}.command-trigger .command-icon{display:grid;place-items:center}}
+  @media(max-width:720px){
+    .context-bar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px}
+    .context-bar :global(.workspace-scope){grid-column:1/-1}
+    .context-details{gap:0 14px}
+  }
+  @media(max-width:600px){
+    .site-header{display:grid;grid-template-columns:minmax(0,1fr) auto auto;grid-template-rows:44px 44px;gap:4px 6px;padding-block:6px}
+    .site-header>a{grid-column:1;grid-row:1}
+    .console-header-actions{display:contents}
+    .public-homepage{grid-column:2/4;grid-row:1;justify-self:end;padding:0}
+    .command-trigger{grid-column:1;grid-row:2;justify-self:start;width:auto;padding-inline:10px}
+    .command-trigger strong{display:inline}
+    .sign-out-control{grid-column:2;grid-row:2}
+    .navigation-toggle{grid-column:3;grid-row:2}
+  }
 </style>
