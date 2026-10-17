@@ -36,6 +36,12 @@ definite drift. Matching runs return 4, including quiet output. Historical sourc
 failures, unconfigured expectations, report/checkpoint formats and the separate
 flight-recorder meaning of `material-drift` are unchanged.
 
+Domain-control projection also separates parent registration from exact-host
+service evidence before recency selection. Historical scope remains supported;
+newer children cannot overwrite apex or sibling service observations. One-shot
+monitoring rejects unsupported child targets before collection and categorises
+wrong-host replies as failed Lookups, preserving checkpoint identities and counts.
+
 Work on a focused branch and prepare the approved explicit version:
 
 ```bash

@@ -781,6 +781,16 @@ Policy matches return **4** in JSON and quiet modes too, without adding diagnost
 fields to monitor reports or checkpoints. Without a policy, rejected Lookups
 retain their existing failure exit; constituent-source states alone do not.
 
+Domain-control review keeps registration evidence at the registrable domain and
+DNS, TLS and web evidence at the observed hostname. It selects the newest eligible
+evidence within each scope; a newer child-host capture cannot replace an apex or
+sibling's service evidence. Separately declared delegation scope is retained.
+Historical Lookups use their retained availability domain, or their original
+registration scope when no hostname was retained, never the submitted query.
+`monitor-once` accepts only registrable-domain targets and rejects an admitted
+child target before any collection starts. A wrong-host collector response is a
+failed Lookup, not an extra successful observation or a retargeted check.
+
 For `danger`, export your Brand Profiles from Brands and explicitly select Deep
 collection. The same Risk model and Brand comparisons used by the console
 evaluate the collected evidence without extra requests:

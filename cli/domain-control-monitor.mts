@@ -54,6 +54,7 @@ import {
 import type { UnknownRecord } from './saved-lookup.mts';
 import { CliUsageError } from './errors.mts';
 import { lookupStrictExitFindings } from './strict-exit.mts';
+import { lookupObservationHostname } from '../packages/evidence/lookup-target.mts';
 
 export { CLI_DOMAIN_CONTROL_MONITOR_SCHEMA, CLI_DOMAIN_CONTROL_MONITOR_VERSION };
 export const MAX_DOMAIN_CONTROL_MONITOR_DOMAINS = CONTRACT_MAX_DOMAIN_CONTROL_MONITOR_DOMAINS;
@@ -295,6 +296,18 @@ export async function runDomainControlMonitor(
   }
   const previous = previousSnapshot(previousInput, startedAt);
   const entries = manifest.entries.slice(0, Math.min(options.limit, MAX_DOMAIN_CONTROL_MONITOR_DOMAINS));
+  const targets = entries.map(entry => {
+    let classified;
+    try {
+      classified = classifyQuery(entry.domain);
+    } catch {
+      throw new CliUsageError('monitor-once requires registrable-domain targets.');
+    }
+    if (classified.type !== 'domain' || classified.isSubdomain) {
+      throw new CliUsageError('monitor-once supports registrable-domain targets only; exact-host monitoring is not supported.');
+    }
+    return classified;
+  });
   const lookups: unknown[] = new Array(entries.length);
   const failuresByIndex: Array<Readonly<{ domain: string; error: string }> | undefined> = new Array(entries.length);
   let cursor = 0;
@@ -306,12 +319,17 @@ export async function runDomainControlMonitor(
       const entry = entries[index];
       if (!entry) break;
       try {
-        const classified = classifyQuery(entry.domain);
+        const classified = targets[index]!;
         const result = await options.executeLookup(classified, { fast: false, compact: false, ...(options.signal ? { signal: options.signal } : {}) });
         options.signal?.throwIfAborted();
         const capturedAt = requireIsoTimestamp(options.now(), 'Domain-control capture time');
         if (Date.parse(capturedAt) < checkedAt) throw new CliUsageError('Domain-control capture time must not precede the run.');
-        lookups[index] = buildCliLookupDocument(entry.domain, classified, result as UnknownRecord, capturedAt, 'deep');
+        const lookup = buildCliLookupDocument(entry.domain, classified, result as UnknownRecord, capturedAt, 'deep');
+        const observedHostname = lookupObservationHostname({ domain: entry.domain, ...(lookup.availability as UnknownRecord) });
+        if (observedHostname !== null && observedHostname !== entry.domain) {
+          throw new TypeError('Lookup observation does not match the monitor target.');
+        }
+        lookups[index] = lookup;
       } catch {
         if (options.signal?.aborted) {
           throw options.signal.reason || new DOMException('Aborted', 'AbortError');

@@ -16,10 +16,10 @@ import { MAX_DOMAIN_CONTROL_MONITOR_INPUT_BYTES } from '../packages/contracts/do
 
 const NOW = '2026-08-05T04:00:00.000Z';
 
-function manifest() {
+function manifest(domains = ['alpha.test', 'beta.test', 'gamma.test']) {
   return buildDomainControlManifest({
     schema: DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA, version: 1, expiresAt: '2026-09-05T04:00:00.000Z',
-    entries: ['alpha.test', 'beta.test', 'gamma.test'].map((domain) => ({ domain, nameservers: [`ns1.${domain}`], ds: [], mx: [], caa: [], tlsIssuer: null, tlsSpkiSha256: null, registrarLock: 'required', renewalReviewAt: null, note: null })),
+    entries: domains.map((domain) => ({ domain, nameservers: [`ns1.${domain}`], ds: [], mx: [], caa: [], tlsIssuer: null, tlsSpkiSha256: null, registrarLock: 'required', renewalReviewAt: null, note: null })),
   }, NOW);
 }
 
@@ -109,6 +109,10 @@ describe('CLI one-shot domain control monitor', () => {
     const second = await runDomainControlMonitor(JSON.stringify(manifest()), JSON.stringify(first), { executeLookup, now: () => '2026-08-06T04:00:00.000Z', limit: 2, concurrency: 2 });
     assert.ok(maximum <= 2);
     assert.equal(first.collection.requested, 2);
+    assert.equal(first.collection.succeeded, 2);
+    assert.equal(second.collection.succeeded, 2);
+    assert.equal(second.collection.failed, 0);
+    assert.deepEqual(second.observations.map(item => item.domain), ['alpha.test', 'beta.test']);
     assert.equal(second.flightRecorder.observationCount, 4);
     assert.equal(second.flightRecorder.summary.unexpectedChanges, 0);
   });
@@ -142,6 +146,47 @@ describe('CLI one-shot domain control monitor', () => {
       .find((profile) => profile.id === edge?.privacyProfileId);
     assert.equal(privacy?.sharingReview, 'required');
     assert.equal(privacy?.excludedCategories.includes('raw-upstream-payloads'), true);
+  });
+
+  test('rejects unsupported child monitoring targets before any collection starts', async () => {
+    let calls = 0, stdout = '', stderr = '';
+    const code = await runCli(['monitor-once', '--json'], {
+      stdout: { write(value) { stdout += value; } }, stderr: { write(value) { stderr += value; } }, now: () => NOW,
+      readArtifactInput: async () => JSON.stringify(manifest(['alpha.test', 'login.alpha.test'])),
+      runUnifiedLookup: async classified => { calls++; return result(classified.registrableDomain || 'alpha.test'); },
+    });
+    assert.equal(code, EXIT_CODES.USAGE, stderr);
+    assert.equal(calls, 0);
+    assert.equal(stdout, '');
+    assert.ok(stderr.length > 0);
+  });
+
+  test('categorises a wrong-host collector response without inflating counts or corrupting a checkpoint', async () => {
+    let stdout = '';
+    const source = JSON.stringify(manifest(['alpha.test', 'beta.test']));
+    assert.equal(await runCli(['monitor-once', '--json'], {
+      stdout: { write(value) { stdout += value; } }, stderr: { write() {} }, now: () => NOW,
+      readArtifactInput: async () => source,
+      runUnifiedLookup: async classified => {
+        const domain = classified.registrableDomain!;
+        const response = result(domain);
+        return domain === 'alpha.test' ? { ...response, availability: {
+          ...response.availability, domain, observationHostname: 'login.alpha.test',
+        } } : response;
+      },
+    }), EXIT_CODES.PARTIAL_FAILURE);
+    const checkpoint = JSON.parse(stdout);
+    assert.equal(checkpoint.collection.requested, 2);
+    assert.equal(checkpoint.collection.succeeded, 1);
+    assert.equal(checkpoint.collection.failed, 1);
+    assert.deepEqual(checkpoint.observations.map((item: { domain: string }) => item.domain), ['beta.test']);
+    const resumed = await runDomainControlMonitor(source, stdout, {
+      executeLookup: async classified => result(classified.registrableDomain!),
+      now: () => '2026-08-06T04:00:00.000Z', limit: 2, concurrency: 1,
+    });
+    assert.equal(resumed.collection.succeeded, 2);
+    assert.equal(resumed.collection.failed, 0);
+    assert.equal(resumed.flightRecorder.observationCount, 3);
   });
 
   test('preserves terminal, JUnit, quiet, prior-snapshot, and failure-policy paths', async () => {

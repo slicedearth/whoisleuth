@@ -3,6 +3,7 @@ import { latestObservationCohort } from '../packages/evidence/latest-observation
 import { canonicalCaaRecord, canonicalDsRecord, canonicalMxRecord, canonicalDomainControlRecords, canonicalPostureRecords } from '../packages/evidence/domain-control-runtime.mts';
 import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 import { postureTransferRestriction } from '../packages/evidence/domain-posture-context.mts';
+import { lookupObservationHostname } from '../packages/evidence/lookup-target.mts';
 import { MAX_DOMAIN_CONTROL_INPUT_RECORDS, PUBLIC_DOMAIN_CONTROL_MANIFEST_VERSION } from '../packages/contracts/domain-control-manifest.mts';
 
 import {
@@ -27,6 +28,7 @@ import {
 } from '../packages/contracts/domain-control-review.mts';
 import {
   MAX_FLIGHT_RECORDER_VALUES,
+  DOMAIN_CONTROL_FLIGHT_RECORDER_FIELDS,
   mergeConcurrentDomainControlFields,
   type DomainControlFlightRecorderField,
   type DomainControlFlightRecorderObservation,
@@ -179,12 +181,25 @@ function pageIdentityValue(availability: UnknownRecord): string[] {
   return components.length ? [components.join(' | ')] : [];
 }
 
-export function domainControlObservationFromSavedLookup(document: SavedLookupDocument): DomainControlFlightRecorderObservation {
+function serviceHostname(document: SavedLookupDocument): string | null {
+  // Historical saved Lookups collected supporting evidence at the registration
+  // domain unless availability retained a more specific scope. Never use query.
+  return lookupObservationHostname({ domain: document.registrableDomain, ...record(document.availability) });
+}
+
+export function domainControlObservationFromSavedLookup(
+  document: SavedLookupDocument,
+  domain = document.registrableDomain,
+): DomainControlFlightRecorderObservation {
   const availability = record(document.availability);
+  const observedHostname = serviceHostname(document);
   const dns = record(availability.dns);
   const dnsRecords = record(dns.records);
   const dnsAt = sourceClock(dns.observedAt, dns.checkedAt);
   const delegation = record(dns.delegation);
+  const delegationHostname = delegation.domain === undefined
+    ? observedHostname === document.registrableDomain ? observedHostname : null
+    : lookupObservationHostname({ domain: delegation.domain });
   const delegationRecords = record(delegation.records);
   const tls = record(availability.tls);
   const tlsState = sourceState(tls);
@@ -201,14 +216,15 @@ export function domainControlObservationFromSavedLookup(document: SavedLookupDoc
   const hostname = (value: unknown) => canonicalDomainControlRecords([value], 'nameservers')[0] ?? '';
   const identity = record(availability.pageIdentity);
   const identityValues = pageIdentityValue(availability);
-  const fields: Field[] = [
+  const registrationFields: Field[] = [
     scalar('registrar', registry.source, registry.sourceState, record(registry.parsed.registrar).name ?? registry.parsed.registrar, registry.observedAt, 300),
     scalar('registrar_lock', registry.source, registry.sourceState, lockValue(registry.parsed), registry.observedAt, 20),
     scalar('registry_dnssec', 'Registry RDAP', rdapState, rdapParsed.dnssec, rdapAt, 80),
     recordField('registry_nameservers', 'Registry RDAP', rdapState, rdapParsed.nameservers, hostname, rdapAt),
     recordField('whois_nameservers', 'WHOIS', diagnostic(document, 'whois'), record(record(document.whois).parsed).nameservers, hostname, registryClock(document, 'whois')),
+  ];
+  const serviceFields: Field[] = [
     recordField('delegated_nameservers', 'DNS NS', dnsRecordState(dns, 'ns'), dnsRecords.ns, hostname, dnsAt),
-    recordField('delegation_ds', 'DNS delegation', Object.hasOwn(delegationRecords, 'ds') ? sourceState(delegation) : 'unsupported', delegationRecords.ds, canonicalDsRecord, sourceClock(delegation.observedAt)),
     recordField('mail_exchangers', 'DNS MX', dnsRecordState(dns, 'mx'), dnsRecords.mx, canonicalMxRecord, dnsAt),
     recordField('caa_policy', 'DNS CAA', dnsRecordState(dns, 'caa'), dnsRecords.caa, canonicalCaaRecord, dnsAt),
     scalar('tls_certificate', 'TLS', tlsState, certificate.fingerprintSha256 ?? tls.fingerprintSha256, tlsAt, 128),
@@ -216,8 +232,15 @@ export function domainControlObservationFromSavedLookup(document: SavedLookupDoc
     scalar('http_origin', 'HTTP', sourceState(http), http.finalOrigin, sourceClock(http.observedAt, http.checkedAt)),
     field('page_identity', 'Static page identity', sourceState(identity) === 'observed' && !identityValues.length ? 'partial' : sourceState(identity), identityValues, sourceClock(identity.observedAt)),
   ];
+  const fields = mergeConcurrentDomainControlFields([
+    domain === document.registrableDomain ? registrationFields : [],
+    domain === observedHostname ? serviceFields : [],
+    domain === delegationHostname ? [recordField('delegation_ds', 'DNS delegation',
+      Object.hasOwn(delegationRecords, 'ds') ? sourceState(delegation) : 'unsupported',
+      delegationRecords.ds, canonicalDsRecord, sourceClock(delegation.observedAt))] : [],
+  ]);
   return Object.freeze({
-    domain: document.registrableDomain, capturedAt: document.generatedAt, collectionDepth: document.mode,
+    domain, capturedAt: document.generatedAt, collectionDepth: document.mode,
     fields: Object.freeze(fields.map((item) => item.state === 'observed' && item.observedAt !== null
       && Date.parse(item.observedAt) > Date.parse(document.generatedAt) ? Object.freeze({ ...item, state: 'partial' as const }) : item)),
   });
@@ -285,18 +308,38 @@ export function buildCliDomainControlReview(inputText: string, generatedAt = new
   const lookups = input.lookups.map((item, index) => parseSavedLookupDocument(JSON.stringify(item), { label: `Lookup ${index + 1}` }));
   const byDomain = new Map<string, SavedLookupDocument[]>();
   for (const lookup of lookups) {
-    const group = byDomain.get(lookup.registrableDomain) ?? [];
-    group.push(lookup);
-    byDomain.set(lookup.registrableDomain, group);
+    const domains = new Set([lookup.registrableDomain, serviceHostname(lookup)]);
+    for (const domain of domains) {
+      if (domain === null) continue;
+      const group = byDomain.get(domain) ?? [];
+      group.push(lookup);
+      byDomain.set(domain, group);
+    }
   }
-  let ignoredHistoricalLookups = 0;
+  const retainedLookups = new Set<SavedLookupDocument>();
   const selected = [...byDomain.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([domain, documents]) => {
-    const cohort = latestObservationCohort(documents, (document) => document.generatedAt);
-    ignoredHistoricalLookups += cohort.superseded;
-    const captures = cohort.latest.map((document) => ({ document, observation: domainControlObservationFromSavedLookup(document) }));
+    const candidates = documents.map((document) => {
+      const observation = domainControlObservationFromSavedLookup(document, domain);
+      return { document, observation, reviewFields: reviewFields(document, observation) };
+    });
+    const currentCaptures = new Set<(typeof candidates)[number]>();
+    const currentFields: (readonly Field[])[] = [];
+    const currentReviewFields: (readonly Field[])[] = [];
+    for (const id of DOMAIN_CONTROL_FLIGHT_RECORDER_FIELDS) {
+      const eligible = candidates.filter(candidate => candidate.observation.fields.some(item => item.id === id));
+      const latest = latestObservationCohort(eligible, candidate => candidate.document.generatedAt);
+      for (const capture of latest.latest) {
+        currentCaptures.add(capture);
+        retainedLookups.add(capture.document);
+        currentFields.push(capture.observation.fields.filter(item => item.id === id));
+        currentReviewFields.push(capture.reviewFields.filter(item => item.id === id));
+      }
+    }
+    const captures = [...currentCaptures];
+    const cohort = latestObservationCohort(captures, capture => capture.document.generatedAt);
     const first = captures[0];
     if (!first || !cohort.observedAt || cohort.undated.length) throw new CliUsageError('Saved Lookup observation times could not be ordered.');
-    const mergedFields = mergeConcurrentDomainControlFields(captures.map((capture) => capture.observation.fields));
+    const mergedFields = mergeConcurrentDomainControlFields(currentFields);
     const futureCapture = Date.parse(cohort.observedAt) > Date.parse(generatedAt);
     const observation: DomainControlFlightRecorderObservation = Object.freeze({
       domain,
@@ -305,7 +348,7 @@ export function buildCliDomainControlReview(inputText: string, generatedAt = new
         ? first.observation.collectionDepth : 'unknown',
       fields: futureCapture ? mergedFields.map((field) => ({ ...field, state: 'partial' as const })) : mergedFields,
     });
-    const fields = mergeConcurrentDomainControlFields(captures.map((capture) => reviewFields(capture.document, capture.observation)));
+    const fields = mergeConcurrentDomainControlFields(currentReviewFields);
     return { observation, reviewFields: futureCapture || observation.collectionDepth === 'unknown'
       ? fields.map((field) => ({ ...field, state: 'partial' as const })) : fields };
   });
@@ -332,7 +375,7 @@ export function buildCliDomainControlReview(inputText: string, generatedAt = new
     input: Object.freeze({
       lookupsReceived: lookups.length,
       latestDomainObservations: observations.length,
-      ignoredHistoricalLookups,
+      ignoredHistoricalLookups: lookups.length - retainedLookups.size,
     }),
     limitations: CLI_DOMAIN_CONTROL_REVIEW_LIMITATIONS,
   });
