@@ -49,8 +49,12 @@ for (const viewport of VIEWPORTS) {
       for (const theme of ['light', 'dark'] as const) {
         await useTheme(page, theme);
         await page.evaluate(() => document.fonts.ready);
-        const controls = header.locator('a, button');
-        await expect(controls).toHaveCount(5);
+        await expect(header.getByRole('link', { name: 'WHOISleuth Dashboard', exact: true })).toBeVisible();
+        await expect(homepage).toBeVisible();
+        await expect(header.getByRole('button', { name: 'Search console navigation', exact: true })).toBeVisible();
+        await expect(signOutButton).toBeVisible();
+        await expect(header.getByRole('button', { name: 'Toggle navigation', exact: true })).toBeVisible();
+        const controls = header.locator('a:visible, button:visible');
         const boxes = await controls.evaluateAll(elements => elements.map(element => {
           const { x, y, width, height } = element.getBoundingClientRect();
           return { x, y, width, height };

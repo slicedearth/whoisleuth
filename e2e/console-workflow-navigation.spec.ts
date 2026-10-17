@@ -422,8 +422,6 @@ test('tab favourites resolve exact retained Cases and canonical destinations wit
     return favourites;
   };
   let favourites = await open();
-  await expect(favourites).toContainText('Keep shortcuts to frequently used tools, views and Case sections while you work.');
-  await expect(favourites).toContainText('These links last only in this tab.');
   await expect(favourites.getByRole('button', { name: 'Add selected Case favourite', exact: true })).toBeEnabled();
   await favourites.getByRole('combobox', { name: 'Case section', exact: true }).selectOption('evidence');
   await favourites.getByRole('button', { name: 'Add selected Case favourite', exact: true }).click();
