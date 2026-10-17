@@ -5,6 +5,7 @@
   import PublicGoalPaths from '#lib/components/PublicGoalPaths.svelte';
   import PublicResourceCards from '#lib/components/PublicResourceCards.svelte';
   import SyntheticTopologyBackdrop from '#lib/components/SyntheticTopologyBackdrop.svelte';
+  import IntelligenceIcon from '#lib/components/IntelligenceIcon.svelte';
   import { publicGuideGoals } from '#lib/public-guide.ts';
   import { PUBLIC_RESOURCES } from '#lib/public-resources.ts';
 
@@ -31,10 +32,7 @@
     <h1>Understand a domain.<br><span>Before you act.</span></h1>
     <p class="lede">Investigate a domain or inspect material you already have. Compare source evidence, keep a case and prepare a reviewed handoff.</p>
     <div class="hero-actions">
-      <div class="example-action">
-        <a class="primary" href="/demo" aria-describedby="example-scope">Explore an example investigation</a>
-        <p id="example-scope">Fictional evidence. No live collection.</p>
-      </div>
+      <a class="primary" href="/demo">Explore the demo</a>
       <PublicConsoleCta />
     </div>
   </div>
@@ -44,19 +42,19 @@
 </section>
 
 <section class="jobs" id="features" aria-labelledby="jobs-title">
-  <div class="section-intro"><p class="eyebrow">Investigate · Respond · Assure</p><h2 id="jobs-title">Start with the work in front of you</h2><p>Choose a domain, a suspicious message, a brand candidate or a saved case. The guides and fictional examples are open to everyone; your own investigations use the console.</p></div>
+  <div class="section-intro"><p class="eyebrow">Investigate · Respond · Assure</p><h2 id="jobs-title">Start with the work in front of you</h2><p>Choose a domain, a suspicious message, a brand candidate or a saved case. The guides and worked examples are open to everyone; your own investigations use the console.</p></div>
   <PublicGoalPaths goals={publicGuideGoals} />
 </section>
 
 <section class="evidence" aria-labelledby="evidence-title">
   <div class="section-intro"><h2 id="evidence-title">Follow the evidence behind a finding</h2><p>Collect relevant sources or start with supplied material. Compare observations, keep the useful evidence and choose what to share.</p></div>
-  <div class="evidence-grid">{#each evidenceSources as source}<article><h3>{source.title}</h3><div><p>{source.description}</p>{#if source.guide}<a class="evidence-guide" href={source.guide.href}>{source.guide.label}<span aria-hidden="true"> →</span></a>{/if}</div></article>{/each}</div>
+  <div class="evidence-grid">{#each evidenceSources as source}<article><h3>{source.title}</h3><div><p>{source.description}</p>{#if source.guide}<a class="evidence-guide" href={source.guide.href}>{source.guide.label} <IntelligenceIcon name="arrow-right" size={16} /></a>{/if}</div></article>{/each}</div>
 </section>
 
 <section class="learn" aria-labelledby="learn-title">
   <div class="section-intro"><h2 id="learn-title">Learn how the evidence fits together</h2><p>Choose a source, follow a worked example and decide what to review next.</p></div>
   <PublicResourceCards resources={PUBLIC_RESOURCES.slice(0,4)} compact />
-  <a class="all-resources" href="/resources">Browse the topic library <span aria-hidden="true">→</span></a>
+  <a class="all-resources" href="/resources">Browse the topic library <IntelligenceIcon name="arrow-right" size={16} /></a>
 </section>
 
 <section class="principles card" aria-labelledby="principles-title">
@@ -74,8 +72,6 @@
   .hero-actions a{display:inline-flex;min-height:44px;align-items:center;justify-content:center;padding:10px 16px;border-radius:var(--radius-sm);font:750 var(--text-xs) var(--font-sans)}
   .hero-actions > :global(a){min-height:44px}
   .hero-actions .primary{color:var(--primary-text);background:linear-gradient(135deg,var(--primary-start),var(--primary-end))}
-  .example-action{min-width:0;max-width:100%}
-  .example-action p{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .hero-preview{min-width:0}
   .hero-preview :global(.preview-panel){box-shadow:0 18px 48px rgb(var(--shadow-rgb) / .16)}
   .jobs,.evidence,.learn{padding:72px 0;border-top:1px solid var(--border)}
@@ -83,7 +79,7 @@
   .evidence{display:grid;grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr);gap:clamp(34px,7vw,82px);align-items:start}.evidence .section-intro{margin:0}.evidence-grid{display:grid}.evidence-grid article{display:grid;grid-template-columns:minmax(130px,.42fr) minmax(0,1fr);gap:24px;padding:18px 0;border-top:1px solid var(--border)}.evidence-grid article:last-child{border-bottom:1px solid var(--border)}.evidence-grid h3{margin:0;font:700 1rem var(--mono)}.evidence-grid p{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.65}
   .evidence-grid article>div{min-width:0}.evidence-guide{display:inline-flex;align-items:center;gap:5px;min-height:44px;margin-top:4px;color:var(--accent);font:700 var(--text-xs) var(--font-sans)}
   .principles{margin:35px 0;padding:clamp(24px,5vw,46px);box-shadow:none}.principles>div{max-width:780px}
-  .all-resources{display:inline-flex;margin-top:18px;color:var(--accent);font:700 var(--text-xs) var(--mono)}
+  .all-resources{display:inline-flex;align-items:center;gap:6px;min-height:44px;margin-top:18px;color:var(--accent);font:700 var(--text-xs) var(--mono)}
   @media(max-width:980px){.hero{grid-template-columns:1fr}.hero-preview{max-width:760px}}
   @media(max-width:680px){.hero{padding-bottom:62px}.hero h1{font-size:clamp(2.25rem,10vw,2.7rem)}.evidence{grid-template-columns:1fr}.evidence-grid article{grid-template-columns:1fr;gap:7px}.hero-preview :global(.preview-note){text-align:left}}
 </style>

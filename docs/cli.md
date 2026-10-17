@@ -649,7 +649,10 @@ second input. Supply every input for an uncompleted step to use files instead,
 or override a connection with `--use-artifact <step-id>:<input-number>=<earlier-step-id>`.
 Input numbers start at 1 and refer to the fixed recipe's placeholders.
 `diff` compares saved observations of the same or different domains; `timeline`
-orders observations of one domain. Candidate and domain-control intent inputs
+orders observations of one domain. Web-derived fields require complete collection
+for the relevant page or favicon; failed, partial and historical unknown collection
+keep their values visible without establishing equality or change. Source-health
+changes remain comparable separately. Candidate and domain-control intent inputs
 remain analyst selections. No external file is inferred or extracted automatically.
 `reconcile` lists each observation time and declared observer/vantage, keeping
 disagreement and unavailable evidence separate. Distinct labels do not verify
@@ -762,6 +765,55 @@ and machine output contains no ANSI or transient progress text.
   diagnostic paths are not copied into the XML. This is not a truth verdict.
 - `--output` writes a private local file atomically and refuses an existing path
   unless `--force` is also selected.
+
+Lookup, Bulk and Discover scan evaluate `--fail-on` against every collected or
+restored result, before output filters. A fulfilled lookup can still match
+`source-failure` through its diagnostics. Quiet and event output do not change
+the policy exit: matches return **4**, with diagnostics on stderr. Ordinary
+collection/checkpoint failures and Lookup's separate `--strict-exit` still apply.
+
+For `monitor-once`, `source-failure` also checks the current run's constituent
+source diagnostics, even when the Lookup fulfils. `inconclusive` checks incomplete
+requested comparisons independently of the headline: MX drift does not hide
+unavailable nameserver evidence. Skipped or unsupported sources are not failed
+requests; an unsupported requested comparison can still be inconclusive.
+Unconfigured expectations and historical source failures do not match these
+policies. `material-drift` continues to mean unexpected complete observation
+changes in the flight recorder, not a desired-state mismatch or missing evidence.
+Policy matches return **4** in JSON and quiet modes too, without adding diagnostic
+fields to monitor reports or checkpoints. Without a policy, rejected Lookups
+retain their existing failure exit; constituent-source states alone do not.
+
+Domain-control review keeps registration evidence at the registrable domain and
+DNS, TLS and web evidence at the observed hostname. It selects the newest eligible
+evidence within each scope; a newer child-host capture cannot replace an apex or
+sibling's service evidence. Separately declared delegation scope is retained.
+Historical Lookups use their retained availability domain, or their original
+registration scope when no hostname was retained, never the submitted query.
+`monitor-once` accepts only registrable-domain targets and rejects an admitted
+child target before any collection starts. A wrong-host collector response is a
+failed Lookup, not an extra successful observation or a retargeted check.
+
+For `danger`, export your Brand Profiles from Brands and explicitly select Deep
+collection. The same Risk model and Brand comparisons used by the console
+evaluate the collected evidence without extra requests:
+
+```bash
+whoisleuth lookup candidate.example --deep --brand-profile brand.json --fail-on danger --json
+whoisleuth bulk domains.txt --deep --brand-profile brand.json --fail-on danger --errors-only --json
+```
+
+The selected file uses the existing versioned Brand Profile export format,
+must provide one unambiguous valid profile with an official domain, and is bounded
+by the existing Brand Profile import byte limit. If the export contains multiple
+profiles, add `--brand-id <exact-profile-id>` from the selected profile's `id`
+field; no first-profile default is chosen. Its private fields are not copied into
+results or checkpoints or sent to sources. Restore it explicitly when resuming.
+Danger matches report the scoring-model version and evidence quality. The
+threshold prioritises review, not confirmed maliciousness. Fast collection,
+missing Brand context or ineligible registration evidence cannot establish a
+match; exit **0** does not establish low risk, complete coverage or safety.
+`inconclusive` and `source-failure` remain independently selected policies.
 
 Local configuration profiles can set presentation, Fast collection, bounded
 concurrency and observer labels. They cannot add targets, enable Deep

@@ -22,7 +22,7 @@ aids rather than automated verdicts.
 <p align="center">
   <a href="https://www.whoisleuth.com"><strong>View WHOISleuth</strong></a>
   &nbsp;·&nbsp;
-  <a href="https://www.whoisleuth.com/demo"><strong>Explore the synthetic demo</strong></a>
+  <a href="https://www.whoisleuth.com/demo"><strong>Explore the demo</strong></a>
   &nbsp;·&nbsp;
   <a href="https://www.whoisleuth.com/resources"><strong>Browse investigation resources</strong></a>
   &nbsp;·&nbsp;

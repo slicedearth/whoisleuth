@@ -233,6 +233,60 @@ describe('discovery scan allowlists and relationships', () => {
 });
 
 describe('chunked discovery collection', () => {
+  test('evaluates fulfilled source failures and uncertainty before filtering, including restored results', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-discovery-policies-'));
+    const checkpoint = path.join(directory, 'scan.json');
+    const argv = ['discover-scan', 'brand.example', '--tlds', 'example', '--scan-limit', '2', '--concurrency', '1'];
+    let requests = 0;
+    const dependencies = {
+      now: () => '2026-08-01T00:00:00.000Z',
+      runUnifiedLookup: async (item: ClassifiedQuery) => {
+        requests++;
+        const result = compactResult(item.value, requests === 1 ? 'unknown' : 'registered');
+        result.diagnostics.rdap.status = 'partial';
+        return result;
+      },
+    };
+    try {
+      const stdout = capture(), stderr = capture();
+      assert.equal(await runCli([
+        ...argv, '--checkpoint', checkpoint, '--acquisition-only', '--json', '--fail-on', 'source-failure',
+      ], { ...dependencies, stdout: stdout.stream, stderr: stderr.stream }), EXIT_CODES.PARTIAL_FAILURE);
+      assert.equal(requests, 2);
+      const document = JSON.parse(stdout.value());
+      assert.deepEqual(document.results, []);
+      assert.equal(document.summary.succeeded, 2, 'fulfilled lookups still carry source failures');
+      assert.equal(document.summary.failed, 0);
+      assert.match(stderr.value(), /source-failure/iu);
+
+      const resumedOutput = capture(), events = capture();
+      assert.equal(await runCli([
+        ...argv, '--checkpoint', checkpoint, '--resume', '--registered-only', '--domains',
+        '--events', '--fail-on', 'inconclusive',
+      ], { ...dependencies, stdout: resumedOutput.stream, stderr: events.stream }), EXIT_CODES.PARTIAL_FAILURE);
+      assert.equal(requests, 2, 'restored results must not be collected again for policy evaluation');
+      assert.equal(resumedOutput.value().trim().split('\n').length, 1, 'only the registered result is presented');
+      const completed = JSON.parse(events.value().trim().split('\n').at(-1)!);
+      assert.equal(completed.event, 'completed');
+      assert.equal(completed.exitCode, EXIT_CODES.PARTIAL_FAILURE);
+
+      const quiet = capture();
+      assert.equal(await runCli([
+        ...argv, '--checkpoint', checkpoint, '--resume', '--acquisition-only', '--quiet', '--fail-on', 'source-failure',
+      ], { ...dependencies, stdout: quiet.stream, stderr: capture().stream }), EXIT_CODES.PARTIAL_FAILURE);
+      assert.equal(quiet.value(), '');
+      assert.equal(requests, 2);
+
+      const ordinary = capture();
+      assert.equal(await runCli([
+        ...argv, '--checkpoint', checkpoint, '--resume', '--acquisition-only', '--json',
+      ], { ...dependencies, stdout: ordinary.stream, stderr: capture().stream }), EXIT_CODES.SUCCESS);
+      assert.deepEqual(JSON.parse(ordinary.value()).results, [], 'no selected policy means no new policy failure');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   test('runs deterministic chunks, preserves global indexes, and forwards resolver selection', async () => {
     const settled: number[] = [];
     const modes: unknown[] = [];

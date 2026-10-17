@@ -3,6 +3,7 @@
   import { INVESTIGATION_ENTITY_LABELS as typeLabels } from '../../../../packages/investigation/investigation-entity.mts';
   import { onMount, tick } from 'svelte';
   import Pagination from './Pagination.svelte';
+  import IntelligenceIcon from './IntelligenceIcon.svelte';
   import {
     DEFERRED_MODULE_RECOVERY_DETAIL,
     isDeferredModuleLoadError,
@@ -143,7 +144,7 @@
               <div><dt>Source</dt><dd>{storeLabels[result.sourceStore]} · {result.source}</dd></div>
               <div><dt>Observed</dt><dd>{formatDate(result.observedAt)}</dd></div>
             </dl>
-            <a href={result.href}>{result.action} <span aria-hidden="true">→</span></a>
+            <a href={result.href}>{result.action} <IntelligenceIcon name="arrow-right" size={16} /></a>
           </article>
         </li>
       {/each}

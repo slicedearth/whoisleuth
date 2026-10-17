@@ -2825,7 +2825,7 @@ WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
 ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ================================================================================
-asn1js@3.0.10
+asn1js@3.1.0
 Relationship: transitive production dependency
 Declared licence: BSD-3-Clause
 Licence source: LICENSE
@@ -3697,7 +3697,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ================================================================================
-es-module-lexer@3.0.3
+es-module-lexer@3.0.4
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: LICENSE
@@ -5544,7 +5544,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ================================================================================
-qs@6.16.0
+qs@6.16.1
 Relationship: transitive production dependency
 Declared licence: BSD-3-Clause
 Licence source: LICENSE.md

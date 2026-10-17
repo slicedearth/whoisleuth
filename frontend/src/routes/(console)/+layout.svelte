@@ -256,7 +256,7 @@
     else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}
   }
   function runtimeLabel(){return capabilities?.runtime==='netlify'?'Netlify':capabilities?.runtime==='express'?'Express':'Hosted';}
-  function capabilityStatus(){return capabilitiesChecked?(capabilities?`Backend · ${runtimeLabel()}`:'Backend unavailable'):'Checking backend…';}
+  function capabilityStatus(){return capabilitiesChecked?(capabilities?runtimeLabel():'Unavailable'):'Checking…';}
   function capabilityStatusDetail(){return capabilitiesChecked?(capabilities?`Network capabilities reported by the ${runtimeLabel()} runtime.`:'The backend capability report is unavailable.'):'Checking the backend capability report.';}
 </script>
 
@@ -344,8 +344,8 @@
         <BrowserWorkspaceIndicator compact>
         {#snippet layout(identity, markerControls)}
         <div class="context-bar">
-          <p class="context-task" role="note" aria-label="Current task"><span>Task</span><strong>{currentTask}</strong></p>
-          <span class="context-backend" role="note" title={capabilityStatusDetail()} aria-label={capabilityStatusDetail()}>{capabilityStatus()}</span>
+          <p class="context-task" role="note" aria-label="Current task"><span>Task ·</span> <strong>{currentTask}</strong></p>
+          <span class="context-backend" role="note" title={capabilityStatusDetail()} aria-label={capabilityStatusDetail()}><span>Backend ·</span> <strong>{capabilityStatus()}</strong></span>
           {@render identity()}
         </div>
         <div class="context-details">
@@ -411,10 +411,10 @@
   @media print{.presentation-options,.tab-references{display:none!important}.presentation-workspace{display:block!important}}
   .console-context{min-width:0;margin-bottom:18px;padding:12px 14px 4px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel);font:400 var(--text-xs)/1.5 var(--font-sans)}
   .context-bar{display:flex;align-items:center;gap:8px 20px;flex-wrap:wrap;min-width:0}
-  .context-task{display:flex;align-items:baseline;gap:6px;margin:0;font:inherit}
+  .context-task,.context-backend{display:flex;align-items:baseline;gap:8px;margin:0;font:inherit}
   .context-task>span{color:var(--muted)}
-  .context-task>strong{font-weight:600}
-  .context-backend{max-width:100%;font:inherit;color:var(--muted);white-space:nowrap;text-overflow:clip}
+  .context-task>strong,.context-backend>strong{color:var(--text);font-weight:600}
+  .context-backend{max-width:100%;color:var(--muted);white-space:nowrap;text-overflow:clip}
   .context-storage{margin-top:0;font:inherit;color:var(--muted)}
   .context-details{display:flex;flex-wrap:wrap;gap:0 16px;align-items:start;min-width:0;margin-top:8px;padding-top:2px;border-top:1px solid var(--border)}
   .context-details>details{min-width:0;max-width:100%;flex:0 1 auto}

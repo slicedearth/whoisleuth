@@ -13,6 +13,8 @@ import { buildCliLookupDocument } from '../cli/formatters/json.mts';
 import { buildCliLookupDiff, formatCliLookupDiff } from '../cli/lookup-diff.mts';
 import { buildCliLookupReconciliation, formatCliLookupReconciliation } from '../cli/lookup-reconcile.mts';
 import { buildCliLookupTimeline, formatCliLookupTimeline } from '../cli/lookup-timeline.mts';
+import { parseSavedLookupDocument } from '../cli/saved-lookup.mts';
+import { capturedWebCollectionQuality } from '../packages/evidence/collection-quality.mts';
 import { MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES } from '../cli/investigation-manifest.mts';
 import { CLI_PROGRESS_EVENT_SCHEMA, CLI_PROGRESS_EVENT_VERSION, createCliProgressEvents } from '../cli/progress-events.mts';
 import { runCli } from '../cli/runner.mts';
@@ -731,6 +733,60 @@ describe('strict exit and machine progress events', () => {
 });
 
 describe('direct reports and saved Lookup diff', () => {
+  test('qualifies saved web evidence in diff and timeline while retaining actual source-health changes', async () => {
+    const domain = 'history.example';
+    const states = [
+      { page: 'complete', http: 'success', password: true },
+      { page: 'unavailable', http: 'unavailable', password: false },
+      { page: 'partial', http: 'success', password: false },
+      { page: undefined, http: 'success', password: false },
+      { page: 'complete', http: 'success', password: false },
+      { page: 'complete', http: 'success', password: true },
+    ] as const;
+    const inputs = states.map((state, index) => {
+      const quality = state.page ? capturedWebCollectionQuality(state.page, 'complete') : undefined;
+      const document = buildCliLookupDocument(domain, classifiedDomain(domain), {
+        ...lookupResult(domain), availability: { ...lookupResult(domain).availability,
+          activityStatus: 'active', pageTitle: 'Example account', http: { status: state.http },
+          ...(quality ? { webCollectionQuality: quality } : {}),
+          credentialSurfaceProfile: { inputs: { categories: { password: state.password ? 1 : 0 } } },
+        },
+      }, `2026-07-0${index + 1}T00:00:00.000Z`, 'deep');
+      const saved = parseSavedLookupDocument(JSON.stringify(document));
+      assert.deepEqual((saved.availability as Record<string, unknown>).webCollectionQuality, quality);
+      return JSON.stringify(saved);
+    });
+    const timeline = buildCliLookupTimeline(inputs, NOW);
+    assert.equal(timeline.summary.transitionCount, 5);
+    for (const [index, transition] of timeline.transitions.entries()) {
+      const password = transition.comparison.rows.find(row => row.id === 'password-field');
+      assert.equal(password?.state, index === 4 ? 'different' : 'unavailable');
+      assert.equal(password?.left, index === 0 ? 'Observed' : 'Not observed');
+      assert.equal(password?.right, index === 4 ? 'Observed' : 'Not observed');
+      assert.equal(transition.comparison.rows.find(row => row.id === 'source-health')?.state, index < 2 ? 'different' : 'equal');
+      assert.equal(transition.comparison.counts.different, index < 2 || index === 4 ? 1 : 0);
+    }
+    assert.equal(timeline.summary.transitionsWithObservedChanges, 3);
+    assert.equal(timeline.summary.fields.different, 3);
+    const diff = buildCliLookupDiff(inputs[0]!, inputs[1]!, NOW, { domainMode: 'same' });
+    assert.deepEqual(diff.comparison, timeline.transitions[0]!.comparison);
+    const absence = buildCliLookupDiff(inputs[4]!, inputs[4]!, NOW, { domainMode: 'same' });
+    assert.equal(absence.comparison.rows.find(row => row.id === 'password-field')?.state, 'equal');
+    let requests = 0;
+    for (const command of ['diff', 'timeline']) {
+      const stdout = capture();
+      assert.equal(await runCli([command, 'before.json', 'after.json', '--json'], {
+        stdout: stdout.stream, stderr: capture().stream, now: () => NOW,
+        readDiffInput: async source => source === 'before.json' ? inputs[0]! : inputs[1]!,
+        runUnifiedLookup: async () => { requests++; throw new Error('Unexpected collection'); },
+      }), EXIT_CODES.SUCCESS);
+      const output = JSON.parse(stdout.value());
+      assert.equal((command === 'diff' ? output.comparison : output.transitions[0].comparison)
+        .rows.find((row: { id: string }) => row.id === 'password-field').state, 'unavailable');
+    }
+    assert.equal(requests, 0);
+  });
+
   test('retains analyst-supplied observation labels without changing collection', async () => {
     const stdout = capture();
     const code = await runCli([

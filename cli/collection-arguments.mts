@@ -27,6 +27,8 @@ type LookupArguments = {
   browse?: true;
   saveLookup?: string;
   failOn?: readonly CliFailPolicy[];
+  brandProfileSource?: string;
+  brandProfileId?: string;
 } & TerminalOptions;
 
 type BulkArguments = {
@@ -41,6 +43,8 @@ type BulkArguments = {
   plan: boolean;
   filter: 'all' | 'registered' | 'inconclusive' | 'errors';
   failOn?: readonly CliFailPolicy[];
+  brandProfileSource?: string;
+  brandProfileId?: string;
 } & TerminalOptions;
 
 type DiscoverArguments = {
@@ -77,6 +81,8 @@ type DiscoverScanArguments = {
   events: boolean;
   plan: boolean;
   failOn?: readonly CliFailPolicy[];
+  brandProfileSource?: string;
+  brandProfileId?: string;
 } & TerminalOptions;
 
 function parseLookupArguments(parsed: ParsedCommandArguments<LookupArguments['action']>): LookupArguments {
@@ -105,6 +111,8 @@ function parseLookupArguments(parsed: ParsedCommandArguments<LookupArguments['ac
       ? { saveLookup: parsed.optionValue('--save-lookup')! }
       : {}),
     ...(selectedFailPolicies ? { failOn: selectedFailPolicies } : {}),
+    ...(parsed.optionValue('--brand-profile') ? { brandProfileSource: parsed.optionValue('--brand-profile')! } : {}),
+    ...(parsed.optionValue('--brand-id') ? { brandProfileId: parsed.optionValue('--brand-id')! } : {}),
   };
 }
 
@@ -133,6 +141,8 @@ function parseBulkArguments(parsed: ParsedCommandArguments<BulkArguments['action
     filter,
     ...terminalOptions(parsed),
     ...(selectedFailPolicies ? { failOn: selectedFailPolicies } : {}),
+    ...(parsed.optionValue('--brand-profile') ? { brandProfileSource: parsed.optionValue('--brand-profile')! } : {}),
+    ...(parsed.optionValue('--brand-id') ? { brandProfileId: parsed.optionValue('--brand-id')! } : {}),
   };
 }
 
@@ -198,6 +208,8 @@ function parseDiscoverScanArguments(parsed: ParsedCommandArguments<DiscoverScanA
     plan: parsed.hasOption('--plan'),
     ...terminalOptions(parsed),
     ...(selectedFailPolicies ? { failOn: selectedFailPolicies } : {}),
+    ...(parsed.optionValue('--brand-profile') ? { brandProfileSource: parsed.optionValue('--brand-profile')! } : {}),
+    ...(parsed.optionValue('--brand-id') ? { brandProfileId: parsed.optionValue('--brand-id')! } : {}),
   };
 }
 

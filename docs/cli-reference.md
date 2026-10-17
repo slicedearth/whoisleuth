@@ -128,6 +128,13 @@ source state is unmeasured, not a negative result. `--csv` keeps the compact col
 `--fail-on` and `--strict-exit` expose selected evidence states to automation
 without changing the result document. Review focused help for the policies a
 command supports.
+Lookup, Bulk and Discover scan evaluate all collected and restored evidence,
+not only the rows retained by a filter. `danger` uses the canonical Risk model;
+select `--deep --brand-profile brand.json` for local reference comparisons, adding
+`--brand-id <exact-profile-id>` for a multi-profile export. A match returns 4 and identifies model and evidence
+quality on stderr. Missing/ineligible evidence is not zero risk and does not
+implicitly select another failure policy. See the
+[automation examples and limits](cli.md#formats-and-exit-behaviour).
 
 | Code | Meaning |
 | ---: | --- |

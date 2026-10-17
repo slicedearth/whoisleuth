@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { PublicResource } from '#lib/public-resources.ts';
+  import IntelligenceIcon from './IntelligenceIcon.svelte';
 
   let {
     resources,
@@ -17,7 +18,7 @@
       <h3>
         <a href={`/resources/${resource.slug}`}>
           <span>{resource.shortTitle}</span>
-          <span aria-hidden="true">→</span>
+          <IntelligenceIcon name="arrow-right" size={16} />
         </a>
       </h3>
       <p>{resource.description}</p>
@@ -29,9 +30,9 @@
   .resource-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 28px}
   article{display:grid;align-content:start;min-width:0;gap:9px;padding:22px 0;border-top:1px solid var(--border)}
   h3{margin:0;font:700 1.05rem/1.4 var(--font-sans);letter-spacing:-.015em}
-  h3 a{display:flex;gap:10px;justify-content:space-between;color:var(--text)}
+  h3 a{display:flex;align-items:center;gap:10px;justify-content:space-between;color:var(--text)}
   h3 a span:first-child{min-width:0}
-  h3 a span:last-child{flex:0 0 auto;color:var(--accent)}
+  h3 a :global(svg){color:var(--accent)}
   h3 a:hover{color:var(--accent)}
   article>p:not(.eyebrow){margin:0;color:var(--muted);font-size:.9375rem;line-height:1.65}
   .compact{grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}

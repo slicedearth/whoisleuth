@@ -3,6 +3,7 @@
   import PublicCliExplorer from '#lib/components/PublicCliExplorer.svelte';
   import PublicReferenceDocument from '#lib/components/PublicReferenceDocument.svelte';
   import PublicSeo from '#lib/components/PublicSeo.svelte';
+  import IntelligenceIcon from '#lib/components/IntelligenceIcon.svelte';
   import { PUBLIC_CLI_GUIDANCE } from '#lib/generated/public-cli-guidance.ts';
   import { PUBLIC_CLI_INDEX } from '#lib/generated/public-cli-index.ts';
   import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../../../../../packages/analysis/project-metadata.mts';
@@ -131,7 +132,7 @@
           <dt>Where work is saved</dt><dd>{mode.storage}</dd>
           <dt>Working offline</dt><dd>{mode.offline}</dd>
         </dl>
-        <a class="reference-link" href={mode.href}>{mode.linkLabel} <span aria-hidden="true">→</span></a>
+        <a class="reference-link" href={mode.href}>{mode.linkLabel} <IntelligenceIcon name="arrow-right" size={16} /></a>
       </article>
     {/each}
   </div>

@@ -489,9 +489,10 @@ test('Case mutation focus recovery respects deliberate movement and restores a d
 });
 
 test('a committed note remains singular when its immediate reread fails', async ({ page }) => {
-  await openCasesView(page);
-  await createCase(page, 'note-neighbour.invalid');
-  await createCase(page, 'note-committed.invalid');
+  await openSeededTimelineCase(page, 'note-committed.invalid', [
+    caseRecord({ id: 'case-note-neighbour', domain: 'note-neighbour.invalid' }),
+    caseRecord({ id: 'case-note-committed', domain: 'note-committed.invalid' }),
+  ]);
   await openCaseSection(page, 'History');
   const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 2 });
 

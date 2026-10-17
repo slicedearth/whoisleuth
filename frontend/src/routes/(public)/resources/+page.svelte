@@ -7,6 +7,7 @@
   import PublicReferenceDocument from '#lib/components/PublicReferenceDocument.svelte';
   import PublicResourceCards from '#lib/components/PublicResourceCards.svelte';
   import PublicSeo from '#lib/components/PublicSeo.svelte';
+  import IntelligenceIcon from '#lib/components/IntelligenceIcon.svelte';
   import {
     commonMistakes,
     glossaryTerms,
@@ -137,7 +138,7 @@
 
 <section id="privacy" class="resource-section" aria-labelledby="privacy-title">
   <div class="section-intro"><h2 id="privacy-title">Privacy and data handling</h2><p>The privacy policy explains network recipients, browser storage, exports, retention and deletion.</p></div>
-  <a class="reference-link" href="/privacy">Read the privacy policy <span aria-hidden="true">→</span></a>
+  <a class="reference-link" href="/privacy">Read the privacy policy <IntelligenceIcon name="arrow-right" size={16} /></a>
 </section>
 
 <section id="results" class="resource-section layout-container" aria-labelledby="results-title">

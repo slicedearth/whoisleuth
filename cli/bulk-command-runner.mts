@@ -14,7 +14,8 @@ import EXIT_CODES from './exit-codes.mts';
 import { buildCliBulkDocument, formatJsonDocument, formatJsonLines } from './formatters/json.mts';
 import { formatTerminalBulk } from './formatters/terminal.mts';
 import { buildCollectionPreflight, formatCollectionPreflight } from './collection-preflight.mts';
-import { evaluateCliFailPolicies, formatFailPolicyNotice } from './fail-policy.mts';
+import { evaluateCliFailPolicies, reportCliFailPolicies } from './fail-policy.mts';
+import { readCliRiskProfile } from './risk-policy.mts';
 import { formatCliJunit } from './ci-report.mts';
 import { createCliProgressEvents } from './progress-events.mts';
 import type { CliCommandContext, LookupDependency } from './runner-types.mts';
@@ -62,6 +63,7 @@ async function runBulkCommand(
     context.writeStdout(args.output === 'json' ? formatJsonDocument(document) : context.terminal(formatCollectionPreflight(document), args.color));
     return EXIT_CODES.SUCCESS;
   }
+  const riskProfile = await readCliRiskProfile(args.brandProfileSource, context.readInput, args.brandProfileId);
   const classify = dependencies.classifyQuery || classifyQuery;
   const checkpointWriter = dependencies.createBulkCheckpointWriter || createBulkCheckpointWriter;
   const checkpoint = args.checkpoint
@@ -127,6 +129,7 @@ async function runBulkCommand(
     collectedTotal: items.length,
     filter: args.filter,
   };
+  const policyFindings = evaluateCliFailPolicies(buildCliBulkDocument(items, { ...metadata, filter: 'all' }), args.failOn || [], riskProfile);
   const selectedItems = selectBulkItems(items, args.filter);
   const selectedDocument = buildCliBulkDocument(selectedItems, metadata);
   if (!args.quiet) {
@@ -139,8 +142,7 @@ async function runBulkCommand(
     else if (args.output === 'queries') context.writeStdout(formatBulkQueryList(selectedItems));
     else context.writeStdout(context.terminal(formatTerminalBulk(selectedItems, metadata), args.color));
   }
-  const policyFindings = evaluateCliFailPolicies(buildCliBulkDocument(items, { ...metadata, filter: 'all' }), args.failOn || []);
-  if (policyFindings.length && !eventProgress.enabled) context.writeStderr(formatFailPolicyNotice(policyFindings));
+  reportCliFailPolicies(policyFindings, context.writeStderr, eventProgress);
   const exitCode = checkpointFailure || items.some((item) => !item.ok) || policyFindings.length
     ? EXIT_CODES.PARTIAL_FAILURE
     : EXIT_CODES.SUCCESS;

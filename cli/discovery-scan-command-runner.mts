@@ -20,7 +20,8 @@ import EXIT_CODES from './exit-codes.mts';
 import { formatJsonDocument } from './formatters/json.mts';
 import { createCliProgressEvents } from './progress-events.mts';
 import { buildCollectionPreflight, formatCollectionPreflight } from './collection-preflight.mts';
-import { evaluateCliFailPolicies, formatFailPolicyNotice } from './fail-policy.mts';
+import { evaluateCliFailPolicies, reportCliFailPolicies } from './fail-policy.mts';
+import { readCliRiskProfile } from './risk-policy.mts';
 import type { CliCommandContext, LookupDependency } from './runner-types.mts';
 import type { DiscoveryDependencies } from './discovery-workflow.mts';
 
@@ -90,6 +91,7 @@ async function runDiscoveryScanCommand(
     context.writeStdout(args.output === 'json' ? formatJsonDocument(document) : context.terminal(formatCollectionPreflight(document), args.color));
     return EXIT_CODES.SUCCESS;
   }
+  const riskProfile = await readCliRiskProfile(args.brandProfileSource, context.readInput, args.brandProfileId);
   const classify = dependencies.classifyQuery || classifyQuery;
   const allowlist = await readAllowlist(args.allowlistSource, dependencies, context, classify);
   const checkpointWriter = dependencies.createBulkCheckpointWriter || createBulkCheckpointWriter;
@@ -179,7 +181,7 @@ async function runDiscoveryScanCommand(
         generationMetadata.generatedAt,
       )
     : null;
-  const document = buildDiscoveryScanDocument(candidates, items, {
+  const metadata = {
     generatedAt: generationMetadata.generatedAt,
     seed: generationMetadata.seed,
     preset: generationMetadata.preset,
@@ -192,9 +194,15 @@ async function runDiscoveryScanCommand(
     chunkSize: args.chunkSize,
     concurrency: args.concurrency,
     deep: args.deep,
-    filter: args.filter,
+    filter: 'all' as const,
     resolverServers,
-  }, allowlist, snapshot);
+  };
+  // Policies describe the complete collected run, including restored results,
+  // source diagnostics and candidate context, before presentation selection.
+  const collectedDocument = buildDiscoveryScanDocument(candidates, items, metadata, allowlist, snapshot);
+  const policyFindings = evaluateCliFailPolicies(collectedDocument, args.failOn || [], riskProfile);
+  const document = args.filter === 'all' ? collectedDocument
+    : buildDiscoveryScanDocument(candidates, items, { ...metadata, filter: args.filter }, allowlist, snapshot);
   if (!args.quiet) {
     if (args.output === 'json') context.writeStdout(formatJsonDocument(document));
     else if (args.output === 'jsonl') context.writeStdout(formatDiscoveryScanJsonLines(document));
@@ -203,8 +211,7 @@ async function runDiscoveryScanCommand(
     else if (args.output === 'domains') context.writeStdout(formatDiscoveryScanDomains(document));
     else context.writeStdout(context.terminal(formatTerminalDiscoveryScan(document), args.color));
   }
-  const policyFindings = evaluateCliFailPolicies(document, args.failOn || []);
-  if (policyFindings.length && !eventProgress.enabled) context.writeStderr(formatFailPolicyNotice(policyFindings));
+  reportCliFailPolicies(policyFindings, context.writeStderr, eventProgress);
   const exitCode = checkpointFailure || items.some((item) => !item.ok) || policyFindings.length
     ? EXIT_CODES.PARTIAL_FAILURE
     : EXIT_CODES.SUCCESS;

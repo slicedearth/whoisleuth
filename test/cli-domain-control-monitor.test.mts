@@ -16,10 +16,10 @@ import { MAX_DOMAIN_CONTROL_MONITOR_INPUT_BYTES } from '../packages/contracts/do
 
 const NOW = '2026-08-05T04:00:00.000Z';
 
-function manifest() {
+function manifest(domains = ['alpha.test', 'beta.test', 'gamma.test']) {
   return buildDomainControlManifest({
     schema: DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA, version: 1, expiresAt: '2026-09-05T04:00:00.000Z',
-    entries: ['alpha.test', 'beta.test', 'gamma.test'].map((domain) => ({ domain, nameservers: [`ns1.${domain}`], ds: [], mx: [], caa: [], tlsIssuer: null, tlsSpkiSha256: null, registrarLock: 'required', renewalReviewAt: null, note: null })),
+    entries: domains.map((domain) => ({ domain, nameservers: [`ns1.${domain}`], ds: [], mx: [], caa: [], tlsIssuer: null, tlsSpkiSha256: null, registrarLock: 'required', renewalReviewAt: null, note: null })),
   }, NOW);
 }
 
@@ -28,6 +28,25 @@ function result(domain: string) {
     diagnostics: { rdap: { status: 'success', observedAt: NOW }, whois: { status: 'unsupported' } },
     rdap: { parsed: { registrar: { name: 'Example Registrar' }, statuses: ['clientTransferProhibited'], nameservers: [`ns1.${domain}`] } },
     whois: { parsed: {} }, availability: { dns: { status: 'success', records: { ns: [`ns1.${domain}`], mx: [], caa: [] }, delegation: { status: 'success', records: { ds: [] } } }, tls: { status: 'unsupported' }, http: { status: 'unavailable' }, pageIdentity: { status: 'unavailable' } },
+  };
+}
+
+function policyManifest(configureNameservers = true) {
+  return buildDomainControlManifest({
+    schema: DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA, version: 1, expiresAt: '2026-09-05T04:00:00.000Z',
+    entries: [{ domain: 'alpha.test', nameservers: configureNameservers ? ['ns1.alpha.test'] : [],
+      mx: ['10 mail.example'], ds: [], caa: [], tlsIssuer: null, tlsSpkiSha256: null,
+      registrarLock: null, renewalReviewAt: null, note: null }],
+  }, NOW);
+}
+
+function policyResult(rdapStatus = 'success', mx = 'mail.example', observedAt = NOW) {
+  const source = result('alpha.test');
+  return {
+    ...source,
+    diagnostics: { rdap: { status: rdapStatus, observedAt }, whois: { status: 'skipped' } },
+    availability: { ...source.availability, dns: { ...source.availability.dns, observedAt,
+      records: { ...source.availability.dns.records, mx: [{ priority: 10, exchange: mx }] } } },
   };
 }
 
@@ -90,6 +109,10 @@ describe('CLI one-shot domain control monitor', () => {
     const second = await runDomainControlMonitor(JSON.stringify(manifest()), JSON.stringify(first), { executeLookup, now: () => '2026-08-06T04:00:00.000Z', limit: 2, concurrency: 2 });
     assert.ok(maximum <= 2);
     assert.equal(first.collection.requested, 2);
+    assert.equal(first.collection.succeeded, 2);
+    assert.equal(second.collection.succeeded, 2);
+    assert.equal(second.collection.failed, 0);
+    assert.deepEqual(second.observations.map(item => item.domain), ['alpha.test', 'beta.test']);
     assert.equal(second.flightRecorder.observationCount, 4);
     assert.equal(second.flightRecorder.summary.unexpectedChanges, 0);
   });
@@ -123,6 +146,47 @@ describe('CLI one-shot domain control monitor', () => {
       .find((profile) => profile.id === edge?.privacyProfileId);
     assert.equal(privacy?.sharingReview, 'required');
     assert.equal(privacy?.excludedCategories.includes('raw-upstream-payloads'), true);
+  });
+
+  test('rejects unsupported child monitoring targets before any collection starts', async () => {
+    let calls = 0, stdout = '', stderr = '';
+    const code = await runCli(['monitor-once', '--json'], {
+      stdout: { write(value) { stdout += value; } }, stderr: { write(value) { stderr += value; } }, now: () => NOW,
+      readArtifactInput: async () => JSON.stringify(manifest(['alpha.test', 'login.alpha.test'])),
+      runUnifiedLookup: async classified => { calls++; return result(classified.registrableDomain || 'alpha.test'); },
+    });
+    assert.equal(code, EXIT_CODES.USAGE, stderr);
+    assert.equal(calls, 0);
+    assert.equal(stdout, '');
+    assert.ok(stderr.length > 0);
+  });
+
+  test('categorises a wrong-host collector response without inflating counts or corrupting a checkpoint', async () => {
+    let stdout = '';
+    const source = JSON.stringify(manifest(['alpha.test', 'beta.test']));
+    assert.equal(await runCli(['monitor-once', '--json'], {
+      stdout: { write(value) { stdout += value; } }, stderr: { write() {} }, now: () => NOW,
+      readArtifactInput: async () => source,
+      runUnifiedLookup: async classified => {
+        const domain = classified.registrableDomain!;
+        const response = result(domain);
+        return domain === 'alpha.test' ? { ...response, availability: {
+          ...response.availability, domain, observationHostname: 'login.alpha.test',
+        } } : response;
+      },
+    }), EXIT_CODES.PARTIAL_FAILURE);
+    const checkpoint = JSON.parse(stdout);
+    assert.equal(checkpoint.collection.requested, 2);
+    assert.equal(checkpoint.collection.succeeded, 1);
+    assert.equal(checkpoint.collection.failed, 1);
+    assert.deepEqual(checkpoint.observations.map((item: { domain: string }) => item.domain), ['beta.test']);
+    const resumed = await runDomainControlMonitor(source, stdout, {
+      executeLookup: async classified => result(classified.registrableDomain!),
+      now: () => '2026-08-06T04:00:00.000Z', limit: 2, concurrency: 1,
+    });
+    assert.equal(resumed.collection.succeeded, 2);
+    assert.equal(resumed.collection.failed, 0);
+    assert.equal(resumed.flightRecorder.observationCount, 3);
   });
 
   test('preserves terminal, JUnit, quiet, prior-snapshot, and failure-policy paths', async () => {
@@ -179,6 +243,113 @@ describe('CLI one-shot domain control monitor', () => {
       },
     }), EXIT_CODES.PARTIAL_FAILURE);
     assert.match(policyNotice, /source-failure/iu);
+  });
+
+  test('applies source-failure to fulfilled current lookups in JSON and quiet output', async () => {
+    for (const status of ['error', 'partial']) {
+      const quiet = status === 'partial';
+      let stdout = '', stderr = '', calls = 0;
+      const source = policyResult(status);
+      const code = await runCli([
+        'monitor-once', '--fail-on', quiet ? 'source-failure,inconclusive' : 'source-failure', quiet ? '--quiet' : '--json',
+      ], {
+        stdout: { write(value) { stdout += value; } }, stderr: { write(value) { stderr += value; } }, now: () => NOW,
+        readArtifactInput: async () => JSON.stringify(policyManifest()),
+        runUnifiedLookup: async () => { calls++; return { ...source, diagnostics: {
+          ...source.diagnostics, network: { status: 'partial', error: 'private source detail' },
+        } }; },
+      });
+      assert.equal(code, EXIT_CODES.PARTIAL_FAILURE, `${status}: ${stderr}`);
+      assert.equal(calls, 1, 'policy evaluation must not repeat collection');
+      assert.match(stderr, /source-failure/u);
+      if (quiet) assert.match(stderr, /inconclusive/u);
+      else assert.doesNotMatch(stderr, /inconclusive/u);
+      assert.doesNotMatch(stdout + stderr, /private source detail/u);
+      if (quiet) assert.equal(stdout, '');
+      else {
+        const document = JSON.parse(stdout);
+        assert.equal(document.collection.succeeded, 1);
+        assert.equal(document.collection.failed, 0, 'constituent failures are not rejected Lookups');
+        assert.equal(Object.hasOwn(document, 'diagnostics'), false);
+        assert.equal(Object.hasOwn(document.collection, 'sourceFailures'), false);
+      }
+    }
+  });
+
+  test('inconclusive matches unavailable nameservers with either aligned or drifting MX', async () => {
+    for (const mx of ['mail.example', 'different-mail.example']) {
+      let stdout = '', stderr = '';
+      const code = await runCli(['monitor-once', '--fail-on', 'inconclusive', '--json'], {
+        stdout: { write(value) { stdout += value; } }, stderr: { write(value) { stderr += value; } }, now: () => NOW,
+        readArtifactInput: async () => JSON.stringify(policyManifest()),
+        runUnifiedLookup: async () => policyResult('unavailable', mx),
+      });
+      const document = JSON.parse(stdout);
+      const mismatch = mx !== 'mail.example';
+      assert.equal(document.review.state, mismatch ? 'drift' : 'partial');
+      assert.equal(document.review.domains[0].comparisons.find((item: { field: string }) => item.field === 'nameservers').state, 'unavailable');
+      assert.equal(document.review.domains[0].comparisons.find((item: { field: string }) => item.field === 'mx').state, mismatch ? 'drift' : 'aligned');
+      assert.equal(document.flightRecorder.summary.unexpectedChanges, 0);
+      assert.equal(code, EXIT_CODES.PARTIAL_FAILURE, `${mx}: ${stderr}`);
+      assert.match(stderr, /inconclusive/u);
+      assert.doesNotMatch(stderr, /source-failure|material-drift/u, 'unselected policies remain independent');
+    }
+  });
+
+  test('distinguishes healthy, unconfigured and unsupported requested comparisons', async () => {
+    for (const [status, configured, inconclusive] of [
+      ['success', true, false], ['unsupported', false, false], ['unsupported', true, true],
+    ] as const) {
+      let stdout = '', stderr = '';
+      const source = policyResult(status);
+      const code = await runCli(['monitor-once', '--fail-on', 'source-failure,inconclusive', '--json'], {
+        stdout: { write(value) { stdout += value; } }, stderr: { write(value) { stderr += value; } }, now: () => NOW,
+        readArtifactInput: async () => JSON.stringify(policyManifest(configured)),
+        runUnifiedLookup: async () => ({ ...source, diagnostics: { ...source.diagnostics,
+          network: { status: 'skipped' }, availability: { status: 'success' },
+        } }),
+      });
+      const document = JSON.parse(stdout);
+      assert.equal(document.review.state, inconclusive ? 'partial' : 'aligned');
+      assert.equal(document.review.domains[0].comparisons.find((item: { field: string }) => item.field === 'nameservers').state,
+        !configured ? 'not_configured' : inconclusive ? 'unsupported' : 'aligned');
+      assert.equal(code, inconclusive ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS, stderr);
+      assert.doesNotMatch(stderr, /source-failure/u);
+      if (inconclusive) assert.match(stderr, /inconclusive/u);
+      else assert.doesNotMatch(stderr, /Failure policy matched/u);
+    }
+  });
+
+  test('uses current evidence only and preserves no-policy behaviour', async () => {
+    const previous = await runDomainControlMonitor(JSON.stringify(policyManifest()), null, {
+      executeLookup: async () => policyResult('error'), now: () => NOW, limit: 1, concurrency: 1,
+    });
+    assert.equal(previous.observations[0]?.fields.find(field => field.id === 'registry_nameservers')?.state, 'unavailable');
+    let stdout = '', stderr = '', calls = 0;
+    const currentAt = '2026-08-05T05:00:00.000Z';
+    assert.equal(await runCli([
+      'monitor-once', '--previous', 'previous.json', '--fail-on', 'source-failure,inconclusive,material-drift', '--json',
+    ], {
+      stdout: { write(value) { stdout += value; } }, stderr: { write(value) { stderr += value; } }, now: () => currentAt,
+      readArtifactInput: async () => JSON.stringify(policyManifest()), readDiffInput: async () => JSON.stringify(previous),
+      runUnifiedLookup: async () => { calls++; return policyResult('success', 'mail.example', currentAt); },
+    }), EXIT_CODES.SUCCESS, stderr);
+    const document = JSON.parse(stdout);
+    assert.equal(calls, 1);
+    assert.equal(document.flightRecorder.observationCount, 2);
+    assert.ok(document.flightRecorder.events.some((event: { capturedAt: string; state: string }) =>
+      event.capturedAt === NOW && event.state === 'partial'), 'historical missing evidence must remain in the flight recorder');
+    assert.equal(document.review.state, 'aligned');
+    assert.doesNotMatch(stderr, /Failure policy matched/u);
+
+    stdout = ''; stderr = '';
+    assert.equal(await runCli(['monitor-once', '--json'], {
+      stdout: { write(value) { stdout += value; } }, stderr: { write(value) { stderr += value; } }, now: () => NOW,
+      readArtifactInput: async () => JSON.stringify(policyManifest()),
+      runUnifiedLookup: async () => policyResult('error', 'different-mail.example'),
+    }), EXIT_CODES.SUCCESS, stderr);
+    assert.equal(JSON.parse(stdout).review.state, 'drift');
+    assert.doesNotMatch(stderr, /Failure policy matched/u);
   });
 
   test('propagates cancellation and stops admitting monitor lookups', async () => {

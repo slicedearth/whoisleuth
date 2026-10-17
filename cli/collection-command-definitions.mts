@@ -9,6 +9,7 @@ import { bulkQueryLimit, bulkConcurrencyLimit } from '../lib/bulk-limits.mts';
 
 const COLLECTION_CEILINGS = `${bulkQueryLimit('fast')} fast or ${bulkQueryLimit('deep')} deep`;
 const CONCURRENCY_CEILINGS = `${bulkConcurrencyLimit('fast')} fast or ${bulkConcurrencyLimit('deep')} deep`;
+const FAILURE_POLICY_BOUNDARY = 'Failure policies evaluate all collected and restored results before output filtering. For danger review, explicitly select --deep and --brand-profile; use --brand-id to select one profile from a multi-profile export. The current canonical Risk model compares collected evidence with that local reference; Fast, missing or ineligible evidence cannot establish a threshold match. The heuristic review threshold is not a maliciousness or safety verdict. The profile is not sent to collectors, retained in checkpoints or copied into output.';
 
 export const COLLECTION_COMMAND_DEFINITIONS = Object.freeze({
   lookup: commandSeed({
@@ -16,7 +17,7 @@ export const COLLECTION_COMMAND_DEFINITIONS = Object.freeze({
       description: 'Collect registration evidence for one domain, IP, or ASN.',
       example: 'whoisleuth lookup example.test --deep --browse',
       boundary:
-        'Fast is the default. An ICANN-recognised public domain, reserved documentation domain, IP, or ASN may occupy command position as shorthand; it delegates to this same parser and URL-like input requires the explicit lookup command. Deep mode adds bounded WHOIS, DNS, HTTP, TLS, technology, posture, and network context where applicable. --deep --exact-url explicitly sends the input URL path and query to the website, without its fragment; ordinary URL input sends only the hostname. --plan remains offline and omits the selected URL. Retained paths and page-derived text require review before sharing. A full Deep homepage observation can derive fixed publication and delivery/cache summaries from the same response without retaining raw metadata values or making another request. --browse opens before collection, shows aggregate Fast progress or independently settled planned Deep sources, and then navigates allowlisted retained fields in the completed document. Press ? for help and / to search rendered panel text only. Closing during collection cancels without a partial document. --save-lookup writes the exact completed private JSON only after a normal browser close; it can contain normalised evidence omitted from panels and refuses an existing path.',
+        'Fast is the default. An ICANN-recognised public domain, reserved documentation domain, IP, or ASN may occupy command position as shorthand; it delegates to this same parser and URL-like input requires the explicit lookup command. Deep mode adds bounded WHOIS, DNS, HTTP, TLS, technology, posture, and network context where applicable. --deep --exact-url explicitly sends the input URL path and query to the website, without its fragment; ordinary URL input sends only the hostname. --plan remains offline and omits the selected URL. Retained paths and page-derived text require review before sharing. A full Deep homepage observation can derive fixed publication and delivery/cache summaries from the same response without retaining raw metadata values or making another request. --browse opens before collection, shows aggregate Fast progress or independently settled planned Deep sources, and then navigates allowlisted retained fields in the completed document. Press ? for help and / to search rendered panel text only. Closing during collection cancels without a partial document. --save-lookup writes the exact completed private JSON only after a normal browser close; it can contain normalised evidence omitted from panels and refuses an existing path. ' + FAILURE_POLICY_BOUNDARY,
     },
     collection: {
       scope:
@@ -41,6 +42,8 @@ export const COLLECTION_COMMAND_DEFINITIONS = Object.freeze({
       '--save-lookup',
       '--strict-exit',
       '--fail-on',
+      '--brand-profile',
+      '--brand-id',
       '--events',
       '--quiet',
       '--no-color',
@@ -49,6 +52,7 @@ export const COLLECTION_COMMAND_DEFINITIONS = Object.freeze({
       positional('target', 'text', 0, 1, [], 'argv_or_stdin', ['--browse']),
     ]),
     constraints: Object.freeze([
+      constraint({ kind: 'requires_all', option: '--brand-id', requiredOptions: ['--brand-profile'] }),
       constraint({
         kind: 'mutually_exclusive',
         options: ['--json', '--junit', '--markdown', '--html'],
@@ -117,7 +121,7 @@ export const COLLECTION_COMMAND_DEFINITIONS = Object.freeze({
       description: 'Triage newline-delimited domains, IPs, or ASNs with bounded concurrency.',
       example: 'cat domains.txt | whoisleuth bulk --jsonl',
       boundary:
-        'Fast and deep jobs use separate concurrency ceilings. Filters affect output only; collection failures and inconclusive authority states remain explicit in JSON, JSONL, and CSV. --csv-with-metadata adds source versions, separate observation and report times, collection origin and diagnostic states; --csv retains the compact columns.',
+        'Fast and deep jobs use separate concurrency ceilings. Filters affect output only; collection failures and inconclusive authority states remain explicit in JSON, JSONL, and CSV. --csv-with-metadata adds source versions, separate observation and report times, collection origin and diagnostic states; --csv retains the compact columns. ' + FAILURE_POLICY_BOUNDARY,
     },
     collection: {
       scope: `Accepts at most ${COLLECTION_CEILINGS} targets, with concurrency capped at ${CONCURRENCY_CEILINGS}.`,
@@ -142,11 +146,14 @@ export const COLLECTION_COMMAND_DEFINITIONS = Object.freeze({
       '--events',
       '--plan',
       '--fail-on',
+      '--brand-profile',
+      '--brand-id',
       '--quiet',
       '--no-color',
     ],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: Object.freeze([
+      constraint({ kind: 'requires_all', option: '--brand-id', requiredOptions: ['--brand-profile'] }),
       constraint({
         kind: 'mutually_exclusive',
         options: [
@@ -252,7 +259,7 @@ export const COLLECTION_COMMAND_DEFINITIONS = Object.freeze({
         'Generate a bounded candidate set, collect a selected subset, and produce a supervised review queue.',
       example:
         'whoisleuth discover-scan example.test --scan-limit 50 --checkpoint scan.json --json',
-      boundary: `This command performs network collection. Fast compact lookup is the default; deep mode is capped at ${bulkQueryLimit('deep')} candidates. Allowlisting changes review priority only and shared infrastructure remains a lead, not attribution. --csv-with-metadata adds source versions, separate observation and report times, collection origin and diagnostic states; --csv retains the compact columns.`,
+      boundary: `This command performs network collection. Fast compact lookup is the default; deep mode is capped at ${bulkQueryLimit('deep')} candidates. Allowlisting changes review priority only and shared infrastructure remains a lead, not attribution. --csv-with-metadata adds source versions, separate observation and report times, collection origin and diagnostic states; --csv retains the compact columns. ${FAILURE_POLICY_BOUNDARY}`,
     },
     collection: {
       scope: `Scans at most ${COLLECTION_CEILINGS} candidates, with concurrency capped at ${CONCURRENCY_CEILINGS}.`,
@@ -281,6 +288,8 @@ export const COLLECTION_COMMAND_DEFINITIONS = Object.freeze({
       '--events',
       '--plan',
       '--fail-on',
+      '--brand-profile',
+      '--brand-id',
       '--json',
       '--jsonl',
       '--csv',
@@ -291,6 +300,7 @@ export const COLLECTION_COMMAND_DEFINITIONS = Object.freeze({
     ],
     positionals: OPTIONAL_TEXT_POSITIONAL,
     constraints: Object.freeze([
+      constraint({ kind: 'requires_all', option: '--brand-id', requiredOptions: ['--brand-profile'] }),
       constraint({
         kind: 'mutually_exclusive',
         options: ['--json', '--jsonl', '--csv', '--csv-with-metadata', '--domains'],

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { AnalystEvidencePivot } from '#lib/analysis/analyst-evidence-pivots.ts';
+  import IntelligenceIcon from './IntelligenceIcon.svelte';
 
   let { pivots }: { pivots: AnalystEvidencePivot[] } = $props();
 </script>
@@ -52,7 +53,7 @@
               rel="noopener noreferrer"
               aria-describedby={`pivot-disclosure-${pivot.id}`}
               aria-label={`Open ${pivot.destination}: ${pivot.label} in a new tab`}
-            >Open <span aria-hidden="true">↗</span></a>
+            >Open <IntelligenceIcon name="arrow-up-right" size={16} /></a>
           </li>
         {/each}
       </ul>

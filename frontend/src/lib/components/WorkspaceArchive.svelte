@@ -4,6 +4,7 @@
   import { onMount, tick } from 'svelte';
   import BrowserWorkspaceIndicator from '#lib/components/BrowserWorkspaceIndicator.svelte';
   import BrowserStorageHealth from './BrowserStorageHealth.svelte';
+  import IntelligenceIcon from './IntelligenceIcon.svelte';
   import WorkspaceRecovery from './WorkspaceRecovery.svelte';
   import WorkspaceFileBackup from './WorkspaceFileBackup.svelte';
   import { hasUnlockedBrowserWorkspace } from '#lib/browser-workspace-unlock.ts';
@@ -280,7 +281,7 @@
         <button class="btn" type="button" onclick={()=>{archiveReview=null;preview=null;selectedIds=[];archiveFile=null;message='Preview cancelled.';}} disabled={busy}>Cancel</button>
       </div>
       {#if localApplication}
-        <details class="archive-details"><summary>Rehearse filesystem recovery</summary><p>Start a separate local application with a new empty folder and <code>--init --offline</code>. Review and import this backup there, then restore its original files or evidence package. Compare the restored records and file verification results before relying on the backup. Keep the original folder unchanged.</p><a class="reference-link" href="/cli#local-application">Local recovery instructions <span aria-hidden="true">→</span></a></details>
+        <details class="archive-details"><summary>Rehearse filesystem recovery</summary><p>Start a separate local application with a new empty folder and <code>--init --offline</code>. Review and import this backup there, then restore its original files or evidence package. Compare the restored records and file verification results before relying on the backup. Keep the original folder unchanged.</p><a class="reference-link" href="/cli#local-application">Local recovery instructions <IntelligenceIcon name="arrow-right" size={16} /></a></details>
       {:else if archiveReview && archiveFile}{#key archiveReview}<WorkspaceRecovery readArchive={archiveReview.read} {archiveFile} archiveSchema={preview.schema} archiveVersion={preview.sourceVersion} {encryptedSource} requireEncryption={encryptedSource || hasUnlockedBrowserWorkspace()} onbusy={value => { busy = value; }} />{/key}{/if}
     </div>
   {/if}

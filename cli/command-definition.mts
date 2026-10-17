@@ -270,6 +270,8 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--interactive': flag('Prompt for missing supported inputs on an interactive terminal.'),
   '--save-lookup': file('After a normal evidence-browser close, save the completed private Lookup JSON to a new file.'),
   '--strict-exit': flag('Use the command’s strict outcome policy when deciding the exit status.'),
+  '--brand-profile': file('Read a local Brand Profile export for danger-policy comparisons; no additional requests or profile retention.'),
+  '--brand-id': text('Select an exact profile ID when --brand-profile contains multiple profiles.'),
   '--fail-on': optionDefinition('policy_list', 'Return a failure-policy exit status for the selected comma-separated outcomes.', {
     values: (command) => CLI_FAIL_POLICIES_BY_COMMAND[command as CliFailPolicyCommand] ?? [],
   }),

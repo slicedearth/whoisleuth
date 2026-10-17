@@ -11,6 +11,7 @@
   import LookupEvidenceReading from './LookupEvidenceReading.svelte';
   import LookupEvidenceCheckpoint from '#lib/components/LookupEvidenceCheckpoint.svelte';
   import CasePicker from './CasePicker.svelte';
+  import IntelligenceIcon from './IntelligenceIcon.svelte';
   import { buildLookupEvidenceReplayDiff } from '#lib/analysis/lookup-evidence-replay-diff.ts';
 
   let replay = $state<LookupEvidenceReplay | null>(null);
@@ -183,7 +184,7 @@
             {#if caseCandidates.length > 1}<CasePicker id="replay-incident-case" records={caseCandidates} selectedId={caseRecord?.id ?? ''} disabled={caseBusy} select={(id) => { caseRecord = caseCandidates.find(record => record.id === id) ?? null; caseStatus = ''; }} />{/if}
             <button class="btn" type="button" disabled={caseBusy || (caseCandidates.length > 0 && !caseRecord)} onclick={() => void saveReplayToCase()}>{caseBusy ? 'Saving…' : caseRecord ? 'Add replay evidence to Case' : 'Create Case'}</button>
             <p class="case-status" role="status" aria-live="polite" aria-atomic="true">{caseStatus}</p>
-            {#if caseRecord}<a class="case-link" href={`/monitor?case=${encodeURIComponent(caseRecord.id)}`}>Open Case in Respond →</a>{/if}
+            {#if caseRecord}<a class="case-link" href={`/monitor?case=${encodeURIComponent(caseRecord.id)}`}>Open Case in Respond <IntelligenceIcon name="arrow-right" size={16} /></a>{/if}
           </section>
 
           {#if caseRecord && replayCheckpointFacts.length}

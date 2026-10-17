@@ -10,7 +10,9 @@ import {
 } from '../cli/domain-control-observations.mts';
 import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
-import { parseSavedLookupDocument } from '../cli/saved-lookup.mts';
+import { buildCliLookupDocument, parseSavedLookupDocument } from '../cli/saved-lookup.mts';
+import { classifyQuery } from '../lib/classify.mts';
+import { buildDomainControlFlightRecorder, DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA, DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION } from '../lib/domain-control-flight-recorder.mts';
 import { MAX_BOUNDED_JSON_DEPTH } from '../lib/bounded-json.mts';
 import {
   DOMAIN_CONTROL_MANIFEST_INPUT_SCHEMA,
@@ -50,7 +52,101 @@ function manifest() {
   }, observedAt);
 }
 
+function savedHostnameLookup(hostname: string, source = lookup()) {
+  return parseSavedLookupDocument(JSON.stringify(buildCliLookupDocument(hostname, classifyQuery(hostname), {
+    ...source,
+    availability: { ...source.availability, domain: source.registrableDomain, observationHostname: hostname,
+      dns: { ...source.availability.dns, delegation: { ...source.availability.dns.delegation, domain: source.registrableDomain } } },
+  }, source.generatedAt, 'deep')));
+}
+
 describe('CLI domain-control observations', () => {
+  test('keeps child services separate while retaining parent registration and explicitly scoped delegation', () => {
+    const child = savedHostnameLookup('login.example.test');
+    const report = buildCliDomainControlReview(JSON.stringify({
+      schema: CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA, version: CLI_DOMAIN_CONTROL_REVIEW_VERSION,
+      manifest: manifest(), lookups: [child],
+    }), observedAt);
+    const comparisons = report.review.domains[0]!.comparisons;
+    assert.equal(comparisons.find(item => item.field === 'nameservers')?.state, 'aligned');
+    assert.equal(comparisons.find(item => item.field === 'registrarLock')?.state, 'aligned');
+    assert.equal(comparisons.find(item => item.field === 'ds')?.state, 'aligned');
+    for (const field of ['mx', 'caa', 'tlsIssuer', 'tlsSpkiSha256']) {
+      assert.equal(comparisons.find(item => item.field === field)?.state, 'unavailable', field);
+    }
+    assert.equal(report.review.state, 'partial');
+    const parent = domainControlObservationFromSavedLookup(child);
+    assert.equal(parent.domain, 'example.test');
+    assert.deepEqual(parent.fields.find(item => item.id === 'registry_nameservers')?.values, ['ns1.example.test']);
+    assert.equal(parent.fields.some(item => ['mail_exchangers', 'tls_certificate', 'http_origin', 'page_identity'].includes(item.id)), false);
+    const service = report.observations.find(item => item.domain === 'login.example.test');
+    assert.deepEqual(service?.fields.find(item => item.id === 'mail_exchangers')?.values, ['10 mail.example.test']);
+    assert.deepEqual(service?.fields.find(item => item.id === 'http_origin')?.values, ['https://example.test']);
+    assert.equal(service?.fields.some(item => item.id === 'registry_nameservers' || item.id === 'delegation_ds'), false);
+    const unscopedDelegation = JSON.parse(JSON.stringify(child));
+    delete unscopedDelegation.availability.dns.delegation.domain;
+    const uncertain = buildCliDomainControlReview(JSON.stringify({
+      schema: CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA, version: CLI_DOMAIN_CONTROL_REVIEW_VERSION,
+      manifest: manifest(), lookups: [unscopedDelegation],
+    }), observedAt);
+    assert.equal(uncertain.review.domains[0]!.comparisons.find(item => item.field === 'ds')?.state, 'unavailable');
+  });
+
+  test('selects current evidence within hostname scope rather than letting children displace an apex or sibling', () => {
+    const apexAt = '2026-08-04T15:30:00.000Z';
+    const loginAt = '2026-08-05T00:30:00.000Z';
+    const shopAt = '2026-08-05T01:00:00.000Z';
+    const login = lookup('example.test', loginAt), shop = lookup('example.test', shopAt);
+    login.availability.dns.records.mx = [{ priority: 10, exchange: 'login-mail.example.test' }];
+    shop.availability.dns.records.mx = [{ priority: 10, exchange: 'shop-mail.example.test' }];
+    const lookups = [savedHostnameLookup('example.test', lookup('example.test', apexAt)),
+      savedHostnameLookup('login.example.test', login), savedHostnameLookup('shop.example.test', shop)];
+    const input = (documents: typeof lookups) => JSON.stringify({
+      schema: CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA, version: CLI_DOMAIN_CONTROL_REVIEW_VERSION,
+      manifest: manifest(), lookups: documents,
+    });
+    const report = buildCliDomainControlReview(input(lookups), observedAt);
+    assert.deepEqual(buildCliDomainControlReview(input([...lookups].reverse()), observedAt), report);
+    assert.equal(report.review.state, 'aligned');
+    const mx = report.review.domains[0]!.comparisons.find(item => item.field === 'mx');
+    assert.deepEqual(mx?.observed, ['10 mail.example.test']);
+    assert.equal(mx?.observedAt, apexAt);
+    for (const [hostname, exchange, time] of [
+      ['example.test', 'mail.example.test', apexAt],
+      ['login.example.test', 'login-mail.example.test', loginAt],
+      ['shop.example.test', 'shop-mail.example.test', shopAt],
+    ]) {
+      const field = report.observations.find(item => item.domain === hostname)?.fields.find(item => item.id === 'mail_exchangers');
+      assert.equal(field?.state, 'observed');
+      assert.deepEqual(field?.values, [`10 ${exchange}`]);
+      assert.equal(field?.observedAt, time);
+    }
+    const baseline = buildCliDomainControlReview(input([lookups[0]!]), apexAt);
+    const history = buildDomainControlFlightRecorder({
+      schema: DOMAIN_CONTROL_FLIGHT_RECORDER_INPUT_SCHEMA, version: DOMAIN_CONTROL_FLIGHT_RECORDER_VERSION,
+      observations: [...baseline.observations, ...report.observations], approvedWindows: [],
+    }, observedAt);
+    assert.equal(history.summary.observedChanges, 0);
+    assert.equal(history.summary.unexpectedChanges, 0);
+  });
+
+  test('retains historical supporting-evidence scope instead of inferring it from the submitted child hostname', () => {
+    for (const legacyDomain of ['example.test', undefined]) {
+      const historical = JSON.parse(JSON.stringify(savedHostnameLookup('login.example.test')));
+      delete historical.availability.observationHostname;
+      if (legacyDomain === undefined) delete historical.availability.domain;
+      const document = parseSavedLookupDocument(JSON.stringify(historical));
+      const report = buildCliDomainControlReview(JSON.stringify({
+        schema: CLI_DOMAIN_CONTROL_REVIEW_INPUT_SCHEMA, version: CLI_DOMAIN_CONTROL_REVIEW_VERSION,
+        manifest: manifest(), lookups: [document],
+      }), observedAt);
+      assert.equal(document.inputHostname, 'login.example.test');
+      assert.equal(report.review.state, 'aligned');
+      assert.deepEqual(report.observations.map(item => item.domain), ['example.test']);
+      assert.deepEqual(report.observations[0]?.fields.find(item => item.id === 'mail_exchangers')?.values, ['10 mail.example.test']);
+    }
+  });
+
   test('retains null MX and case-sensitive CAA payloads in their canonical form', () => {
     const value = lookup();
     value.availability.dns.records.mx = [{ priority: 0, exchange: '' }];

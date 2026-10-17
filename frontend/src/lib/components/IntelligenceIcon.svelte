@@ -30,6 +30,8 @@
     | 'star'
     | 'star-filled'
     | 'ellipsis'
+    | 'arrow-right'
+    | 'arrow-up-right'
     | 'minus';
 
   let {
@@ -49,6 +51,7 @@
 
 <svg
   class={className}
+  class:link-arrow={name === 'arrow-right' || name === 'arrow-up-right'}
   viewBox="0 0 24 24"
   width={size}
   height={size}
@@ -140,6 +143,10 @@
     <circle class="icon-solid" cx="5" cy="12" r="1"/><circle class="icon-solid" cx="12" cy="12" r="1"/><circle class="icon-solid" cx="19" cy="12" r="1"/>
   {:else if name === 'minus'}
     <path d="M5 12h14"/>
+  {:else if name === 'arrow-right'}
+    <path d="M5 12h14m-6-6 6 6-6 6"/>
+  {:else if name === 'arrow-up-right'}
+    <path d="m7 17 10-10M7 7h10v10"/>
   {:else if name === 'lookup' || name === 'search' || name === 'command'}
     <circle class="icon-wash" cx="10.5" cy="10.5" r="6.5"/>
     <circle cx="10.5" cy="10.5" r="6.5"/>
@@ -164,6 +171,7 @@
 
 <style>
   svg{display:block;flex:none;overflow:visible;color:inherit;fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round}
+  svg.link-arrow{display:inline-block;vertical-align:middle}
   .icon-wash{fill:currentColor;fill-opacity:.1}
   .icon-solid{fill:currentColor}
   .icon-detail{opacity:.72}

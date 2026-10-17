@@ -17,7 +17,8 @@ import type { BoundedTextStream } from './bulk.mts';
 import type { TerminalEnvironment } from './terminal-presentation.mts';
 import { serializeCliLookupDocument, type UnknownRecord } from './saved-lookup.mts';
 import { lookupStrictExitFindings } from './strict-exit.mts';
-import { evaluateCliFailPolicies, formatFailPolicyNotice } from './fail-policy.mts';
+import { evaluateCliFailPolicies, reportCliFailPolicies } from './fail-policy.mts';
+import { readCliRiskProfile } from './risk-policy.mts';
 import { formatCliJunit } from './ci-report.mts';
 import { browseLookupOperation, canBrowseLookup } from './lookup-browser.mts';
 import { writePrivateFile } from './output-file.mts';
@@ -88,6 +89,7 @@ async function runLookupCommand(
       : context.terminal(formatCliLookupPlan(plan), args.color));
     return EXIT_CODES.SUCCESS;
   }
+  const riskProfile = await readCliRiskProfile(args.brandProfileSource, context.readInput, args.brandProfileId);
 
   let documentGeneratedAt = '';
   const buildDocument = ({ result, collectionReceipt }: Readonly<{ result: unknown; collectionReceipt: LookupCollectionReceipt | undefined }>) => {
@@ -172,6 +174,8 @@ async function runLookupCommand(
     }
     document = buildDocument(result);
   }
+  const strictFindings = args.strictExit ? lookupStrictExitFindings(document) : [];
+  const policyFindings = evaluateCliFailPolicies(document, args.failOn || [], riskProfile);
   if (!args.quiet) {
     if (args.output === 'json') context.writeStdout(serializeCliLookupDocument(document));
     else if (args.output === 'junit') context.writeStdout(formatCliJunit(document));
@@ -187,13 +191,11 @@ async function runLookupCommand(
     }
   }
 
-  const strictFindings = args.strictExit ? lookupStrictExitFindings(document) : [];
-  const policyFindings = evaluateCliFailPolicies(document, args.failOn || []);
   const exitCode = strictFindings.length || policyFindings.length ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;
   if (strictFindings.length && !args.events) {
     context.writeStderr(`Strict exit: ${strictFindings.length} requested source state${strictFindings.length === 1 ? '' : 's'} were incomplete.\n`);
   }
-  if (policyFindings.length && !args.events) context.writeStderr(formatFailPolicyNotice(policyFindings));
+  reportCliFailPolicies(policyFindings, context.writeStderr, eventProgress);
   eventProgress.emit({ event: 'completed', exitCode });
   return exitCode;
 }
