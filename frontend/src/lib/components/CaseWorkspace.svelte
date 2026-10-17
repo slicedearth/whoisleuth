@@ -1,5 +1,6 @@
 <script lang="ts">
   import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import IntelligenceIcon from './IntelligenceIcon.svelte';
   import { page } from '$app/state';
   import { beforeNavigate, goto } from '$app/navigation';
   import { onMount, tick, untrack } from 'svelte';
@@ -735,7 +736,7 @@ import { BrowserLocalDataError } from '#lib/browser-local-data-content.ts';
       <section class="empty-state card">
         <h2>No cases yet</h2>
         <p>Retain evidence from Lookup or Bulk, or enter a domain above.</p>
-        <a href="/lookup">Open Lookup →</a>
+        <a href="/lookup">Open Lookup <IntelligenceIcon name="arrow-right" size={16} /></a>
       </section>
     {/if}
     <details class="advanced-case-tools">

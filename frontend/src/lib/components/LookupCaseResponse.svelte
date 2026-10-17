@@ -1,5 +1,6 @@
 <script lang="ts">
   import { recipientMailto } from '../../../../packages/evidence/email-recipient.mts';
+  import IntelligenceIcon from './IntelligenceIcon.svelte';
   import {
     CASE_DISPOSITIONS,
     isReviewedCaseDisposition,
@@ -621,7 +622,7 @@
             >{/if}
           {#if route.officialSourceUrl}<p class="route-source"
               ><a href={route.officialSourceUrl} target="_blank" rel="noreferrer"
-                >Review the official route source ↗</a
+                >Review the official route source <IntelligenceIcon name="arrow-up-right" size={16} /></a
               ></p
             >{/if}
           {#if route.reviewAfter}<p class="route-source"

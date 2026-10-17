@@ -2,6 +2,7 @@
   import { tick } from 'svelte';
   import Pagination from '#lib/components/Pagination.svelte';
   import EvidenceTimestamp from '#lib/components/EvidenceTimestamp.svelte';
+  import IntelligenceIcon from './IntelligenceIcon.svelte';
   import MonitorDomainTimeline from '#lib/components/MonitorDomainTimeline.svelte';
   import WatchlistDomainMetadata from '#lib/components/WatchlistDomainMetadata.svelte';
   import type { WatchBrandNames } from '#lib/analysis/watchlist-context-labels.ts';
@@ -128,7 +129,7 @@
     <Pagination {currentPage} {pageCount} {setPage} ariaLabel="Watchlist pages" />
   </section>
 {:else}
-  <section class="empty-state card"><h2>No watchlists saved</h2><p>Add reviewed Brand candidates without collection, or save observed Bulk results to begin an evidence timeline.</p><a id="empty-watchlist-open-bulk" href="/bulk">Open Bulk →</a></section>
+  <section class="empty-state card"><h2>No watchlists saved</h2><p>Add reviewed Brand candidates without collection, or save observed Bulk results to begin an evidence timeline.</p><a id="empty-watchlist-open-bulk" href="/bulk">Open Bulk <IntelligenceIcon name="arrow-right" size={16} /></a></section>
 {/if}
 
 {#if entry}

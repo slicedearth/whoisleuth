@@ -1,6 +1,7 @@
 <script lang="ts">
   import PublicReferenceDocument from '#lib/components/PublicReferenceDocument.svelte';
   import PublicSeo from '#lib/components/PublicSeo.svelte';
+  import IntelligenceIcon from '#lib/components/IntelligenceIcon.svelte';
   import {
     type PublicResource,
   } from '#lib/public-resources.ts';
@@ -95,7 +96,7 @@
 
   <aside class="repository" id="technical-reference" aria-labelledby="technical-reference-title">
     <h2 id="technical-reference-title">Technical details</h2>
-    <p>Read about collection limits, source attribution, storage and exports.</p><a class="reference-link" href={`${WHOISLEUTH_SOURCE_REPOSITORY_URL}/blob/main/${resource.repositoryDoc}`} target="_blank" rel="noopener">Open {resource.repositoryDoc}<span class="sr-only"> (opens in a new tab)</span><span aria-hidden="true">→</span></a>
+    <p>Read about collection limits, source attribution, storage and exports.</p><a class="reference-link" href={`${WHOISLEUTH_SOURCE_REPOSITORY_URL}/blob/main/${resource.repositoryDoc}`} target="_blank" rel="noopener">Open {resource.repositoryDoc}<span class="sr-only"> (opens in a new tab)</span><IntelligenceIcon name="arrow-up-right" size={16} /></a>
   </aside>
 </article>
 </PublicReferenceDocument>

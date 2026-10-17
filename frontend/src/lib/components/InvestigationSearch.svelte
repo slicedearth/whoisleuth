@@ -3,6 +3,7 @@
   import { INVESTIGATION_ENTITY_LABELS as typeLabels } from '../../../../packages/investigation/investigation-entity.mts';
   import { onMount, tick } from 'svelte';
   import Pagination from './Pagination.svelte';
+  import IntelligenceIcon from './IntelligenceIcon.svelte';
   import InvestigationHistory from './InvestigationHistory.svelte';
   import { reloadDeferredModulePage } from '#lib/deferred-module.ts';
   import {
@@ -131,7 +132,7 @@
         </ul>
       </details>
     {/if}
-    <a class="result-action" href={result.href} onclick={event => openResult(event, result.href)}>{result.action} <span aria-hidden="true">→</span></a>
+    <a class="result-action" href={result.href} onclick={event => openResult(event, result.href)}>{result.action} <IntelligenceIcon name="arrow-right" size={16} /></a>
     <details class="history-disclosure" open={historyEntity === result.entityId} ontoggle={event => {
       if (event.currentTarget.open) historyEntity = result.entityId;
       else if (historyEntity === result.entityId) historyEntity = null;

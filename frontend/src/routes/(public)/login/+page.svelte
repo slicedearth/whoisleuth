@@ -3,6 +3,7 @@
   import { afterNavigate, goto } from '$app/navigation';
   import { page } from '$app/state';
   import BrandMark from '#lib/components/BrandMark.svelte';
+  import IntelligenceIcon from '#lib/components/IntelligenceIcon.svelte';
   import PublicSeo from '#lib/components/PublicSeo.svelte';
   import { requestJsonCapped, SMALL_JSON_RESPONSE_BYTES } from '#lib/bounded-json-response.ts';
   import { protectedReturnTarget } from '#lib/workspaces.ts';
@@ -95,7 +96,7 @@
 />
 
 <section class="login-view" aria-labelledby="login-title">
-  <div class="login-copy"><p class="eyebrow">{localApplication ? 'Local application' : 'Protected console'}</p><h1 id="login-title">Continue to WHOISleuth</h1><p>{localApplication ? 'Open the filesystem workspace selected in your terminal.' : 'Sign in to investigate domains and manage browser-local work.'}</p><a href="/demo">Explore the synthetic demo first <span aria-hidden="true">→</span></a></div>
+  <div class="login-copy"><p class="eyebrow">{localApplication ? 'Local application' : 'Protected console'}</p><h1 id="login-title">Continue to WHOISleuth</h1><p>{localApplication ? 'Open the filesystem workspace selected in your terminal.' : 'Sign in to investigate domains and manage browser-local work.'}</p><a href="/demo">Explore the synthetic demo first <IntelligenceIcon name="arrow-right" size={16} /></a></div>
   {#if localApplication}
     <section class="login card" aria-labelledby="local-session-title"><div class="mark"><BrandMark /></div><h2 id="local-session-title">Open local workspace</h2><p class="muted">Use the private launch link shown in the terminal. It works only while that application instance is running; a hosting password is not needed.</p>{#if checking}<p role="status">Opening local session…</p>{/if}{#if error}<p class="error" role="alert">{error}</p>{/if}</section>
   {:else}

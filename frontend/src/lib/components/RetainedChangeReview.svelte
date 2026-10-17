@@ -4,6 +4,7 @@
   import { selectComparisonReportRows } from '../../../../packages/comparison/comparison-row-report.mts';
   import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import ComparisonLedgerRows from '#lib/components/ComparisonLedgerRows.svelte';
+  import IntelligenceIcon from './IntelligenceIcon.svelte';
   import ComparisonFrame from '#lib/components/ComparisonFrame.svelte';
   import CaseCheckpointStage from '#lib/components/CaseCheckpointStage.svelte';
   import {
@@ -219,7 +220,7 @@
   {#if selectedItem}
     <article class="selected-comparison" aria-labelledby="selected-comparison-title">
       <ComparisonFrame>
-      {#snippet header()}<div><p class="eyebrow">Selected retained comparison</p><h3 id="selected-comparison-title">{selectedItem.label}</h3></div><a class="owner-link" href={selectedItem.ownerHref}>Open owning record →</a>{/snippet}
+      {#snippet header()}<div><p class="eyebrow">Selected retained comparison</p><h3 id="selected-comparison-title">{selectedItem.label}</h3></div><a class="owner-link" href={selectedItem.ownerHref}>Open owning record <IntelligenceIcon name="arrow-right" size={16} /></a>{/snippet}
       {#snippet left()}
         <section aria-label="Earlier comparison source"><h4>Earlier</h4><dl class="comparison-metadata">
           <div><dt>Source</dt><dd>{selectedItem.earlier.source}</dd></div>
