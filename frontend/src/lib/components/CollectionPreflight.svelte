@@ -39,8 +39,8 @@
 
 <style>
   .collection-preflight{margin-top:14px;border:1px solid var(--border);border-radius:var(--radius-md);background:rgb(var(--bg-rgb) / .42)}
-  summary{padding:10px 12px;cursor:pointer}
-  summary span{font:700 var(--text-xs) var(--mono)}
+  summary{min-height:44px;align-content:center;padding:10px 12px;cursor:pointer;font:700 var(--text-xs)/1.5 var(--mono)}
+  .disclosure-heading{vertical-align:baseline}
   summary small{color:var(--muted);font:650 var(--text-2xs) var(--mono)}
   .preflight-body{display:grid;gap:10px;padding:0 12px 12px;border-top:1px solid var(--border)}
   .preflight-body>p{margin:10px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}

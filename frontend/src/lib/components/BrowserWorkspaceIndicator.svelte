@@ -51,7 +51,7 @@
 
 {#snippet identityView()}
 <div class="workspace-scope" class:compact role={compact ? 'note' : undefined} aria-label={compact ? 'Active workspace' : undefined}>
-  {destination ? 'Backup and import workspace:' : 'Workspace:'}
+  {destination ? 'Backup and import workspace:' : 'Workspace ·'}
   {#if !destination && marker !== 'none'}<span class="workspace-marker" class:blue={marker === 'blue'} class:violet={marker === 'violet'} class:amber={marker === 'amber'} aria-hidden="true"></span>{/if}
   <strong>{name}</strong>
   {#if !destination}
@@ -76,6 +76,7 @@
 <style>
   .workspace-scope{display:flex;flex-wrap:wrap;align-items:baseline;gap:5px 8px;margin:0 0 12px;font-size:var(--text-xs);color:var(--muted);overflow-wrap:anywhere;min-width:0}.workspace-scope strong{color:var(--text);min-width:0}.workspace-scope a{margin-left:auto;color:var(--accent);text-underline-offset:3px}
   .workspace-scope.compact{margin:0;flex:1 1 22rem}
+  .workspace-scope.compact strong{font-weight:600}
   .workspace-marker { width: 10px; height: 10px; flex: 0 0 10px; border-radius: 50%; align-self: center; }
   .workspace-marker.blue { background: #3687c4; } .workspace-marker.violet { background: #926dc9; } .workspace-marker.amber { background: #bc852d; }
   .marker-preview { min-width: 0; }

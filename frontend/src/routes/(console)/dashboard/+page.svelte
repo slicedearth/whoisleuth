@@ -217,7 +217,7 @@
 <form class="dashboard-lookup" onsubmit={openLookup}>
   <label for="dashboard-target">Investigate a target</label>
   <div><input id="dashboard-target" bind:value={lookupTarget} maxlength="253" placeholder="Domain, IP address or ASN" autocomplete="off" autocapitalize="none" spellcheck="false"><button class="primary" type="submit" disabled={!lookupTarget.trim()}>Open Lookup</button></div>
-  <nav aria-label="New investigation"><a href="/discover">Discover candidates</a><a href="/bulk">Triage a list</a>{#if workspaceState === 'returning'}<button type="button" class="link-action" onclick={() => openFirstUseTool('guide')}>Start a guided investigation</button>{/if}</nav>
+  <nav aria-label="New investigation"><a class="text-link" href="/discover">Discover candidates</a><a class="text-link" href="/bulk">Triage a list</a>{#if workspaceState === 'returning'}<button type="button" class="link-action" onclick={() => openFirstUseTool('guide')}>Start a guided investigation</button>{/if}</nav>
 </form>
 {#if workspaceMutationStatus}<p class="workspace-mutation-status" role="status" aria-live="polite" aria-atomic="true">{workspaceMutationStatus}</p>{/if}
 {#if summaryError}<div class="summary-error"><p role="status">{summaryError}</p>{#if summaryRecovery === 'reload'}<p>Reloading clears unsaved form edits.</p>{/if}<button id="refresh-dashboard-summary" class="btn" type="button" disabled={summaryPending} onclick={retryLocalSummary}>{summaryRecovery === 'reload' ? 'Reload review tools' : 'Refresh saved-work summary'}</button></div>{/if}
