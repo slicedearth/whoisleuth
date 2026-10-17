@@ -138,6 +138,7 @@ async function runMonitorOnceCommand(
   const executeLookup = dependencies.runUnifiedLookup || (await import('../lib/lookup.mts')).runUnifiedLookup;
   const progress = context.beginProgress('Collecting bounded domain-control evidence');
   let document;
+  let currentSourceFailureCount = 0;
   try {
     document = await runDomainControlMonitor(manifestInput, previousInput, {
       executeLookup,
@@ -145,6 +146,9 @@ async function runMonitorOnceCommand(
       limit: args.limit,
       concurrency: args.concurrency,
       ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+      ...(args.failOn?.includes('source-failure') ? {
+        onSourceFailures: (count: number) => { currentSourceFailureCount = count; },
+      } : {}),
       onSettled: (completed, total) => progress.update(`Collected ${completed} of ${total} owned domains`),
     });
   } finally {
@@ -157,7 +161,7 @@ async function runMonitorOnceCommand(
         ? formatCliJunit(document)
         : context.terminal(formatDomainControlMonitor(document), args.color));
   }
-  const policyFindings = evaluateCliFailPolicies(document, args.failOn || []);
+  const policyFindings = evaluateCliFailPolicies(document, args.failOn || [], null, currentSourceFailureCount);
   if (policyFindings.length) context.writeStderr(formatFailPolicyNotice(policyFindings));
   return document.collection.failed || policyFindings.length
     ? EXIT_CODES.PARTIAL_FAILURE

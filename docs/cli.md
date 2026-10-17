@@ -769,6 +769,18 @@ restored result, before output filters. A fulfilled lookup can still match
 the policy exit: matches return **4**, with diagnostics on stderr. Ordinary
 collection/checkpoint failures and Lookup's separate `--strict-exit` still apply.
 
+For `monitor-once`, `source-failure` also checks the current run's constituent
+source diagnostics, even when the Lookup fulfils. `inconclusive` checks incomplete
+requested comparisons independently of the headline: MX drift does not hide
+unavailable nameserver evidence. Skipped or unsupported sources are not failed
+requests; an unsupported requested comparison can still be inconclusive.
+Unconfigured expectations and historical source failures do not match these
+policies. `material-drift` continues to mean unexpected complete observation
+changes in the flight recorder, not a desired-state mismatch or missing evidence.
+Policy matches return **4** in JSON and quiet modes too, without adding diagnostic
+fields to monitor reports or checkpoints. Without a policy, rejected Lookups
+retain their existing failure exit; constituent-source states alone do not.
+
 For `danger`, export your Brand Profiles from Brands and explicitly select Deep
 collection. The same Risk model and Brand comparisons used by the console
 evaluate the collected evidence without extra requests:

@@ -5,6 +5,7 @@ import { RISK_REVIEW_THRESHOLD } from '../packages/analysis/risk-scoring.mts';
 import type { BrandProfileSignalProfile } from '../packages/analysis/brand-profile-signals.mts';
 import { explainCliLookupRisk } from './risk-policy.mts';
 import type { CliProgressEvents } from './progress-events.mts';
+import { DOMAIN_CONTROL_REVIEW_SCHEMA } from '../packages/contracts/domain-control-review.mts';
 
 export const CLI_FAIL_POLICIES = ['source-failure', 'inconclusive', 'danger', 'material-drift'] as const;
 export type CliFailPolicy = typeof CLI_FAIL_POLICIES[number];
@@ -48,6 +49,7 @@ export function evaluateCliFailPolicies(
   document: unknown,
   policies: readonly CliFailPolicy[],
   profile: BrandProfileSignalProfile | null = null,
+  currentSourceFailureCount = 0,
 ): FailPolicyFinding[] {
   const root = record(document);
   const findings: FailPolicyFinding[] = [];
@@ -60,10 +62,16 @@ export function evaluateCliFailPolicies(
       const collection = record(root.collection);
       const summary = record(root.summary);
       const failed = Number(collection.failed ?? summary.failed ?? 0);
-      if (sourceFindings.length || failed > 0) findings.push({ policy, reason: `${sourceFindings.length + failed} failed or incomplete collection state(s)` });
+      const failures = sourceFindings.length + failed + currentSourceFailureCount;
+      if (failures > 0) findings.push({ policy, reason: `${failures} failed or incomplete collection state(s)` });
     } else if (policy === 'inconclusive') {
-      const count = availabilityStates(root).filter((state) => ['unknown', 'inconclusive', 'partial', 'unavailable'].includes(state)).length;
-      if (count) findings.push({ policy, reason: `${count} authority or availability state(s) remained inconclusive` });
+      const review = record(root.review);
+      const comparisons = review.schema === DOMAIN_CONTROL_REVIEW_SCHEMA;
+      const counts = record(review.counts);
+      const count = comparisons
+        ? Number(counts.partial ?? 0) + Number(counts.unavailable ?? 0) + Number(counts.unsupported ?? 0)
+        : availabilityStates(root).filter((state) => ['unknown', 'inconclusive', 'partial', 'unavailable'].includes(state)).length;
+      if (count) findings.push({ policy, reason: `${count} ${comparisons ? 'requested comparison(s)' : 'authority or availability state(s)'} remained inconclusive` });
     } else if (policy === 'danger') {
       const documents = [root, ...(Array.isArray(root.results) ? root.results.map(record) : [])];
       const risks = documents.flatMap(item => {

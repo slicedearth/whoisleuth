@@ -29,6 +29,13 @@ using `danger` should select `--deep --brand-profile brand.json`; no match is no
 a safety verdict. The homepage now labels the illustrative preview once rather
 than repeating fictional-data wording beside the product actions.
 
+Also include the monitor policy correction: `monitor-once --fail-on
+source-failure` includes failed current constituent sources in fulfilled Lookups;
+`--fail-on inconclusive` includes incomplete requested comparisons even beside
+definite drift. Matching runs return 4, including quiet output. Historical source
+failures, unconfigured expectations, report/checkpoint formats and the separate
+flight-recorder meaning of `material-drift` are unchanged.
+
 Work on a focused branch and prepare the approved explicit version:
 
 ```bash

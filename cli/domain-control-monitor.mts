@@ -53,6 +53,7 @@ import {
 } from './domain-control-observations.mts';
 import type { UnknownRecord } from './saved-lookup.mts';
 import { CliUsageError } from './errors.mts';
+import { lookupStrictExitFindings } from './strict-exit.mts';
 
 export { CLI_DOMAIN_CONTROL_MONITOR_SCHEMA, CLI_DOMAIN_CONTROL_MONITOR_VERSION };
 export const MAX_DOMAIN_CONTROL_MONITOR_DOMAINS = CONTRACT_MAX_DOMAIN_CONTROL_MONITOR_DOMAINS;
@@ -258,6 +259,7 @@ export async function runDomainControlMonitor(
     concurrency: number;
     signal?: AbortSignal;
     onSettled?: (completed: number, total: number) => void;
+    onSourceFailures?: (count: number) => void;
   }>,
 ) {
   if (!Number.isSafeInteger(options.limit)
@@ -326,6 +328,9 @@ export async function runDomainControlMonitor(
   const failures = failuresByIndex.filter((failure): failure is Readonly<{ domain: string; error: string }> => Boolean(failure));
   const successful = lookups.filter(Boolean);
   if (!successful.length) throw new Error('No domain-control monitor lookup completed successfully.');
+  // Only current Lookup diagnostics contribute; checkpoints retain observations,
+  // not policy metadata or raw diagnostics.
+  options.onSourceFailures?.(successful.reduce<number>((count, lookup) => count + lookupStrictExitFindings(lookup).length, 0));
   const generatedAt = requireIsoTimestamp(options.now(), 'Domain-control completion time');
   if (Date.parse(generatedAt) < checkedAt || successful.some((lookup) =>
     Date.parse(String((lookup as UnknownRecord).generatedAt)) > Date.parse(generatedAt))) {
