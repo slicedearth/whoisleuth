@@ -1,10 +1,13 @@
 import { expect, test } from './fixtures';
-import { boundingBox, expectNoHorizontalOverflow, expectVersionedSourceLink } from './helpers';
+import { boundingBox, expectNoHorizontalOverflow, expectVersionedSourceLink, useTheme } from './helpers';
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 
 const VIEWPORTS = [
   { label: '320x640', width: 320, height: 640 },
   { label: '390x568', width: 390, height: 568 },
   { label: '390x844', width: 390, height: 844 },
+  { label: '600x844', width: 600, height: 844 },
+  { label: '601x844', width: 601, height: 844 },
 ];
 
 // The CSS floor for the drawer's protected browser-chrome/safe-area region
@@ -19,7 +22,7 @@ for (const viewport of VIEWPORTS) {
   test.describe(`mobile navigation @ ${viewport.label}`, () => {
     test.use({ viewport: { width: viewport.width, height: viewport.height } });
 
-    test('header keeps sign out accessible while the drawer opens without overflow', async ({ page }) => {
+    test('header keeps sign out accessible while the drawer opens without overflow', async ({ page }, testInfo) => {
       await page.goto('/lookup');
 
       // Exactly one visible WHOISleuth logo/title (the header's, not the
@@ -38,6 +41,42 @@ for (const viewport of VIEWPORTS) {
 
       const header = page.locator('.shell > header');
       const signOutButton = header.getByRole('button', { name: 'Sign out' });
+      const homepage = page.getByRole('region', { name: 'Current investigation context' }).getByRole('link', { name: /View public homepage/u });
+      await expect(header.getByRole('link', { name: /View public homepage/u })).toHaveCount(0);
+      await expect(homepage).toHaveAttribute('href', '/');
+      await expect(homepage).toHaveAttribute('target', '_blank');
+      await expect(homepage).toHaveAttribute('rel', 'noopener noreferrer');
+      await expect(page.getByRole('link', { name: /View public homepage/u })).toHaveCount(1);
+      for (const theme of ['light', 'dark'] as const) {
+        await useTheme(page, theme);
+        await page.evaluate(() => document.fonts.ready);
+        await expect(header.getByRole('link', { name: 'WHOISleuth Dashboard', exact: true })).toBeVisible();
+        await expect(homepage).toBeVisible();
+        await expect(header.getByRole('button', { name: 'Search console navigation', exact: true })).toBeVisible();
+        await expect(signOutButton).toBeVisible();
+        await expect(header.getByRole('button', { name: 'Toggle navigation', exact: true })).toBeVisible();
+        const controls = header.locator('a:visible, button:visible');
+        const boxes = await controls.evaluateAll(elements => elements.map(element => {
+          const { x, y, width, height } = element.getBoundingClientRect();
+          return { x, y, width, height };
+        }));
+        const bounds = await boundingBox(header);
+        for (const [index, box] of boxes.entries()) {
+          expect(box.height).toBeGreaterThanOrEqual(44);
+          expect(box.width).toBeGreaterThanOrEqual(44);
+          expect(box.x).toBeGreaterThanOrEqual(bounds.x);
+          expect(box.x + box.width).toBeLessThanOrEqual(bounds.x + bounds.width);
+          expect(Math.abs(box.y + box.height / 2 - (bounds.y + bounds.height / 2))).toBeLessThanOrEqual(1);
+          expect(box.y + box.height).toBeLessThanOrEqual(bounds.y + bounds.height);
+          for (const other of boxes.slice(index + 1)) {
+            const overlap = Math.min(box.x + box.width, other.x + other.width) > Math.max(box.x, other.x)
+              && Math.min(box.y + box.height, other.y + other.height) > Math.max(box.y, other.y);
+            expect(overlap).toBe(false);
+          }
+        }
+        await expectNoHorizontalOverflow(page);
+        if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`private-header-${theme}-${viewport.label}.png`) });
+      }
       await expect(signOutButton).toBeVisible();
       await expect(signOutButton).toBeEnabled();
       await expect(signOutButton).toHaveCSS('white-space', 'nowrap');

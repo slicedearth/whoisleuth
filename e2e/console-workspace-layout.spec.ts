@@ -15,7 +15,7 @@ const viewports = [
 ] as const;
 
 test('public and console footers keep one layout and complete accessible links', async ({ page }, testInfo) => {
-  for (const width of [320, 1024, 1280]) for (const theme of ['light', 'dark'] as const) {
+  for (const width of [320, 390, 412, 720, 1024, 1280]) for (const theme of ['light', 'dark'] as const) {
     await page.setViewportSize({ width, height: 900 });
     let publicLayout: number[] | undefined;
     for (const path of ['/', '/resources', '/dashboard']) {
@@ -40,14 +40,15 @@ test('public and console footers keep one layout and complete accessible links',
       const layout = await footer.evaluate(element => {
         const box = element.getBoundingClientRect();
         const metadata = element.querySelector('p')!.getBoundingClientRect();
+        const author = element.querySelector('p a')!.getBoundingClientRect();
         const navigation = element.querySelector('nav')!.getBoundingClientRect();
         return {
           metadataBottom: metadata.bottom - box.top,
           navigationTop: navigation.top - box.top,
-          positions: Array.from(element.querySelectorAll('nav > a')).flatMap(link => {
+          positions: [metadata.height, author.left - box.left, author.top - box.top, ...Array.from(element.querySelectorAll('nav > a')).flatMap(link => {
             const bounds = link.getBoundingClientRect();
             return [bounds.left - box.left, bounds.top - box.top];
-          }),
+          })],
         };
       });
       expect(layout.navigationTop).toBeGreaterThan(layout.metadataBottom);
