@@ -169,9 +169,9 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await dashboardLink.click();
   await expect(page).toHaveURL('/dashboard');
   await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
-  const publicHomepageLink = page.getByRole('banner').getByRole('link', { name: /View public homepage/u });
+  const publicHomepageLink = page.getByRole('region', { name: 'Current investigation context' }).getByRole('link', { name: /View public homepage/u });
+  await expect(page.getByRole('banner').getByRole('link', { name: /View public homepage/u })).toHaveCount(0);
   await expect(page.getByRole('link', { name: /View public homepage/u })).toHaveCount(1);
-  await expect(page.getByRole('main').getByRole('link', { name: /View public homepage/u })).toHaveCount(0);
   await expect(publicHomepageLink).toHaveAttribute('target', '_blank');
   await expect(publicHomepageLink).toHaveAttribute('rel', 'noopener noreferrer');
   const homepagePromise = page.waitForEvent('popup');

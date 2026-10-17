@@ -699,7 +699,7 @@ details.evidence-card > summary.evidence-summary { font: inherit; }
 .workspace-view-nav :is([aria-current='page'], [aria-selected='true'], [aria-pressed='true']) { color: var(--text); border-bottom-color: currentColor; background: var(--panel-raised); }
 
 /* ---------- Application shell ---------- */
-.shell { --console-toolbar-height: 54px; display: grid; grid-template: "sidebar header" var(--console-toolbar-height) "sidebar main" minmax(0,1fr) / 232px minmax(0,1fr); min-height: 100vh; overflow-x: clip; }
+.shell { --console-toolbar-height: 54px; --local-nav-anchor-offset: calc(var(--console-toolbar-height) + 12px); display: grid; grid-template: "sidebar header" var(--console-toolbar-height) "sidebar main" minmax(0,1fr) / 232px minmax(0,1fr); min-height: 100vh; overflow-x: clip; }
 .shell .card { background: var(--panel); box-shadow: none; }
 .shell a.card:hover, .shell a.card:focus-visible { transform: none; }
 .shell .heading::after { display: none; }
@@ -813,11 +813,8 @@ main { grid-area: main; width: min(1280px,100%); margin: auto; padding: 30px cla
 }
 
 @media (max-width: 720px) {
-  .shell > main { padding-inline: 12px; }
-}
-
-@media (max-width: 600px) {
-  .shell, :root[data-theme='light'] .shell { --console-toolbar-height: 104px; }
+  .shell > main { padding-top: 16px; padding-inline: 12px; }
+  .shell .heading .eyebrow { margin-top: 0; }
 }
 
 @media (max-width: 380px) {

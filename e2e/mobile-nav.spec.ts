@@ -41,7 +41,8 @@ for (const viewport of VIEWPORTS) {
 
       const header = page.locator('.shell > header');
       const signOutButton = header.getByRole('button', { name: 'Sign out' });
-      const homepage = header.getByRole('link', { name: /View public homepage/u });
+      const homepage = page.getByRole('region', { name: 'Current investigation context' }).getByRole('link', { name: /View public homepage/u });
+      await expect(header.getByRole('link', { name: /View public homepage/u })).toHaveCount(0);
       await expect(homepage).toHaveAttribute('href', '/');
       await expect(homepage).toHaveAttribute('target', '_blank');
       await expect(homepage).toHaveAttribute('rel', 'noopener noreferrer');
@@ -65,6 +66,7 @@ for (const viewport of VIEWPORTS) {
           expect(box.width).toBeGreaterThanOrEqual(44);
           expect(box.x).toBeGreaterThanOrEqual(bounds.x);
           expect(box.x + box.width).toBeLessThanOrEqual(bounds.x + bounds.width);
+          expect(Math.abs(box.y + box.height / 2 - (bounds.y + bounds.height / 2))).toBeLessThanOrEqual(1);
           expect(box.y + box.height).toBeLessThanOrEqual(bounds.y + bounds.height);
           for (const other of boxes.slice(index + 1)) {
             const overlap = Math.min(box.x + box.width, other.x + other.width) > Math.max(box.x, other.x)
