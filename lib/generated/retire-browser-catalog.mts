@@ -2,11 +2,11 @@
 // browser-library catalogue. Apache-2.0 licensed source; do not edit by hand.
 
 const RETIRE_BROWSER_CATALOG = Object.freeze({
-  catalogVersion: "retire.js-2026.10.15",
-  sourceRevision: "69016f934568b93ce2517073dc2ac99dba615215",
-  sourceUpdatedAt: "2026-10-15T07:45:18.000Z",
-  sourceSha256: "b026add16583e58cd463300722a36e319eca637ebdd507be79786a46634cf441",
-  sourceUrl: "https://github.com/RetireJS/retire.js/blob/69016f934568b93ce2517073dc2ac99dba615215/repository/jsrepository.json",
+  catalogVersion: "retire.js-2026.10.21",
+  sourceRevision: "e5e228659bbcaea7ba85536a2ef8d4fb97b366e9",
+  sourceUpdatedAt: "2026-10-21T10:07:00.000Z",
+  sourceSha256: "01756a592875f31e99481ace7a05a9c23e6915027c719495d542709db7ee2c35",
+  sourceUrl: "https://github.com/RetireJS/retire.js/blob/e5e228659bbcaea7ba85536a2ef8d4fb97b366e9/repository/jsrepository.json",
   components: {
   "jquery": {
     "extractors": {
@@ -6290,6 +6290,51 @@ const RETIRE_BROWSER_CATALOG = Object.freeze({
         }
       },
       {
+        "below": "14.3.2",
+        "severity": "high",
+        "atOrAbove": "0",
+        "cwe": [
+          "CWE-400",
+          "CWE-407"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2026-111759"
+          ],
+          "githubID": "GHSA-R7FV-28H4-CVQ7"
+        }
+      },
+      {
+        "below": "14.3.3",
+        "severity": "low",
+        "atOrAbove": "0",
+        "cwe": [
+          "CWE-400",
+          "CWE-407"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2026-111766"
+          ],
+          "githubID": "GHSA-VFGH-JCMW-G37Q"
+        }
+      },
+      {
+        "below": "14.3.3",
+        "severity": "high",
+        "atOrAbove": "14.1.0",
+        "cwe": [
+          "CWE-400",
+          "CWE-407"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2026-111758"
+          ],
+          "githubID": "GHSA-GFR2-RV44-R23C"
+        }
+      },
+      {
         "below": "15.0.1",
         "severity": "medium",
         "atOrAbove": "15.0.0",
@@ -6299,6 +6344,51 @@ const RETIRE_BROWSER_CATALOG = Object.freeze({
         ],
         "identifiers": {
           "githubID": "GHSA-253C-MCHW-3W2R"
+        }
+      },
+      {
+        "below": "15.0.2",
+        "severity": "high",
+        "atOrAbove": "15.0.0",
+        "cwe": [
+          "CWE-400",
+          "CWE-407"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2026-111759"
+          ],
+          "githubID": "GHSA-R7FV-28H4-CVQ7"
+        }
+      },
+      {
+        "below": "15.0.3",
+        "severity": "high",
+        "atOrAbove": "15.0.0",
+        "cwe": [
+          "CWE-400",
+          "CWE-407"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2026-111758"
+          ],
+          "githubID": "GHSA-GFR2-RV44-R23C"
+        }
+      },
+      {
+        "below": "15.0.3",
+        "severity": "low",
+        "atOrAbove": "15.0.0",
+        "cwe": [
+          "CWE-400",
+          "CWE-407"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2026-111766"
+          ],
+          "githubID": "GHSA-VFGH-JCMW-G37Q"
         }
       }
     ]
@@ -9209,8 +9299,7 @@ const RETIRE_BROWSER_CATALOG = Object.freeze({
         ],
         "identifiers": {
           "CVE": [
-            "CVE-2021-23337",
-            "CVE-2026-4800"
+            "CVE-2021-23337"
           ],
           "githubID": "GHSA-35JH-R3H4-6JHM"
         }
@@ -9239,8 +9328,7 @@ const RETIRE_BROWSER_CATALOG = Object.freeze({
         ],
         "identifiers": {
           "CVE": [
-            "CVE-2025-13465",
-            "CVE-2026-2950"
+            "CVE-2025-13465"
           ],
           "githubID": "GHSA-XXJR-MMJV-4GPG"
         }
@@ -9254,7 +9342,6 @@ const RETIRE_BROWSER_CATALOG = Object.freeze({
         ],
         "identifiers": {
           "CVE": [
-            "CVE-2025-13465",
             "CVE-2026-2950"
           ],
           "githubID": "GHSA-F23M-R3PF-42RH"
@@ -9269,7 +9356,6 @@ const RETIRE_BROWSER_CATALOG = Object.freeze({
         ],
         "identifiers": {
           "CVE": [
-            "CVE-2021-23337",
             "CVE-2026-4800"
           ],
           "githubID": "GHSA-R5FR-RJXR-66JC"

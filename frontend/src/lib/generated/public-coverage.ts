@@ -38,7 +38,7 @@ export const PUBLIC_COVERAGE = {
     "registrySnapshot": {
       "schema": "whoisleuth\u002eregistry-standards-coverage",
       "version": 1,
-      "verifiedAt": "2026-10-03",
+      "verifiedAt": "2026-10-27",
       "counts": {
         "activeTlds": 1437,
         "countryCode": 309,

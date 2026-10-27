@@ -136,7 +136,7 @@ const VERSION_22_NEGATIVE_SUFFIXES = [
   'so', 'tc', 'td', 'tg', 'tm', 'vu', 'xn--j1amh',
   'xn--mgbah1a3hjkrd', 'xn--ogbpf8fl',
 ];
-const VERSION_22_RDAP_SUFFIXES = new Set(['gs', 'nf', 'sn']);
+const VERSION_22_RDAP_SUFFIXES = new Set(['gs', 'nf', 'sc', 'sn']);
 const VERSION_23_NEGATIVE_SUFFIXES = ['bj', 'do'];
 const VERSION_23_UNVERIFIED_SUFFIXES = [
   'bo', 'bw', 'cf', 'ge', 'gp', 'gq', 'hm', 'iq', 'pf', 'sb',
@@ -148,7 +148,7 @@ const VERSION_24_PROMOTED_SUFFIXES = new Set(['xn--90ae', 'xn--l1acc', 'xn--wgbl
 
 describe('registry capability metadata', () => {
   test('has a versioned, deterministic compatibility matrix', () => {
-    assert.equal(REGISTRY_CAPABILITIES_VERSION, 31);
+    assert.equal(REGISTRY_CAPABILITIES_VERSION, 32);
     const first = registryCompatibilityMatrix();
     const second = registryCompatibilityMatrix();
     assert.deepEqual(first, second);

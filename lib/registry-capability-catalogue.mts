@@ -80,18 +80,18 @@ type RegistryCapabilitySeed = Pick<
   'id' | 'suffixes' | 'registryClass' | 'whoisParserProfile' | 'fixtureScenarios'
 >>;
 
-const REGISTRY_CAPABILITIES_VERSION = 31;
+const REGISTRY_CAPABILITIES_VERSION = 32;
 const MAX_CAPABILITY_INPUT_LENGTH = 253;
 
 const REGISTRY_STANDARDS_COVERAGE_SNAPSHOT = Object.freeze({
   schema: REGISTRY_STANDARDS_COVERAGE_SCHEMA,
   version: 1,
-  verifiedAt: '2026-10-03',
+  verifiedAt: '2026-10-27',
   sources: Object.freeze({
-    rootZoneVersion: '2026100200',
-    rootZoneLastUpdatedAt: '2026-10-02T07:07:02.000Z',
+    rootZoneVersion: '2026102600',
+    rootZoneLastUpdatedAt: '2026-10-26T07:07:01.000Z',
     rootZoneTldSetSha256: '71093802743b87ee52fac5dd4f662cafd0133dae5089ac6c2e34ee73cebfc836',
-    rdapBootstrapPublication: '2026-09-30T23:00:03.000Z',
+    rdapBootstrapPublication: '2026-10-22T23:00:04.000Z',
     rdapBootstrapVersion: '1.0',
     urls: Object.freeze([
       'https://data.iana.org/TLD/tlds-alpha-by-domain.txt',
@@ -185,7 +185,7 @@ const VERSION_22_NEGATIVE_ONLY_SUFFIXES = Object.freeze([
   'so', 'tc', 'td', 'tg', 'tm', 'vu', 'xn--j1amh',
   'xn--mgbah1a3hjkrd', 'xn--ogbpf8fl',
 ]);
-const VERSION_22_RDAP_SUFFIXES = Object.freeze(['gs', 'nf', 'sn']);
+const VERSION_22_RDAP_SUFFIXES = Object.freeze(['gs', 'nf', 'sc', 'sn']);
 const VERSION_23_NEGATIVE_ONLY_SUFFIXES = Object.freeze(['bj', 'do']);
 const VERSION_23_UNVERIFIED_REFERRAL_SUFFIXES = Object.freeze([
   'bo', 'bw', 'cf', 'ge', 'gp', 'gq', 'hm', 'iq', 'pf', 'sb',
