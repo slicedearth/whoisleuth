@@ -20,32 +20,17 @@ unsupported future versions, and document migration or comparison behaviour.
 
 ## Prepare a release
 
-Include these CLI corrections in the next release notes: Discovery failure
-policies now include results hidden by output filters and restored checkpoints;
-`danger` evaluates canonical Risk evidence with an explicitly supplied local
-Brand Profile rather than asserted score/severity fields. Matching runs return
-4 without changing stdout schemas, collection limits or request scope. Scripts
-using `danger` should select `--deep --brand-profile brand.json`; no match is not
-a safety verdict. The homepage now labels the illustrative preview once rather
-than repeating fictional-data wording beside the product actions.
+The upcoming 2.8.1 maintenance notes should include the patched Node 24 runtime,
+compatible dependency updates, and refreshed SSLBL, KEV, browser-advisory,
+registrar and IANA registry data. The MIME update preserves bounded offline
+intake while enforcing aggregate header budgets and treating header-like lines
+after a malformed field as body text. No extra collection, retention or evidence
+format change is introduced.
 
-Also include the monitor policy correction: `monitor-once --fail-on
-source-failure` includes failed current constituent sources in fulfilled Lookups;
-`--fail-on inconclusive` includes incomplete requested comparisons even beside
-definite drift. Matching runs return 4, including quiet output. Historical source
-failures, unconfigured expectations, report/checkpoint formats and the separate
-flight-recorder meaning of `material-drift` are unchanged.
-
-Domain-control projection also separates parent registration from exact-host
-service evidence before recency selection. Historical scope remains supported;
-newer children cannot overwrite apex or sibling service observations. One-shot
-monitoring rejects unsupported child targets before collection and categorises
-wrong-host replies as failed Lookups, preserving checkpoint identities and counts.
-
-Bulk comparison and saved-Lookup `diff`/`timeline` now qualify web-derived fields
-using retained collection quality. Failed, partial or unknown collection cannot
-establish equality, removal or change; source-health changes remain visible.
-Existing reports and historical integrity verification keep their formats.
+Also note explicit focus restoration when dismissing the mobile documentation
+navigator, corrected native Fish completion verification, and current DNSSEC
+root-anchor transition guidance. These changes do not alter CLI failure-policy
+or comparison semantics delivered in 2.8.0.
 
 Work on a focused branch and prepare the approved explicit version:
 
