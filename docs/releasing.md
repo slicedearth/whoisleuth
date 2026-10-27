@@ -28,9 +28,10 @@ after a malformed field as body text. No extra collection, retention or evidence
 format change is introduced.
 
 Also note explicit focus restoration when dismissing the mobile documentation
-navigator, corrected native Fish completion verification, and current DNSSEC
-root-anchor transition guidance. These changes do not alter CLI failure-policy
-or comparison semantics delivered in 2.8.0.
+navigator, command-palette scrolling that preserves the latest keyboard choice,
+corrected native Fish completion verification, and current DNSSEC root-anchor
+transition guidance. These changes do not alter CLI failure-policy or comparison
+semantics delivered in 2.8.0.
 
 Work on a focused branch and prepare the approved explicit version:
 
