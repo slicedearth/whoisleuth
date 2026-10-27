@@ -36,7 +36,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ================================================================================
-@fastify/busboy@3.2.3
+@fastify/busboy@3.2.4
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: LICENSE
@@ -168,7 +168,7 @@ Licence source: locked optional platform package metadata
 
 This optional platform package declares MIT. It is installed separately on supported platforms, not included in this artefact. Its installed package provides its own licence notices.
 ================================================================================
-@netlify/blobs@11.1.4
+@netlify/blobs@11.1.6
 Relationship: direct production dependency
 Declared licence: MIT
 Licence source: LICENSE
@@ -196,14 +196,14 @@ LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ================================================================================
-@netlify/dev-utils@6.0.3
+@netlify/dev-utils@6.0.4
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: package metadata
 
 The installed package declares MIT. It does not include a standalone licence document.
 ================================================================================
-@netlify/otel@7.0.4
+@netlify/otel@7.0.6
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: LICENSE
@@ -472,7 +472,7 @@ Apache License
    See the License for the specific language governing permissions and
    limitations under the License.
 ================================================================================
-@opentelemetry/api-logs@0.221.0
+@opentelemetry/api-logs@0.223.0
 Relationship: transitive production dependency
 Declared licence: Apache-2.0
 Licence source: LICENSE
@@ -679,7 +679,7 @@ Apache License
    See the License for the specific language governing permissions and
    limitations under the License.
 ================================================================================
-@opentelemetry/context-async-hooks@2.10.0
+@opentelemetry/context-async-hooks@2.12.0
 Relationship: transitive production dependency
 Declared licence: Apache-2.0
 Licence source: LICENSE
@@ -886,7 +886,7 @@ Apache License
    See the License for the specific language governing permissions and
    limitations under the License.
 ================================================================================
-@opentelemetry/core@2.10.0
+@opentelemetry/core@2.12.0
 Relationship: transitive production dependency
 Declared licence: Apache-2.0
 Licence source: LICENSE
@@ -1093,7 +1093,7 @@ Apache License
    See the License for the specific language governing permissions and
    limitations under the License.
 ================================================================================
-@opentelemetry/instrumentation@0.221.0
+@opentelemetry/instrumentation@0.223.0
 Relationship: transitive production dependency
 Declared licence: Apache-2.0
 Licence source: LICENSE
@@ -1300,7 +1300,7 @@ Apache License
    See the License for the specific language governing permissions and
    limitations under the License.
 ================================================================================
-@opentelemetry/resources@2.10.0
+@opentelemetry/resources@2.12.0
 Relationship: transitive production dependency
 Declared licence: Apache-2.0
 Licence source: LICENSE
@@ -1507,7 +1507,7 @@ Apache License
    See the License for the specific language governing permissions and
    limitations under the License.
 ================================================================================
-@opentelemetry/sdk-trace@2.10.0
+@opentelemetry/sdk-trace@2.12.0
 Relationship: transitive production dependency
 Declared licence: Apache-2.0
 Licence source: LICENSE
@@ -1714,7 +1714,7 @@ Apache License
    See the License for the specific language governing permissions and
    limitations under the License.
 ================================================================================
-@opentelemetry/sdk-trace-base@2.10.0
+@opentelemetry/sdk-trace-base@2.12.0
 Relationship: transitive production dependency
 Declared licence: Apache-2.0
 Licence source: LICENSE
@@ -1921,7 +1921,7 @@ Apache License
    See the License for the specific language governing permissions and
    limitations under the License.
 ================================================================================
-@opentelemetry/sdk-trace-node@2.10.0
+@opentelemetry/sdk-trace-node@2.12.0
 Relationship: transitive production dependency
 Declared licence: Apache-2.0
 Licence source: LICENSE
@@ -2888,7 +2888,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ================================================================================
-body-parser@2.3.0
+body-parser@2.4.0
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: LICENSE
@@ -4371,7 +4371,7 @@ LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ================================================================================
-import-in-the-middle@3.5.2
+import-in-the-middle@3.5.3
 Relationship: transitive production dependency
 Declared licence: Apache-2.0
 Licence source: LICENSE
@@ -5437,7 +5437,7 @@ Apache License
 
    END OF TERMS AND CONDITIONS
 ================================================================================
-postal-mime@4.0.7
+postal-mime@4.1.4
 Relationship: direct production dependency
 Declared licence: MIT-0
 Licence source: LICENSE.txt
@@ -6198,7 +6198,7 @@ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ================================================================================
-tldts@7.4.18
+tldts@7.4.19
 Relationship: direct production dependency
 Declared licence: MIT
 Licence source: LICENSE
@@ -6217,7 +6217,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
  WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ================================================================================
-tldts-core@7.4.18
+tldts-core@7.4.19
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: LICENSE
@@ -6493,7 +6493,7 @@ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
 TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ================================================================================
-undici@8.12.2
+undici@8.12.3
 Relationship: direct production dependency
 Declared licence: MIT
 Licence source: LICENSE
