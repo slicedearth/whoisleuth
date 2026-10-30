@@ -27,6 +27,12 @@ intake while enforcing aggregate header budgets and treating header-like lines
 after a malformed field as body text. No extra collection, retention or evidence
 format change is introduced.
 
+The final refresh advances Node 24 to 24.22.2, SvelteKit to 3.1.1 and Svelte to
+5.57.3, with parent-compatible ASN.1, HTTP, PDF and build-tool updates. The
+retained SSLBL feed and vulnerability catalogues were reviewed again against
+their 30 October source checks; IANA coverage now reflects one retired TLD.
+TypeScript 6 and the existing ASN.1 major dependency lines remain unchanged.
+
 Also note explicit focus restoration when dismissing the mobile documentation
 navigator, command-palette scrolling that preserves the latest keyboard choice,
 corrected native Fish completion verification, and current DNSSEC root-anchor
