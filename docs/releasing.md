@@ -30,7 +30,7 @@ format change is introduced.
 The final refresh advances Node 24 to 24.22.2, SvelteKit to 3.1.1 and Svelte to
 5.57.3, with parent-compatible ASN.1, HTTP, PDF and build-tool updates. The
 retained SSLBL feed and vulnerability catalogues were reviewed again against
-their 30 October source checks; IANA coverage now reflects one retired TLD.
+their 31 October source checks; IANA coverage now reflects one retired TLD.
 TypeScript 6 and the primary Node 24 major line remain unchanged.
 
 The additional dependency pass upgrades Netlify Blobs to 11.1.7, Postal MIME to

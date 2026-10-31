@@ -2,11 +2,11 @@
 // browser-library catalogue. Apache-2.0 licensed source; do not edit by hand.
 
 const RETIRE_BROWSER_CATALOG = Object.freeze({
-  catalogVersion: "retire.js-2026.10.29",
-  sourceRevision: "54d26f6069fe0c2b727772d3f1108306146e9c88",
-  sourceUpdatedAt: "2026-10-29T04:20:34.000Z",
-  sourceSha256: "75f8a0ef8337b7677100f31fdd27ed7524f41b293b250141d537a3fdc171771c",
-  sourceUrl: "https://github.com/RetireJS/retire.js/blob/54d26f6069fe0c2b727772d3f1108306146e9c88/repository/jsrepository.json",
+  catalogVersion: "retire.js-2026.10.30",
+  sourceRevision: "970fc886e7eb1002bc5e989f3f480ab5853fc82a",
+  sourceUpdatedAt: "2026-10-30T15:21:58.000Z",
+  sourceSha256: "1ba9dff7c8e0767bec64aa2da255e8cf08a5dc1d43c279ab46c0c2059f2f6f23",
+  sourceUrl: "https://github.com/RetireJS/retire.js/blob/970fc886e7eb1002bc5e989f3f480ab5853fc82a/repository/jsrepository.json",
   components: {
   "jquery": {
     "extractors": {
@@ -9326,6 +9326,216 @@ const RETIRE_BROWSER_CATALOG = Object.freeze({
             "CVE-2021-29489"
           ],
           "githubID": "GHSA-8J65-4PCQ-XQ95"
+        }
+      },
+      {
+        "below": "11.4.9",
+        "severity": "high",
+        "atOrAbove": "0",
+        "cwe": [
+          "CWE-79"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2026-118251"
+          ],
+          "githubID": "GHSA-5793-X2Q3-C3Q7"
+        }
+      },
+      {
+        "below": "11.4.9",
+        "severity": "high",
+        "atOrAbove": "6.1.0",
+        "cwe": [
+          "CWE-1321"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2026-118250"
+          ],
+          "githubID": "GHSA-RMQC-XVR3-V46C"
+        }
+      },
+      {
+        "below": "11.4.9",
+        "severity": "high",
+        "atOrAbove": "10.0.0",
+        "cwe": [
+          "CWE-79"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2026-118246"
+          ],
+          "githubID": "GHSA-35RR-XWFH-X789"
+        }
+      },
+      {
+        "below": "11.4.9",
+        "severity": "high",
+        "atOrAbove": "10.3.2",
+        "cwe": [
+          "CWE-79"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2026-116796"
+          ],
+          "githubID": "GHSA-MW4F-GJ5X-6XR4"
+        }
+      },
+      {
+        "below": "12.6.1",
+        "severity": "high",
+        "atOrAbove": "12.0.0",
+        "cwe": [
+          "CWE-79"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2026-118246"
+          ],
+          "githubID": "GHSA-35RR-XWFH-X789"
+        }
+      },
+      {
+        "below": "12.6.1",
+        "severity": "high",
+        "atOrAbove": "12.0.0",
+        "cwe": [
+          "CWE-79"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2026-118251"
+          ],
+          "githubID": "GHSA-5793-X2Q3-C3Q7"
+        }
+      },
+      {
+        "below": "12.6.1",
+        "severity": "high",
+        "atOrAbove": "12.0.0",
+        "cwe": [
+          "CWE-79"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2026-118244"
+          ],
+          "githubID": "GHSA-65HG-CF3F-5M39"
+        }
+      },
+      {
+        "below": "12.6.1",
+        "severity": "high",
+        "atOrAbove": "12.0.0",
+        "cwe": [
+          "CWE-1321"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2026-118250"
+          ],
+          "githubID": "GHSA-RMQC-XVR3-V46C"
+        }
+      },
+      {
+        "below": "12.6.2",
+        "severity": "high",
+        "atOrAbove": "12.0.0",
+        "cwe": [
+          "CWE-79"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2026-116796"
+          ],
+          "githubID": "GHSA-MW4F-GJ5X-6XR4"
+        }
+      },
+      {
+        "below": "13.1.0",
+        "severity": "high",
+        "atOrAbove": "13.0.0",
+        "cwe": [
+          "CWE-79"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2026-118246"
+          ],
+          "githubID": "GHSA-35RR-XWFH-X789"
+        }
+      },
+      {
+        "below": "13.1.0",
+        "severity": "high",
+        "atOrAbove": "13.0.0",
+        "cwe": [
+          "CWE-79"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2026-118251"
+          ],
+          "githubID": "GHSA-5793-X2Q3-C3Q7"
+        }
+      },
+      {
+        "below": "13.1.0",
+        "severity": "high",
+        "atOrAbove": "13.0.0",
+        "cwe": [
+          "CWE-79"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2026-118244"
+          ],
+          "githubID": "GHSA-65HG-CF3F-5M39"
+        }
+      },
+      {
+        "below": "13.1.0",
+        "severity": "high",
+        "atOrAbove": "13.0.0",
+        "cwe": [
+          "CWE-1321"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2026-118249"
+          ],
+          "githubID": "GHSA-GFVX-2C2G-38WQ"
+        }
+      },
+      {
+        "below": "13.1.0",
+        "severity": "high",
+        "atOrAbove": "13.0.0",
+        "cwe": [
+          "CWE-1321"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2026-118250"
+          ],
+          "githubID": "GHSA-RMQC-XVR3-V46C"
+        }
+      },
+      {
+        "below": "13.1.1",
+        "severity": "high",
+        "atOrAbove": "13.0.0",
+        "cwe": [
+          "CWE-79"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2026-116796"
+          ],
+          "githubID": "GHSA-MW4F-GJ5X-6XR4"
         }
       }
     ]
