@@ -1,6 +1,7 @@
 import { requiredValue } from './value-assertions.mts';
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { getStore } from '@netlify/blobs';
 import {
   createNetlifyBlobVersionedTextStore,
   MAX_BLOB_KEY_BYTES,
@@ -120,6 +121,32 @@ describe('scheduled monitoring Netlify Blobs adapter', () => {
     const store = createNetlifyBlobVersionedTextStore(blobs);
     assert.equal(await store.compareAndSet('state', '"stale"', 'ciphertext'), false);
     assert.deepEqual(requiredValue(blobs.writes[0]).options, { onlyIfMatch: '"stale"' });
+  });
+
+  test('SDK conditional responses distinguish successful writes, conflicts and provider failures', async () => {
+    let status = 200;
+    const writes: RequestInit[] = [];
+    const blobs = getStore({
+      name: 'fixture-monitor', siteID: 'fixture-site', token: '<example-token>',
+      edgeURL: 'https://blobs.example',
+      fetch: async (_input, init) => {
+        writes.push(init ?? {});
+        return new Response('', { status, headers: { etag: '"next"' } });
+      },
+    });
+    const store = createNetlifyBlobVersionedTextStore(blobs);
+    assert.equal(await store.compareAndSet('state', '"v1"', 'ciphertext'), true);
+    status = 409;
+    assert.equal(await store.compareAndSet('state', '"v1"', 'ciphertext'), false);
+    status = 400;
+    await assert.rejects(store.compareAndSet('state', '"v1"', 'ciphertext'), {
+      name: 'BlobsInternalError', status: 400,
+    });
+    assert.equal(writes.length, 3);
+    for (const write of writes) {
+      assert.equal(write.method?.toLowerCase(), 'put');
+      assert.equal(new Headers(write.headers).get('if-match'), '"v1"');
+    }
   });
 
   test('rejects malformed stores, Blob keys, entries, versions, values, and write responses', async () => {

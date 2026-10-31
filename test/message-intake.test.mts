@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import PostalMime from 'postal-mime';
 import { createLinkIntake, refangIntakeUrl } from '../packages/investigation/link-intake.mts';
 import { reviewMessageInput } from '../packages/investigation/message-intake.mts';
 import { MAX_INTAKE_LINKS, MAX_MESSAGE_INTAKE_BYTES, MAX_MESSAGE_DEPTH } from '../packages/contracts/message-intake.mts';
@@ -198,7 +199,7 @@ test('nested messages and calendars are parsed without opening attachments', asy
   assert.equal(result.report.coverage.state, 'partial');
 });
 
-test('email review retains duplicate and folded evidence without retaining recipient or subject fields', async () => {
+test('email review retains duplicate and folded evidence without retaining private header fields', async () => {
   const source = [
     'From: "Private Sender"',
     '\t<private-first@first.example>',
@@ -210,12 +211,16 @@ test('email review retains duplicate and folded evidence without retaining recip
     'Cc: private-copy@copy.example',
     'Subject: private first subject',
     'Subject: private second subject',
+    'OTP-Token: "<example-otp>"; origin="https://private-otp.example"',
     'Authentication-Results: receiver.example;',
     '\tspf=pass smtp.mailfrom=first.example;',
     '\t dkim=pass header.d=first.example',
     'Authentication-Results: other-receiver.example; spf=fail smtp.mailfrom=second.example',
     'Content-Type: text/plain; charset=utf-8', '', 'Review only',
   ].join('\r\n');
+  assert.deepEqual((await PostalMime.parse(bytes(source))).otp, {
+    code: '<example-otp>', origin: 'https://private-otp.example',
+  });
   const { report } = await reviewMessageInput(bytes(source), 'email', now);
   assert.deepEqual(report.identities.filter(item => item.role === 'from').map(item => item.domain), ['first.example', 'second.example']);
   assert.deepEqual(report.identities.filter(item => item.role === 'reply_to').map(item => item.domain), ['other.example', 'reply.example']);
@@ -224,7 +229,7 @@ test('email review retains duplicate and folded evidence without retaining recip
     ['receiver.example', 'not_established', [['spf', 'pass'], ['dkim', 'pass']]],
     ['other-receiver.example', 'not_established', [['spf', 'fail']]],
   ]);
-  for (const privateValue of ['Private Sender', 'private-', 'subject', 'recipient.example', 'later.example', 'copy.example']) {
+  for (const privateValue of ['Private Sender', 'private-', '<example-otp>', 'subject', 'otp-token', 'recipient.example', 'later.example', 'copy.example']) {
     assert.equal(JSON.stringify(report).includes(privateValue), false, privateValue);
   }
 });

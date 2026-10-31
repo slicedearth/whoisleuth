@@ -20,4 +20,17 @@ describe('certificate extension profile', () => {
     assert.equal(parseCertificateExtensionProfile(Buffer.from('not a certificate')).partial, true);
     assert.equal(parseCertificateExtensionProfile(null).parsed, false);
   });
+
+  test('trailing bytes cannot turn an incomplete certificate parse into complete evidence', () => {
+    const certificate = Buffer.from(CERTIFICATE_WITH_EXTENSIONS, 'base64');
+    for (const suffix of [Buffer.from([0]), certificate]) {
+      const result = parseCertificateExtensionProfile(Buffer.concat([certificate, suffix]));
+      assert.equal(result.parsed, false);
+      assert.equal(result.partial, true);
+      assert.deepEqual(result.certificatePolicies, { oids: [], truncated: false });
+      assert.deepEqual(result.crlDistributionPoints, {
+        total: 0, http: 0, https: 0, ldap: 0, other: 0, truncated: false,
+      });
+    }
+  });
 });

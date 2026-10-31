@@ -31,7 +31,16 @@ The final refresh advances Node 24 to 24.22.2, SvelteKit to 3.1.1 and Svelte to
 5.57.3, with parent-compatible ASN.1, HTTP, PDF and build-tool updates. The
 retained SSLBL feed and vulnerability catalogues were reviewed again against
 their 30 October source checks; IANA coverage now reflects one retired TLD.
-TypeScript 6 and the existing ASN.1 major dependency lines remain unchanged.
+TypeScript 6 and the primary Node 24 major line remain unchanged.
+
+The additional dependency pass upgrades Netlify Blobs to 11.1.7, Postal MIME to
+4.2.0, the transitive TypeScript runtime helpers to 2.9.1, and X.509 to 3.1.0
+with its matching ASN.1 3/asn1js 4 dependency family. Conditional Blob writes now
+distinguish concurrent conflicts from provider failures. Certificate input with
+trailing bytes remains explicitly partial instead of yielding complete extension
+evidence; saved normalised evidence and historical verification are unchanged.
+Message review continues to exclude OTP-header codes and origins from retained
+reports. No chain-search feature, additional request or storage field is enabled.
 
 Also note explicit focus restoration when dismissing the mobile documentation
 navigator, command-palette scrolling that preserves the latest keyboard choice,
