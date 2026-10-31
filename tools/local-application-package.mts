@@ -20,7 +20,7 @@ import {
   discoverPackageCompilerClosure, emittedPackageFiles, materializePackageSourceSnapshot,
 } from './package-source.mts';
 import { MAX_PACKAGE_COMPILER_CONTEXT_BYTES, MAX_PACKAGE_COMPILER_CONTEXT_FILE_BYTES, MAX_PACKAGE_GRAPH_BYTES, PACKAGE_PROCESS_TIMEOUT_MS } from './package-resource-bounds.mts';
-import { optionalPackageInputs, assertInstalledPackageDependencies, optionalPackageLock, captureOptionalPackageFiles, assertInstalledOptionalPackage, validateOptionalPackageFiles, buildOptionalPackageNotices } from './optional-package.mts';
+import { optionalPackageInputs, assertInstalledPackageDependencies, optionalPackageLock, captureOptionalPackageFiles, assertInstalledOptionalPackage, validateOptionalPackageFiles, buildOptionalPackageNotices, bundledPackageDependencyNames } from './optional-package.mts';
 import { pathIsWithin, requireJsonRecord as object, dependencyCruiserExecutable } from './maintainer-tool-helpers.mts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -47,10 +47,11 @@ export function localApplicationPackageManifest(sourceValue: unknown, lockfileVa
   const source = object(sourceValue, 'Local package manifest');
   if (source.name !== '@slicedearth/whoisleuth-local' || source.private !== true || source.license !== 'AGPL-3.0-only') throw new Error('Unexpected local application package identity.');
   const lock = object(object(lockfileValue, 'Lockfile').packages, 'Locked packages');
-  const pinned = Object.fromEntries(dependencies.map(name => [name, normalizeBoundedStableSemanticVersion(object(lock[`node_modules/${name}`], 'Locked dependency').version)]));
+  const bundled = bundledPackageDependencyNames(lockfileValue, dependencies);
+  const pinned = Object.fromEntries(bundled.map(name => [name, normalizeBoundedStableSemanticVersion(object(lock[`node_modules/${name}`], 'Locked dependency').version)]));
   return { name: source.name, version: normalizeBoundedStableSemanticVersion(source.version), private: true, type: 'module', license: source.license,
     description: source.description, bin: { 'whoisleuth-local': `runtime/${ENTRY.replace(/\.mts$/u, '.mjs')}` }, engines: { node: '>=24.19.0' },
-    dependencies: pinned, bundleDependencies: [...dependencies], repository: { type: 'git', url: WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL }, homepage: WHOISLEUTH_PROJECT_URL };
+    dependencies: pinned, bundleDependencies: bundled, repository: { type: 'git', url: WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL }, homepage: WHOISLEUTH_PROJECT_URL };
 }
 
 type LocalInstalledInput = Readonly<{

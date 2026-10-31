@@ -39,6 +39,8 @@ with its matching ASN.1 3/asn1js 4 dependency family. Conditional Blob writes no
 distinguish concurrent conflicts from provider failures. Certificate input with
 trailing bytes remains explicitly partial instead of yielding complete extension
 evidence; saved normalised evidence and historical verification are unchanged.
+Self-contained packages explicitly bundle required locked peers so offline
+installation retains the complete runtime dependency set.
 Message review continues to exclude OTP-header codes and origins from retained
 reports. No chain-search feature, additional request or storage field is enabled.
 

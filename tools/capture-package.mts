@@ -20,7 +20,7 @@ import {
 import { MAX_PACKAGE_COMPILER_CONTEXT_BYTES, MAX_PACKAGE_COMPILER_CONTEXT_FILE_BYTES, MAX_PACKAGE_GRAPH_BYTES, PACKAGE_PROCESS_TIMEOUT_MS } from './package-resource-bounds.mts';
 import { playwrightBrowserCacheDirectory } from './ci-verification.mts';
 import { dependencyCruiserExecutable } from './maintainer-tool-helpers.mts';
-import { optionalPackageInputs, assertInstalledPackageDependencies, optionalPackageLock, captureOptionalPackageFiles, assertInstalledOptionalPackage, validateOptionalPackageFiles, buildOptionalPackageNotices } from './optional-package.mts';
+import { optionalPackageInputs, assertInstalledPackageDependencies, optionalPackageLock, captureOptionalPackageFiles, assertInstalledOptionalPackage, validateOptionalPackageFiles, buildOptionalPackageNotices, bundledPackageDependencyNames } from './optional-package.mts';
 
 const execFile = promisify(execFileCallback);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -65,10 +65,14 @@ export function capturePackageManifest(sourceValue: unknown, lockValue: unknown,
     if (!satisfies) throw new Error(`Locked ${name} does not satisfy the reviewed companion declaration.`);
     pinned[name] = version;
   }
+  const bundled = bundledPackageDependencyNames(lockValue, dependencies);
+  for (const name of bundled) {
+    pinned[name] ??= normalizeBoundedStableSemanticVersion(object(packages[`node_modules/${name}`], `Locked ${name}`).version);
+  }
   return {
     name: source.name, version: normalizeBoundedStableSemanticVersion(source.version), private: true,
     type: 'module', license: source.license, description: source.description,
-    bin: { 'whoisleuth-capture': `runtime/${ENTRY_OUTPUT}` }, engines: { node: '>=24' }, dependencies: pinned, bundleDependencies: [...dependencies],
+    bin: { 'whoisleuth-capture': `runtime/${ENTRY_OUTPUT}` }, engines: { node: '>=24' }, dependencies: pinned, bundleDependencies: bundled,
     contentPolicy: { class: 'dual-use' },
     repository: { type: 'git', url: WHOISLEUTH_SOURCE_REPOSITORY_GIT_URL }, homepage: WHOISLEUTH_PROJECT_URL,
   };

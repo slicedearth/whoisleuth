@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { MAX_PACKAGE_PROCESSING_ITEMS } from './package-resource-bounds.mts';
 import { emittedPackageFiles, validateCompiledPackageFiles } from './package-source.mts';
 import { boundedSafeRelativePath, requireJsonRecord as object } from './maintainer-tool-helpers.mts';
-import { buildThirdPartyNotices, productionDependencyInstallPaths } from './third-party-notices.mts';
+import { buildThirdPartyNotices, productionDependencyInstallPaths, resolveInstalledDependency } from './third-party-notices.mts';
 import { readBoundedRegularFileWithin } from '../lib/bounded-file.mts';
 
 const MAX_BUNDLED_FILE_BYTES = 16 * 1024 * 1024;
@@ -12,6 +12,29 @@ type PackageFileIdentity = Readonly<{ bytes: number; sha256: string }>;
 /** Both bundled companions install with --omit=optional on every platform. */
 export function buildOptionalPackageNotices(root: string, dependencies: readonly string[], scopeLabel: string, lockfileValue: unknown): Promise<string> {
   return buildThirdPartyNotices(root, { directDependencyNames: dependencies, scopeLabel, lockfileValue, omitOptionalDependencies: true });
+}
+
+/** npm does not traverse peer edges when bundling a dependency's runtime. */
+export function bundledPackageDependencyNames(lockfileValue: unknown, direct: readonly string[]): readonly string[] {
+  const packages = object(object(lockfileValue, 'Lockfile').packages, 'Locked packages');
+  const names = new Set(direct);
+  const required = new Set(direct.length ? productionDependencyInstallPaths(lockfileValue, direct, { omitOptionalDependencies: true }) : []);
+  for (const location of required) {
+    const entry = object(packages[location], 'Locked dependency');
+    const peers = entry.peerDependencies === undefined ? {} : object(entry.peerDependencies, 'Locked peer dependencies');
+    const metadata = entry.peerDependenciesMeta === undefined ? {} : object(entry.peerDependenciesMeta, 'Locked peer metadata');
+    for (const name of Object.keys(peers)) {
+      if (metadata[name] !== undefined && object(metadata[name], 'Locked peer metadata').optional === true) continue;
+      const resolved = resolveInstalledDependency(packages, location, name);
+      if (!resolved || !required.has(resolved)) throw new Error(`Required bundled peer ${name} is missing from the locked runtime.`);
+      // A root bundle must not flatten a differently resolved nested peer.
+      if (resolveInstalledDependency(packages, '', name) !== resolved) {
+        throw new Error(`Required bundled peer ${resolved} has no matching root installation.`);
+      }
+      names.add(name);
+    }
+  }
+  return [...names].sort();
 }
 
 /** Shared closure mechanics; each optional package retains its own entry points and policy. */
@@ -89,7 +112,16 @@ export function optionalPackageLock(manifest: Record<string, unknown>, lockfile:
 export function validateOptionalPackageFiles(pack: Record<string, unknown>, expected: readonly string[]): readonly string[] {
   if (!Array.isArray(pack.files) || !pack.files.length || pack.files.length > MAX_PACKAGE_PROCESSING_ITEMS) throw new Error('Optional package inventory exceeds its processing bound.');
   const files = pack.files.map(value => boundedSafeRelativePath(object(value, 'Packed optional entry').path, 'Packed optional path'));
-  if (new Set(files).size !== files.length || JSON.stringify([...files].sort()) !== JSON.stringify([...expected].sort())) throw new Error('The optional archive differs from its reviewed file inventory.');
+  const actual = new Set(files);
+  if (actual.size !== files.length || JSON.stringify([...files].sort()) !== JSON.stringify([...expected].sort())) {
+    const reviewed = new Set(expected);
+    const missing = expected.filter(file => !actual.has(file));
+    const unexpected = files.filter(file => !reviewed.has(file));
+    throw new Error('The optional archive differs from its reviewed file inventory. '
+      + `Missing ${missing.length}: ${JSON.stringify(missing.slice(0, 5))}; `
+      + `unexpected ${unexpected.length}: ${JSON.stringify(unexpected.slice(0, 5))}; `
+      + `duplicate entries: ${files.length - actual.size}.`);
+  }
   validateCompiledPackageFiles({ ...pack, files: pack.files.filter(value => !String(object(value, 'Packed entry').path).startsWith('node_modules/')) }, expected.filter(file => !file.startsWith('node_modules/')));
   return files;
 }
