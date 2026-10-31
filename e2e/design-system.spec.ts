@@ -375,12 +375,26 @@ test('command palette hints are optional, context-aware and limited to the Conso
 });
 
 test('the console command palette keeps every destination heading readable on mobile', async ({ page }) => {
-  for (const width of [400, 430, 489, 500]) {
+  for (const width of [320, 400, 430, 489, 500]) {
     await page.setViewportSize({ width, height: 700 });
     await page.goto('/dashboard');
+    await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
+    const delayedFrame = await page.evaluateHandle(() => {
+      const original = window.requestAnimationFrame;
+      let pending: (() => void) | undefined;
+      window.requestAnimationFrame = callback => {
+        window.requestAnimationFrame = original;
+        return original.call(window, time => { pending = () => callback(time); });
+      };
+      return {
+        ready: () => Boolean(pending),
+        release: () => { pending?.(); pending = undefined; window.requestAnimationFrame = original; },
+      };
+    });
     await page.getByRole('button', { name: 'Search console navigation' }).click();
     const dialog = page.getByRole('dialog', { name: 'Go to' });
     await expect(dialog).toBeVisible();
+    await expect.poll(() => delayedFrame.evaluate(frame => frame.ready())).toBe(true);
     const options = dialog.getByRole('option');
     const headings = dialog.locator('.command-copy strong');
     await expect.poll(() => options.count()).toBeGreaterThan(0);
@@ -388,6 +402,15 @@ test('the console command palette keeps every destination heading readable on mo
     await expect.poll(() => headings.evaluateAll((items) => items.length > 0 && items.every((heading) =>
       heading.scrollWidth <= heading.clientWidth + 1
     ))).toBe(true);
+    const search = dialog.getByRole('combobox', { name: 'Search pages and tools' });
+    await search.press('End');
+    const last = options.last();
+    await expect(last).toHaveAttribute('aria-selected', 'true');
+    await expect(last).toBeInViewport({ ratio: 1 });
+    // A late initial-selection callback must not scroll away from a newer choice.
+    await delayedFrame.evaluate(frame => frame.release());
+    await delayedFrame.dispose();
+    await expect(last).toBeInViewport({ ratio: 1 });
     await page.keyboard.press('Escape');
   }
 });

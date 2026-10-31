@@ -165,8 +165,12 @@
       const optionId = `command-option-${index}`;
       const list = resultsList;
       const palette = dialog;
-      keepSelectedVisible(optionId, list, palette);
-      requestAnimationFrame(() => keepSelectedVisible(optionId, list, palette));
+      const keepCurrentVisible = () => {
+        if (selectedIndex !== index || resultsList !== list || dialog !== palette || !list.isConnected) return;
+        keepSelectedVisible(optionId, list, palette);
+      };
+      keepCurrentVisible();
+      requestAnimationFrame(keepCurrentVisible);
     });
   }
 

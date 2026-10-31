@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import PostalMime from 'postal-mime';
 import { createLinkIntake, refangIntakeUrl } from '../packages/investigation/link-intake.mts';
 import { reviewMessageInput } from '../packages/investigation/message-intake.mts';
 import { MAX_INTAKE_LINKS, MAX_MESSAGE_INTAKE_BYTES, MAX_MESSAGE_DEPTH } from '../packages/contracts/message-intake.mts';
@@ -198,7 +199,7 @@ test('nested messages and calendars are parsed without opening attachments', asy
   assert.equal(result.report.coverage.state, 'partial');
 });
 
-test('email review retains duplicate and folded evidence without retaining recipient or subject fields', async () => {
+test('email review retains duplicate and folded evidence without retaining private header fields', async () => {
   const source = [
     'From: "Private Sender"',
     '\t<private-first@first.example>',
@@ -210,12 +211,16 @@ test('email review retains duplicate and folded evidence without retaining recip
     'Cc: private-copy@copy.example',
     'Subject: private first subject',
     'Subject: private second subject',
+    'OTP-Token: "<example-otp>"; origin="https://private-otp.example"',
     'Authentication-Results: receiver.example;',
     '\tspf=pass smtp.mailfrom=first.example;',
     '\t dkim=pass header.d=first.example',
     'Authentication-Results: other-receiver.example; spf=fail smtp.mailfrom=second.example',
     'Content-Type: text/plain; charset=utf-8', '', 'Review only',
   ].join('\r\n');
+  assert.deepEqual((await PostalMime.parse(bytes(source))).otp, {
+    code: '<example-otp>', origin: 'https://private-otp.example',
+  });
   const { report } = await reviewMessageInput(bytes(source), 'email', now);
   assert.deepEqual(report.identities.filter(item => item.role === 'from').map(item => item.domain), ['first.example', 'second.example']);
   assert.deepEqual(report.identities.filter(item => item.role === 'reply_to').map(item => item.domain), ['other.example', 'reply.example']);
@@ -224,20 +229,24 @@ test('email review retains duplicate and folded evidence without retaining recip
     ['receiver.example', 'not_established', [['spf', 'pass'], ['dkim', 'pass']]],
     ['other-receiver.example', 'not_established', [['spf', 'fail']]],
   ]);
-  for (const privateValue of ['Private Sender', 'private-', 'subject', 'recipient.example', 'later.example', 'copy.example']) {
+  for (const privateValue of ['Private Sender', 'private-', '<example-otp>', 'subject', 'otp-token', 'recipient.example', 'later.example', 'copy.example']) {
     assert.equal(JSON.stringify(report).includes(privateValue), false, privateValue);
   }
 });
 
 test('Unicode whitespace cannot turn an invalid field name into sender evidence', async () => {
-  const source = [
-    '\uFEFFFrom: forged@bom.example',
-    '\u00A0From: forged@space.example',
-    'From: sender@actual.example',
-    'Content-Type: text/plain', '', 'Review only',
-  ].join('\r\n');
-  const { report } = await reviewMessageInput(bytes(source), 'email', now);
-  assert.deepEqual(report.identities.filter(item => item.role === 'from').map(item => item.domain), ['actual.example']);
+  for (const prefix of ['\uFEFF', '\u00A0']) {
+    const source = [
+      'From: sender@actual.example',
+      // The first non-header ends the block. Neither its forged field nor
+      // later header-looking body text can create additional sender evidence.
+      `${prefix}From: forged@invalid.example`,
+      'From: sender@body.example',
+      'Content-Type: text/plain', '', 'Review only',
+    ].join('\r\n');
+    const { report } = await reviewMessageInput(bytes(source), 'email', now);
+    assert.deepEqual(report.identities.filter(item => item.role === 'from').map(item => item.domain), ['actual.example']);
+  }
 });
 
 test('MIME nesting admits the supported boundary and rejects the next level without parser details', async () => {
@@ -255,6 +264,23 @@ test('MIME nesting admits the supported boundary and rejects the next level with
     name: 'TypeError',
     message: 'The message could not be decoded within the MIME nesting and header limits. No input was retained.',
   });
+});
+
+test('encoded-word headers preserve ordinary message review and header budgets include small fields', async () => {
+  const subject = '=?utf-8?B?QUJD?= '.repeat(8_192);
+  const { report } = await reviewMessageInput(bytes(
+    `From: sender@message.example\r\nSubject: ${subject}\r\nContent-Type: text/plain\r\n\r\nhttps://message.example/private?token=not-retained`,
+  ), 'email', now);
+  assert.equal(report.coverage.state, 'reviewed');
+  assert.deepEqual(report.links.map(link => link.hostname), ['message.example']);
+  assert.equal(JSON.stringify(report).includes('not-retained'), false);
+  assert.equal(JSON.stringify(report).includes('ABC'), false);
+
+  // Short fields must consume the parser's aggregate header budget too, not
+  // just their small wire size. Rejection keeps the original input private.
+  await assert.rejects(reviewMessageInput(bytes(
+    `${'X-Note: x\r\n'.repeat(4_097)}Content-Type: text/plain\r\n\r\nhttps://message.example/`,
+  ), 'email', now), /could not be decoded.*No input was retained/u);
 });
 
 test('message and header reviews share quoted-address and authentication-clause semantics', async () => {

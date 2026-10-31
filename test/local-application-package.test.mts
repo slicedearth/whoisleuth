@@ -6,7 +6,7 @@ import path from 'node:path';
 import { describe, test } from 'node:test';
 import { parseLocalApplicationArguments } from '../packages/local-application/arguments.mts';
 import { localApplicationPackageInputs, localApplicationPackageManifest } from '../tools/local-application-package.mts';
-import { optionalPackageLock, assertInstalledPackageDependencies, captureOptionalPackageFiles, assertInstalledOptionalPackage, validateOptionalPackageFiles } from '../tools/optional-package.mts';
+import { optionalPackageLock, assertInstalledPackageDependencies, captureOptionalPackageFiles, assertInstalledOptionalPackage, validateOptionalPackageFiles, bundledPackageDependencyNames } from '../tools/optional-package.mts';
 import { CI_CLI_RUNTIME_SCRIPTS } from '../tools/ci-verification.mts';
 import { buildVerificationOwnershipPlan } from '../tools/verification-ownership.mts';
 import { buildFocusedVerificationExecution } from '../tools/focused-verification.mts';
@@ -81,6 +81,25 @@ describe('local application package', () => {
     }
   });
 
+  test('bundles required locked peers without adding optional peers or flattening nested versions', () => {
+    const lock = { packages: {
+      'node_modules/parent': { ...dependency('1.0.0'), peerDependencies: { engine: '^2.0.0', optional: '^1.0.0' }, peerDependenciesMeta: { optional: { optional: true } } },
+      'node_modules/engine': { ...dependency('2.0.0', { child: '^2.0.0' }), peerDependencies: { schema: '^1.0.0' } },
+      'node_modules/schema': dependency('1.0.0'),
+      'node_modules/child': dependency('1.0.0'),
+      'node_modules/engine/node_modules/child': { ...dependency('2.0.0'), peer: true },
+      'node_modules/optional': { ...dependency('1.0.0'), peer: true, optional: true },
+      'node_modules/unrelated': { ...dependency('1.0.0'), peer: true },
+    } };
+    const result = localApplicationPackageManifest(manifest, lock, ['parent']);
+    assert.deepEqual(result.dependencies, { engine: '2.0.0', parent: '1.0.0', schema: '1.0.0' });
+    assert.deepEqual(result.bundleDependencies, ['engine', 'parent', 'schema']);
+    assert.equal((optionalPackageLock(result, lock).packages['node_modules/engine/node_modules/child'] as Record<string, unknown>).version, '2.0.0');
+    assert.deepEqual(bundledPackageDependencyNames({ packages: {} }, []), []);
+    const nested = { packages: { ...lock.packages, 'node_modules/parent/node_modules/engine': { ...dependency('2.1.0'), peer: true } } };
+    assert.throws(() => localApplicationPackageManifest(manifest, nested, ['parent']), /node_modules\/parent\/node_modules\/engine/u);
+  });
+
   test('selects a verified build before local packaging in both runtime lanes and focused checks', () => {
     assert.ok(CI_CLI_RUNTIME_SCRIPTS.indexOf('frontend:build:integrity') < CI_CLI_RUNTIME_SCRIPTS.indexOf('local:package:check'));
     const plan = buildVerificationOwnershipPlan([entry]);
@@ -98,6 +117,8 @@ describe('local application package', () => {
       assert.throws(() => validateOptionalPackageFiles({ files: candidate.map(path => ({ path })) }, candidate));
     }
     assert.throws(() => validateOptionalPackageFiles({ files: [...files, files[0]].map(path => ({ path })) }, files));
+    assert.throws(() => validateOptionalPackageFiles({ files: files.slice(0, -1).map(path => ({ path })) }, files), /node_modules\/parent\/index\.d\.ts/u);
+    assert.throws(() => validateOptionalPackageFiles({ files: [...files, 'unexpected.txt'].map(path => ({ path })) }, files), /unexpected\.txt/u);
     const directory = await mkdtemp(path.join(tmpdir(), 'optional-package-files-'));
     try {
       for (const file of files) { await mkdir(path.dirname(path.join(directory, file)), { recursive: true }); await writeFile(path.join(directory, file), file); }

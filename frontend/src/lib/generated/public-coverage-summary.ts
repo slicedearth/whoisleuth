@@ -38,17 +38,17 @@ export const PUBLIC_COVERAGE_SUMMARY = {
     "registrySnapshot": {
       "schema": "whoisleuth\u002eregistry-standards-coverage",
       "version": 1,
-      "verifiedAt": "2026-10-03",
+      "verifiedAt": "2026-10-30",
       "counts": {
-        "activeTlds": 1437,
+        "activeTlds": 1436,
         "countryCode": 309,
-        "nonCountryCode": 1128,
-        "generic": 1110,
+        "nonCountryCode": 1127,
+        "generic": 1109,
         "genericRestricted": 3,
         "sponsored": 14,
         "infrastructure": 1,
         "rdapBootstrapServiceGroups": 592,
-        "genericAndRestrictedRdapCovered": 1113,
+        "genericAndRestrictedRdapCovered": 1112,
         "sponsoredRdapCovered": 12,
         "infrastructureRdapCovered": 0
       },

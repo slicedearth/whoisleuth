@@ -83,11 +83,13 @@ test('retained guidance is compact beside the actual tool and expands through a 
   await page.getByRole('textbox', { name: 'Domain', exact: true }).fill('guide.example');
   await page.getByRole('button', { name: 'Start guide', exact: true }).click();
   await expect(page.locator('details.work-plan')).toHaveJSProperty('open', true);
+  // Navigate once before layout changes, rather than cancelling hover preloads
+  // on the outgoing dashboard during each viewport transition.
+  await page.goto('/lookup');
   for (const theme of ['light', 'dark'] as const) {
     await useTheme(page, theme);
     for (const viewport of viewports) {
       await page.setViewportSize(viewport);
-      await page.goto('/lookup');
       const plan = page.locator('details.work-plan');
       await expect(plan).toHaveJSProperty('open', false);
       await expect(page.locator('#query')).toBeInViewport();

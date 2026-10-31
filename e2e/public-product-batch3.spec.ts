@@ -188,6 +188,11 @@ test('long reference labels remain distinct and the mobile navigator works by ke
         await expect(dialog).toBeHidden();
         await expect(trigger).toBeFocused();
         await trigger.click();
+        await expect(dialog).toBeVisible();
+        await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+        await expect(dialog).toBeHidden();
+        await expect(trigger).toBeFocused();
+        await trigger.click();
         const contents = page.getByRole('dialog', { name: 'Documentation', exact: true });
         await expect(contents).toBeVisible();
         const destination = contents.getByRole('navigation', { name: 'Reporting and takedown guidance sections' }).getByRole('link').first();

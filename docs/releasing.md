@@ -20,32 +20,35 @@ unsupported future versions, and document migration or comparison behaviour.
 
 ## Prepare a release
 
-Include these CLI corrections in the next release notes: Discovery failure
-policies now include results hidden by output filters and restored checkpoints;
-`danger` evaluates canonical Risk evidence with an explicitly supplied local
-Brand Profile rather than asserted score/severity fields. Matching runs return
-4 without changing stdout schemas, collection limits or request scope. Scripts
-using `danger` should select `--deep --brand-profile brand.json`; no match is not
-a safety verdict. The homepage now labels the illustrative preview once rather
-than repeating fictional-data wording beside the product actions.
+The upcoming 2.8.1 maintenance notes should include the patched Node 24 runtime,
+compatible dependency updates, and refreshed SSLBL, KEV, browser-advisory,
+registrar and IANA registry data. The MIME update preserves bounded offline
+intake while enforcing aggregate header budgets and treating header-like lines
+after a malformed field as body text. No extra collection, retention or evidence
+format change is introduced.
 
-Also include the monitor policy correction: `monitor-once --fail-on
-source-failure` includes failed current constituent sources in fulfilled Lookups;
-`--fail-on inconclusive` includes incomplete requested comparisons even beside
-definite drift. Matching runs return 4, including quiet output. Historical source
-failures, unconfigured expectations, report/checkpoint formats and the separate
-flight-recorder meaning of `material-drift` are unchanged.
+The final refresh advances Node 24 to 24.22.2, SvelteKit to 3.1.1 and Svelte to
+5.57.3, with parent-compatible ASN.1, HTTP, PDF and build-tool updates. The
+retained SSLBL feed and vulnerability catalogues were reviewed again against
+their 31 October source checks; IANA coverage now reflects one retired TLD.
+TypeScript 6 and the primary Node 24 major line remain unchanged.
 
-Domain-control projection also separates parent registration from exact-host
-service evidence before recency selection. Historical scope remains supported;
-newer children cannot overwrite apex or sibling service observations. One-shot
-monitoring rejects unsupported child targets before collection and categorises
-wrong-host replies as failed Lookups, preserving checkpoint identities and counts.
+The additional dependency pass upgrades Netlify Blobs to 11.1.7, Postal MIME to
+4.2.0, the transitive TypeScript runtime helpers to 2.9.1, and X.509 to 3.1.0
+with its matching ASN.1 3/asn1js 4 dependency family. Conditional Blob writes now
+distinguish concurrent conflicts from provider failures. Certificate input with
+trailing bytes remains explicitly partial instead of yielding complete extension
+evidence; saved normalised evidence and historical verification are unchanged.
+Self-contained packages explicitly bundle required locked peers so offline
+installation retains the complete runtime dependency set.
+Message review continues to exclude OTP-header codes and origins from retained
+reports. No chain-search feature, additional request or storage field is enabled.
 
-Bulk comparison and saved-Lookup `diff`/`timeline` now qualify web-derived fields
-using retained collection quality. Failed, partial or unknown collection cannot
-establish equality, removal or change; source-health changes remain visible.
-Existing reports and historical integrity verification keep their formats.
+Also note explicit focus restoration when dismissing the mobile documentation
+navigator, command-palette scrolling that preserves the latest keyboard choice,
+corrected native Fish completion verification, and current DNSSEC root-anchor
+transition guidance. These changes do not alter CLI failure-policy or comparison
+semantics delivered in 2.8.0.
 
 Work on a focused branch and prepare the approved explicit version:
 

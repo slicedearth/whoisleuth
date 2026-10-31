@@ -96,6 +96,12 @@ PKIX, STARTTLS and SMTP transport remain separate evidence states.
 STARTTLS detection uses the full bounded reply. If the retained capability
 inventory is shortened, the report remains partial and names the omission.
 
+Review supplied root anchors against the [IANA trust-anchor files](https://www.iana.org/dnssec/files),
+not a copied key tag: KSK-2024 (38696) has signed the root since 11 October 2026.
+KSK-2017 (20326) remains published during the transition; its scheduled revocation
+and removal are 11 January and 22 March 2027. These commands never fetch or
+replace your selected anchors automatically.
+
 The separate optional rendered-capture companion is distributed as a locally
 assembled archive, not as part of the hosted application or main CLI, and is
 not published to a package registry. Its sandboxed, bounded browser executes

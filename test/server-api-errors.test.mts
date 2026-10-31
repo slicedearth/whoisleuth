@@ -5,6 +5,7 @@ import express from 'express';
 import { fileURLToPath } from 'node:url';
 import { stat } from 'node:fs/promises';
 import { format } from 'node:util';
+import { brotliCompressSync, deflateSync, gzipSync } from 'node:zlib';
 import { recordValue, requiredValue, stringValue } from './value-assertions.mts';
 import { deferred } from './deferred.mts';
 import type { NetworkRouteServices } from '../server.mts';
@@ -234,6 +235,46 @@ async function expectSanitizedJson(response: Response, statusCode: number, expec
 }
 
 describe('Express API request-body errors', () => {
+  test('compressed JSON preserves login and contact validation, bounds and process survival', async () => {
+    const loginBody = JSON.stringify({ password: process.env.SITE_PASSWORD });
+    const contactBody = JSON.stringify({ category: 'privacy', token: 'test-token', message: 'not accepted' });
+    for (const [encoding, compress] of [
+      ['gzip', gzipSync], ['deflate', deflateSync], ['br', brotliCompressSync],
+    ] as const) {
+      for (const [route, body, expectedStatus] of [
+        ['login', loginBody, 200], ['contact-route', contactBody, 400],
+      ] as const) {
+        const response = await fetch(`${origin}/api/${route}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Content-Encoding': encoding, Origin: origin },
+          body: new Uint8Array(compress(body)),
+        });
+        assert.equal(response.status, expectedStatus, `${route}: ${encoding}`);
+        await response.arrayBuffer();
+      }
+    }
+    // A complete gzip frame plus trailing bytes used to leave an unhandled
+    // decoder error after the JSON parser had already returned successfully.
+    const trailing = Buffer.concat([gzipSync(loginBody), Buffer.from([0]), Buffer.alloc(100 * 1024, 0x58)]);
+    const response = await fetch(`${origin}/api/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip', Origin: origin },
+      body: trailing,
+    });
+    assert.equal(response.status, 200);
+    await response.arrayBuffer();
+    const oversized = await fetch(`${origin}/api/contact-route`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip', Origin: origin },
+      body: new Uint8Array(gzipSync(JSON.stringify({ token: 'x'.repeat(9 * 1024) }))),
+    });
+    assert.equal(oversized.status, 413);
+    assert.equal((await oversized.json()).errorCode, 'REQUEST_TOO_LARGE');
+    const healthy = await postLogin(loginBody);
+    assert.equal(healthy.status, 200);
+    await healthy.arrayBuffer();
+  });
+
   test('reject cross-site requests before attempting to parse their bodies', async () => {
     const response = await postLogin('{bad', 'https://outside.example');
     assert.equal(response.status, 403);
