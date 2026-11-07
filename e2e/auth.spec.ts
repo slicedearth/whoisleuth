@@ -194,15 +194,19 @@ test('signs in through the login form and back out again', async ({ page }) => {
   await expect(page).toHaveURL('/dashboard');
   await expect(publicResourcesPage).toHaveURL('/resources');
   await expect(publicResourcesPage.getByRole('heading', { name: 'Guides for common investigation tasks' })).toBeVisible();
+  await expect(publicResourcesPage.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
   await publicResourcesPage.close();
+  const publicSignOutButton = desktopPublicNavigation.getByRole('button', { name: 'Sign out', exact: true });
   await page.goto('/demo');
+  // An "Open console" link can be rendered while the session check is still pending.
+  await expect(publicSignOutButton).toBeVisible();
   await expect(page.locator('.demo-footer').getByRole('link', { name: 'Open console' })).toHaveAttribute('href', '/dashboard');
   await expect(page.locator('.demo-footer').getByRole('link', { name: 'Sign in to investigate' })).toHaveCount(0);
   await page.goto('/resources');
+  await expect(publicSignOutButton).toBeVisible();
   await expect(page.getByRole('main').getByRole('link', { name: 'Open console', exact: true })).toHaveAttribute('href', '/dashboard');
   await expect(page.getByRole('link', { name: 'Sign in to investigate' })).toHaveCount(0);
   await page.goto('/');
-  const publicSignOutButton = page.getByRole('button', { name: 'Sign out' });
   await expect(publicSignOutButton).toBeVisible();
   await expect(publicSignOutButton).toHaveCSS('white-space', 'nowrap');
   for (const viewportWidth of [390, 320]) {

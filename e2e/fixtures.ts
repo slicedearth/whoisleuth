@@ -126,6 +126,7 @@ export async function installBrowserGuards(browser: Browser, options: GuardOptio
   const origin = new URL(networkGuardOrigin);
   if (origin.origin !== networkGuardOrigin || origin.protocol !== 'http:'
     || origin.hostname !== '127.0.0.1' || !origin.port) throw new Error('Browser fixtures require one exact loopback origin.');
+  const useDeclarativeAriaLabels = browserName === 'firefox' && browser.version() === '159.0';
   const offOriginRequests: string[] = [], consoleIssues: string[] = [], diagnostics: string[] = [];
   const assetIssues: string[] = [];
   let omittedAssetIssues = 0;
@@ -137,6 +138,16 @@ export async function installBrowserGuards(browser: Browser, options: GuardOptio
     if (contexts.has(context)) return;
     const pending = (async () => {
       const guard = await installNetworkGuard(context, networkGuardOrigin);
+      if (useDeclarativeAriaLabels) {
+        // Firefox 159 can crash when the scanner and role locators read the
+        // same reflected label in different worlds. The fixtures use HTML
+        // ID references, so let the scanner resolve those without reflection.
+        await context.addInitScript(() => {
+          if (!Reflect.deleteProperty(Element.prototype, 'ariaLabelledByElements')) {
+            throw new Error('Could not select declarative ARIA labels for Firefox 159.');
+          }
+        });
+      }
       let closed = false;
       context.once('close', () => { closed = true; });
       const pages = new Map<Page, () => void>();

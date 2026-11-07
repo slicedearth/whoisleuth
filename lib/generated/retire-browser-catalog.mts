@@ -2,11 +2,11 @@
 // browser-library catalogue. Apache-2.0 licensed source; do not edit by hand.
 
 const RETIRE_BROWSER_CATALOG = Object.freeze({
-  catalogVersion: "retire.js-2026.10.30",
-  sourceRevision: "970fc886e7eb1002bc5e989f3f480ab5853fc82a",
-  sourceUpdatedAt: "2026-10-30T15:21:58.000Z",
-  sourceSha256: "1ba9dff7c8e0767bec64aa2da255e8cf08a5dc1d43c279ab46c0c2059f2f6f23",
-  sourceUrl: "https://github.com/RetireJS/retire.js/blob/970fc886e7eb1002bc5e989f3f480ab5853fc82a/repository/jsrepository.json",
+  catalogVersion: "retire.js-2026.11.06",
+  sourceRevision: "0b95bcf8de1b38347a76245c8746ff864a92a17b",
+  sourceUpdatedAt: "2026-11-06T04:28:49.000Z",
+  sourceSha256: "744de775854771ba5ce5624465865eccce24e76d7ceccd46da218ead1e0d9130",
+  sourceUrl: "https://github.com/RetireJS/retire.js/blob/0b95bcf8de1b38347a76245c8746ff864a92a17b/repository/jsrepository.json",
   components: {
   "jquery": {
     "extractors": {
@@ -2068,19 +2068,6 @@ const RETIRE_BROWSER_CATALOG = Object.freeze({
         }
       },
       {
-        "below": "1.14",
-        "severity": "high",
-        "cwe": [
-          "CWE-79"
-        ],
-        "identifiers": {
-          "CVE": [
-            "CVE-2018-15494"
-          ],
-          "githubID": "GHSA-84CM-X2Q5-8225"
-        }
-      },
-      {
         "below": "1.14.6",
         "severity": "high",
         "atOrAbove": "1.14.0",
@@ -2140,6 +2127,29 @@ const RETIRE_BROWSER_CATALOG = Object.freeze({
             "CVE-2021-23450"
           ],
           "githubID": "GHSA-M8GW-HJPR-RJV7"
+        }
+      }
+    ]
+  },
+  "dojox": {
+    "extractors": {
+      "uri": [
+        "/(?:dojo-release-)?([0-9][0-9.a-z_\\-]+)(?:-src)?/dojox/.+\\.js",
+        "/dojox@([0-9][0-9.a-z_\\-]+)/.+\\.js"
+      ]
+    },
+    "vulnerabilities": [
+      {
+        "below": "1.14.0",
+        "severity": "critical",
+        "cwe": [
+          "CWE-116"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2018-15494"
+          ],
+          "githubID": "GHSA-84CM-X2Q5-8225"
         }
       }
     ]
@@ -8150,7 +8160,8 @@ const RETIRE_BROWSER_CATALOG = Object.freeze({
         "severity": "high",
         "atOrAbove": "15.2.0",
         "cwe": [
-          "CWE-288"
+          "CWE-288",
+          "CWE-358"
         ],
         "identifiers": {
           "CVE": [
@@ -8811,7 +8822,8 @@ const RETIRE_BROWSER_CATALOG = Object.freeze({
         "severity": "high",
         "atOrAbove": "16.0.0",
         "cwe": [
-          "CWE-288"
+          "CWE-288",
+          "CWE-358"
         ],
         "identifiers": {
           "CVE": [
@@ -9747,20 +9759,6 @@ const RETIRE_BROWSER_CATALOG = Object.freeze({
       },
       {
         "below": "4.18.0",
-        "severity": "medium",
-        "atOrAbove": "0",
-        "cwe": [
-          "CWE-1321"
-        ],
-        "identifiers": {
-          "CVE": [
-            "CVE-2026-2950"
-          ],
-          "githubID": "GHSA-F23M-R3PF-42RH"
-        }
-      },
-      {
-        "below": "4.18.0",
         "severity": "high",
         "atOrAbove": "4.0.0",
         "cwe": [
@@ -9771,6 +9769,20 @@ const RETIRE_BROWSER_CATALOG = Object.freeze({
             "CVE-2026-4800"
           ],
           "githubID": "GHSA-R5FR-RJXR-66JC"
+        }
+      },
+      {
+        "below": "4.18.1",
+        "severity": "medium",
+        "atOrAbove": "4.17.23",
+        "cwe": [
+          "CWE-1321"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2026-2950"
+          ],
+          "githubID": "GHSA-F23M-R3PF-42RH"
         }
       }
     ]
@@ -10716,6 +10728,20 @@ const RETIRE_BROWSER_CATALOG = Object.freeze({
         }
       },
       {
+        "below": "6.11.6",
+        "severity": "critical",
+        "atOrAbove": "0",
+        "cwe": [
+          "CWE-94"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2026-41242"
+          ],
+          "githubID": "GHSA-XQ3M-2V4X-88GG"
+        }
+      },
+      {
         "below": "7.2.5",
         "severity": "critical",
         "atOrAbove": "7.0.0",
@@ -10732,7 +10758,7 @@ const RETIRE_BROWSER_CATALOG = Object.freeze({
       {
         "below": "7.5.5",
         "severity": "critical",
-        "atOrAbove": "0",
+        "atOrAbove": "7.0.0",
         "cwe": [
           "CWE-94"
         ],

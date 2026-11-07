@@ -22,9 +22,11 @@
   let sidebar: HTMLElement;
   let navigatorOpen = $state(false);
   let navigatorTrigger: HTMLButtonElement | null = null;
+  let dismissedTrigger: HTMLButtonElement | null = null;
 
   async function openNavigator(trigger: HTMLButtonElement) {
     // Pointer activation does not focus buttons in every browser.
+    dismissedTrigger = null;
     navigatorTrigger = trigger;
     trigger.focus({ preventScroll: true });
     navigatorOpen = true;
@@ -33,10 +35,20 @@
   }
 
   function dismissNavigator() {
+    dismissedTrigger = navigatorTrigger;
     navigator.close();
-    // Restore dismissal focus explicitly across native dialog implementations.
-    // Following a link retains its separate destination-focus behavior below.
-    if (navigatorTrigger?.isConnected) navigatorTrigger.focus({ preventScroll: true });
+  }
+
+  async function navigatorClosed() {
+    if (navigator.open) return;
+    navigatorOpen = false;
+    const trigger = dismissedTrigger;
+    dismissedTrigger = null;
+    if (!trigger) return;
+    // Restore focus after native close and removal of the dialog contents.
+    // Link activation instead leaves focus on the destination.
+    await tick();
+    if (!navigatorOpen && trigger.isConnected) trigger.focus({ preventScroll: true });
   }
 
   function followLink(event: MouseEvent, href: string) {
@@ -143,7 +155,7 @@
   </div>
 </aside>
 
-<dialog class="reference-navigator" bind:this={navigator} aria-labelledby="reference-navigator-title" onclose={() => navigatorOpen = false} oncancel={event => { event.preventDefault(); dismissNavigator(); }}>
+<dialog class="reference-navigator" bind:this={navigator} aria-labelledby="reference-navigator-title" onclose={navigatorClosed} oncancel={event => { event.preventDefault(); dismissNavigator(); }}>
   <header><h2 id="reference-navigator-title">Documentation</h2><button type="button" onclick={dismissNavigator}>Close</button></header>
   {#if navigatorOpen}{@render pages(true)}{/if}
 </dialog>

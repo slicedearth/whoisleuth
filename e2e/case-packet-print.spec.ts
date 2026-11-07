@@ -214,28 +214,28 @@ test('printable packets preserve the exact audience projection, isolate print co
   await page.setViewportSize({ width: 1280, height: 720 });
   await openReport.click();
   await expect(dialog.getByRole('heading', { name: 'packet-print.invalid', exact: true })).toBeFocused();
-  const focusedControls = new Set<string>();
+  const printButton = dialog.getByRole('button', { name: 'Print or save PDF', exact: true });
+  const closeButton = dialog.getByRole('button', { name: 'Close report', exact: true });
+  const appendixControl = dialog.getByRole('checkbox', { name: 'Include exact packet JSON as a technical appendix', exact: true });
   // Native macOS WebKit uses Option–Tab to include buttons and checkboxes.
   const nextControl = browserName === 'webkit' && process.platform === 'darwin' ? 'Alt+Tab' : 'Tab';
-  for (let index = 0; index < 8; index++) {
+  for (const control of [printButton, closeButton, appendixControl]) {
     await page.keyboard.press(nextControl);
-    if (index === 0) await expect(dialog.getByRole('button', { name: 'Print or save PDF', exact: true })).toBeFocused();
-    const focus = await dialog.evaluate(element => ({
-      inside: element.contains(document.activeElement),
-      browserControls: !document.hasFocus() && document.activeElement === document.body,
-      control: document.activeElement?.matches('input[type="checkbox"]') ? 'appendix'
-        : document.activeElement?.matches('button') ? document.activeElement.textContent?.trim() : null,
-    }));
-    expect(focus.inside || focus.browserControls).toBe(true);
-    if (focus.inside && focus.control) focusedControls.add(focus.control);
+    await expect(control).toBeFocused();
   }
-  expect(focusedControls).toEqual(new Set(['Print or save PDF', 'Close report', 'appendix']));
-  await dialog.getByRole('checkbox', { name: 'Include exact packet JSON as a technical appendix', exact: true }).focus();
   const previousControl = nextControl === 'Alt+Tab' ? 'Alt+Shift+Tab' : 'Shift+Tab';
   await page.keyboard.press(previousControl);
-  await expect(dialog.getByRole('button', { name: 'Close report', exact: true })).toBeFocused();
+  await expect(closeButton).toBeFocused();
   await page.keyboard.press(previousControl);
-  await expect(dialog.getByRole('button', { name: 'Print or save PDF', exact: true })).toBeFocused();
+  await expect(printButton).toBeFocused();
+  const lastDisclosure = dialog.locator('summary').last();
+  await lastDisclosure.focus();
+  await expect(lastDisclosure).toBeFocused();
+  await page.keyboard.press(nextControl);
+  // The document body can represent focus leaving the page for browser controls.
+  expect(await dialog.evaluate(element =>
+    element.contains(document.activeElement) || document.activeElement === document.body,
+  )).toBe(true);
   await openReport.evaluate(element => element.focus());
   await expect(openReport).not.toBeFocused();
   await page.keyboard.press('Escape');
