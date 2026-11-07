@@ -23,8 +23,9 @@ unsupported future versions, and document migration or comparison behaviour.
 The upcoming 2.8.2 maintenance notes should include compatible updates to the
 bounded HTTP client, PDF and QR intake, HTML parsing, network context, hosted
 storage, charting, build and verification dependencies. The HTTP client includes
-upstream security fixes, and the test and capture companion use matching
-Playwright versions. Node 24.22.2 and TypeScript 6.0.3 remain unchanged.
+upstream security fixes. Browser verification and capture stay on matching
+Playwright 1.64.1 pins after Firefox content processes crashed on 1.65.0.
+Node 24.22.2 and TypeScript 6.0.3 remain unchanged.
 
 The 7 November review refreshes retained SSLBL fingerprints, exploited-
 vulnerability identifiers, browser-library advisories and registrar standing.

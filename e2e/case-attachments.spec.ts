@@ -266,6 +266,7 @@ test('an existing version-one record database upgrades additively without rewrit
   await openCasesView(page); await createCase(page, 'upgrade-file.example');
   const before = await readBrowserLocalCollection(page, 'cases');
   await page.goto('/privacy');
+  await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
   await page.evaluate(async () => {
     const result = <T>(request: IDBRequest<T>) => new Promise<T>((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
     const name = 'whoisleuth-browser-data-v1', db = await result(indexedDB.open(name));
