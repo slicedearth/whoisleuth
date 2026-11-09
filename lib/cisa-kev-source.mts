@@ -21,6 +21,25 @@ export type KevProjection = Readonly<{
   identifiers: readonly string[];
 }>;
 
+export function kevProjectionIsCurrent(projection: Pick<KevProjection, 'releasedAt'>, now: Date): boolean {
+  const age = now.getTime() - Date.parse(projection.releasedAt);
+  return age >= 0 && Math.floor(age / 86_400_000) <= KEV_REVIEW_DAYS;
+}
+
+export function assessKevPublisherUpdate(next: KevProjection, previous: Omit<KevProjection, 'sourceUrl'>, now: Date) {
+  const date = Date.parse(next.releasedAt);
+  const previousDate = Date.parse(previous.releasedAt);
+  const incoming = new Set(next.identifiers);
+  const removed = previous.identifiers.filter(id => !incoming.has(id)).length;
+  const added = incoming.size - (previous.identifiers.length - removed);
+  const status = date < previousDate || date > now.getTime() || next.catalogVersion < previous.catalogVersion || removed
+    ? 'review_required' as const
+    : next.catalogVersion === previous.catalogVersion
+      ? date === previousDate && next.sourceSha256 === previous.sourceSha256 && added === 0 ? 'unchanged' as const : 'review_required' as const
+      : date > previousDate && kevProjectionIsCurrent(next, now) ? 'additive' as const : 'review_required' as const;
+  return { status, added, removed };
+}
+
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -54,7 +73,7 @@ export function admitKevProjection(value: unknown): KevProjection {
     || typeof sourceSha256 !== 'string' || !SHA256.test(sourceSha256)
     || sourceUrl !== KEV_SOURCE_URL || !Array.isArray(identifiers) || !identifiers.length
     || identifiers.length > MAX_ENTRIES || !identifiers.every(isCveIdentifier)
-    || identifiers.some((id, index) => index > 0 && identifiers[index - 1] >= id)) {
+    || identifiers.some((id, index) => index > 0 && (identifiers[index - 1] ?? '') >= id)) {
     throw new TypeError('Invalid known-exploited vulnerability projection.');
   }
   const projection = Object.freeze({ catalogVersion, releasedAt, sourceSha256, sourceUrl, identifiers: Object.freeze([...identifiers]) });
@@ -66,13 +85,17 @@ export function admitKevProjection(value: unknown): KevProjection {
 
 export function parseKevSource(text: string): KevProjection {
   const source = parseBoundedJsonObject(text, { maximumBytes: MAX_KEV_SOURCE_BYTES, label: 'Known-exploited vulnerability source' });
+  return projectKevPublisher(source, createHash('sha256').update(text).digest('hex'));
+}
+
+export function projectKevPublisher(source: Record<string, unknown>, sourceSha256: string): KevProjection {
   const catalogVersion = source.catalogVersion;
   const releasedAt = source.dateReleased;
   if (typeof catalogVersion !== 'string' || !KEV_VERSION.test(catalogVersion) || typeof releasedAt !== 'string') {
     throw new TypeError('Invalid known-exploited vulnerability source identity.');
   }
   return admitKevProjection({
-    catalogVersion, releasedAt, sourceSha256: createHash('sha256').update(text).digest('hex'), sourceUrl: KEV_SOURCE_URL,
+    catalogVersion, releasedAt, sourceSha256, sourceUrl: KEV_SOURCE_URL,
     identifiers: projectCatalogue(source, catalogVersion, releasedAt),
   });
 }

@@ -68,6 +68,7 @@ type TechnologyFinding = {
   evidence: TechnologyEvidence[];
 };
 type TechnologyInput = {
+  knownExploitedEdition?: import('./cisa-kev-source.mts').KevProjection | undefined;
   html?: unknown;
   htmlAvailable?: unknown;
   generator?: unknown;
@@ -628,6 +629,7 @@ async function analyzeWebsiteTechnology(input: TechnologyInput = {}) {
   const htmlAnalysis = htmlAvailable ? technologyHtmlAnalysis(input) : analyzeStaticHtml('');
   const browserLibraryProfile = htmlAvailable ? await analyzeBrowserLibraries({
     htmlAnalysis,
+    knownExploitedEdition: input.knownExploitedEdition,
     observedAt: input.observedAt,
     sourceTruncated: input.sourceTruncated,
     ...(input.signal ? { signal: input.signal } : {}),

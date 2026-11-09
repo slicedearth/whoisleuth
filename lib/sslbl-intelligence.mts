@@ -326,5 +326,3 @@ export function inspectSslblCertificate(
     ]),
   });
 }
-
-export type { SslblSnapshot };

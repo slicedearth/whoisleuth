@@ -40,6 +40,7 @@ import type { lookupThreatfoxDomain } from './threatfox-intelligence.mts';
 import type { lookupUrlhausDomain } from './urlhaus-intelligence.mts';
 import type { lookupUrlscanDomain } from './urlscan-intelligence.mts';
 import type { buildWhoisChain } from './whois.mts';
+import type { LookupSourceEditions } from './retained-source-data.mts';
 
 type RegistrarRdap = Awaited<ReturnType<typeof fetchRegistrarRdapRecord>>;
 type WhoisEnvelope = {
@@ -60,6 +61,7 @@ type LookupResponseOptions = {
   signal?: AbortSignal;
   sslblSnapshot?: unknown;
   sslblNow?: string | number | Date;
+  sourceEditions?: LookupSourceEditions | undefined;
 };
 type LookupResponseContext = {
   classified: ClassifiedQuery;
@@ -278,7 +280,7 @@ async function buildUnifiedLookupResponse(context: LookupResponseContext) {
     ? inspectCertificateWarningData(
         availability && typeof availability.tls === 'object' ? availability.tls : null,
         {
-          ...(options.sslblSnapshot === undefined ? {} : { snapshot: options.sslblSnapshot }),
+          snapshot: options.sslblSnapshot === undefined ? options.sourceEditions?.sslbl : options.sslblSnapshot,
           ...(options.sslblNow === undefined ? {} : { now: options.sslblNow }),
         },
       )
@@ -461,6 +463,7 @@ async function buildUnifiedLookupResponse(context: LookupResponseContext) {
   const registrarStanding = classified.type === 'domain' && !compact
     ? buildRegistrarStanding({
         registrarIanaId: resolveRegistrarIanaId(rdapRecord?.parsed, whois.parsed),
+        catalogue: options.sourceEditions?.registrar,
       })
     : null;
   return {

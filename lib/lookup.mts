@@ -35,6 +35,7 @@ import type { LookupTimingSource } from './lookup-diagnostics.mts';
 import { prepareSelectedLookupUrl } from '../packages/evidence/lookup-target.mts';
 import { createLookupCollectionReceiptTracker } from './lookup-collection-receipt.mts';
 import type { LookupCollectionReceipt } from '../packages/evidence/lookup-collection-receipt.mts';
+import type { LookupSourceEditions } from './retained-source-data.mts';
 
 type LookupOptions = {
   fetchRdapRecord?: typeof fetchRdapRecord;
@@ -50,6 +51,7 @@ type LookupOptions = {
   inspectSslblCertificate?: typeof inspectSslblCertificate;
   sslblSnapshot?: unknown;
   sslblNow?: string | number | Date;
+  sourceEditions?: LookupSourceEditions;
   fast?: boolean;
   compact?: boolean;
   selectedUrl?: string;
@@ -84,6 +86,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
   const inspectCertificateWarningData = options.inspectSslblCertificate || inspectSslblCertificate;
   const fast = options.fast === true;
   const compact = options.compact === true;
+  const sourceEditions = classified.type === 'domain' && !fast && !compact ? options.sourceEditions : undefined;
   const externalIntelligence = options.externalIntelligence === true;
   const malwareHostIntelligence = options.malwareHostIntelligence === true;
   const malwareIocIntelligence = options.malwareIocIntelligence === true;
@@ -149,6 +152,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
         includeDeliveryMetadata: !fast && !compact,
         includeStructuredDataIdentity: !fast && !compact,
         includeTechnologyProfile: !fast,
+        ...(sourceEditions?.kev ? { knownExploitedEdition: sourceEditions.kev } : {}),
         includeSecurityPosture: !compact,
         ...(!fast && !compact ? { observationHostname: classified.inputHostname } : {}),
         ...(selectedUrl ? { selectedUrl } : {}),
@@ -291,7 +295,7 @@ async function runUnifiedLookup(classified: ClassifiedQuery, options: LookupOpti
     fast,
     inspectCertificateWarningData,
     networkContextPromise,
-    options,
+    options: { ...options, sourceEditions },
     rdapEnabled,
     rdapPromise,
     registrarRdapPromise,

@@ -409,6 +409,7 @@ import { SCHEMA_LIFECYCLE_REGISTRY } from '../packages/contracts/schema-lifecycl
 import { LOCAL_WORKSPACE_COMPATIBILITY } from '../packages/contracts/local-application.mts';
 import { RDAP_NAMESERVER_SEARCH_COMPATIBILITY } from '../packages/contracts/rdap-nameserver-search.mts';
 import { SSLBL_SNAPSHOT_COMPATIBILITY } from '../packages/contracts/sslbl-snapshot.mts';
+import { RETAINED_SOURCE_EDITION_COMPATIBILITY } from '../packages/contracts/retained-source-edition.mts';
 import {
   REGISTRAR_STANDING_AUDIT_COMPATIBILITY,
   REGISTRAR_STANDING_CATALOGUE_COMPATIBILITY,
@@ -551,6 +552,7 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   outputEntry({ id: 'maintainer.source-drift', schema: SOURCE_DRIFT_SCHEMA, currentVersion: SOURCE_DRIFT_VERSION, byteBudget: null, owner: 'tools/source-drift-audit.mts', note: 'Explicit bounded comparison of retained data with fixed public sources; reports drift and unavailable evidence without rewriting catalogues.' }),
   outputEntry({ id: 'maintainer.schema-compatibility-inventory', schema: SCHEMA_COMPATIBILITY_INVENTORY_SCHEMA, currentVersion: SCHEMA_COMPATIBILITY_INVENTORY_VERSION, byteBudget: null, owner: 'tools/schema-compatibility.mts', note: 'Bounded deterministic inventory of every reviewed serialized contract and its explicit compatibility decision.' }),
   entry(SSLBL_SNAPSHOT_COMPATIBILITY),
+  entry(RETAINED_SOURCE_EDITION_COMPATIBILITY),
   entry(REGISTRAR_STANDING_CATALOGUE_COMPATIBILITY),
   entry(REGISTRAR_STANDING_AUDIT_COMPATIBILITY),
   entry(REGISTRAR_STANDING_COMPATIBILITY),

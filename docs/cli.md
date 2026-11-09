@@ -75,6 +75,12 @@ page, use `whoisleuth lookup 'https://portal.example.test/review' --deep --exact
 This sends the path and query to the website, without the fragment. Review
 retained paths and page-derived text before sharing the result.
 
+A Deep domain Lookup can use one deliberately selected
+[reviewed source edition](source-maintenance.md#refresh-a-data-edition-without-a-build).
+Pass `--source-edition FILE --source-digest sha256:…` with the independently
+recorded digest. An invalid or stale edition stops before collection. This
+does not add requests or automatically download a newer catalogue.
+
 To continue a reviewed terminal Lookup in the browser, save the completed
 private document from the interactive view:
 

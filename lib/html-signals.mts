@@ -42,6 +42,7 @@ type HtmlSignalOptions = {
   includeCredentialSurfaceProfile?: boolean;
   includeStructuredDataIdentity?: boolean;
   includeTechnologyProfile?: boolean;
+  knownExploitedEdition?: import('./cisa-kev-source.mts').KevProjection | undefined;
   activityStatus?: unknown;
 };
 type ResourceType = 'image' | 'script' | 'stylesheet' | 'link' | 'frame' | 'media' | 'object';
@@ -749,6 +750,7 @@ async function extractHtmlSignals(html: string, domain: string, options: HtmlSig
       httpServer: options.httpServer,
       responseHeaders: options.responseHeaders,
       resourceOrigins: pageIdentity.resources.externalOrigins,
+      knownExploitedEdition: options.knownExploitedEdition,
       effectiveBaseUrl,
       documentOrigin,
       observedAt: options.observedAt,

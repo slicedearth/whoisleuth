@@ -29,6 +29,7 @@ type LookupArguments = {
   failOn?: readonly CliFailPolicy[];
   brandProfileSource?: string;
   brandProfileId?: string;
+  sourceEdition?: Readonly<{ path: string; digest: string }>;
 } & TerminalOptions;
 
 type BulkArguments = {
@@ -113,6 +114,9 @@ function parseLookupArguments(parsed: ParsedCommandArguments<LookupArguments['ac
     ...(selectedFailPolicies ? { failOn: selectedFailPolicies } : {}),
     ...(parsed.optionValue('--brand-profile') ? { brandProfileSource: parsed.optionValue('--brand-profile')! } : {}),
     ...(parsed.optionValue('--brand-id') ? { brandProfileId: parsed.optionValue('--brand-id')! } : {}),
+    ...(parsed.optionValue('--source-edition') ? {
+      sourceEdition: { path: parsed.optionValue('--source-edition')!, digest: parsed.optionValue('--source-digest')! },
+    } : {}),
   };
 }
 

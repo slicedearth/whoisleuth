@@ -44,6 +44,8 @@ export const COLLECTION_COMMAND_DEFINITIONS = Object.freeze({
       '--fail-on',
       '--brand-profile',
       '--brand-id',
+      '--source-edition',
+      '--source-digest',
       '--events',
       '--quiet',
       '--no-color',
@@ -53,6 +55,8 @@ export const COLLECTION_COMMAND_DEFINITIONS = Object.freeze({
     ]),
     constraints: Object.freeze([
       constraint({ kind: 'requires_all', option: '--brand-id', requiredOptions: ['--brand-profile'] }),
+      constraint({ kind: 'requires_all', option: '--source-edition', requiredOptions: ['--deep', '--source-digest'] }),
+      constraint({ kind: 'requires_all', option: '--source-digest', requiredOptions: ['--source-edition'] }),
       constraint({
         kind: 'mutually_exclusive',
         options: ['--json', '--junit', '--markdown', '--html'],
@@ -104,6 +108,7 @@ export const COLLECTION_COMMAND_DEFINITIONS = Object.freeze({
           '--events',
           '--quiet',
           '--fail-on',
+          '--source-edition',
         ],
       }),
     ]),

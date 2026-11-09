@@ -3,9 +3,12 @@
 // Maintenance-only observations. Source bodies remain in memory; this command
 // neither installs upstream content nor changes the retained dataset owners.
 import { fileURLToPath } from 'node:url';
+import { mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
 import { SSLBL_CERTIFICATE_SNAPSHOT } from '../lib/sslbl-certificates.generated.mts';
 import { SSLBL_SNAPSHOT_MAX_AGE_MS } from '../lib/sslbl-intelligence.mts';
 import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
+import { parseBoundedJsonObject } from '../packages/analysis/bounded-json.mts';
 import { CISA_KEV_CATALOG } from '../lib/generated/cisa-kev-catalog.mts';
 import { RETIRE_BROWSER_CATALOG } from '../lib/generated/retire-browser-catalog.mts';
 import {
@@ -14,13 +17,17 @@ import {
 import retainedInfrastructure from '../packages/relationships/common-infrastructure-snapshot.json' with { type: 'json' };
 import { RDAP_EXTENSION_REGISTRY_FIXTURE } from '../fixtures/rdap-extension-registry.mts';
 import { safeFetchDetailed, readTextCapped } from '../lib/safe-fetch.mts';
+import { writePrivateFile } from '../cli/output-file.mts';
+import { prepareRetainedSourceData } from '../lib/retained-source-data.mts';
 import { sha256Text as sha256 } from './maintainer-tool-helpers.mts';
 import {
-  SSLBL_SOURCE_URL, MAX_SSLBL_SOURCE_BYTES, parseSslblCertificateCsv, assessSslblSnapshotUpdate,
-} from './sslbl-snapshot.mts';
-import { SOURCE_URL as KEV_URL, MAX_SOURCE_BYTES as KEV_BYTES, projectCatalogue } from './cisa-kev-catalog.mts';
+  SSLBL_SOURCE_URL, MAX_SSLBL_SOURCE_BYTES, parseSslblCertificateCsv, assessSslblSnapshotUpdate, buildSslblSnapshotData,
+} from '../lib/sslbl-source.mts';
+import {
+  KEV_SOURCE_URL as KEV_URL, MAX_KEV_SOURCE_BYTES as KEV_BYTES,
+  assessKevPublisherUpdate, kevProjectionIsCurrent, projectKevPublisher, type KevProjection,
+} from '../lib/cisa-kev-source.mts';
 import { MAX_SOURCE_BYTES as BROWSER_CATALOGUE_BYTES, MAX_CATALOGUE_COMPONENTS } from './retire-browser-catalog.mts';
-import { DEFAULT_MAX_AGE_DAYS as KEV_REVIEW_DAYS } from './cisa-kev-catalog-status.mts';
 import {
   SOURCE_DEFINITIONS, MAX_SOURCE_BYTES as INFRASTRUCTURE_BYTES, FRESHNESS_DAYS,
   parseSource, verifyCloudflareRanges, commonInfrastructureHealth,
@@ -43,10 +50,11 @@ type Check = Readonly<{
   id: string; label: string; status: 'current' | 'drift' | 'inconclusive';
   expectedItems: number | null; observedItems: number | null;
   expectedDigest: string | null; observedDigest: string | null; detail: string;
+  routineUpdate?: true;
 }>;
 export type SourceDriftBaseline = Readonly<{
   sslbl: unknown;
-  kev: Readonly<{ sourceSha256: string; releasedAt: string; identifiers: readonly string[] }>;
+  kev: Omit<KevProjection, 'sourceUrl'>;
   browser: Readonly<{ sourceSha256: string }>;
   infrastructure: Snapshot;
   unicode: Readonly<{ version: string; sha256: string }>;
@@ -62,6 +70,7 @@ type Options = Readonly<{
   now?: Date; fetchSource?: FetchSource; baseline?: SourceDriftBaseline;
   requestTimeoutMs?: number; totalTimeoutMs?: number;
   stdout?: Writable; stderr?: Writable;
+  onRoutineProjection?: (source: 'sslbl' | 'kev', projection: unknown) => void;
 }>;
 class SourceUnavailable extends Error {}
 
@@ -106,7 +115,7 @@ export async function auditSourceDrift(options: Options = {}) {
       await response.body?.cancel();
       throw new SourceUnavailable(`Source returned HTTP ${response.status}.`);
     }
-    const body = await readTextCapped(response, maximum, { fatalUtf8: true });
+    const body = await readTextCapped(response, maximum, { fatalUtf8: true, preserveUtf8Bom: true });
     if (body.truncated) throw new SourceUnavailable('Source exceeded its byte bound.');
     if (!body.text) throw new SourceUnavailable('Source returned an empty body.');
     return body.text;
@@ -143,25 +152,32 @@ export async function auditSourceDrift(options: Options = {}) {
         assessSslblSnapshotUpdate(source, now.toISOString(), { currentSnapshot: baseline.sslbl, allowLargeShrink: true }));
       const previous = record(baseline.sslbl);
       const overdue = now.getTime() - Date.parse(source.sourceUpdatedAt) > SSLBL_SNAPSHOT_MAX_AGE_MS;
+      const routine = !overdue && update.removed === 0 && source.sourceDigestSha256 !== previous.sourceDigestSha256;
+      if (routine && options.onRoutineProjection) options.onRoutineProjection('sslbl', buildSslblSnapshotData(source, now.toISOString()));
       return { ...comparison(String(previous.sourceDigestSha256), source.sourceDigestSha256, update.currentEntries, update.nextEntries,
         `Added ${update.added}; removed ${update.removed}. ${overdue ? 'Upstream feed is older than the runtime freshness window; review source availability.'
-          : update.largeShrink ? 'Large shrink requires explicit review.' : 'Refresh through the existing snapshot owner when changed.'}`),
+          : update.removed ? 'Removals require explicit review.' : 'Routine additive or publisher-date change; deployed adoption was not checked.'}`),
+        ...(routine ? { routineUpdate: true as const } : {}),
         ...(overdue ? { status: 'drift' as const } : {}) };
     }),
     check('kev', 'Exploited-vulnerability catalogue', async () => {
       const raw = await text(KEV_URL, KEV_BYTES);
-      const source = verifiedStage('Vulnerability catalogue is not a valid JSON object.', () => record(JSON.parse(raw)));
-      const metadata = verifiedStage('Vulnerability catalogue metadata is invalid, future-dated or older than the retained release.', () => {
+      const source = verifiedStage('Vulnerability catalogue is not a valid JSON object.', () =>
+        parseBoundedJsonObject(raw, { maximumBytes: KEV_BYTES, label: 'Vulnerability catalogue' }));
+      verifiedStage('Vulnerability catalogue metadata is invalid, future-dated or older than the retained release.', () => {
         if (typeof source.catalogVersion !== 'string' || !/^\d{4}\.\d{2}\.\d{2}$/u.test(source.catalogVersion)
           || typeof source.dateReleased !== 'string' || date(source.dateReleased, now) < Date.parse(baseline.kev.releasedAt)) {
           throw new TypeError();
         }
-        return { version: source.catalogVersion, releasedAt: source.dateReleased };
       });
-      const ids = verifiedStage('Vulnerability catalogue entries failed projection validation.', () => projectCatalogue(source, metadata.version, metadata.releasedAt));
-      const overdue = Math.floor((now.getTime() - Date.parse(metadata.releasedAt)) / 86_400_000) > KEV_REVIEW_DAYS;
-      return { ...comparison(baseline.kev.sourceSha256, sha256(raw), baseline.kev.identifiers.length, ids.length,
-        `Observed catalogue ${source.catalogVersion}. ${overdue ? 'Upstream release is beyond its review window.' : 'Review additions/removals before updating its pin.'}`),
+      const next = verifiedStage('Vulnerability catalogue entries failed projection validation.', () => projectKevPublisher(source, sha256(raw)));
+      const update = assessKevPublisherUpdate(next, baseline.kev, now);
+      const overdue = !kevProjectionIsCurrent(next, now);
+      if (update.status === 'additive') options.onRoutineProjection?.('kev', next);
+      return { ...comparison(baseline.kev.sourceSha256, next.sourceSha256, baseline.kev.identifiers.length, next.identifiers.length,
+        `Observed catalogue ${next.catalogVersion}; added ${update.added}, removed ${update.removed}. ${overdue ? 'Upstream release is beyond its review window.'
+          : update.status === 'additive' ? 'Routine publisher update; deployed adoption was not checked.' : 'Check provenance before changing the retained pin.'}`),
+        ...(update.status === 'additive' ? { routineUpdate: true as const } : {}),
         ...(overdue ? { status: 'drift' as const } : {}) };
     }),
     check('browser_advisories', 'Browser-library advisory catalogue', async () => {
@@ -234,13 +250,33 @@ export async function auditSourceDrift(options: Options = {}) {
 
 export async function main(args = process.argv.slice(2), options: Options = {}): Promise<number> {
   try {
-    if (!args.includes('--live') || new Set(args).size !== args.length || args.some(arg => !['--live', '--json'].includes(arg))) {
-      throw new TypeError('Usage: npm run sources:drift -- --live [--json]');
+    const prepare = args.filter(arg => arg.startsWith('--prepare-dir='));
+    const directory = prepare[0]?.slice('--prepare-dir='.length);
+    if (!args.includes('--live') || new Set(args).size !== args.length || prepare.length > 1 || (prepare.length && !directory)
+      || args.some(arg => !['--live', '--json', '--allow-routine-feed-drift'].includes(arg) && !arg.startsWith('--prepare-dir='))) {
+      throw new TypeError('Usage: npm run sources:drift -- --live [--json] [--allow-routine-feed-drift] [--prepare-dir=NEW_DIRECTORY]');
     }
-    const report = await auditSourceDrift(options);
-    (options.stdout ?? process.stdout).write(args.includes('--json') ? `${JSON.stringify(report, null, 2)}\n`
-      : `${report.checks.map(item => `${item.status.toUpperCase()} ${item.label}: ${item.detail}`).join('\n')}\nRequests: ${report.networkRequests}; no files changed.\n`);
-    return report.status === 'current' ? 0 : report.status === 'drift' ? 1 : 2;
+    if (directory) await mkdir(directory, { mode: 0o700 });
+    const candidates = new Map<'sslbl' | 'kev', unknown>();
+    const report = await auditSourceDrift(directory ? {
+      ...options, onRoutineProjection: (source, projection) => { candidates.set(source, projection); },
+    } : options);
+    const prepared: { source: string; file: string; digest: string }[] = [];
+    if (directory) {
+      for (const [source, data] of [...candidates].sort(([left], [right]) => left < right ? -1 : 1)) {
+        const edition = await prepareRetainedSourceData(source, data, new Date(report.generatedAt));
+        const file = `${source}.edition.json`;
+        await writePrivateFile(join(directory, file), edition.text);
+        prepared.push({ source, file, digest: edition.digest });
+      }
+    }
+    const suffix = directory ? `${prepared.length} edition candidate(s) prepared; none activated.` : 'no files changed.';
+    (options.stdout ?? process.stdout).write(args.includes('--json')
+      ? `${JSON.stringify(directory ? { ...report, prepared } : report, null, 2)}\n`
+      : `${report.checks.map(item => `${item.status.toUpperCase()} ${item.label}: ${item.detail}`).join('\n')}\nRequests: ${report.networkRequests}; ${suffix}\n`
+        + prepared.map(item => `${item.file} ${item.digest}\n`).join(''));
+    if (report.status === 'inconclusive') return 2;
+    return report.checks.some(item => item.status === 'drift' && !(item.routineUpdate && args.includes('--allow-routine-feed-drift'))) ? 1 : 0;
   } catch (error) {
     (options.stderr ?? process.stderr).write(`${error instanceof TypeError ? error.message : 'Source drift audit could not complete.'}\n`);
     return 2;

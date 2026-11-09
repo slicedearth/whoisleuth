@@ -47,6 +47,7 @@ type Snapshot = Readonly<{
   excludedSources: readonly Readonly<{ id: string; reason: string }>[];
   limitations: readonly string[];
 }>;
+export type CommonInfrastructureSnapshot = Snapshot;
 
 type CompiledCidr = Readonly<{ cidr: string } & (
   { family: 4; mask: number; network: number }

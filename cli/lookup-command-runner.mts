@@ -24,6 +24,9 @@ import { browseLookupOperation, canBrowseLookup } from './lookup-browser.mts';
 import { writePrivateFile } from './output-file.mts';
 import { prepareLookupCollectionTarget, prepareSelectedLookupUrl } from '../packages/evidence/lookup-target.mts';
 import type { LookupCollectionReceipt } from '../packages/evidence/lookup-collection-receipt.mts';
+import { MAX_RETAINED_SOURCE_EDITION_BYTES } from '../packages/contracts/retained-source-edition.mts';
+import { admitRetainedSourceData, type LookupSourceEditions } from '../lib/retained-source-data.mts';
+import { SOURCE_EDITION_DIGEST } from '../packages/evidence/retained-source-edition.mts';
 
 export type LookupCommandDependencies = {
   stdin?: BoundedTextStream;
@@ -90,6 +93,23 @@ async function runLookupCommand(
     return EXIT_CODES.SUCCESS;
   }
   const riskProfile = await readCliRiskProfile(args.brandProfileSource, context.readInput, args.brandProfileId);
+  let sourceEditions: LookupSourceEditions | undefined;
+  if (args.sourceEdition) {
+    if (classified.type !== 'domain' || args.sourceEdition.path === '-' || !SOURCE_EDITION_DIGEST.test(args.sourceEdition.digest)) {
+      throw new CliUsageError('--source-edition requires a local file, its sha256: digest and a Deep domain Lookup.');
+    }
+    try {
+      const text = await context.readInput(args.sourceEdition.path, MAX_RETAINED_SOURCE_EDITION_BYTES, 'Source edition');
+      const edition = await admitRetainedSourceData({ text, digest: args.sourceEdition.digest }, undefined, new Date(context.now()));
+      dependencies.signal?.throwIfAborted();
+      if (!edition.current) throw new TypeError();
+      sourceEditions = edition.source === 'sslbl' ? { sslbl: edition.data }
+        : edition.source === 'kev' ? { kev: edition.data } : { registrar: edition.data };
+    } catch {
+      dependencies.signal?.throwIfAborted();
+      throw new CliUsageError('Could not verify a current Lookup edition from that file and digest. No collection was started.');
+    }
+  }
 
   let documentGeneratedAt = '';
   const buildDocument = ({ result, collectionReceipt }: Readonly<{ result: unknown; collectionReceipt: LookupCollectionReceipt | undefined }>) => {
@@ -115,6 +135,7 @@ async function runLookupCommand(
     const result = await executeLookup(classified, {
       fast: !args.deep,
       compact: false,
+      ...(sourceEditions ? { sourceEditions } : {}),
       onCollectionReceipt: value => { collectionReceipt = value; },
       ...(signal ? { signal } : {}),
       ...(args.deep ? {

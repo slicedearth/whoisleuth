@@ -272,6 +272,8 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--strict-exit': flag('Use the command’s strict outcome policy when deciding the exit status.'),
   '--brand-profile': file('Read a local Brand Profile export for danger-policy comparisons; no additional requests or profile retention.'),
   '--brand-id': text('Select an exact profile ID when --brand-profile contains multiple profiles.'),
+  '--source-edition': file('Apply one reviewed local certificate, known-exploited or registrar edition to a Deep domain Lookup.'),
+  '--source-digest': text('Verify the edition against its separately obtained sha256: digest.'),
   '--fail-on': optionDefinition('policy_list', 'Return a failure-policy exit status for the selected comma-separated outcomes.', {
     values: (command) => CLI_FAIL_POLICIES_BY_COMMAND[command as CliFailPolicyCommand] ?? [],
   }),

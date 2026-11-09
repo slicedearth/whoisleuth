@@ -10,6 +10,7 @@ import { createInlineLibraryScanner } from './browser-library-worker.mts';
 
 import { RETIRE_BROWSER_CATALOG } from './generated/retire-browser-catalog.mts';
 import { CISA_KEV_CATALOG } from './generated/cisa-kev-catalog.mts';
+import { kevProjectionIsCurrent, type KevProjection } from './cisa-kev-source.mts';
 import { createObservation, normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 import { isCveIdentifier } from '../packages/contracts/vulnerability-identifiers.mts';
 import {
@@ -42,6 +43,7 @@ type BrowserLibraryFinding = {
   weaknessClasses: string[];
 };
 type BrowserLibraryProfileInput = {
+  knownExploitedEdition?: KevProjection | undefined;
   html?: unknown;
   htmlAnalysis?: StaticHtmlAnalysis;
   observedAt?: unknown;
@@ -93,8 +95,7 @@ const SEVERITY_WEIGHT: Readonly<Record<Severity, number>> = Object.freeze({
 });
 const CATALOG_COMPONENTS = RETIRE_BROWSER_CATALOG.components as UnknownRecord;
 const KNOWN_EXPLOITED_IDENTIFIERS = new Set<string>(CISA_KEV_CATALOG.identifiers);
-const KNOWN_EXPLOITED_RELEASED_AT = normalizeExplicitIsoTimestamp(CISA_KEV_CATALOG.releasedAt);
-if (KNOWN_EXPLOITED_RELEASED_AT === null) throw new Error('Pinned known-exploited catalogue has an invalid release timestamp.');
+const editionIdentifiers = new WeakMap<KevProjection, ReadonlySet<string>>();
 
 const PATTERN_EXTRACTOR_CATALOGUE = Object.freeze(Object.entries(CATALOG_COMPONENTS).map(([component, value]) => {
   const extractors = record((record(value) as CatalogComponent).extractors);
@@ -336,7 +337,7 @@ function severity(value: unknown): Severity | null {
     : null;
 }
 
-function findingFromDetection(detected: DetectedComponent): { finding: BrowserLibraryFinding; omittedCveIdentifiers: number } {
+function findingFromDetection(detected: DetectedComponent, knownExploited: ReadonlySet<string>): { finding: BrowserLibraryFinding; omittedCveIdentifiers: number } {
   const component = record(CATALOG_COMPONENTS[detected.component]) as CatalogComponent;
   const vulnerabilities = matchingVulnerabilities(component, detected.version);
   let highestSeverity: Severity | null = null;
@@ -372,7 +373,7 @@ function findingFromDetection(detected: DetectedComponent): { finding: BrowserLi
   }
 
   const advisoryIdentifiers = [...identifiers].sort();
-  const knownExploitedIdentifiers = advisoryIdentifiers.filter((identifier) => KNOWN_EXPLOITED_IDENTIFIERS.has(identifier));
+  const knownExploitedIdentifiers = advisoryIdentifiers.filter((identifier) => knownExploited.has(identifier));
   const finding: BrowserLibraryFinding = {
     id: detected.component,
     name: detected.component,
@@ -416,7 +417,15 @@ async function analyzeBrowserLibraries(input: BrowserLibraryProfileInput = {}) {
   input.signal?.throwIfAborted();
   const inlineSignatureUnavailable = inlineSignatureResult.timedOut || inlineSignatureResult.unavailable;
 
-  const projected = [...detected.values()].map(findingFromDetection);
+  const catalogue = input.knownExploitedEdition ?? CISA_KEV_CATALOG;
+  const releasedAt = normalizeExplicitIsoTimestamp(catalogue.releasedAt);
+  if (releasedAt === null) throw new Error('Retained known-exploited catalogue has an invalid release timestamp.');
+  let knownExploited: ReadonlySet<string> = KNOWN_EXPLOITED_IDENTIFIERS;
+  if (input.knownExploitedEdition) {
+    knownExploited = editionIdentifiers.get(catalogue) ?? new Set(catalogue.identifiers);
+    editionIdentifiers.set(catalogue, knownExploited);
+  }
+  const projected = [...detected.values()].map(detection => findingFromDetection(detection, knownExploited));
   const omittedCveIdentifiers = projected.reduce((total, entry) => total + entry.omittedCveIdentifiers, 0);
   const allFindings = projected.map((entry) => entry.finding)
     .sort((left, right) => (
@@ -439,9 +448,13 @@ async function analyzeBrowserLibraries(input: BrowserLibraryProfileInput = {}) {
   const limitations = [
     'Library versions are inferred from passive static signatures and may be absent, transformed, or misleading.',
     'A catalogue advisory match identifies a component version associated with a published advisory; it does not establish reachability or exploitability.',
-    'A CISA KEV match means that the advisory identifier appears in the pinned known-exploited catalogue; it does not establish that the detected page exposes or executes the affected code path.',
+    'A CISA KEV match means that the advisory identifier appears in the retained known-exploited catalogue; it does not establish that the detected page exposes or executes the affected code path.',
     'Referenced scripts are not fetched, executed, or retained, and unmatched scripts are not evidence that no library is present.',
   ];
+  const observedAt = normalizeExplicitIsoTimestamp(input.observedAt);
+  if (!kevProjectionIsCurrent(catalogue, observedAt ? new Date(observedAt) : new Date())) {
+    limitations.push('The known-exploited catalogue is outside its review window. Matches are historical leads; missing matches do not establish current catalogue absence.');
+  }
   if (input.sourceTruncated === true) limitations.push('The captured homepage body was truncated, so script evidence may be incomplete.');
   if (htmlAnalysis.inputLimitReached) limitations.push(`Only the first ${MAX_LIBRARY_HTML_CHARS} HTML characters were evaluated.`);
   if (htmlAnalysis.tagLimitReached) limitations.push('Static HTML tokenization reached its tag or attribute boundary.');
@@ -462,8 +475,8 @@ async function analyzeBrowserLibraries(input: BrowserLibraryProfileInput = {}) {
     },
     knownExploitedCatalog: {
       name: 'CISA KEV',
-      version: CISA_KEV_CATALOG.catalogVersion,
-      releasedAt: KNOWN_EXPLOITED_RELEASED_AT,
+      version: catalogue.catalogVersion,
+      releasedAt,
     },
     ...createObservation({
       status: truncated ? 'partial' : 'success',

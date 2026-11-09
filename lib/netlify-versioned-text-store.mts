@@ -1,6 +1,11 @@
 // Strong, bounded text reads and conditional writes over Netlify Blobs.
 import { abortable } from './abort.mts';
-import type { VersionedTextStore } from './versioned-text-store.mts';
+
+export type VersionedTextSnapshot = { value: string | null; version: string | null };
+export type VersionedTextStore = {
+  read: (key: string, options?: { signal?: AbortSignal }) => Promise<VersionedTextSnapshot>;
+  compareAndSet: (key: string, expectedVersion: string | null, nextValue: string, options?: { signal?: AbortSignal }) => Promise<boolean>;
+};
 
 type NetlifyBlobReadResult = {
   data: unknown;

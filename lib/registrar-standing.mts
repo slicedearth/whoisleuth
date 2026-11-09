@@ -35,7 +35,7 @@ type GeneratedNotice = Readonly<{
   sourceUrl: string;
   indexOutcome: string | null;
 }>;
-type Catalogue = Readonly<{
+export type Catalogue = Readonly<{
   generatedAt: string;
   iana: Readonly<{
     sourceUrl: string;
@@ -199,6 +199,17 @@ function validatedCatalogue(value: unknown, now: Date): Catalogue | null {
     previousNotice = { issuedOn: notice.issuedOn, noticeId: notice.noticeId };
   }
   return value as Catalogue;
+}
+
+export function admitRegistrarStandingCatalogue(value: unknown, now: Date): Catalogue {
+  if (!Number.isFinite(now.getTime())) throw new TypeError('Registrar catalogue time is invalid.');
+  const catalogue = validatedCatalogue(value, now);
+  if (!catalogue) throw new TypeError('Invalid registrar standing catalogue.');
+  return Object.freeze({
+    ...catalogue,
+    iana: Object.freeze({ ...catalogue.iana, counts: Object.freeze({ ...catalogue.iana.counts }) }),
+    icann: Object.freeze({ ...catalogue.icann, notices: Object.freeze(catalogue.icann.notices.map(notice => Object.freeze({ ...notice }))) }),
+  });
 }
 
 function accreditationMap(catalogue: Catalogue): Map<string, RegistrarAccreditationState> {

@@ -51,7 +51,7 @@ type SafeFetchDetailedResult = {
   durationMs: number;
   status?: number;
 };
-type CappedTextOptions = { includeSha256?: boolean; fatalUtf8?: boolean };
+type CappedTextOptions = { includeSha256?: boolean; fatalUtf8?: boolean; preserveUtf8Bom?: boolean };
 
 const MAX_REDIRECTS = MAX_OUTBOUND_REDIRECTS;
 const MAX_SAFE_FETCH_URL_LENGTH = MAX_OUTBOUND_HTTP_URL_CHARACTERS;
@@ -459,7 +459,7 @@ async function readTextCapped(res: Response, maxBytes: number, options: CappedTe
   }
   const reader = res.body.getReader();
 
-  const decoder = new TextDecoder('utf-8', { fatal: options.fatalUtf8 === true });
+  const decoder = new TextDecoder('utf-8', { fatal: options.fatalUtf8 === true, ignoreBOM: options.preserveUtf8Bom === true });
   let text = '';
   let received = 0;
   let truncated = false;

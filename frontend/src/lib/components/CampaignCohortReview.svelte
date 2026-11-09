@@ -9,6 +9,8 @@
   import type { CaseRecord } from '#lib/cases.ts';
   import type { CaseRelationshipSummary } from '#lib/analysis/case-relationships.ts';
   import type { CampaignRecord } from '#lib/campaigns.ts';
+  import type { CommonInfrastructureSnapshot } from '#lib/analysis/common-infrastructure.ts';
+  import InfrastructureEditionPicker from './InfrastructureEditionPicker.svelte';
 
   let {
     campaign,
@@ -32,11 +34,13 @@
 
   let selectedProfileId = $state('');
   let appliedCampaignId = $state('');
+  let infrastructureEdition = $state.raw<CommonInfrastructureSnapshot | undefined>(undefined);
   const review = $derived(buildCampaignCohortReview({
     domains: campaign.domains,
     cases: records,
     profiles,
     relationshipSummary,
+    infrastructureEdition,
     selectedBrandProfileId: selectedProfileId,
     sourceStates,
   }));
@@ -62,6 +66,7 @@
     if (id === appliedCampaignId) return;
     untrack(() => {
       selectedProfileId = '';
+      infrastructureEdition = undefined;
       appliedCampaignId = id;
     });
   });
@@ -101,6 +106,9 @@
     {#if review.selectedScope}<span class="state-chip">{review.state}</span>{/if}
   </header>
   <p class="qualification">Choose a Brand Profile explicitly linked by these Cases to review their retained cross-case rationale. Campaign membership stays unchanged; no new request is made.</p>
+  {#key campaign.id}
+    <InfrastructureEditionPicker edition={infrastructureEdition} onchange={(edition) => { infrastructureEdition = edition; }} />
+  {/key}
 
   {#if review.sources.cases === 'loading'}
     <p class="source-state" role="status">Case associations are still loading. No cohort count is available yet.</p>

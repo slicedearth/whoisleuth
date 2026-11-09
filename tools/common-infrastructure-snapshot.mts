@@ -11,6 +11,8 @@ import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
 import { readTextCapped, safeFetchDetailed } from '../lib/safe-fetch.mts';
 import retainedSnapshot from '../packages/relationships/common-infrastructure-snapshot.json' with { type: 'json' };
 import { parseCommonInfrastructureSnapshot } from '../packages/relationships/common-infrastructure.mts';
+import { CLOUDFLARE_RANGE_URLS, FRESHNESS_DAYS } from '../packages/relationships/common-infrastructure-health.mts';
+export { CLOUDFLARE_RANGE_URLS, FRESHNESS_DAYS, commonInfrastructureHealth } from '../packages/relationships/common-infrastructure-health.mts';
 import {
   COMMON_INFRASTRUCTURE_SCHEMA,
   COMMON_INFRASTRUCTURE_VERSION,
@@ -82,12 +84,7 @@ type MainOptions = Readonly<{
 
 export const SNAPSHOT_PATH = 'packages/relationships/common-infrastructure-snapshot.json';
 export const DEFAULT_UPSTREAM_COMMIT = retainedSnapshot.source.commit;
-export const CLOUDFLARE_RANGE_URLS = Object.freeze([
-  'https://www.cloudflare.com/ips-v4',
-  'https://www.cloudflare.com/ips-v6',
-]);
 export const MAX_SOURCE_BYTES = 1024 * 1024;
-export const FRESHNESS_DAYS = 30;
 export const REVIEWED_PUBLIC_RESOLVERS_SOURCE_DATE = '2026-08-10';
 export const SOURCE_DEFINITIONS = Object.freeze([
   Object.freeze({
@@ -274,39 +271,6 @@ export async function verifyCloudflareRanges(
 }
 
 export class OfficialRangeMismatchError extends Error {}
-
-export function commonInfrastructureHealth(now = new Date(), value: unknown = retainedSnapshot) {
-  const admitted = parseCommonInfrastructureSnapshot(value);
-  const raw = record(value, 'Retained infrastructure');
-  const sources = raw.sources as SourceSnapshot[];
-  const ages: number[] = [];
-  const sourceAges: { id: string; ageDays: number }[] = [];
-  for (const source of sources) {
-    if (source.id === 'public-dns-core') continue;
-    const proof = source.verification;
-    if (proof && (source.id !== 'cloudflare'
-      || !Array.isArray(proof.sources) || proof.sources.length !== CLOUDFLARE_RANGE_URLS.length
-      || !proof.sources.every((item, index) => item.url === CLOUDFLARE_RANGE_URLS[index] && /^[a-f0-9]{64}$/u.test(item.sha256))
-      || proof.rangesSha256 !== createHash('sha256').update(JSON.stringify(source.values)).digest('hex')
-      || !Number.isFinite(Date.parse(proof.observedAt))
-      || new Date(proof.observedAt).toISOString() !== proof.observedAt
-      || Date.parse(proof.observedAt) > Date.parse(admitted.generatedAt)
-      || Date.parse(proof.observedAt) < Date.parse(source.sourceDate))) {
-      throw new TypeError('Retained range verification has invalid provenance.');
-    }
-    const age = Math.floor((now.getTime() - Date.parse(proof?.observedAt ?? source.sourceDate)) / 86_400_000);
-    ages.push(age);
-    sourceAges.push({ id: source.id, ageDays: age });
-  }
-  const ageDays = ages.length ? Math.max(...ages) : null;
-  const state = !Number.isFinite(now.getTime()) || Date.parse(admitted.generatedAt) > now.getTime()
-    || ages.some(age => age < 0) || !ages.length
-    ? 'unavailable' as const
-    : admitted.excludedSources.length || (ageDays ?? 0) > FRESHNESS_DAYS ? 'stale' as const : 'current' as const;
-  return Object.freeze({ state, ageDays: state === 'unavailable' ? null : ageDays,
-    observedAt: admitted.generatedAt, itemCount: admitted.entryCount, excludedCount: admitted.excludedSources.length,
-    sourceAges: Object.freeze(sourceAges) });
-}
 
 export async function buildCommonInfrastructureSnapshot(
   commit: string,

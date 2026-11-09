@@ -10,14 +10,9 @@ import {
   parseScheduledMonitorKey,
 } from './scheduled-monitor-crypto.mts';
 import { abortable } from './abort.mts';
-import type { VersionedTextStore } from './versioned-text-store.mts';
+import type { VersionedTextSnapshot, VersionedTextStore } from './netlify-versioned-text-store.mts';
 
 type ScheduledMonitorOperationOptions = { signal?: AbortSignal };
-
-type VersionedTextSnapshot = {
-  value: string | null;
-  version: string | null;
-};
 
 type ScheduledMonitorUpdate<Result> = {
   state: unknown;
