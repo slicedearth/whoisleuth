@@ -3,24 +3,18 @@ import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
-import { isCveIdentifier } from '../packages/contracts/vulnerability-identifiers.mts';
-import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
+import { sha256Text as moduleDigest } from './maintainer-tool-helpers.mts';
 import {
-  jsonRecordOrEmpty as record,
-  sha256Text as moduleDigest,
-} from './maintainer-tool-helpers.mts';
+  KEV_SOURCE_URL as SOURCE_URL, MAX_KEV_SOURCE_BYTES as MAX_SOURCE_BYTES, MAX_KEV_PROJECTION_BYTES as MAX_OUTPUT_BYTES,
+  projectCatalogue, parseKevSource,
+} from '../lib/cisa-kev-source.mts';
 
 const SOURCE_VERSION = '2026.11.06';
 const SOURCE_RELEASED_AT = '2026-11-06T19:44:45.1797Z';
 const SOURCE_SHA256 = '47e0406b2be5a40420eff66f3d90e83eb8883dae6ff4d08e1b2a942c366f6cc2';
-const SOURCE_URL = 'https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json';
 const OUTPUT_PATH = 'lib/generated/cisa-kev-catalog.mts';
 const OUTPUT_DIGEST_PATH = 'lib/generated/cisa-kev-catalog.sha256';
-const MAX_SOURCE_BYTES = 5 * 1024 * 1024;
-const MAX_OUTPUT_BYTES = 128 * 1024;
-const MAX_ENTRIES = 10_000;
 
-type UnknownRecord = Record<string, unknown>;
 type WritableLike = { write(value: string): unknown };
 type CatalogMode = 'check' | 'write';
 type MainOptions = Readonly<{
@@ -54,34 +48,16 @@ async function readBoundedText(filename: string, maxBytes: number): Promise<stri
   }
 }
 
-function projectCatalogue(value: unknown, expectedVersion: string, expectedReleasedAt: string): string[] {
-  const source = record(value);
-  if (source.catalogVersion !== expectedVersion || source.dateReleased !== expectedReleasedAt) {
-    throw new Error('CISA KEV catalogue version or release date does not match the pinned metadata.');
-  }
-  if (normalizeExplicitIsoTimestamp(source.dateReleased) === null) throw new TypeError('CISA KEV catalogue has an invalid release timestamp.');
-  const vulnerabilities = Array.isArray(source.vulnerabilities) ? source.vulnerabilities : [];
-  if (vulnerabilities.length === 0 || vulnerabilities.length > MAX_ENTRIES) {
-    throw new RangeError(`CISA KEV catalogue must contain between 1 and ${MAX_ENTRIES} records.`);
-  }
-  const identifiers = new Set<string>();
-  for (const item of vulnerabilities) {
-    const cve = record(item).cveID;
-    if (!isCveIdentifier(cve)) throw new TypeError('CISA KEV catalogue contains an invalid CVE identifier.');
-    identifiers.add(cve);
-  }
-  if (identifiers.size !== vulnerabilities.length || source.count !== vulnerabilities.length) {
-    throw new Error('CISA KEV catalogue count or uniqueness check failed.');
-  }
-  return [...identifiers].sort();
-}
-
 function projectSource(sourceText: string): string[] {
   const sourceHash = createHash('sha256').update(sourceText).digest('hex');
   if (sourceHash !== SOURCE_SHA256) {
     throw new Error(`CISA KEV catalogue digest mismatch: expected ${SOURCE_SHA256}, received ${sourceHash}.`);
   }
-  return projectCatalogue(JSON.parse(sourceText), SOURCE_VERSION, SOURCE_RELEASED_AT);
+  const source = parseKevSource(sourceText);
+  if (source.catalogVersion !== SOURCE_VERSION || source.releasedAt !== SOURCE_RELEASED_AT) {
+    throw new TypeError('CISA KEV catalogue metadata does not match the pinned release.');
+  }
+  return [...source.identifiers];
 }
 
 function renderModule(identifiers: readonly string[]): string {

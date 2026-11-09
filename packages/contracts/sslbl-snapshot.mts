@@ -2,6 +2,9 @@ import { defineSchemaCompatibility } from './schema-compatibility.mts';
 
 export const SSLBL_SNAPSHOT_SCHEMA = 'whoisleuth.sslbl-certificate-snapshot';
 export const SSLBL_SNAPSHOT_VERSION = 1;
+export const SSLBL_SOURCE_URL = 'https://sslbl.abuse.ch/blacklist/sslblacklist.csv';
+export const MAX_SSLBL_SNAPSHOT_ENTRIES = 50_000;
+export const MAX_SSLBL_FINGERPRINT_CHUNKS = 1_000;
 
 export const SSLBL_SNAPSHOT_COMPATIBILITY = defineSchemaCompatibility({
   id: 'derived.sslbl-certificate-snapshot',

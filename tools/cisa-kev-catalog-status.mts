@@ -1,10 +1,10 @@
 import { fileURLToPath } from 'node:url';
 
 import { CISA_KEV_CATALOG } from '../lib/generated/cisa-kev-catalog.mts';
+import { KEV_REVIEW_DAYS as DEFAULT_MAX_AGE_DAYS } from '../lib/cisa-kev-source.mts';
 
 export const CISA_KEV_STATUS_SCHEMA = 'whoisleuth.cisa-kev-catalog-status';
 export const CISA_KEV_STATUS_VERSION = 1;
-const DEFAULT_MAX_AGE_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 type WritableLike = { write(value: string): unknown };
