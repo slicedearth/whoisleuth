@@ -273,7 +273,7 @@ test('executes the final gate against every result, including newly added lanes'
       unitTestExecutablePath('bash'),
       ['-e', '-o', 'pipefail', '-c', requiredValue(gate.run)],
       {
-        env: { ...process.env, NEEDS_RESULTS: JSON.stringify(results) },
+        env: { ...process.env, GITHUB_STEP_SUMMARY: undefined, NEEDS_RESULTS: JSON.stringify(results) },
         encoding: 'utf8',
         timeout: 5000,
       },

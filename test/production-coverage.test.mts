@@ -333,7 +333,7 @@ describe('production coverage policy', () => {
       const file = path.join(directory, 'fixture.lcov');
       await writeFile(file, sources.map(source => lcovRecord(source,
         source === underCovered ? [10, 1, 8, 1, 5, 1] : [10, 10, 8, 8, 5, 5])).join('\n'));
-      const environment = environmentWithoutV8Coverage();
+      const environment = environmentWithoutV8Coverage({ ...process.env, GITHUB_STEP_SUMMARY: undefined });
       await assert.rejects(promisify(execFile)(process.execPath, ['tools/production-coverage.mts', file], {
         cwd: path.resolve(import.meta.dirname, '..'), env: environment,
         encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 * 1024,
