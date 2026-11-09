@@ -456,7 +456,7 @@ export function productionCoverageArguments(testPattern?: string): string[] {
     ...GENERATED_SOURCE_GLOBS.map((pattern) => `--test-coverage-exclude=${pattern}`),
     '--test-reporter=spec', '--test-reporter-destination=stdout',
     '--test-reporter=lcov', '--test-reporter-destination=test-coverage.lcov',
-    '--test-reporter=./tools/ci-test-results-reporter.mts', '--test-reporter-destination=stdout',
+    `--test-reporter=${new URL('./ci-test-results-reporter.mts', import.meta.url).href}`, '--test-reporter-destination=stdout',
     ...(testPattern ? [testPattern] : nodeTestFiles('unit', REPOSITORY_ROOT)),
   ];
 }

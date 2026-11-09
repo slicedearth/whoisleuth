@@ -23,6 +23,8 @@ function executionFixture(context: TestContext) {
   mkdirSync(path.join(root, 'lib'));
   const environment = environmentWithoutV8Coverage();
   delete environment.NODE_TEST_CONTEXT;
+  // Nested fixture runs must not append their results to the real CI summary.
+  delete environment.GITHUB_STEP_SUMMARY;
   environment.WHOISLEUTH_TEST_SHELL_LOG = log;
   for (const shell of SHELLS) {
     const filename = path.join(bin, shell);
