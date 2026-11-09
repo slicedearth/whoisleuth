@@ -5208,7 +5208,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ================================================================================
-parse5@8.1.0
+parse5@8.1.1
 Relationship: direct production dependency
 Declared licence: MIT
 Licence source: LICENSE
