@@ -49,13 +49,13 @@ describe('official registry drift workflow', () => {
     assert.match(WORKFLOW, /registry-drift-report\.json/u);
     assert.match(WORKFLOW, /registry-fixture-freshness-report\.json/u);
     assert.match(WORKFLOW, /registrar-standing-report\.json/u);
-    assert.match(WORKFLOW, /npm run --silent sources:drift -- --live --json > source-drift-report\.json/u);
+    assert.match(WORKFLOW, /npm run --silent sources:drift -- --live --json --allow-routine-feed-drift > source-drift-report\.json/u);
     assert.match(WORKFLOW, /retention-days: 7/u);
     const workflow = parse(WORKFLOW);
     const review = workflow.jobs.audit.steps.find((step: { env?: Record<string, string> }) => step.env?.REGISTRAR_EXIT_CODE);
     assert.ok(review);
     assert.match(review.run, /process\.exitCode = 1;/u);
-    assert.match(review.if, /steps\.sources\.outputs\.exit_code != '0'/u);
+    assert.match(review.if, /!cancelled\(\)/u);
     const retained = workflow.jobs.audit.steps.find((step: { uses?: string }) => step.uses?.startsWith('actions/upload-artifact@'));
     assert.match(retained.if, /steps\.sources\.outputs\.exit_code != '0'/u);
     assert.ok(retained.with.path.split('\n').includes('source-drift-report.json'));

@@ -19,6 +19,7 @@ import { registrarStandingCatalogueHealth } from '../lib/registrar-standing.mts'
 import { platformReportingCatalogueHealth } from '../packages/cases/platform-reporting-routes.mts';
 import { browserCatalogueHealth } from './retire-browser-catalog.mts';
 import { commonInfrastructureHealth, FRESHNESS_DAYS } from './common-infrastructure-snapshot.mts';
+import { summaryText, writeCiSummary } from './ci-summary.mts';
 
 export const SOURCE_HEALTH_SCHEMA = 'whoisleuth.source-health';
 export const SOURCE_HEALTH_VERSION = 2;
@@ -57,6 +58,7 @@ type BuildOptions = Readonly<{
 type MainOptions = BuildOptions & Readonly<{
   stdout?: WritableLike;
   stderr?: WritableLike;
+  writeSummary?: (markdown: string) => void;
 }>;
 type SslblStatusOptions = Readonly<{
   snapshot?: unknown;
@@ -456,6 +458,12 @@ export async function main(args = process.argv.slice(2), options: MainOptions = 
   try {
     const parsed = parseArguments(args);
     const report = await buildSourceHealthReport(options);
+    if (parsed.githubAnnotations) options.writeSummary?.([
+      '## Offline retained source health', '',
+      `Checked ${report.summary.entries} local sources and evaluations; no upstream or deployment check was performed.`, '',
+      '| Source or evaluation | State | Next action |', '| --- | --- | --- |',
+      ...report.entries.map(item => `| ${summaryText(item.label)} | ${item.state} | ${item.state === 'current' || item.state === 'measured' ? '—' : summaryText(item.action)} |`),
+    ].join('\n'));
     (options.stdout ?? process.stdout).write(parsed.githubAnnotations
       ? formatSourceHealthAnnotations(report)
       : parsed.json
@@ -464,6 +472,7 @@ export async function main(args = process.argv.slice(2), options: MainOptions = 
     if (report.summary.states.malformed > 0) return 2;
     return parsed.strict && report.summary.strictFailures > 0 ? 1 : 0;
   } catch (error) {
+    if (args.includes('--github-annotations')) options.writeSummary?.('## Offline retained source health: unavailable\n\nThe local report could not be evaluated. No source was refreshed.');
     (options.stderr ?? process.stderr).write(
       `${error instanceof Error ? error.message : 'Offline source-health report failed.'}\n`,
     );
@@ -472,7 +481,7 @@ export async function main(args = process.argv.slice(2), options: MainOptions = 
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  void main().then((code) => { process.exitCode = code; });
+  void main(process.argv.slice(2), { writeSummary: writeCiSummary }).then((code) => { process.exitCode = code; });
 }
 
 export type {

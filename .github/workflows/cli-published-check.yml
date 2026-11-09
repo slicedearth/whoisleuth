@@ -34,6 +34,7 @@ jobs:
         with:
           node-version-file: .nvmrc
       - name: Download reviewed release candidate
+        id: candidate-download
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: whoisleuth-cli-release-candidate
@@ -41,7 +42,17 @@ jobs:
           github-token: ${{ github.token }}
           run-id: ${{ inputs.release_run_id }}
       - name: Verify exact published package against reviewed candidate
+        id: registry-readback
         env:
           RELEASE_VERSION: ${{ inputs.version }}
           RELEASE_DIRECTORY: ${{ runner.temp }}/whoisleuth-cli-release
         run: node tools/published-cli-check.mts "$RELEASE_VERSION" --candidate-report "$RELEASE_DIRECTORY/cli-package-report.json" --candidate-archive "$RELEASE_DIRECTORY/whoisleuth-cli-$RELEASE_VERSION.tgz" --json
+      - name: Explain published verification outcome
+        if: ${{ !cancelled() }}
+        env:
+          DOWNLOAD_RESULT: ${{ steps.candidate-download.outcome }}
+          VERIFY_RESULT: ${{ steps.registry-readback.outcome }}
+        run: >-
+          node tools/ci-summary.mts 'Published CLI verification'
+          "$DOWNLOAD_RESULT|Reviewed candidate|Check the release run ID and whether its candidate artefact is still available."
+          "$VERIFY_RESULT|Registry read-back and byte comparison|Check whether the exact version has been approved and is public, then check the reported metadata or archive mismatch."

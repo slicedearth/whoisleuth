@@ -23,9 +23,11 @@ import {
 } from './playwright-shard-aggregate.mts';
 import {
   readPlaywrightResultData,
+  renderPlaywrightResultSummary,
   summarizePlaywrightResults,
   type PlaywrightResultSummary,
 } from './playwright-results-summary.mts';
+import { writeCiSummary } from './ci-summary.mts';
 import {
   playwrightJsonReporterEnvironment,
   playwrightJsonResultsPath,
@@ -225,12 +227,20 @@ async function criticalBrowserSummary(workspace: HostedBrowserWorkspace, port: n
     path.join(workspace.root, 'node_modules/@playwright/test/cli.js'),
     'test', '--config=e2e/cross-browser.config.ts', '--grep=@cross-browser-critical', '--workers=1', '--retries=0',
   ], environment);
-  if (code !== 0) throw new Error(`Critical cross-browser checks failed with exit ${code}.`);
-  const report = resultData(workspace.root, environment);
+  let report: unknown;
+  try {
+    report = resultData(workspace.root, environment);
+  } catch (error) {
+    writeCiSummary('## Critical browser results unavailable\n\nThe runner did not leave a readable report. Check the build identity, browser startup and retained runner diagnostics.');
+    if (code !== 0) throw new Error(`Critical cross-browser checks failed with exit ${code}.`);
+    throw error;
+  }
   const summary = summarizePlaywrightResults(report, 'critical cross-browser');
   const reportDirectory = path.join(REPOSITORY_ROOT, 'playwright-results');
   mkdirSync(reportDirectory, { recursive: true });
   writeFileSync(path.join(reportDirectory, 'critical-browser.json'), `${JSON.stringify(report)}\n`, { mode: 0o600 });
+  writeCiSummary(renderPlaywrightResultSummary(summary));
+  if (code !== 0) throw new Error(`Critical cross-browser checks failed with exit ${code}.`);
   if (!summary.total || summary.failed || summary.flaky || summary.retried || summary.skipped || summary.truncated) {
     throw new Error('Critical cross-browser evidence is empty, incomplete, skipped, retried or failed.');
   }

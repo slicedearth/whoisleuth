@@ -27,4 +27,10 @@ jobs:
           node-version-file: .nvmrc
           package-manager-cache: false
       - name: Audit the production lockfile
+        id: production-audit
         run: npm run dependencies:audit
+      - name: Explain missing audit result
+        if: ${{ !cancelled() && steps.production-audit.outcome == 'skipped' }}
+        run: >-
+          node tools/ci-summary.mts 'Production dependency audit'
+          'skipped|Advisory check'

@@ -52,6 +52,7 @@ jobs:
       - name: Test package contracts
         run: node --test test/cli-package.test.mts test/cli-package-boundary.test.mts test/cli-process.test.mts
       - name: Assemble exact release candidate
+        id: assemble
         env:
           EXPECTED_TAG: v${{ inputs.version }}
           RELEASE_DIRECTORY: ${{ runner.temp }}/whoisleuth-cli-release
@@ -69,11 +70,13 @@ jobs:
           test "${#archives[@]}" -eq 1
           sha256sum --check "${archives[0]}.sha256"
       - name: Bind reviewed candidate reports and dependency evidence
+        id: bind
         env:
           EXPECTED_VERSION: ${{ inputs.version }}
           RELEASE_DIRECTORY: ${{ runner.temp }}/whoisleuth-cli-release
         run: node tools/published-cli-check.mts "$EXPECTED_VERSION" --candidate-report "$RELEASE_DIRECTORY/cli-package-report.json" --candidate-archive "$RELEASE_DIRECTORY/whoisleuth-cli-$EXPECTED_VERSION.tgz" --installed-dependencies "$RELEASE_DIRECTORY/installed-dependencies.json" --offline
       - name: Upload reviewed candidate
+        id: candidate-upload
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: whoisleuth-cli-release-candidate
@@ -81,6 +84,19 @@ jobs:
           if-no-files-found: error
           retention-days: 90
           compression-level: 0
+      - name: Explain release preparation outcome
+        if: ${{ !cancelled() }}
+        env:
+          TAG_RESULT: ${{ steps.provenance.outcome }}
+          ASSEMBLY_RESULT: ${{ steps.assemble.outcome }}
+          BIND_RESULT: ${{ steps.bind.outcome }}
+          UPLOAD_RESULT: ${{ steps.candidate-upload.outcome }}
+        run: >-
+          node tools/ci-summary.mts 'Release candidate preparation'
+          "$TAG_RESULT|Tag and exact-revision CI|Check the selected version, tag ancestry and completed CI for that exact commit."
+          "$ASSEMBLY_RESULT|Candidate assembly and installed checks|Check the package contract and installed-command diagnostics."
+          "$BIND_RESULT|Candidate evidence binding|Check the archive, report and installed-dependency digests."
+          "$UPLOAD_RESULT|Review artefact|No usable candidate was uploaded; check the assembly directory."
 
   publish:
     needs: prepare
@@ -103,6 +119,7 @@ jobs:
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
       - name: Download reviewed candidate
+        id: candidate-download
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: whoisleuth-cli-release-candidate
@@ -118,9 +135,24 @@ jobs:
           sha256sum --check "${archives[0]}.sha256"
           echo "archive=$RELEASE_DIRECTORY/${archives[0]}" >> "$GITHUB_OUTPUT"
       - name: Recheck downloaded report and dependency evidence binding
+        id: recheck
         env:
           EXPECTED_VERSION: ${{ inputs.version }}
           RELEASE_DIRECTORY: ${{ runner.temp }}/whoisleuth-cli-release
         run: node tools/published-cli-check.mts "$EXPECTED_VERSION" --candidate-report "$RELEASE_DIRECTORY/cli-package-report.json" --candidate-archive "$RELEASE_DIRECTORY/whoisleuth-cli-$EXPECTED_VERSION.tgz" --installed-dependencies "$RELEASE_DIRECTORY/installed-dependencies.json" --offline
       - name: Stage reviewed version with provenance
+        id: stage
         run: npm stage publish "${{ steps.candidate.outputs.archive }}" --access public --provenance
+      - name: Explain staging outcome
+        if: ${{ !cancelled() }}
+        env:
+          DOWNLOAD_RESULT: ${{ steps.candidate-download.outcome }}
+          DIGEST_RESULT: ${{ steps.candidate.outcome }}
+          BIND_RESULT: ${{ steps.recheck.outcome }}
+          STAGE_RESULT: ${{ steps.stage.outcome }}
+        run: >-
+          node tools/ci-summary.mts 'Registry staging — publication still requires approval'
+          "$DOWNLOAD_RESULT|Download reviewed candidate|Check that the exact release candidate was retained in this run."
+          "$DIGEST_RESULT|Archive digest|The downloaded archive could not be verified. Do not stage different bytes."
+          "$BIND_RESULT|Candidate evidence binding|The downloaded reports or dependency evidence did not match the archive."
+          "$STAGE_RESULT|Registry staging|Check trusted publishing and whether this exact version is already staged or published."

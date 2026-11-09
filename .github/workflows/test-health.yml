@@ -44,31 +44,27 @@ jobs:
       - name: Verify retained timing contract without rewriting it
         run: npm run verification:timing:check
       - name: Report offline retained source health
-        run: |
-          set -o pipefail
-          npm run sources:health | tee "$RUNNER_TEMP/source-health-report.txt"
-          npm run sources:health -- --github-annotations
-          {
-            echo '## Offline retained source health'
-            echo '```text'
-            cat "$RUNNER_TEMP/source-health-report.txt"
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+        run: npm run sources:health -- --github-annotations
       - name: Profile the complete unit suite three times
         run: |
           set -o pipefail
           for run in 1 2 3; do
-            npm run test:profile > "$RUNNER_TEMP/test-duration-report-$run.txt"
+            WHOISLEUTH_CI_PROFILE_SAMPLE="$run" npm run test:profile > "$RUNNER_TEMP/test-duration-report-$run.txt"
           done
       - name: Compare median duration health
         run: |
           set -o pipefail
+          result=0
           npm run test:duration-health -- \
             --report="$RUNNER_TEMP/test-duration-report-1.txt" \
             --report="$RUNNER_TEMP/test-duration-report-2.txt" \
             --report="$RUNNER_TEMP/test-duration-report-3.txt" \
-            | tee "$RUNNER_TEMP/test-duration-health.md"
+            | tee "$RUNNER_TEMP/test-duration-health.md" || result=$?
           cat "$RUNNER_TEMP/test-duration-health.md" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$result" -ne 0 ]; then
+            printf '\nTiming comparison did not pass (exit %s). See the retained sample reports.\n' "$result" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$result"
       - name: Build a directly reviewable unit timing candidate
         env:
           PROFILE_PROVENANCE: unit-ci-${{ github.run_id }}-${{ github.run_attempt }}

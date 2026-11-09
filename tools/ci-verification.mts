@@ -10,6 +10,7 @@ import { FRONTEND_BROWSER_ARTIFACT_PATHS } from './frontend-build-integrity.mts'
 import { npmExecutableName } from './maintainer-tool-helpers.mts';
 import { codeqlRamMegabytes } from './local-codeql.mts';
 import { resolveUnitTestExecutables, unitTestExecutableEnvironment } from './toolchain-compatibility.mts';
+import { renderCiStageSummary, writeCiSummary } from './ci-summary.mts';
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FULL_SHA = /^[a-f0-9]{40}$/u;
@@ -182,7 +183,8 @@ function run(command: string, args: readonly string[], environment: NodeJS.Proce
     stdio: 'inherit',
   });
   if (child.error) throw child.error;
-  if (child.status !== 0) throw new Error(`Local CI command failed with exit code ${child.status ?? 2}.`);
+  if (child.signal) throw new Error(`Verification command stopped on ${child.signal}.`);
+  if (child.status !== 0) throw new Error(`Verification command failed with exit code ${child.status ?? 2}.`);
 }
 
 function npmRun(
@@ -204,8 +206,28 @@ export function ciCommandGroupScripts(group: CiCommandGroup): readonly string[] 
 export function runCiCommandGroup(
   group: CiCommandGroup,
   execute: (script: string, args: readonly string[]) => void = (script, args) => npmRun(script, args),
+  report?: (markdown: string) => void,
 ): void {
-  for (const script of ciCommandGroupScripts(group)) execute(script, []);
+  const stages = ciCommandGroupScripts(group).map(script => ({ name: `npm run ${script}`, outcome: 'skipped', action: '' }));
+  try {
+    for (const [index, script] of ciCommandGroupScripts(group).entries()) {
+      const stage = stages[index]!;
+      try {
+        execute(script, []);
+        stage.outcome = 'success';
+      } catch (error) {
+        stage.outcome = 'failure';
+        // Only the bounded diagnosis from the launcher, not arbitrary command output.
+        const message = error instanceof Error ? error.message : '';
+        stage.action = /^Verification command (?:failed with exit code \d+|stopped on SIG[A-Z0-9]+)\.$/u.test(message)
+          ? `${message} See this command's diagnostic or evidence below.`
+          : 'The command could not complete. See the named command diagnostic.';
+        throw error;
+      }
+    }
+  } finally {
+    report?.(renderCiStageSummary(`Verification: ${group}`, stages));
+  }
 }
 
 function nodeVersion(executable: string): string | null {
@@ -519,7 +541,7 @@ export function main(args = process.argv.slice(2)): number {
       assertLocalCiRuntime();
       if (group === 'cli-runtime') process.env.WHOISLEUTH_CLI_RUNTIME_NODE = cliRuntimeExecutable();
       if (group === 'quality') assertHostedCiParity();
-      runCiCommandGroup(group);
+      runCiCommandGroup(group, undefined, writeCiSummary);
       return 0;
     }
     assertLocalCiRuntime();

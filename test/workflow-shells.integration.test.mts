@@ -48,8 +48,9 @@ if (command === 'ci') {
     assert.equal(process.env.WHOISLEUTH_FAST_CHECK_SEED, '42');
   }
 } else if (command === 'sources:health') {
-  assert.ok(args.length === 0 || JSON.stringify(args) === JSON.stringify(['--', '--github-annotations']));
-  console.log(args.length ? 'fixture-annotations' : 'fixture-source-health');
+  assert.deepEqual(args, ['--', '--github-annotations']);
+  fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, 'fixture-source-health\n');
+  console.log('fixture-annotations');
 } else if (command === 'test:profile') {
   assert.deepEqual(args, []);
   console.log(JSON.stringify({ kind: 'complete-unit-run', sample: calls.filter(call => call.command === command).length + 1 }));
@@ -81,7 +82,7 @@ const healthJobs = healthWorkflow.jobs as Record<string, {
 const healthSteps = requiredValue(healthJobs.profile).steps;
 
 const expectedHealthCommands = ['ci', 'toolchain:check', 'test:properties', 'test:mutation', 'verification:timing:check',
-  'sources:health', 'sources:health', 'test:profile', 'test:profile', 'test:profile',
+  'sources:health', 'test:profile', 'test:profile', 'test:profile',
   'test:duration-health', 'verification:timing:update-candidate'];
 
 for (const failure of [null, ...expectedHealthCommands.map((_, index) => index)]) {
@@ -117,7 +118,7 @@ for (const failure of [null, ...expectedHealthCommands.map((_, index) => index)]
         return;
       }
       assert.equal(status, 0);
-      assert.deepEqual(calls.filter(call => call.command === 'sources:health')[1]?.args, ['--', '--github-annotations']);
+      assert.deepEqual(calls.filter(call => call.command === 'sources:health').map(call => call.args), [['--', '--github-annotations']]);
       const displayed = await readFile(summary, 'utf8');
       assert.match(displayed, /fixture-source-health/u);
       assert.match(displayed, /fixture-duration-health/u);
@@ -276,14 +277,15 @@ test('executes the final gate against every result, including newly added lanes'
         encoding: 'utf8',
         timeout: 5000,
       },
-    ).status;
-  assert.equal(execute(successes), 0);
-  assert.notEqual(execute({}), 0);
+    );
+  assert.equal(execute(successes).status, 0);
+  assert.notEqual(execute({}).status, 0);
   for (const name of [...Object.keys(successes), 'future-verification']) {
     for (const result of ['failure', 'cancelled', 'skipped', null]) {
-      assert.notEqual(execute({ ...successes, [name]: { result } }), 0, `${name}: ${result}`);
+      assert.notEqual(execute({ ...successes, [name]: { result } }).status, 0, `${name}: ${result}`);
     }
   }
+  assert.match(execute({ ...successes, 'future-verification': { result: 'skipped' } }).stdout, /future-verification \| Not run/u);
 });
 
 test('explains source drift in the job summary while retaining the failing result', async () => {
@@ -359,11 +361,11 @@ test('explains source drift in the job summary while retaining the failing resul
     assert.ifError(result.error);
     assert.equal(result.status, 1, result.stderr);
     const rendered = await readFile(summary, 'utf8');
-    assert.match(rendered, /Registrar standing \| 1/u);
+    assert.match(rendered, /Registrar standing \| Review needed/u);
     assert.match(rendered, /iana_registrar_ids: drift; records 10 → 11/u);
     assert.match(rendered, /Normalised digest a{64} → b{64}/u);
     assert.doesNotMatch(rendered, /catalogue_freshness/u);
-    assert.match(rendered, /Retained source catalogues \| 2/u);
+    assert.match(rendered, /Retained source catalogues \| Check incomplete/u);
     assert.match(rendered, /Unicode confusables: drift.*requires calibration/u);
     assert.doesNotMatch(rendered, /<source>|`/u);
     assert.match(result.stdout, /::error title=Registry maintenance requires review::/u);
@@ -388,7 +390,7 @@ test('explains source drift in the job summary while retaining the failing resul
     );
     assert.ifError(unavailable.error);
     assert.equal(unavailable.status, 1);
-    assert.match(await readFile(summary, 'utf8'), /Registrar report is unavailable or malformed/u);
+    assert.match(await readFile(summary, 'utf8'), /Registrar standing report is unavailable or malformed/u);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
