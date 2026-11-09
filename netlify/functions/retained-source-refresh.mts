@@ -1,10 +1,12 @@
+import { getStore } from '@netlify/blobs';
 import { HOSTED_SOURCE_IDS } from '../../packages/contracts/retained-source-edition.mts';
 import { runSourceEditionCycle } from '../../lib/retained-source-channel.mts';
 import { assessAutomaticSourceEdition, readAutomaticPublisher } from '../../lib/retained-source-refresh.mts';
-import { openRetainedSourceStore, retainedSourcesEnabled } from '../../lib/retained-source-netlify.mts';
+import { retainedSourceStoreFactory, retainedSourcesEnabled } from '../../lib/retained-source-netlify.mts';
 
 export const config = { schedule: '17 3 * * *' };
 type DeployContext = { deploy?: { context?: unknown } };
+const openRetainedSourceStore = retainedSourceStoreFactory(getStore);
 
 export async function runRetainedSourceRefresh(context?: DeployContext, {
   enabled = process.env.RETAINED_SOURCE_EDITIONS,

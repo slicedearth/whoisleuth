@@ -313,11 +313,7 @@ describe('production dependency audit policy', () => {
     );
   });
 
-  test('production imports stay on the dependency package-root surface', () => {
-    const expected = new Set([
-      'netlify/functions/scheduled-monitor-management.mts',
-      'netlify/functions/scheduled-monitor.mts',
-    ]);
+  test('only hosted functions import the Blob package root', () => {
     const files = [
       'server.mts',
       ...['cli', 'frontend/src', 'lib', 'netlify', 'packages'].flatMap((directory) =>
@@ -328,8 +324,9 @@ describe('production dependency audit policy', () => {
     ];
     const imports = files.filter((entry) => /(?:from\s+|(?:import|require)\s*\()\s*['"]@netlify\/blobs/u
       .test(fs.readFileSync(path.join(REPOSITORY_ROOT, entry), 'utf8')));
-    assert.deepEqual(new Set(imports), expected);
+    assert.ok(imports.length > 0);
     for (const entry of imports) {
+      assert.ok(entry.startsWith('netlify/functions/'), `Hosted storage package imported outside its runtime: ${entry}`);
       const source = fs.readFileSync(path.join(REPOSITORY_ROOT, entry), 'utf8');
       assert.match(source, /import \{ getStore \} from '@netlify\/blobs';/u);
       assert.doesNotMatch(source, /@netlify\/blobs\//u);

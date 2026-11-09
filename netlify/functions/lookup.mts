@@ -1,3 +1,4 @@
+import { getStore } from '@netlify/blobs';
 import { runUnifiedLookup, LOOKUP_ERROR_CODES } from '../../lib/lookup.mts';
 import { createLookupHttpResponse } from '../../lib/lookup-response-contract.mts';
 import { prepareLookupHttpOperation, type LookupHttpDependencies } from '../../lib/lookup-http-operation.mts';
@@ -7,7 +8,7 @@ import { guardNetlifyNetworkRequest, withNetlifyOperationBudget } from '../../li
 import { json, netlifyJsonToResponse, readRequestTextCapped, withNetlifyFetchApiErrorBoundary } from '../../lib/http.mts';
 import { MAX_LOOKUP_SELECTION_BODY_BYTES } from '../../lib/lookup-selected-request.mts';
 import { createRetainedLookupSourceReader } from '../../lib/retained-source-reader.mts';
-import { openRetainedSourceStore, retainedSourcesEnabled } from '../../lib/retained-source-netlify.mts';
+import { retainedSourceStoreFactory, retainedSourcesEnabled } from '../../lib/retained-source-netlify.mts';
 import type { LookupSourceEditions } from '../../lib/retained-source-data.mts';
 
 type LookupHandlerDependencies = LookupHttpDependencies & Readonly<{
@@ -17,7 +18,7 @@ type LookupHandlerDependencies = LookupHttpDependencies & Readonly<{
 type LookupFunctionContext = Readonly<{ waitUntil?: (completion: Promise<unknown>) => void; deploy?: { context?: unknown } }>;
 
 function createLookupHandler(dependencies: LookupHandlerDependencies = {
-  runUnifiedLookup, createLookupHttpResponse, readSourceEditions: createRetainedLookupSourceReader(openRetainedSourceStore),
+  runUnifiedLookup, createLookupHttpResponse, readSourceEditions: createRetainedLookupSourceReader(retainedSourceStoreFactory(getStore)),
 }) {
   return withNetlifyFetchApiErrorBoundary(async (request: Request, context?: LookupFunctionContext): Promise<Response> => {
     const guard = guardNetlifyNetworkRequest({ headers: Object.fromEntries(request.headers) }, 'lookup');
