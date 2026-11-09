@@ -20,7 +20,6 @@ import { createLookupHttpResponse } from '../lib/lookup-response-contract.mts';
 import { runUnifiedLookup } from '../lib/lookup.mts';
 import { buildSessionCookie, createSessionToken } from '../lib/auth.mts';
 import type { safeFetchDetailed } from '../lib/safe-fetch.mts';
-import { TEST_SESSION_SECRET, TEST_SITE_PASSWORD } from '../e2e/constants.ts';
 
 const NOW = new Date('2026-11-15T09:00:00.000Z');
 const FIRST = 'a'.repeat(40);
@@ -222,8 +221,8 @@ test('known-exploited updates use existing advisory matching and preserve editio
 test('the authenticated hosted handler uses editions only on opted-in production Deep domain lookups', async (t) => {
   t.mock.method(Date, 'now', () => NOW.getTime());
   const previous = { SITE_PASSWORD: process.env.SITE_PASSWORD, SESSION_SECRET: process.env.SESSION_SECRET };
-  process.env.SITE_PASSWORD = TEST_SITE_PASSWORD;
-  process.env.SESSION_SECRET = TEST_SESSION_SECRET;
+  process.env.SITE_PASSWORD = 'test-only-secret';
+  process.env.SESSION_SECRET = 'test-only-session-signing-secret';
   t.after(() => { for (const [key, value] of Object.entries(previous)) {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
