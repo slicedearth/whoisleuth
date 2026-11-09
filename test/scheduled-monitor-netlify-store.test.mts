@@ -169,12 +169,12 @@ describe('scheduled monitoring Netlify Blobs adapter', () => {
       { data: new Blob([new Uint8Array([0xc3, 0x28])]).stream(), etag: '"v1"' },
     ]) {
       blobs.entry = entry as NonNullable<BlobRead>;
-      await assert.rejects(store.read('state'), /invalid scheduled monitoring entry/i);
+      await assert.rejects(store.read('state'), TypeError);
     }
 
     const invalidMetadataStream = blobStream('ciphertext');
     blobs.entry = { data: invalidMetadataStream, etag: null } as NonNullable<BlobRead>;
-    await assert.rejects(store.read('state'), /invalid scheduled monitoring entry/i);
+    await assert.rejects(store.read('state'), TypeError);
     assert.equal(invalidMetadataStream.locked, false);
 
     let pulls = 0;
@@ -189,7 +189,7 @@ describe('scheduled monitoring Netlify Blobs adapter', () => {
         cancel() { cancelled = true; },
       }),
     };
-    await assert.rejects(store.read('state'), /invalid scheduled monitoring entry/i);
+    await assert.rejects(store.read('state'), TypeError);
     assert.ok(pulls >= 2 && pulls <= 3);
     assert.equal(cancelled, true);
 

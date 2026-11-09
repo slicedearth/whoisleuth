@@ -10,22 +10,13 @@ import {
   parseScheduledMonitorKey,
 } from './scheduled-monitor-crypto.mts';
 import { abortable } from './abort.mts';
+import type { VersionedTextStore } from './versioned-text-store.mts';
 
 type ScheduledMonitorOperationOptions = { signal?: AbortSignal };
 
 type VersionedTextSnapshot = {
   value: string | null;
   version: string | null;
-};
-
-type VersionedTextStore = {
-  read: (key: string, options?: ScheduledMonitorOperationOptions) => Promise<VersionedTextSnapshot>;
-  compareAndSet: (
-    key: string,
-    expectedVersion: string | null,
-    nextValue: string,
-    options?: ScheduledMonitorOperationOptions,
-  ) => Promise<boolean>;
 };
 
 type ScheduledMonitorUpdate<Result> = {
