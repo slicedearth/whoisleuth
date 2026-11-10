@@ -237,7 +237,7 @@ Licence source: package metadata
 
 The installed package declares MIT. It does not include a standalone licence document.
 ================================================================================
-@netlify/otel@7.0.7
+@netlify/otel@7.0.8
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: LICENSE
@@ -506,7 +506,7 @@ Apache License
    See the License for the specific language governing permissions and
    limitations under the License.
 ================================================================================
-@opentelemetry/api-logs@0.223.0
+@opentelemetry/api-logs@0.223.1
 Relationship: transitive production dependency
 Declared licence: Apache-2.0
 Licence source: LICENSE
@@ -1127,7 +1127,7 @@ Apache License
    See the License for the specific language governing permissions and
    limitations under the License.
 ================================================================================
-@opentelemetry/instrumentation@0.223.0
+@opentelemetry/instrumentation@0.223.1
 Relationship: transitive production dependency
 Declared licence: Apache-2.0
 Licence source: LICENSE

@@ -10,8 +10,8 @@ import {
 } from '../lib/cisa-kev-source.mts';
 
 const SOURCE_VERSION = '2026.11.09';
-const SOURCE_RELEASED_AT = '2026-11-09T16:16:16.4275Z';
-const SOURCE_SHA256 = 'b75c0505de900f157cd71f9c2585c32624768a218e4a5723a6e8914635118c93';
+const SOURCE_RELEASED_AT = '2026-11-09T19:54:37.4945Z';
+const SOURCE_SHA256 = '4372c54ba169d113742974d9e0c68b3523d8e4374c9b2bdcf28712b68565d5cf';
 const OUTPUT_PATH = 'lib/generated/cisa-kev-catalog.mts';
 const OUTPUT_DIGEST_PATH = 'lib/generated/cisa-kev-catalog.sha256';
 

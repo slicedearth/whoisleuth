@@ -2,11 +2,11 @@
 // browser-library catalogue. Apache-2.0 licensed source; do not edit by hand.
 
 const RETIRE_BROWSER_CATALOG = Object.freeze({
-  catalogVersion: "retire.js-2026.11.06",
-  sourceRevision: "0b95bcf8de1b38347a76245c8746ff864a92a17b",
-  sourceUpdatedAt: "2026-11-06T04:28:49.000Z",
-  sourceSha256: "744de775854771ba5ce5624465865eccce24e76d7ceccd46da218ead1e0d9130",
-  sourceUrl: "https://github.com/RetireJS/retire.js/blob/0b95bcf8de1b38347a76245c8746ff864a92a17b/repository/jsrepository.json",
+  catalogVersion: "retire.js-2026.11.09",
+  sourceRevision: "9c6abc0c5844c8418b0050f4d66ef8d401e6401b",
+  sourceUpdatedAt: "2026-11-09T19:30:37.000Z",
+  sourceSha256: "f134daeccb7c448e62e6cb9498373c7a0d3c6ab8a825fb048dce3da922f55829",
+  sourceUrl: "https://github.com/RetireJS/retire.js/blob/9c6abc0c5844c8418b0050f4d66ef8d401e6401b/repository/jsrepository.json",
   components: {
   "jquery": {
     "extractors": {
@@ -2140,6 +2140,90 @@ const RETIRE_BROWSER_CATALOG = Object.freeze({
     },
     "vulnerabilities": [
       {
+        "below": "1.11.9",
+        "severity": "medium",
+        "atOrAbove": "0",
+        "cwe": [
+          "CWE-79"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2019-10785"
+          ],
+          "githubID": "GHSA-PG97-WW7H-5MJR"
+        }
+      },
+      {
+        "below": "1.11.10",
+        "severity": "low",
+        "atOrAbove": "0",
+        "cwe": [
+          "CWE-94"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2020-5259"
+          ],
+          "githubID": "GHSA-3HW5-Q855-G6CW"
+        }
+      },
+      {
+        "below": "1.12.7",
+        "severity": "medium",
+        "atOrAbove": "1.12.0",
+        "cwe": [
+          "CWE-79"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2019-10785"
+          ],
+          "githubID": "GHSA-PG97-WW7H-5MJR"
+        }
+      },
+      {
+        "below": "1.12.8",
+        "severity": "low",
+        "atOrAbove": "1.12.0",
+        "cwe": [
+          "CWE-94"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2020-5259"
+          ],
+          "githubID": "GHSA-3HW5-Q855-G6CW"
+        }
+      },
+      {
+        "below": "1.13.6",
+        "severity": "medium",
+        "atOrAbove": "1.13.0",
+        "cwe": [
+          "CWE-79"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2019-10785"
+          ],
+          "githubID": "GHSA-PG97-WW7H-5MJR"
+        }
+      },
+      {
+        "below": "1.13.7",
+        "severity": "low",
+        "atOrAbove": "1.13.0",
+        "cwe": [
+          "CWE-94"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2020-5259"
+          ],
+          "githubID": "GHSA-3HW5-Q855-G6CW"
+        }
+      },
+      {
         "below": "1.14.0",
         "severity": "critical",
         "cwe": [
@@ -2150,6 +2234,90 @@ const RETIRE_BROWSER_CATALOG = Object.freeze({
             "CVE-2018-15494"
           ],
           "githubID": "GHSA-84CM-X2Q5-8225"
+        }
+      },
+      {
+        "below": "1.14.5",
+        "severity": "medium",
+        "atOrAbove": "1.14.0",
+        "cwe": [
+          "CWE-79"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2019-10785"
+          ],
+          "githubID": "GHSA-PG97-WW7H-5MJR"
+        }
+      },
+      {
+        "below": "1.14.6",
+        "severity": "low",
+        "atOrAbove": "1.14.0",
+        "cwe": [
+          "CWE-94"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2020-5259"
+          ],
+          "githubID": "GHSA-3HW5-Q855-G6CW"
+        }
+      },
+      {
+        "below": "1.15.2",
+        "severity": "medium",
+        "atOrAbove": "1.15.0",
+        "cwe": [
+          "CWE-79"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2019-10785"
+          ],
+          "githubID": "GHSA-PG97-WW7H-5MJR"
+        }
+      },
+      {
+        "below": "1.15.3",
+        "severity": "low",
+        "atOrAbove": "1.15.0",
+        "cwe": [
+          "CWE-94"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2020-5259"
+          ],
+          "githubID": "GHSA-3HW5-Q855-G6CW"
+        }
+      },
+      {
+        "below": "1.16.1",
+        "severity": "medium",
+        "atOrAbove": "1.16.0",
+        "cwe": [
+          "CWE-79"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2019-10785"
+          ],
+          "githubID": "GHSA-PG97-WW7H-5MJR"
+        }
+      },
+      {
+        "below": "1.16.2",
+        "severity": "low",
+        "atOrAbove": "1.16.0",
+        "cwe": [
+          "CWE-94"
+        ],
+        "identifiers": {
+          "CVE": [
+            "CVE-2020-5259"
+          ],
+          "githubID": "GHSA-3HW5-Q855-G6CW"
         }
       }
     ]
