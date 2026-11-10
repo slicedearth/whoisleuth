@@ -198,7 +198,7 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
     ]),
     steps: Object.freeze([
       Object.freeze({ title: 'Start from supplied material or a target', body: 'For text, messages or documents, open Review a message, link or selected file. Inspect source-linked addresses and labelled hashes; explicitly select relevant phone candidates from plain text. Compare a displayed destination with a separately supplied one, keeping its source and time. For a target question, choose Fast registration triage or deliberate Deep collection.' }),
-      Object.freeze({ title: 'Retain and compare the relevant evidence', body: 'Save the reviewed report in a case; original files are a separate choice. Retained files offers text and PNG comparisons. Specialist evidence reviews compares retained domain history and accepts source-linked registration boundaries. Keep missing inputs, different conditions and earlier observations visible instead of treating them as absence.' }),
+      Object.freeze({ title: 'Retain and compare the relevant evidence', body: 'Save the reviewed report in a case; original files are a separate choice. Use Retained files to compare text or PNGs. Open Specialist evidence reviews to compare retained domain history and declare source-linked registration boundaries. Keep missing inputs, different conditions and earlier observations visible instead of treating them as absence.' }),
       Object.freeze({ title: 'Record the next bounded decision', body: 'Pin the useful fact, link a conclusion and set a review question. In Response, prepare separate external recipient scopes or an internal containment handoff from selected existing follow-ups and pins. Review disclosure before export; provider resolution cannot close an open internal request. Practise these steps with the supplied fictional case below.' }),
     ]),
     evidence: Object.freeze([
@@ -270,7 +270,7 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
     ]),
     steps: Object.freeze([
       Object.freeze({ title: 'Choose a focused set', body: 'Paste a bounded domain list or carry a reviewed shortlist from Discover. Remove unrelated names before collection.' }),
-      Object.freeze({ title: 'Select depth and pacing', body: 'Fast emphasizes registration. Bulk Deep adds compact DNS, mail, website, TLS, technology and certificate comparison fields without becoming a full single-domain Deep response.' }),
+      Object.freeze({ title: 'Select depth and pacing', body: 'Fast emphasises registration. Bulk Deep adds compact DNS, mail, website, TLS, technology and certificate comparison fields without becoming a full single-domain Deep response.' }),
       Object.freeze({ title: 'Review before acting', body: 'Sort and filter by source state, compare two domains, retain useful relationships, and act only on an explicit selection.' }),
     ]),
     evidence: Object.freeze([
@@ -343,7 +343,7 @@ export const PUBLIC_RESOURCES: readonly PublicResource[] = Object.freeze([
     ]),
     steps: Object.freeze([
       Object.freeze({ title: 'Keep collection and retention separate', body: 'Opening a tool does not save its result. The analyst must choose a case, snapshot, watchlist, relationship or export action.' }),
-      Object.freeze({ title: 'Back up and check original files', body: 'Download a versioned encrypted workspace archive or the separately labelled unencrypted format. Review the missing-original checklist: a retained file reference without its bytes is not a recovered original. Restore the required bytes before relying on a complete file export. The encrypted passphrase is never sent or recoverable.' }),
+      Object.freeze({ title: 'Back up and check original files', body: 'Download a versioned encrypted workspace archive or the separately labelled unencrypted format. Review the missing-original checklist: a retained file reference without its bytes is not a recovered original. Restore the required bytes before relying on a complete file export. WHOISleuth does not send the passphrase or offer a way to recover it.' }),
       Object.freeze({ title: 'Reopen without replacing evidence', body: 'Reopen a saved acquisition-review JSON to preview earlier manual fields, accept deliberately and reconfirm against current Lookup evidence. Use ordinary case printing for a reviewed record summary, not an original-file backup. If workspace controls are unavailable, Dashboard Support diagnostics reports capabilities such as Web Locks; named workspaces require it and IndexedDB.' }),
     ]),
     evidence: Object.freeze([

@@ -964,14 +964,14 @@ describe('lookup evidence export', () => {
     missingRdap.rdap = {};
     assert.throws(
       () => evidence.buildLookupEvidence(missingRdap),
-      /successful RDAP without normalized publication data/iu,
+      /successful RDAP without normalised publication data/iu,
     );
 
     const missingWhois = fixtureResponse();
     missingWhois.whois = { chain: [] };
     assert.throws(
       () => evidence.buildLookupEvidence(missingWhois),
-      /complete WHOIS without normalized publication data/iu,
+      /complete WHOIS without normalised publication data/iu,
     );
   });
 

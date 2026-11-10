@@ -74,6 +74,7 @@ export type WebsiteEnrichmentOptions = {
   includeDeliveryMetadata?: boolean;
   includeStructuredDataIdentity?: boolean;
   includeTechnologyProfile?: boolean;
+  knownExploitedEdition?: import('./cisa-kev-source.mts').KevProjection;
   includeSecurityPosture?: boolean;
   collectDnsIntelligence?: typeof collectDnsIntelligence;
   dnsResolvers?: Record<string, DnsResolver>;
@@ -374,6 +375,7 @@ async function enrichWebsite(context: WebsiteContext, options: WebsiteEnrichment
         ...(options.includeTechnologyProfile !== undefined
           ? { includeTechnologyProfile: options.includeTechnologyProfile }
           : {}),
+        knownExploitedEdition: options.knownExploitedEdition,
       });
       if (pageIdentityEligible && htmlSignals.domainSaleSignal) {
         if (!selectedUrl && observationHostname === domain) forSaleSignal = forSaleSignal || htmlSignals.domainSaleSignal;

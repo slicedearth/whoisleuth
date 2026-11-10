@@ -12,6 +12,7 @@ import { COMMON_INFRASTRUCTURE_SNAPSHOT } from '../frontend/src/lib/analysis/com
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../lib/evidence-export.mts';
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
+import { encodeRetainedSourceEdition } from '../packages/evidence/retained-source-edition.mts';
 
 const COHORT_PROFILE_ID = 'cohort_profile_exact';
 const COHORT_OTHER_PROFILE_ID = 'cohort_profile_other';
@@ -325,6 +326,27 @@ test.describe('browser-local campaigns', () => {
     const assertionPanel = region.getByText(/Analyst assertions · not used for cohort membership/u);
     await assertionPanel.click();
     await expect(region).toContainText('S'.repeat(400));
+
+    await page.clock.setFixedTime(new Date(COHORT_NOW));
+    const reviewed = await encodeRetainedSourceEdition('infrastructure', {
+      ...COMMON_INFRASTRUCTURE_SNAPSHOT, generatedAt: COHORT_NOW,
+      sources: COMMON_INFRASTRUCTURE_SNAPSHOT.sources.map(source => ({
+        ...source, sourceDate: COHORT_NOW.slice(0, 10), label: 'Fixture reviewed ranges',
+      })),
+      excludedSources: [],
+    });
+    await region.getByText('Use a reviewed infrastructure edition', { exact: true }).click();
+    await region.getByLabel('Edition file').setInputFiles({ name: 'edition.json', mimeType: 'application/json', buffer: Buffer.from(reviewed.text) });
+    await region.getByLabel('Expected SHA-256 digest').fill(`sha256:${'0'.repeat(64)}`);
+    await region.getByRole('button', { name: 'Apply edition' }).click();
+    await expect(region.getByRole('status')).toContainText('did not verify');
+    await region.getByLabel('Expected SHA-256 digest').fill(reviewed.digest);
+    await region.getByRole('button', { name: 'Apply edition' }).click();
+    await expect(region.getByRole('status')).toContainText('Using the reviewed edition');
+    await expect(cohort).toContainText('Fixture reviewed ranges');
+    await region.getByRole('button', { name: 'Use bundled ranges' }).click();
+    await expect(cohort).not.toContainText('Fixture reviewed ranges');
+
     expect(dataRequests).toEqual([]);
     expect(await page.evaluate(() => (window as unknown as { __cohortWrites?: number }).__cohortWrites)).toBe(0);
     expect(await page.evaluate(() => (window as unknown as { __cohortLocalStorageWrites?: number }).__cohortLocalStorageWrites)).toBe(0);

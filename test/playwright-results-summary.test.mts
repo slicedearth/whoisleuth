@@ -38,9 +38,12 @@ function fixture(attachmentBody?: string) {
         }],
       }, {
         title: 'shows a bounded error',
+        line: 42,
         tests: [{
           status: 'unexpected',
-          results: [{ status: 'failed', duration: 800, retry: 0, attachments: [{ name: 'trace' }] }],
+          projectName: 'chromium',
+          results: [{ status: 'failed', duration: 800, retry: 0, attachments: [{ name: 'trace' }],
+            errors: [{ message: 'Error: expect(locator).toBeVisible()\nReceived: private assertion values /home/runner/private.txt' }] }],
         }],
       }],
     }],
@@ -75,6 +78,9 @@ describe('Playwright result summary', () => {
   });
   test('counts retries and failures while retaining only bounded diagnostic labels', () => {
     const summary = summarizePlaywrightResults(fixture(), '1-of-2');
+    const markdown = renderPlaywrightResultSummary(summary);
+    assert.match(markdown, /console\.spec\.ts:42 \(chromium\).*assertion was not satisfied/u);
+    assert.doesNotMatch(markdown, /private assertion values|\/home\/runner/u);
     assert.deepEqual({
       total: summary.total,
       passed: summary.passed,

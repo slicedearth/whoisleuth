@@ -578,7 +578,7 @@ export function serializeLookupEvidence(value: unknown, pretty = false): string 
   try {
     output = JSON.stringify(value, null, pretty ? 2 : 0);
   } catch {
-    throw new TypeError('Lookup evidence could not be serialized as JSON.');
+    throw new TypeError('Lookup evidence could not be serialised as JSON.');
   }
   if (new TextEncoder().encode(output).byteLength > LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES) {
     throw new TypeError('Lookup evidence exceeds the 5 MiB portable file limit.');

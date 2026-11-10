@@ -287,7 +287,7 @@ describe('page fingerprints', () => {
     const result = fingerprints(`<main>${Array.from({ length: MAX_VISIBLE_TEXT_TOKENS + 1 }, (_, index) => `word${index}`).join(' ')}</main>`);
     assert.equal(requiredValue(result.visibleText).tokenCount, MAX_VISIBLE_TEXT_TOKENS);
     assert.equal(requiredValue(result.visibleText).truncated, true);
-    assert.match(result.limitations.join(' '), /normalized tokens/);
+    assert.match(result.limitations.join(' '), /normalised tokens/);
   });
 
   test('caps forms and controls with explicit partial provenance', () => {

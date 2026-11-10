@@ -143,7 +143,7 @@ function analyzePageRole(input: PageRoleProfileInput = {}) {
     'JavaScript-rendered content, page interaction, authenticated content, and text outside the retained title are not evaluated.',
     'Only fixed role labels and evidence descriptions are retained; page text, arbitrary attributes, matched markup, and URLs are discarded.',
   ];
-  if (truncated) limitations.push('The captured page or static tokenization reached a limit, so later role evidence may be absent.');
+  if (truncated) limitations.push('The captured page or static tokenisation reached a limit, so later role evidence may be absent.');
 
   return {
     pageRoleProfileVersion: PAGE_ROLE_PROFILE_VERSION,

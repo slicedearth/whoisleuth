@@ -119,7 +119,7 @@
         const { report } = parsed;
         selectedOriginal = parsed.original;
         preview = { kind: 'findings', document: report.document };
-        onmessage(`Validated ${report.accepted} portable WACZ finding${report.accepted === 1 ? '' : 's'} from ${report.warcResources} verified WARC resource${report.warcResources === 1 ? '' : 's'} and ${report.records} bounded record${report.records === 1 ? '' : 's'}; ${report.excluded} excluded. The package stayed local and only normalized page evidence is available for deliberate import.`);
+        onmessage(`Validated ${report.accepted} portable WACZ finding${report.accepted === 1 ? '' : 's'} from ${report.warcResources} verified WARC resource${report.warcResources === 1 ? '' : 's'} and ${report.records} bounded record${report.records === 1 ? '' : 's'}; ${report.excluded} excluded. The package stayed local and only normalised page evidence is available for deliberate import.`);
         return;
       }
       const warc = file.name.toLowerCase().endsWith('.warc') || file.type === 'application/warc';
@@ -130,7 +130,7 @@
         const report = await parseWarcEvidenceArchive(await file.arrayBuffer(), file.name);
         if (!owns()) return;
         preview = { kind: 'findings', document: report.document };
-        onmessage(`Validated ${report.accepted} portable WARC finding${report.accepted === 1 ? '' : 's'} from ${report.records} bounded record${report.records === 1 ? '' : 's'}; ${report.excluded} excluded. The archive stayed local and only normalized page evidence is available for deliberate import.`);
+        onmessage(`Validated ${report.accepted} portable WARC finding${report.accepted === 1 ? '' : 's'} from ${report.records} bounded record${report.records === 1 ? '' : 's'}; ${report.excluded} excluded. The archive stayed local and only normalised page evidence is available for deliberate import.`);
         return;
       }
       if (file.size > MAX_EXTERNAL_INTELLIGENCE_IMPORT_BYTES) {
@@ -202,7 +202,7 @@
         } else document = convertExternalFindingRows(value);
         preview = { kind: 'findings', document };
         const domainCount = new Set(document.findings.map((finding) => finding.domain)).size;
-        onmessage(`Converted and validated ${document.findings.length} finding${document.findings.length === 1 ? '' : 's'} for ${domainCount} domain${domainCount === 1 ? '' : 's'}. Review the normalized preview before importing.`);
+        onmessage(`Converted and validated ${document.findings.length} finding${document.findings.length === 1 ? '' : 's'} for ${domainCount} domain${domainCount === 1 ? '' : 's'}. Review the normalised preview before importing.`);
       } else if (
         value
         && typeof value === 'object'
@@ -228,7 +228,7 @@
         const document = parseWebCaptureSummary(value);
         preview = { kind: 'findings', document };
         const domainCount = new Set(document.findings.map((finding) => finding.domain)).size;
-        onmessage(`Validated ${document.findings.length} sanitised web-capture finding${document.findings.length === 1 ? '' : 's'} for ${domainCount} domain${domainCount === 1 ? '' : 's'}. Review the normalized preview before importing.`);
+        onmessage(`Validated ${document.findings.length} sanitised web-capture finding${document.findings.length === 1 ? '' : 's'} for ${domainCount} domain${domainCount === 1 ? '' : 's'}. Review the normalised preview before importing.`);
       } else {
         const document = parseExternalIntelligenceDocument(value, await sourceDigest(bytes));
         if (!owns()) return;

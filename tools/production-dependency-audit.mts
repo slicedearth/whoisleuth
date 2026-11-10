@@ -9,6 +9,7 @@ import { parseBoundedJsonObject } from '../packages/analysis/bounded-json.mts';
 import { requireJsonRecord } from './maintainer-tool-helpers.mts';
 import { productionDependencyInstallPaths } from './third-party-notices.mts';
 import { candidateDependencyAuditInput } from './installed-dependency-evidence.mts';
+import { summaryText, writeCiSummary } from './ci-summary.mts';
 
 import {
   assessProductionDependencyAudit,
@@ -151,6 +152,7 @@ export function main(options: Readonly<{
   stderr?: WritableLike;
   installedCandidate?: string;
   runAudit?: (installedLockfile?: Record<string, unknown>) => AuditCommandResult;
+  writeSummary?: (markdown: string) => void;
 }> = {}): number {
   const stdout = options.stdout ?? process.stdout;
   const stderr = options.stderr ?? process.stderr;
@@ -159,6 +161,7 @@ export function main(options: Readonly<{
     if (options.installedCandidate) candidate = candidateDependencyAuditInput(readAuditInput(options.installedCandidate));
   } catch {
     stderr.write('Installed candidate dependency evidence is unavailable or invalid.\n');
+    options.writeSummary?.('## Production dependency audit: not completed\n\nInstalled candidate evidence was missing or invalid. Check candidate assembly and its digest before rerunning.');
     return 2;
   }
   if (candidate) stdout.write(`Installed candidate archive SHA-256: ${candidate.archiveSha256}\n`);
@@ -166,11 +169,13 @@ export function main(options: Readonly<{
 
   if (result.timedOut) {
     stderr.write(`Production dependency audit timed out after ${PRODUCTION_DEPENDENCY_AUDIT_TIMEOUT_MS}ms.\n`);
+    options.writeSummary?.('## Production dependency audit: not completed\n\nThe registry request timed out. This is not a clean advisory result.');
     return 2;
   }
   if (result.error || result.signal || (result.status !== 0 && result.status !== 1)) {
     const detail = boundedError(result.stderr);
     stderr.write(`Production dependency audit could not complete${detail ? `: ${detail}` : '.'}\n`);
+    options.writeSummary?.('## Production dependency audit: not completed\n\nThe audit command could not obtain a valid advisory response. Check registry connectivity and the audit input.');
     return 2;
   }
 
@@ -179,6 +184,16 @@ export function main(options: Readonly<{
   });
   const formatted = formatProductionDependencyAuditAssessment(assessment);
   (assessment.status === 'accepted' ? stdout : stderr).write(formatted);
+  const findings = assessment.findings.filter(item => item.code === 'production_vulnerability');
+  const outcome = assessment.status === 'accepted' ? 'Passed' : findings.length ? 'Advisories found' : 'Response not verified';
+  options.writeSummary?.([
+    `## Production dependency audit: ${outcome}`, '',
+    candidate ? 'Scope: exact installed release candidate.' : 'Scope: locked production dependencies, including optional package runtimes.',
+    assessment.status === 'accepted' ? 'No production vulnerabilities reported.' : '',
+    ...assessment.findings.slice(0, 12).map(item => `- ${summaryText(item.message)}`),
+    ...(assessment.findings.length > 12 ? ['- Additional entries are listed in the audit output.'] : []),
+    ...(findings.length ? ['Review the affected dependency chains before accepting a release.'] : []),
+  ].join('\n'));
   return assessment.status === 'accepted' ? 0 : 1;
 }
 
@@ -187,5 +202,5 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   if (args.length && (args.length !== 2 || args[0] !== '--installed-candidate' || !args[1])) {
     process.stderr.write('Usage: dependencies:audit [--installed-candidate <installed-dependencies.json>]\n');
     process.exitCode = 2;
-  } else process.exitCode = main(args[1] ? { installedCandidate: args[1] } : {});
+  } else process.exitCode = main({ writeSummary: writeCiSummary, ...(args[1] ? { installedCandidate: args[1] } : {}) });
 }

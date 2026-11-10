@@ -331,7 +331,7 @@ feed local search and graph consumers. Empty artefact-reference and assertion
 arrays reserve those typed boundaries without inventing records.
 
 The adapter performs no writes or network requests. It reuses the owning
-collection normalizer, refuses malformed and unsupported future schemas,
+collection normaliser, refuses malformed and unsupported future schemas,
 enforces entity, observation, relationship, reference, limitation, record, and
 serialised-byte caps. The IndexedDB collection and workspace archive remain
 authoritative; the in-memory envelope is disposable.

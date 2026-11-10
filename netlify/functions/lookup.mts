@@ -1,3 +1,4 @@
+import { getStore } from '@netlify/blobs';
 import { runUnifiedLookup, LOOKUP_ERROR_CODES } from '../../lib/lookup.mts';
 import { createLookupHttpResponse } from '../../lib/lookup-response-contract.mts';
 import { prepareLookupHttpOperation, type LookupHttpDependencies } from '../../lib/lookup-http-operation.mts';
@@ -6,11 +7,19 @@ import { operationBudgetTargetFor } from '../../lib/operation-budget.mts';
 import { guardNetlifyNetworkRequest, withNetlifyOperationBudget } from '../../lib/netlify-network-guard.mts';
 import { json, netlifyJsonToResponse, readRequestTextCapped, withNetlifyFetchApiErrorBoundary } from '../../lib/http.mts';
 import { MAX_LOOKUP_SELECTION_BODY_BYTES } from '../../lib/lookup-selected-request.mts';
+import { createRetainedLookupSourceReader } from '../../lib/retained-source-reader.mts';
+import { retainedSourceStoreFactory, retainedSourcesEnabled } from '../../lib/retained-source-netlify.mts';
+import type { LookupSourceEditions } from '../../lib/retained-source-data.mts';
 
-type LookupHandlerDependencies = LookupHttpDependencies;
-type LookupFunctionContext = Readonly<{ waitUntil: (completion: Promise<unknown>) => void }>;
+type LookupHandlerDependencies = LookupHttpDependencies & Readonly<{
+  readSourceEditions?: (signal?: AbortSignal) => Promise<LookupSourceEditions>;
+  sourceEditionsEnabled?: string;
+}>;
+type LookupFunctionContext = Readonly<{ waitUntil?: (completion: Promise<unknown>) => void; deploy?: { context?: unknown } }>;
 
-function createLookupHandler(dependencies: LookupHandlerDependencies = { runUnifiedLookup, createLookupHttpResponse }) {
+function createLookupHandler(dependencies: LookupHandlerDependencies = {
+  runUnifiedLookup, createLookupHttpResponse, readSourceEditions: createRetainedLookupSourceReader(retainedSourceStoreFactory(getStore)),
+}) {
   return withNetlifyFetchApiErrorBoundary(async (request: Request, context?: LookupFunctionContext): Promise<Response> => {
     const guard = guardNetlifyNetworkRequest({ headers: Object.fromEntries(request.headers) }, 'lookup');
     if (guard.response) return netlifyJsonToResponse(guard.response);
@@ -31,23 +40,35 @@ function createLookupHandler(dependencies: LookupHandlerDependencies = { runUnif
     });
     if (!operation.ok) return netlifyJsonToResponse(json(operation.status, operation.body, operation.status === 405 ? { Allow: 'GET, POST' } : {}));
     const target = operationBudgetTargetFor('lookup', operation.options);
+    const readSourceEditions = dependencies.readSourceEditions;
+    const lookupDependencies = readSourceEditions
+      && retainedSourcesEnabled(context, dependencies.sourceEditionsEnabled ?? process.env.RETAINED_SOURCE_EDITIONS)
+      ? {
+          ...dependencies,
+          async runUnifiedLookup(classified, options) {
+            if (classified.type !== 'domain' || options?.fast || options?.compact) return dependencies.runUnifiedLookup(classified, options);
+            const sourceEditions = await readSourceEditions(options?.signal);
+            return dependencies.runUnifiedLookup(classified, { ...options, sourceEditions });
+          },
+        } satisfies LookupHttpDependencies
+      : dependencies;
     // Without a lifecycle extension, use ordinary JSON rather than abandoning a lease after headers.
     if (!operation.streaming || !context?.waitUntil) {
       return netlifyJsonToResponse(await withNetlifyOperationBudget(guard.sessionKey, target,
-        async () => json(200, await operation.run(dependencies, request.signal))));
+        async () => json(200, await operation.run(lookupDependencies, request.signal))));
     }
     return new Promise<Response>((resolve, reject) => {
       let responded = false;
       const completion = withNetlifyOperationBudget(guard.sessionKey, target, async () => {
         const stream = createLookupProgressBody({ sources: operation.sources, signal: request.signal,
-          run: (settled, signal) => operation.run(dependencies, signal, settled) });
+          run: (settled, signal) => operation.run(lookupDependencies, signal, settled) });
         responded = true;
         resolve(new Response(stream.body, { headers: { ...json(200, null).headers,
           'Content-Type': `${LOOKUP_PROGRESS_CONTENT_TYPE}; charset=utf-8` } }));
         await stream.completion;
         return json(204, null);
       });
-      context.waitUntil(completion.catch(() => {}));
+      context.waitUntil?.(completion.catch(() => {}));
       void completion.then(response => { if (!responded) resolve(netlifyJsonToResponse(response)); }, reject);
     });
   }, LOOKUP_ERROR_CODES.LOOKUP_FAILED);

@@ -231,7 +231,7 @@ function buildRegistryDoctorReport(raw: string, generatedAt = new Date().toISOSt
     ...sources.filter((source) => source.alignment === 'unexpected_observation').map((source) => (
       source.source === 'rdap' && source.expected === 'unsupported'
         ? 'Review whether the retained no-service RDAP profile needs refreshing; current bootstrap discovery may identify a newly published service.'
-        : `Review why ${source.source.toUpperCase()} produced normalized evidence despite the declared ${source.expected.replaceAll('_', ' ')} access profile.`
+        : `Review why ${source.source.toUpperCase()} produced normalised evidence despite the declared ${source.expected.replaceAll('_', ' ')} access profile.`
     )),
     ...sources.filter((source) => source.alignment === 'observed' && source.objectIdentifier === 'not_observed').map((source) => (
       `${source.source.toUpperCase()} succeeded without a retained registry object identifier; this can be a valid publication omission and should remain unknown rather than an error.`

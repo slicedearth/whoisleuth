@@ -311,7 +311,7 @@ function createThreatfoxIntelligenceAdapter(dependencies: AdapterDependencies = 
           'The provider retains malware-associated indicators for a limited period and does not represent complete historical coverage.',
           'An IOC association can be historical, shared, compromised, or reassigned and requires analyst review.',
           ...(discarded > 0
-            ? [`${discarded} provider record${discarded === 1 ? ' was' : 's were'} omitted because it could not be safely normalized.`]
+            ? [`${discarded} provider record${discarded === 1 ? ' was' : 's were'} omitted because it could not be safely normalised.`]
             : []),
         ],
       }, observedAt);

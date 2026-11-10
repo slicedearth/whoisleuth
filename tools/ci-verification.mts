@@ -10,6 +10,7 @@ import { FRONTEND_BROWSER_ARTIFACT_PATHS } from './frontend-build-integrity.mts'
 import { npmExecutableName } from './maintainer-tool-helpers.mts';
 import { codeqlRamMegabytes } from './local-codeql.mts';
 import { resolveUnitTestExecutables, unitTestExecutableEnvironment } from './toolchain-compatibility.mts';
+import { renderCiStageSummary, writeCiSummary } from './ci-summary.mts';
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FULL_SHA = /^[a-f0-9]{40}$/u;
@@ -39,6 +40,7 @@ export const CI_PREFLIGHT_SCRIPTS = Object.freeze([
 ] as const);
 
 export const CI_UNIT_SCRIPTS = Object.freeze([
+  'verification:redis:check',
   'test:coverage',
   'test:integration',
 ] as const);
@@ -182,7 +184,8 @@ function run(command: string, args: readonly string[], environment: NodeJS.Proce
     stdio: 'inherit',
   });
   if (child.error) throw child.error;
-  if (child.status !== 0) throw new Error(`Local CI command failed with exit code ${child.status ?? 2}.`);
+  if (child.signal) throw new Error(`Verification command stopped on ${child.signal}.`);
+  if (child.status !== 0) throw new Error(`Verification command failed with exit code ${child.status ?? 2}.`);
 }
 
 function npmRun(
@@ -204,8 +207,28 @@ export function ciCommandGroupScripts(group: CiCommandGroup): readonly string[] 
 export function runCiCommandGroup(
   group: CiCommandGroup,
   execute: (script: string, args: readonly string[]) => void = (script, args) => npmRun(script, args),
+  report?: (markdown: string) => void,
 ): void {
-  for (const script of ciCommandGroupScripts(group)) execute(script, []);
+  const stages = ciCommandGroupScripts(group).map(script => ({ name: `npm run ${script}`, outcome: 'skipped', action: '' }));
+  try {
+    for (const [index, script] of ciCommandGroupScripts(group).entries()) {
+      const stage = stages[index]!;
+      try {
+        execute(script, []);
+        stage.outcome = 'success';
+      } catch (error) {
+        stage.outcome = 'failure';
+        // Only the bounded diagnosis from the launcher, not arbitrary command output.
+        const message = error instanceof Error ? error.message : '';
+        stage.action = /^Verification command (?:failed with exit code \d+|stopped on SIG[A-Z0-9]+)\.$/u.test(message)
+          ? `${message} See this command's diagnostic or evidence below.`
+          : 'The command could not complete. See the named command diagnostic.';
+        throw error;
+      }
+    }
+  } finally {
+    report?.(renderCiStageSummary(`Verification: ${group}`, stages));
+  }
 }
 
 function nodeVersion(executable: string): string | null {
@@ -353,7 +376,7 @@ function assertFrontendBuildArtifactFlow(workflow: Workflow): void {
   const paths = String(upload?.with?.path ?? '').trim().split(/\r?\n/u).map((value) => value.trim()).sort();
   if (!upload || condition(upload.if) || upload.with?.['if-no-files-found'] !== 'error'
     || JSON.stringify(paths) !== JSON.stringify([...FRONTEND_BROWSER_ARTIFACT_PATHS].sort())) {
-    throw new Error('Hosted browser-build artifact publication must contain the served build and its identity only.');
+    throw new Error('Hosted browser-build artefact publication must contain the served build and its identity only.');
   }
   const buildVerification = build.steps.findIndex((step) => stepScripts(step).includes('frontend:build:integrity'));
   if (buildVerification < 0 || buildVerification >= build.steps.indexOf(upload)) {
@@ -366,7 +389,7 @@ function assertFrontendBuildArtifactFlow(workflow: Workflow): void {
     if (!download || condition(download.if) || download.with?.path !== 'frontend'
       || download.with?.pattern !== undefined || download.with?.['merge-multiple'] !== undefined
       || !dependencies(consumer).includes('browser-build')) {
-      throw new Error('Hosted browser build download must use the exact verified build artifact.');
+      throw new Error('Hosted browser build download must use the exact verified build artefact.');
     }
     const execution = consumer.steps.flatMap((step, index) => stepScripts(step).map(script => ({ script, index })));
     const integrity = execution.findIndex(({ script }) => script === 'frontend:build:integrity');
@@ -519,7 +542,7 @@ export function main(args = process.argv.slice(2)): number {
       assertLocalCiRuntime();
       if (group === 'cli-runtime') process.env.WHOISLEUTH_CLI_RUNTIME_NODE = cliRuntimeExecutable();
       if (group === 'quality') assertHostedCiParity();
-      runCiCommandGroup(group);
+      runCiCommandGroup(group, undefined, writeCiSummary);
       return 0;
     }
     assertLocalCiRuntime();

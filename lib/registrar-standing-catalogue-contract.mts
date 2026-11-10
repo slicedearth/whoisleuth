@@ -73,5 +73,5 @@ export const REGISTRAR_STANDING_AUDIT_COMPATIBILITY = defineSchemaCompatibility(
   writeSemantics: 'read_only',
   byteBudget: MAX_REGISTRAR_STANDING_AUDIT_BYTES,
   owner: 'lib/registrar-standing-catalogue-contract.mts',
-  note: 'Target-free two-source drift report that compares bounded normalized official projections without modifying the checked-in catalogue.',
+  note: 'Target-free two-source drift report that compares bounded normalised official projections without modifying the checked-in catalogue.',
 });

@@ -76,7 +76,7 @@ export function runCuratedConnectorFixture(
     );
   }
   if (typeof normalizeFixture !== 'function') {
-    throw new TypeError('Connector fixture requires a synchronous normalizer');
+    throw new TypeError('Connector fixture requires a synchronous normaliser');
   }
 
   let firstPayload: unknown;
@@ -113,7 +113,7 @@ export function runCuratedConnectorFixture(
       (typeof output === 'object' || typeof output === 'function') &&
       typeof (output as { then?: unknown }).then === 'function'
     ) {
-      throw new TypeError('Connector fixture normalizers must be synchronous');
+      throw new TypeError('Connector fixture normalisers must be synchronous');
     }
     return createCuratedConnectorResult(
       connector,

@@ -367,7 +367,7 @@ function values(value: unknown, label: string, legacy: boolean, field: DomainCon
     const normalized = recorderValue(input[index], `${label}[${index}]`, legacy, field, complete);
     if (normalized) output.add(normalized);
     if (output.size > maximum) {
-      throw new TypeError(`${label} must contain at most ${maximum} unique normalized values.`);
+      throw new TypeError(`${label} must contain at most ${maximum} unique normalised values.`);
     }
   }
   return [...output].sort(ordinalCompare);

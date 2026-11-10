@@ -75,8 +75,18 @@ test('offline Case file guidance is reachable from tasks and direct command link
 
 test('keeps desktop and narrow public navigation complete and request-free', async ({ page }) => {
   const investigationRequests = collectInvestigationRequests(page);
+  async function visitPublicPage(path: string) {
+    // Prerendered content can be visible before the route has hydrated. Wait
+    // for the public layout's existing on-mount session check before moving on.
+    const [session] = await Promise.all([
+      page.waitForResponse(response => new URL(response.url()).pathname === '/api/session'),
+      page.goto(path),
+    ]);
+    await session.finished();
+  }
+
   await page.setViewportSize({ width: 1280, height: 820 });
-  await page.goto('/');
+  await visitPublicPage('/');
 
   const navigation = page.getByRole('navigation', { name: 'Public navigation' });
   await expect(page.getByRole('link', { name: 'WHOISleuth overview' })).toHaveAttribute('href', '/');
@@ -85,7 +95,7 @@ test('keeps desktop and narrow public navigation complete and request-free', asy
   await expect(navigation.getByRole('link', { name: 'Resources' })).toHaveAttribute('href', '/resources');
   await expect(navigation.getByText('More', { exact: true })).toHaveCount(0);
 
-  await page.goto('/resources');
+  await visitPublicPage('/resources');
   let documentation = page.getByRole('navigation', { name: 'Documentation' });
   for (const [label, href] of [['Resources', '/resources'], ['CLI', '/cli'], ['Methodology', '/methodology'], ['Coverage', '/coverage'], ['Examples', '/examples']] as const) {
     await expect(documentation.getByRole('link', { name: label, exact: true })).toHaveAttribute('href', href);
@@ -101,7 +111,7 @@ test('keeps desktop and narrow public navigation complete and request-free', asy
     ['/coverage', 'Capability and registry coverage'],
     ['/examples', 'Prepare inputs and understand the output'],
   ] as const) {
-    await page.goto(path);
+    await visitPublicPage(path);
     await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
     documentation = page.getByRole('navigation', { name: 'Documentation' });
     await expect(documentation.getByRole('link', { name: path === '/cli' ? 'CLI' : path === '/methodology' ? 'Methodology' : path === '/coverage' ? 'Coverage' : 'Examples', exact: true })).toHaveAttribute('aria-current', 'page');
@@ -112,7 +122,7 @@ test('keeps desktop and narrow public navigation complete and request-free', asy
   }
 
   await page.setViewportSize({ width: 1280, height: 820 });
-  await page.goto('/cli');
+  await visitPublicPage('/cli');
   await expect(page.locator('.reference-tree')).toBeVisible();
   await expect(page.locator('.page-sections')).toBeVisible();
   await expect(page.locator('.page-sections').getByRole('link', { name: 'Command reference' })).toHaveAttribute('href', '#commands');
@@ -145,7 +155,7 @@ test('keeps desktop and narrow public navigation complete and request-free', asy
   }
 
   await page.setViewportSize({ width: 320, height: 700 });
-  await page.goto('/cli');
+  await visitPublicPage('/cli');
   const siteMenu = page.locator('.site-menu');
   await siteMenu.getByText('Menu', { exact: true }).click();
   const mobileNavigation = siteMenu.getByRole('navigation', { name: 'Public navigation' });

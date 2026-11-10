@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   auditSourceDrift, main, BROWSER_REVISION_URL, INFRASTRUCTURE_REVISION_URL,
   UNICODE_LATEST_URL, type SourceDriftBaseline,
@@ -10,6 +13,7 @@ import { SOURCE_URL as KEV_URL } from '../tools/cisa-kev-catalog.mts';
 import { RDAP_EXTENSION_SOURCE_URL } from '../tools/rdap-extension-drift-audit.mts';
 import { RDAP_EXTENSION_REGISTRY_FIXTURE } from '../fixtures/rdap-extension-registry.mts';
 import { sha256Text as sha256 } from '../tools/maintainer-tool-helpers.mts';
+import { decodeRetainedSourceEdition } from '../packages/evidence/retained-source-edition.mts';
 
 const NOW = new Date('2026-09-23T12:00:00.000Z');
 const COMMIT = 'a'.repeat(40);
@@ -52,7 +56,7 @@ async function fixture() {
   const baseline: SourceDriftBaseline = {
     sslbl: { sourceUpdatedAt: parsed.sourceUpdatedAt, sourceDigestSha256: parsed.sourceDigestSha256,
       entriesDigestSha256: parsed.entriesDigestSha256, entryCount: 1, fingerprintChunks: ['a'.repeat(40)] },
-    kev: { sourceSha256: sha256(kev), releasedAt: '2026-09-22T00:00:00.000Z', identifiers: ['CVE-2026-12345'] },
+    kev: { sourceSha256: sha256(kev), catalogVersion: '2026.09.22', releasedAt: '2026-09-22T00:00:00.000Z', identifiers: ['CVE-2026-12345'] },
     browser: { sourceSha256: sha256(browser) }, infrastructure,
     unicode: { version: '18.0.0', sha256: sha256(unicode) }, extensionDigest: sha256(extensions),
   };
@@ -166,5 +170,45 @@ describe('read-only retained source drift', () => {
     assert.equal(await main(['--live'], { ...setup, stdout, stderr }), 1);
     setup.bodies.set(UNICODE_LATEST_URL, 'malformed');
     assert.equal(await main(['--live'], { ...setup, stdout, stderr }), 2);
+  });
+
+  test('scheduled mode reports routine updates without passing removals or unreadable publishers', async () => {
+    const setup = await fixture();
+    const stdout = output();
+    const stderr = output();
+    const next = JSON.stringify({ catalogVersion: '2026.09.23', dateReleased: '2026-09-23T08:00:00Z',
+      count: 2, vulnerabilities: [{ cveID: 'CVE-2026-12345' }, { cveID: 'CVE-2026-12346' }] });
+    setup.bodies.set(KEV_URL, next);
+    assert.equal(await main(['--live'], { ...setup, stdout, stderr }), 1);
+    assert.equal(await main(['--live', '--allow-routine-feed-drift'], { ...setup, stdout, stderr }), 0);
+    assert.equal((await auditSourceDrift(setup)).checks.find(row => row.id === 'kev')?.routineUpdate, true);
+    setup.bodies.set(KEV_URL, next.replace('CVE-2026-12345', 'CVE-2026-12347'));
+    assert.equal(await main(['--live', '--allow-routine-feed-drift'], { ...setup, stdout, stderr }), 1);
+    setup.bodies.set(KEV_URL, 'unavailable');
+    assert.equal(await main(['--live', '--allow-routine-feed-drift'], { ...setup, stdout, stderr }), 2);
+  });
+
+  test('prepares a reviewable projection from the same publisher response without refetching or overwriting', async () => {
+    const setup = await fixture();
+    const dir = await mkdtemp(join(tmpdir(), 'source-audit-candidate-'));
+    try {
+      const stdout = output();
+      const stderr = output();
+      const raw = setup.bodies.get(SSLBL_SOURCE_URL)!.replace('09:00:00', '10:00:00')
+        + `2026-09-23 08:00:00,${'b'.repeat(40)},Synthetic\n`;
+      setup.bodies.set(SSLBL_SOURCE_URL, raw);
+      const outputDir = join(dir, 'new');
+      const args = ['--live', '--json', `--prepare-dir=${outputDir}`];
+      assert.equal(await main(args, { ...setup, stdout, stderr }), 1, stderr.read());
+      const [receipt] = JSON.parse(stdout.read()).prepared;
+      assert.equal(receipt.source, 'sslbl');
+      const text = await readFile(join(outputDir, receipt.file), 'utf8');
+      const edition = await decodeRetainedSourceEdition(text, receipt.digest, 'sslbl');
+      assert.equal((edition.data as { sourceDigestSha256: string }).sourceDigestSha256, sha256(raw));
+      assert.equal(await main(args, { ...setup, stdout, stderr }), 2);
+      assert.equal(setup.requests.filter(url => url === SSLBL_SOURCE_URL).length, 1);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

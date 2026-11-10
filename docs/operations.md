@@ -163,6 +163,12 @@ loopback listener, fixed refresh sources, server-side connection, cache limits
 and rollback. It remains disabled unless configured; manual file review is
 available independently.
 
+The optional [retained source edition channel](source-maintenance.md#refresh-a-data-edition-without-a-build)
+is separate from domain-feed search and hosted monitoring. Its production-only
+worker and cache handle fixed public intelligence data, never analyst targets
+or saved investigations. After initial deployment and opt-in, data promotion,
+hold and rollback use existing site storage without a build.
+
 ## Request limits and operation admission
 
 Express and functions share fixed-window request controls:

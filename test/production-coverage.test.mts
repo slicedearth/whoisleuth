@@ -178,9 +178,12 @@ describe('production coverage policy', () => {
       // run. The inherited worker marker prevents a recursive test run.
       const environment = environmentWithoutV8Coverage();
       delete environment.NODE_TEST_CONTEXT;
+      const summary = path.join(root, 'summary.md');
+      environment.GITHUB_STEP_SUMMARY = summary;
       await promisify(execFile)(process.execPath, productionCoverageArguments('test/probe.test.mts'), {
         cwd: root, env: environment, encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 * 1024,
       });
+      assert.match(await readFile(summary, 'utf8'), /1 passed · 0 failed/u);
       const report = parseProductionCoverage(await readFile(path.join(root, 'test-coverage.lcov'), 'utf8'));
       assert.deepEqual(report.records.map((record) => record.source).sort(), [
         'lib/ordinary.mts', 'packages/example/ordinary.mts',
@@ -330,7 +333,7 @@ describe('production coverage policy', () => {
       const file = path.join(directory, 'fixture.lcov');
       await writeFile(file, sources.map(source => lcovRecord(source,
         source === underCovered ? [10, 1, 8, 1, 5, 1] : [10, 10, 8, 8, 5, 5])).join('\n'));
-      const environment = environmentWithoutV8Coverage();
+      const environment = environmentWithoutV8Coverage({ ...process.env, GITHUB_STEP_SUMMARY: undefined });
       await assert.rejects(promisify(execFile)(process.execPath, ['tools/production-coverage.mts', file], {
         cwd: path.resolve(import.meta.dirname, '..'), env: environment,
         encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 * 1024,

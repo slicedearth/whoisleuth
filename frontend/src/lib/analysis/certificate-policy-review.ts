@@ -239,10 +239,10 @@ function caaFinding(input: Readonly<{
     observed: [input.issuer, ...identifiers],
     expected,
     detail: aligned
-      ? `The observed certificate issuer maps to an authorization identifier published in the current CAA evidence${input.effectiveOwner ? ` at ${input.effectiveOwner}` : ''}.`
+      ? `The observed certificate issuer maps to an authorisation identifier published in the current CAA evidence${input.effectiveOwner ? ` at ${input.effectiveOwner}` : ''}.`
       : unknownAuthorization
         ? 'Current CAA includes an identifier outside the reviewed issuer mappings. Its relationship to the observed issuer is unknown.'
-        : `The observed certificate issuer did not map to an authorization identifier in the current CAA evidence${input.effectiveOwner ? ` at ${input.effectiveOwner}` : ''}.`,
+        : `The observed certificate issuer did not map to an authorisation identifier in the current CAA evidence${input.effectiveOwner ? ` at ${input.effectiveOwner}` : ''}.`,
     sources: ['DNS', 'TLS certificate'],
     limitations: fixedLimitations,
   };

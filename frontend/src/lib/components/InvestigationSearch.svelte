@@ -120,7 +120,7 @@
     <dl>
       <div><dt>{fieldLabels[result.matchedField]}</dt><dd>{result.matchedValue}</dd></div>
       <div><dt>Source</dt><dd>{storeLabels[result.sourceStore] || result.sourceStore} · {result.source}</dd></div>
-      {#if result.classification}<div><dt>Classification</dt><dd>{result.classification === 'derived' ? 'Derived observation' : 'Normalized observation'}</dd></div>{/if}
+      {#if result.classification}<div><dt>Classification</dt><dd>{result.classification === 'derived' ? 'Derived observation' : 'Normalised observation'}</dd></div>{/if}
       <div><dt>Observed</dt><dd>{formatDate(result.observedAt)}</dd></div>
     </dl>
     {#if result.limitations.length || result.truncated === true}

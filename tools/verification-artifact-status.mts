@@ -27,7 +27,7 @@ const GROUPS = Object.freeze({
 function resolveArtifact(relative: string, repositoryRoot: string): string {
   const absolute = path.resolve(repositoryRoot, relative);
   if (!absolute.startsWith(`${repositoryRoot}${path.sep}`) || path.relative(repositoryRoot, absolute) !== relative) {
-    throw new TypeError('Verification artifact target escaped the repository root.');
+    throw new TypeError('Verification artefact target escaped the repository root.');
   }
   return absolute;
 }
@@ -73,7 +73,7 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
       skipPortChecks.length === 0,
     );
     process.stdout.write(
-      `Verification artifacts: ${result.removed.length} removed, ${result.remaining.length} generated paths remain; `
+      `Verification artefacts: ${result.removed.length} removed, ${result.remaining.length} generated paths remain; `
       + (result.portFree === null
         ? `port ${result.playwrightPort} not checked.\n`
         : `port ${result.playwrightPort} ${result.portFree ? 'free' : 'occupied'}.\n`),
@@ -81,7 +81,7 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     if (result.remaining.length) process.stdout.write(`Remaining generated paths: ${result.remaining.join(', ')}.\n`);
     return result.portFree === false ? 2 : 0;
   } catch (error) {
-    process.stderr.write(`${error instanceof Error ? error.message : 'Verification artifact status failed.'}\n`);
+    process.stderr.write(`${error instanceof Error ? error.message : 'Verification artefact status failed.'}\n`);
     return 2;
   }
 }

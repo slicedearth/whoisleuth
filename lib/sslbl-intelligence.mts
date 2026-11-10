@@ -8,17 +8,19 @@ import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.
 import {
   SSLBL_SNAPSHOT_SCHEMA,
   SSLBL_SNAPSHOT_VERSION,
+  SSLBL_SOURCE_URL,
+  MAX_SSLBL_SNAPSHOT_ENTRIES,
+  MAX_SSLBL_FINGERPRINT_CHUNKS,
 } from '../packages/contracts/sslbl-snapshot.mts';
 
 export const SSLBL_INTELLIGENCE_VERSION = 1;
 export const SSLBL_SNAPSHOT_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 export const SSLBL_SNAPSHOT_EXPIRED_AGE_MS = 45 * 24 * 60 * 60 * 1000;
-export const MAX_SSLBL_SNAPSHOT_ENTRIES = 50_000;
-export const MAX_SSLBL_FINGERPRINT_CHUNKS = 1_000;
+export { MAX_SSLBL_SNAPSHOT_ENTRIES, MAX_SSLBL_FINGERPRINT_CHUNKS };
 export const SSLBL_SOURCE_PAGE = 'https://sslbl.abuse.ch/blacklist/';
 
 type UnknownRecord = Record<string, unknown>;
-type SslblSnapshot = Readonly<{
+export type SslblSnapshot = Readonly<{
   schema: string;
   version: number;
   source: string;
@@ -66,7 +68,6 @@ export type SslblCertificateIntelligence = Readonly<{
 
 const SHA1_RE = /^[a-f0-9]{40}$/u;
 const SHA256_RE = /^[a-f0-9]{64}$/u;
-const SNAPSHOT_SOURCE = 'https://sslbl.abuse.ch/blacklist/sslblacklist.csv';
 
 function record(value: unknown): UnknownRecord {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -96,7 +97,7 @@ function validateSnapshot(value: unknown): ValidatedSslblSnapshot | null {
   const generatedAt = timestamp(candidate.generatedAt);
   if (candidate.schema !== SSLBL_SNAPSHOT_SCHEMA
     || candidate.version !== SSLBL_SNAPSHOT_VERSION
-    || candidate.source !== SNAPSHOT_SOURCE
+    || candidate.source !== SSLBL_SOURCE_URL
     || !sourceUpdatedAt
     || !generatedAt
     || Date.parse(sourceUpdatedAt) > Date.parse(generatedAt)
@@ -133,9 +134,23 @@ function validateSnapshot(value: unknown): ValidatedSslblSnapshot | null {
 }
 
 let builtInSnapshotValidation: ValidatedSslblSnapshot | null | undefined;
+const admittedSnapshots = new WeakMap<object, ValidatedSslblSnapshot>();
+
+/** Admit once, then reuse the exact immutable projection in a bounded cache. */
+export function admitSslblSnapshot(value: unknown): SslblSnapshot {
+  const admitted = validateSnapshot(value);
+  if (!admitted) throw new TypeError('Invalid certificate fingerprint snapshot.');
+  const { schema, version, source, sourceUpdatedAt, generatedAt, sourceDigestSha256, entriesDigestSha256, entryCount, fingerprintChunks } = admitted.snapshot;
+  const snapshot = Object.freeze({
+    schema, version, source, sourceUpdatedAt, generatedAt, sourceDigestSha256, entriesDigestSha256, entryCount,
+    fingerprintChunks: Object.freeze([...fingerprintChunks]),
+  });
+  admittedSnapshots.set(snapshot, { snapshot, fingerprints: admitted.fingerprints });
+  return snapshot;
+}
 
 function validatedSnapshot(value: unknown | undefined): ValidatedSslblSnapshot | null {
-  if (value !== undefined) return validateSnapshot(value);
+  if (value !== undefined) return (value && typeof value === 'object' ? admittedSnapshots.get(value) : undefined) ?? validateSnapshot(value);
   if (builtInSnapshotValidation === undefined) {
     builtInSnapshotValidation = validateSnapshot(SSLBL_CERTIFICATE_SNAPSHOT);
   }
@@ -311,5 +326,3 @@ export function inspectSslblCertificate(
     ]),
   });
 }
-
-export type { SslblSnapshot };

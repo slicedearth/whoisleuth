@@ -229,8 +229,8 @@ function comparisonDiagnostics(
     const label = text(field.label, 100) || 'Registration field';
     const normalizedLabel = label.toLowerCase();
     let hypothesis = 'Different source publication scope or update timing';
-    let detail = `Registry RDAP and ${sourceLabel} published different normalized values. Review the exact values and source timestamps.`;
-    const basis = ['Material normalized-value difference'];
+    let detail = `Registry RDAP and ${sourceLabel} published different normalised values. Review the exact values and source timestamps.`;
+    const basis = ['Material normalised-value difference'];
     if (timeGapHours !== null && timeGapHours >= 1) {
       hypothesis = 'Collection-time or publication-lag difference';
       detail = `The sources were observed about ${timeGapHours} hour${timeGapHours === 1 ? '' : 's'} apart. A change or publication delay could explain the difference, but this is not established.`;

@@ -135,7 +135,7 @@ describe('TLS CLI output', () => {
     assert.match(output, /Evidence\s+Success/);
     assert.match(output, /Protocol\s+TLSv1\.3/);
     assert.match(output, /Cipher\s+TLS_AES_256_GCM_SHA384/);
-    assert.match(output, /Authorized\s+Yes/);
+    assert.match(output, /Authorised\s+Yes/);
     assert.match(output, /Hostname match\s+Yes/);
     assert.match(output, /Validity\s+Valid/);
     assert.match(output, /Subject\s+login\.example\.test/);
@@ -188,7 +188,7 @@ describe('TLS CLI output', () => {
       findings: [],
     }));
     assert.match(output, /Evidence\s+Error/);
-    assert.match(output, /Authorized\s+No/);
+    assert.match(output, /Authorised\s+No/);
     assert.match(output, /Hostname match\s+No/);
     assert.match(output, /Trust detail\s+UNABLE_TO_VERIFY_LEAF_SIGNATURE/);
     assert.match(output, /Name detail\s+Hostname mismatch/);

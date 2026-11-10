@@ -54,10 +54,78 @@ jobs:
         timeout-minutes: 2
         run: |
           exit_code=0
-          npm run --silent sources:drift -- --live --json > source-drift-report.json || exit_code=$?
+          npm run --silent sources:drift -- --live --json --allow-routine-feed-drift > source-drift-report.json || exit_code=$?
           printf 'exit_code=%s\n' "$exit_code" >> "$GITHUB_OUTPUT"
+      - name: Summarise sources and require review when needed
+        id: review
+        if: ${{ !cancelled() }}
+        env:
+          REGISTRY_EXIT_CODE: ${{ steps.audit.outputs.exit_code }}
+          FIXTURE_EXIT_CODE: ${{ steps.fixtures.outputs.exit_code }}
+          REGISTRAR_EXIT_CODE: ${{ steps.registrar_standing.outputs.exit_code }}
+          SOURCE_EXIT_CODE: ${{ steps.sources.outputs.exit_code }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync, readFileSync, lstatSync } from 'node:fs';
+          const text = (value) => String(value ?? 'unavailable').replace(/[\u0000-\u001f\u007f|<>`]/gu, ' ').slice(0, 500);
+          const reports = [
+            ['Official registry data', 'registry-drift-report.json', 'checks', process.env.REGISTRY_EXIT_CODE],
+            ['Fixture freshness', 'registry-fixture-freshness-report.json', 'files', process.env.FIXTURE_EXIT_CODE],
+            ['Registrar standing', 'registrar-standing-report.json', 'checks', process.env.REGISTRAR_EXIT_CODE],
+            ['Retained source catalogues', 'source-drift-report.json', 'checks', process.env.SOURCE_EXIT_CODE, true],
+          ];
+          const outcome = (code) => code === '0' ? 'Passed' : code === '1' ? 'Review needed'
+            : code ? 'Check incomplete' : 'Not run or interrupted';
+          const stateOf = (row) => row.status ?? row.state;
+          const identityOf = (row) => row.label ?? row.path ?? row.id;
+          const results = reports.map(([label, filename, key, code, allowRoutine]) => {
+            try {
+              const stat = lstatSync(filename);
+              if (!stat.isFile() || stat.size === 0 || stat.size > 2 * 1024 * 1024) throw new Error('Invalid report size');
+              const rows = JSON.parse(readFileSync(filename, 'utf8'))[key];
+              if (!Array.isArray(rows) || rows.length === 0 || rows.length > 500 || rows.some(row => !row
+                || typeof stateOf(row) !== 'string' || !stateOf(row).trim()
+                || typeof identityOf(row) !== 'string' || !identityOf(row).trim())) throw new Error('Invalid report rows');
+              const findings = rows.filter(row => stateOf(row) !== 'current');
+              const accepted = code === '0' && findings.every(row => allowRoutine && stateOf(row) === 'drift' && row.routineUpdate === true);
+              return { label, allowRoutine, findings, accepted, outcome: code === '0' && !accepted ? 'Check incomplete' : outcome(code) };
+            } catch {
+              return { label, accepted: false, outcome: code ? 'Check incomplete' : outcome(code), findings: null };
+            }
+          });
+          const lines = ['## Registry maintenance', '', '| Check | Outcome |', '| --- | --- |',
+            ...results.map(result => `| ${result.label} | ${result.outcome} |`), ''];
+          for (const { label, allowRoutine, findings } of results) {
+            if (!findings) {
+              lines.push(`- ${label} report is unavailable or malformed. Inspect its source-check and setup steps.`);
+              continue;
+            }
+            for (const row of findings.slice(0, 12)) {
+              const state = allowRoutine && stateOf(row) === 'drift' && row.routineUpdate === true ? 'routine publisher update' : text(stateOf(row));
+              let detail = `${text(identityOf(row))}: ${state}`;
+              if (row.expectedItems !== undefined) detail += `; records ${text(row.expectedItems)} → ${text(row.observedItems)}`;
+              if (row.expectedDigest) detail += `. Normalised digest ${text(row.expectedDigest)} → ${text(row.observedDigest)}`;
+              if (row.ageDays !== undefined) detail += `. Review age ${text(row.ageDays)} days${row.maximumAgeDays !== undefined ? `; limit ${text(row.maximumAgeDays)} days` : ''}`;
+              if (row.expectedYear !== undefined) detail += `. Catalogue year ${text(row.expectedYear)} → ${text(row.observedYear)}`;
+              if (row.detail) detail += `. ${text(row.detail)}`;
+              lines.push(`- ${detail}.`);
+            }
+            if (findings.length > 12) lines.push(`- ${label}: ${findings.length - 12} further entries in the report.`);
+          }
+          const blocked = results.some(result => !result.accepted);
+          lines.push('', blocked
+            ? 'If retained, open the registry-maintenance-reports artefact. A changed source requires review; an unavailable source is inconclusive.'
+            : 'No manual review was required. Routine publisher updates do not establish deployment freshness.', '');
+          const summary = lines.join('\n');
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
+          console.log(summary);
+          if (blocked) {
+            console.log('::error title=Registry maintenance requires review::See the job summary for the affected source, counts and review status.');
+            process.exitCode = 1;
+          }
+          NODE
       - name: Retain reviewable reports
-        if: steps.audit.outputs.exit_code != '0' || steps.fixtures.outputs.exit_code != '0' || steps.registrar_standing.outputs.exit_code != '0' || steps.sources.outputs.exit_code != '0'
+        if: ${{ !cancelled() && steps.review.outcome == 'failure' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: registry-maintenance-reports
@@ -66,53 +134,5 @@ jobs:
             registry-fixture-freshness-report.json
             registrar-standing-report.json
             source-drift-report.json
-          if-no-files-found: error
+          if-no-files-found: ignore
           retention-days: 7
-      - name: Require manual review
-        if: steps.audit.outputs.exit_code != '0' || steps.fixtures.outputs.exit_code != '0' || steps.registrar_standing.outputs.exit_code != '0' || steps.sources.outputs.exit_code != '0'
-        env:
-          REGISTRY_EXIT_CODE: ${{ steps.audit.outputs.exit_code }}
-          FIXTURE_EXIT_CODE: ${{ steps.fixtures.outputs.exit_code }}
-          REGISTRAR_EXIT_CODE: ${{ steps.registrar_standing.outputs.exit_code }}
-          SOURCE_EXIT_CODE: ${{ steps.sources.outputs.exit_code }}
-        run: |
-          node --input-type=module <<'NODE'
-          import { appendFileSync, readFileSync, statSync } from 'node:fs';
-          const text = (value) => String(value ?? 'unavailable').replace(/[\u0000-\u001f\u007f|<>`]/gu, ' ').slice(0, 500);
-          const lines = ['## Registry maintenance review', '', '| Check | Exit code |', '| --- | --- |',
-            `| Official registry data | ${text(process.env.REGISTRY_EXIT_CODE)} |`,
-            `| Fixture freshness | ${text(process.env.FIXTURE_EXIT_CODE)} |`,
-            `| Registrar standing | ${text(process.env.REGISTRAR_EXIT_CODE)} |`,
-            `| Retained source catalogues | ${text(process.env.SOURCE_EXIT_CODE)} |`, ''];
-          for (const [label, filename, key] of [
-            ['Official registry', 'registry-drift-report.json', 'checks'],
-            ['Fixture', 'registry-fixture-freshness-report.json', 'files'],
-            ['Registrar', 'registrar-standing-report.json', 'checks'],
-            ['Source catalogue', 'source-drift-report.json', 'checks'],
-          ]) {
-            try {
-              const stat = statSync(filename);
-              if (!stat.isFile() || stat.size > 2 * 1024 * 1024) throw new Error('Invalid report size');
-              const rows = JSON.parse(readFileSync(filename, 'utf8'))[key];
-              if (!Array.isArray(rows) || rows.length > 500) throw new Error('Invalid report rows');
-              for (const row of rows) {
-                if ((row.status ?? row.state) === 'current') continue;
-                let detail = `${text(row.label ?? row.path ?? row.id)}: ${text(row.status ?? row.state)}`;
-                if (row.expectedItems !== undefined) detail += `; records ${text(row.expectedItems)} → ${text(row.observedItems)}`;
-                if (row.expectedDigest) detail += `. Normalised digest ${text(row.expectedDigest)} → ${text(row.observedDigest)}`;
-                if (row.ageDays !== undefined) detail += `. Review age ${text(row.ageDays)} days${row.maximumAgeDays !== undefined ? `; limit ${text(row.maximumAgeDays)} days` : ''}`;
-                if (row.expectedYear !== undefined) detail += `. Catalogue year ${text(row.expectedYear)} → ${text(row.observedYear)}`;
-                if (row.detail) detail += `. ${text(row.detail)}`;
-                lines.push(`- ${detail}.`);
-              }
-            } catch {
-              lines.push(`- ${label} report is unavailable or malformed; inspect its source-check step.`);
-            }
-          }
-          lines.push('', 'Review the retained registry-maintenance-reports artefact before refreshing source data. Drift requires review; an unavailable source is inconclusive.', '');
-          const summary = lines.join('\n');
-          appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
-          console.log(summary);
-          console.log('::error title=Registry maintenance requires review::See the job summary for the affected source, counts and review status.');
-          process.exitCode = 1;
-          NODE

@@ -69,7 +69,7 @@ jobs:
           path: test-coverage.lcov
           if-no-files-found: ignore
           retention-days: 7
-      - name: Clean generated unit artifacts
+      - name: Clean generated unit artefacts
         if: always()
         run: npm run verification:artifacts -- --cleanup=unit
 
@@ -150,7 +150,7 @@ jobs:
       - name: Record isolated authenticated performance and verify loading contracts
         if: ${{ matrix.kind == 'performance' }}
         run: npm run frontend:authenticated-loading-report
-      - name: Summarize Playwright result data
+      - name: Summarise Playwright result data
         if: always()
         env:
           WHOISLEUTH_PLAYWRIGHT_RUN_LABEL: ${{ matrix.label }}
@@ -174,7 +174,7 @@ jobs:
             test-results/
           if-no-files-found: ignore
           retention-days: 7
-      - name: Clean generated browser artifacts and verify port state
+      - name: Clean generated browser artefacts and verify port state
         if: always()
         run: npm run verification:artifacts -- --cleanup=browser
 
@@ -328,4 +328,17 @@ jobs:
         env:
           NEEDS_RESULTS: ${{ toJSON(needs) }}
         run: |
-          node -e 'const results = Object.values(JSON.parse(process.env.NEEDS_RESULTS)); process.exit(results.length > 0 && results.every(job => job.result === "success") ? 0 : 1)'
+          node --input-type=module <<'NODE'
+          import { appendFileSync } from 'node:fs';
+          const results = Object.entries(JSON.parse(process.env.NEEDS_RESULTS));
+          const labels = { success: 'Passed', failure: 'Failed', cancelled: 'Cancelled', skipped: 'Not run' };
+          const accepted = results.length > 0 && results.every(([, job]) => job.result === 'success');
+          const lines = ['## Required verification', '', '| Lane | Outcome |', '| --- | --- |',
+            ...results.map(([id, job]) => `| ${/^[a-z0-9-]+$/.test(id) ? id : 'Unknown lane'} | ${Object.hasOwn(labels, job.result) ? labels[job.result] : 'Unavailable'} |`),
+            '', accepted ? 'Every required lane passed for this revision.'
+              : 'Select the failed lane under Jobs for its command, test or setup details. A lane marked Not run is not a pass.', ''];
+          const summary = lines.join('\n');
+          console.log(summary);
+          if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
+          process.exitCode = accepted ? 0 : 1;
+          NODE

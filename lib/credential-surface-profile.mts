@@ -46,7 +46,7 @@ function analyzeCredentialSurfaceProfile(input: CredentialSurfaceProfileInput = 
     limitations.push('The captured homepage body was truncated, so credential-surface evidence may be incomplete.');
   }
   if (htmlAnalysis.tagLimitReached) {
-    limitations.push('Static tokenization reached its tag boundary, so later form or input elements may be absent.');
+    limitations.push('Static tokenisation reached its tag boundary, so later form or input elements may be absent.');
   }
   if (forms.truncated) {
     limitations.push(`Form or input profiling reached an element-count or attribute-classification boundary. At most the first ${MAX_STATIC_FORMS} forms and ${MAX_STATIC_INPUTS} input elements were eligible.`);

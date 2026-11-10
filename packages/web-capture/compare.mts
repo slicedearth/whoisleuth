@@ -156,7 +156,7 @@ function captureDomain(value: unknown, label: string): string {
   const unbracketed = candidate.startsWith('[') && candidate.endsWith(']') ? candidate.slice(1, -1) : candidate;
   if (isIP(unbracketed)) return candidate;
   if (!isValidAsciiHostname(candidate, { requireDot: false, requireLowercase: true })) {
-    throw new Error(`${label} must be a normalized hostname or IP address.`);
+    throw new Error(`${label} must be a normalised hostname or IP address.`);
   }
   return candidate;
 }
@@ -257,7 +257,7 @@ function parseManifest(value: unknown): CaptureManifest {
   if (!Array.isArray(capture.artifacts) || capture.artifacts.length !== 2) {
     throw new Error('Rendered capture must contain one screenshot and one DOM digest artefact.');
   }
-  const artifacts = capture.artifacts.map((artifact, index) => parseArtifact(artifact, `Rendered capture artifact ${index + 1}`));
+  const artifacts = capture.artifacts.map((artifact, index) => parseArtifact(artifact, `Rendered capture artefact ${index + 1}`));
   const screenshot = artifacts.find((artifact) => artifact.kind === 'screenshot');
   const domDigest = artifacts.find((artifact) => artifact.kind === 'dom_digest');
   if (!screenshot || !domDigest) throw new Error('Rendered capture must contain distinct screenshot and DOM digest artefacts.');

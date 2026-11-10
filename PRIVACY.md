@@ -525,13 +525,22 @@ analyst search terms. Disabling the connection does not delete its cache;
 deletion is a separate operator action. Feed membership and a missing match
 are not verdicts about a domain.
 
-The checked-in SSLBL certificate projection is local and digest-checked. Lookup
+The retained SSLBL certificate projection is matched locally. Lookup
 does not send its target or certificate to SSLBL. Opening a separately labelled
 matching-record link is ordinary deliberate navigation to that provider.
 
 Registrar standing is matched locally using only the numeric IANA ID already
 present in registration evidence. Lookup makes no additional IANA or ICANN
 request for it.
+
+An optional hosted source-edition worker contacts fixed public certificate and
+known-exploited catalogue publishers independently of lookups. Its site store
+contains bounded public projections, digests and controls. Authenticated
+production Deep domain Lookup reads fixed edition keys, not target-derived
+keys. Neither the store nor those publishers receive targets, certificates,
+Cases, sessions or workspaces from this feature. Explicitly selected CLI
+Lookup editions and campaign range files are read locally, never uploaded;
+the browser selection is not saved.
 
 Optional scheduled monitoring is disabled by default. When configured, the
 worker retains only the bounded application-encrypted compact watchlist

@@ -286,7 +286,7 @@ function canonicalString(value: unknown): string {
   try {
     return JSON.stringify(canonicalize(value));
   } catch {
-    throw new Error('A workspace archive section could not be canonicalized safely.');
+    throw new Error('A workspace archive section could not be canonicalised safely.');
   }
 }
 

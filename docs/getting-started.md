@@ -134,6 +134,13 @@ before merge or deployment. A routine contribution does not require a second
 complete run on the contributor's machine. State which checks were run and
 which were not; a focused result is not release evidence.
 
+On GitHub, start with the run **Summary**. Required CI lists each lane and
+whether it passed, failed or did not run. The individual job summaries give
+failing test names, diagnostic categories and artefact context where a report
+was produced. Scheduled source checks distinguish reviewable publisher drift
+from unavailable data; release staging does not imply publication. Raw
+diagnostics and retained reports remain available for investigation.
+
 For verification-infrastructure changes, reproducing hosted failures, or full
 local assurance, run the complete boundary from a clean commit:
 

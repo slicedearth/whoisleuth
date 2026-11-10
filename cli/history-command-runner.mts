@@ -43,7 +43,7 @@ async function runRetainedDiffCommand(
   dependencies: HistoryCommandDependencies,
   context: CliCommandContext,
 ): Promise<number> {
-  context.setFailureLabel('Retained artifact diff');
+  context.setFailureLabel('Retained artefact diff');
   const readDiffInput = dependencies.readDiffInput
     || ((source: string) => context.readInput(source, MAX_RETAINED_ARTIFACT_DIFF_BYTES, 'Retained diff input'));
   let leftInput: string;

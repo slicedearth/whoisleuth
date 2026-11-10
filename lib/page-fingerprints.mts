@@ -391,10 +391,10 @@ function createPageFingerprints(html: unknown, options: PageFingerprintOptions =
     'DOM-structure and form fingerprints describe parsed ancestry and explicit form references, not every browser form-owner repair, executed behaviour or proof of a shared author.',
   ];
   if (source.truncated) limitations.push(`Fingerprint input was capped at ${MAX_FINGERPRINT_SOURCE_BYTES} UTF-8 bytes.`);
-  if (normalized.normalizedTruncated || normalized.structureTruncated) limitations.push(`Fingerprint tokenization reached the ${MAX_FINGERPRINT_TOKENS}-token or ${MAX_FINGERPRINT_TAG_LENGTH}-character tag boundary.`);
-  if (parsedStructure.tagLimitReached || parsedStructure.structureLimitReached) limitations.push('Standards-compliant DOM-structure tokenization reached its bounded tag or token limit.');
+  if (normalized.normalizedTruncated || normalized.structureTruncated) limitations.push(`Fingerprint tokenisation reached the ${MAX_FINGERPRINT_TOKENS}-token or ${MAX_FINGERPRINT_TAG_LENGTH}-character tag boundary.`);
+  if (parsedStructure.tagLimitReached || parsedStructure.structureLimitReached) limitations.push('Standards-compliant DOM-structure tokenisation reached its bounded tag or token limit.');
   if (normalized.attributesTruncated) limitations.push(`Some tags exceeded the ${MAX_FINGERPRINT_ATTRIBUTES}-attribute fingerprint boundary.`);
-  if (text?.truncated) limitations.push(`Visible-text fingerprinting retained only the first ${MAX_VISIBLE_TEXT_TOKENS} normalized tokens.`);
+  if (text?.truncated) limitations.push(`Visible-text fingerprinting retained only the first ${MAX_VISIBLE_TEXT_TOKENS} normalised tokens.`);
   if (forms?.truncated) limitations.push(`Form fingerprinting retained at most ${MAX_FORM_FINGERPRINTS} forms and ${MAX_FORM_CONTROLS} controls.`);
   return {
     fingerprintVersion: PAGE_FINGERPRINT_VERSION,

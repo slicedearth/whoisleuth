@@ -451,7 +451,7 @@ export function selectMaterializedPackageSources(
   const selected = new Set(materializedSources);
   for (const source of runtimeSources) {
     if (!selected.has(source)) {
-      throw new TypeError(`CLI dependency graph source ${source} is not reachable from the materialized entrypoint closure.`);
+      throw new TypeError(`CLI dependency graph source ${source} is not reachable from the materialised entrypoint closure.`);
     }
   }
   return Object.freeze([...selected].sort());
@@ -656,12 +656,12 @@ export async function checkCliPackage(repositoryRoot: string, options: CliPackag
     );
     for (const source of materializedClosure.sources) {
       if (!sourceSnapshot.has(source)) {
-        throw new TypeError(`Materialized CLI compiler closure requires uncaptured source ${source}.`);
+        throw new TypeError(`Materialised CLI compiler closure requires uncaptured source ${source}.`);
       }
     }
     for (const contextFile of materializedClosure.contextFiles) {
       if (!compilerSnapshot.has(contextFile)) {
-        throw new TypeError(`Materialized CLI compiler closure requires uncaptured context ${contextFile}.`);
+        throw new TypeError(`Materialised CLI compiler closure requires uncaptured context ${contextFile}.`);
       }
     }
     const sources = selectMaterializedPackageSources(runtimeSources, materializedClosure.sources);

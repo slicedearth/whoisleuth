@@ -669,8 +669,8 @@ describe('lookup evidence HTML rendering', () => {
     assert.match(html, /default-src 'none'/);
     assert.match(html, /<style>[\s\S]*@media print/);
     assert.match(html, /<main>[\s\S]*<h2>Registry sources<\/h2>/);
-    assert.match(html, /<table>[\s\S]*Normalized registry publication comparison/);
-    assert.match(html, /Normalized registry and registrar RDAP publication comparison/);
+    assert.match(html, /<table>[\s\S]*Normalised registry publication comparison/);
+    assert.match(html, /Normalised registry and registrar RDAP publication comparison/);
     assert.match(html, /Observed network registration/);
     assert.match(html, /Example edge network/);
     assert.match(html, /edge or shared network rather than the origin host/);

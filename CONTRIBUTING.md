@@ -127,7 +127,11 @@ repository analyser itself. New test files need no inventory registration.
 The unit and coverage lanes need no optional shells. Native completion and
 workflow-shell checks run in integration and require Bash, zsh, Fish and
 PowerShell; the complete local CI entry point checks those prerequisites before
-expensive work.
+expensive work. Integration also needs the pinned isolated Redis engine. The
+shared CI unit group runs `npm run verification:redis:check` before coverage;
+it checks a reachable local Docker socket or the exact binaries in
+`WHOISLEUTH_VERIFICATION_REDIS_BIN_DIR` without starting a server or pulling an
+image. The Redis suite still starts and cleans up its own private fixture.
 
 Small leaf components can have a `<kebab-name>.component.spec.ts` browser
 contract exercised through a real page. Focused selection uses it only when the

@@ -317,7 +317,7 @@ export function readWebCaptureManifest(value: unknown): Readonly<{
       .map((item) => normalizeDomain(item))
       .filter((item): item is string => Boolean(item));
     if (!Array.isArray(capture.artifacts) || !capture.artifacts.length || capture.artifacts.length > 2) {
-      throw new Error(`Web capture manifest ${index + 1} must contain one or two artifact metadata records.`);
+      throw new Error(`Web capture manifest ${index + 1} must contain one or two artefact metadata records.`);
     }
     const artifactSummaries: string[] = [];
     const kinds = new Set<string>();
@@ -327,16 +327,16 @@ export function readWebCaptureManifest(value: unknown): Readonly<{
         throw new Error(`Web capture manifest ${index + 1} artifact ${artifactIndex + 1} contains unsupported fields.`);
       }
       const kind = artifact.kind === 'screenshot' || artifact.kind === 'dom_digest' ? artifact.kind : null;
-      if (!kind || kinds.has(kind)) throw new Error(`Web capture manifest ${index + 1} has an invalid or duplicate artifact kind.`);
+      if (!kind || kinds.has(kind)) throw new Error(`Web capture manifest ${index + 1} has an invalid or duplicate artefact kind.`);
       kinds.add(kind);
-      const fileName = artifactName(artifact.fileName, `Web capture manifest ${index + 1} artifact name`);
+      const fileName = artifactName(artifact.fileName, `Web capture manifest ${index + 1} artefact name`);
       const sha256 = typeof artifact.sha256 === 'string' && SHA256_RE.test(artifact.sha256)
         ? artifact.sha256.toLowerCase()
         : null;
-      if (!sha256) throw new Error(`Web capture manifest ${index + 1} artifact digest must be SHA-256.`);
-      const mimeType = text(artifact.mimeType, 80, `Web capture manifest ${index + 1} artifact MIME type`)?.toLowerCase();
+      if (!sha256) throw new Error(`Web capture manifest ${index + 1} artefact digest must be SHA-256.`);
+      const mimeType = text(artifact.mimeType, 80, `Web capture manifest ${index + 1} artefact MIME type`)?.toLowerCase();
       const maximumBytes = kind === 'screenshot' ? MAX_WEB_CAPTURE_SCREENSHOT_BYTES : MAX_WEB_CAPTURE_DOM_DIGEST_BYTES;
-      const bytes = positiveInteger(artifact.bytes, maximumBytes, `Web capture manifest ${index + 1} artifact size`);
+      const bytes = positiveInteger(artifact.bytes, maximumBytes, `Web capture manifest ${index + 1} artefact size`);
       if (kind === 'screenshot') {
         if (!['image/png', 'image/jpeg', 'image/webp'].includes(mimeType || '')) {
           throw new Error(`Web capture manifest ${index + 1} screenshot MIME type is unsupported.`);

@@ -338,7 +338,7 @@ function withLocalCommonality(
         ? 'shared'
         : 'focused';
   const commonalityExplanation = commonality === 'limited_sample'
-    ? `Observed in ${safeOccurrenceCount} of ${safeWorkspaceCount} comparable local cases. The sample is too small to characterize commonality.`
+    ? `Observed in ${safeOccurrenceCount} of ${safeWorkspaceCount} comparable local cases. The sample is too small to characterise commonality.`
     : commonality === 'widespread'
       ? `Observed in ${safeOccurrenceCount} of ${safeWorkspaceCount} comparable local cases (${frequency}%). This is widespread in this workspace and may reflect common infrastructure.`
       : commonality === 'shared'

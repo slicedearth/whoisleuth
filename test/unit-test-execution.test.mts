@@ -23,6 +23,8 @@ function executionFixture(context: TestContext) {
   mkdirSync(path.join(root, 'lib'));
   const environment = environmentWithoutV8Coverage();
   delete environment.NODE_TEST_CONTEXT;
+  // Nested fixture runs must not append their results to the real CI summary.
+  delete environment.GITHUB_STEP_SUMMARY;
   environment.WHOISLEUTH_TEST_SHELL_LOG = log;
   for (const shell of SHELLS) {
     const filename = path.join(bin, shell);
@@ -140,6 +142,33 @@ test('unit assertion failures remain failures after successful preflight', (cont
   assert.equal(child.status, 1);
   assert.match(child.stdout, /expected negative control/u);
   assert.equal(readFileSync(fixture.log, 'utf8').trim().split('\n').length, 4);
+});
+
+test('the CI test summary shows a suite setup failure once without listing cancelled children', (context) => {
+  const fixture = executionFixture(context);
+  const summary = path.join(fixture.root, 'ci-summary.md');
+  fixture.environment.GITHUB_STEP_SUMMARY = summary;
+  writeFileSync(path.join(fixture.root, 'test/probe.test.mts'), [
+    "import assert from 'node:assert/strict';",
+    "import { before, describe, test } from 'node:test';",
+    `import { resolveRedisVerificationEngine } from ${JSON.stringify(new URL('../tools/redis-verification.mts', import.meta.url).href)};`,
+    "describe('isolated fixture', () => {",
+    "  before(() => resolveRedisVerificationEngine({ env: { WHOISLEUTH_VERIFICATION_REDIS_BIN_DIR: 'relative' } }));",
+    "  test('dependent case one', () => assert.fail('should not start'));",
+    "  test('dependent case two', () => assert.fail('should not start'));",
+    '});',
+    "test('unrelated assertion', () => assert.fail('private diagnostic detail'));",
+  ].join('\n'));
+  const reporter = new URL('../tools/ci-test-results-reporter.mts', import.meta.url).href;
+  const child = executeFixture(fixture, ['--test', `--test-reporter=${reporter}`, 'test/probe.test.mts']);
+  assert.equal(child.error, undefined);
+  assert.equal(child.status, 1, child.stderr);
+  const rendered = readFileSync(summary, 'utf8');
+  assert.match(rendered, /1 failed · 2 cancelled/u);
+  assert.equal(rendered.match(/isolated fixture/gu)?.length, 1);
+  assert.match(rendered, /Isolated Redis setup failed.*WHOISLEUTH_VERIFICATION_REDIS_BIN_DIR/u);
+  assert.match(rendered, /unrelated assertion: Assertion failed/u);
+  assert.doesNotMatch(rendered, /dependent case|private diagnostic detail/u);
 });
 
 test('path reuse never probes again and never substitutes a broken explicit override', (context) => {

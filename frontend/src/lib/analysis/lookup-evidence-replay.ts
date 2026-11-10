@@ -147,7 +147,7 @@ function validateCurrentPrivacyBoundary(
       throw new Error('invalid current projection');
     }
   } catch {
-    throw new Error(`Lookup evidence schema ${schemaVersion} violates its privacy-minimized publication boundary.`);
+    throw new Error(`Lookup evidence schema ${schemaVersion} violates its privacy-minimised publication boundary.`);
   }
 }
 

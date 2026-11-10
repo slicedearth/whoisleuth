@@ -42,6 +42,7 @@ type HtmlSignalOptions = {
   includeCredentialSurfaceProfile?: boolean;
   includeStructuredDataIdentity?: boolean;
   includeTechnologyProfile?: boolean;
+  knownExploitedEdition?: import('./cisa-kev-source.mts').KevProjection | undefined;
   activityStatus?: unknown;
 };
 type ResourceType = 'image' | 'script' | 'stylesheet' | 'link' | 'frame' | 'media' | 'object';
@@ -529,7 +530,7 @@ function extractPageIdentity(html: string, domain: string, options: HtmlSignalOp
   if (sourceTruncated) limitations.push('Homepage body capture reached its byte limit; identity fields may be incomplete.');
   if (baseHrefState === 'invalid') limitations.push('The first bounded document base URL was invalid; relative URL relationships use the response URL and remain partial.');
   if (tagLimitReached) limitations.push(`Page identity parsing reached the ${MAX_IDENTITY_TAGS}-tag or ${MAX_IDENTITY_TAG_LENGTH}-character tag limit.`);
-  if (formLimitReached) limitations.push(`Only the first ${MAX_FORMS} forms were summarized.`);
+  if (formLimitReached) limitations.push(`Only the first ${MAX_FORMS} forms were summarised.`);
   if (originLimitReached) limitations.push(`Only the first ${MAX_FORM_ACTION_ORIGINS} external form-action origins were retained.`);
   if (queryOmitted) limitations.push('Query strings and fragments were omitted from retained page-identity URLs.');
   if (pathTruncated) limitations.push('An overlong page-identity URL path was replaced by its origin.');
@@ -749,6 +750,7 @@ async function extractHtmlSignals(html: string, domain: string, options: HtmlSig
       httpServer: options.httpServer,
       responseHeaders: options.responseHeaders,
       resourceOrigins: pageIdentity.resources.externalOrigins,
+      knownExploitedEdition: options.knownExploitedEdition,
       effectiveBaseUrl,
       documentOrigin,
       observedAt: options.observedAt,

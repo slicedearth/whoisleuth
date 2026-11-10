@@ -589,7 +589,7 @@ export async function main(args = process.argv.slice(2), options: MainOptions = 
       checks,
       status: checks.every((check) => check.status === 'current') ? 'current' : 'drift',
       limitations: Object.freeze([
-        'The audit compares bounded normalized official-source projections; it does not change the catalogue.',
+        'The audit compares bounded normalised official-source projections; it does not change the catalogue.',
         'The ICANN projection covers the recorded current-year notice index, not allegations or a complete historical compliance record.',
       ]),
     });

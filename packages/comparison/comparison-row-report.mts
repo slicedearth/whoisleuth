@@ -136,15 +136,15 @@ function render(projection: Projection): string {
     add(label);
     field('  Source', value.source); field('  Source state', value.sourceState);
     field('  Observed', value.observedAt); field('  Published', value.publishedAt); field('  Retained locally', value.retainedAt);
-    if (content !== undefined) field('  Normalized value', content);
+    if (content !== undefined) field('  Normalised value', content);
   };
   const item = projection.comparison;
   add('Selected comparison rows');
   add('These rows come from the displayed retained comparison, not a fresh collection or a check of the latest saved state. Reload the source page before exporting to include changes made elsewhere.');
-  add('Bounded normalized comparison values, not full original evidence or a self-contained re-verifiable package.');
+  add('Bounded normalised comparison values, not full original evidence or a self-contained re-verifiable package.');
   add('Only the explicitly selected rows are included. Selection is not an assessment of safety, ownership or resolution.');
   add('Local identifiers are navigation references, not cryptographic integrity or provenance proof.');
-  add('Exact earlier/later artifact identifiers and comparison algorithm/version are not supplied by this projection.');
+  add('Exact earlier/later artefact identifiers and comparison algorithm/version are not supplied by this projection.');
   add('Any model/version field selected below retains only its own stated scope; it is not a complete algorithm declaration.');
   add('Missing clocks or source context have not been reconstructed. Values are quoted; reading-direction controls are escaped.');
   add();
@@ -154,7 +154,7 @@ function render(projection: Projection): string {
   side('Earlier comparison source', item.earlier); side('Later comparison source', item.later);
   notes('Comparison limitations', item.limitations);
   add(`Comparison omitted limitations: ${item.omittedLimitations}`); add(`Comparison source-omitted rows: ${item.sourceOmittedRows}`);
-  add(`Selected rows: ${projection.rows.length}`); add(`Available normalized rows: ${projection.availableRows}`);
+  add(`Selected rows: ${projection.rows.length}`); add(`Available normalised rows: ${projection.availableRows}`);
   add(`Available rows not selected: ${projection.unselectedRows}`); add(`Producer total rows: ${projection.totalRows}`);
   add(`Projection truncation: ${projection.truncated}`);
   notes('Projection limitations', projection.limitations);

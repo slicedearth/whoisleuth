@@ -130,7 +130,7 @@ function buildLookalikeCalibration(raw: string, generatedAt = new Date().toISOSt
     limitations: [
       'This offline report summarises analyst dispositions for the supplied reviewed sample and never changes mutation generation, ordering, Risk, or filtering automatically.',
       'Suspicious and confirmed-abuse dispositions are counted as review leads, not proof of maliciousness; expected and false-positive dispositions are not proof of safety.',
-      `A family remains an insufficient sample below ${MIN_LOOKALIKE_CALIBRATION_SAMPLE} reviewed candidates, and even larger local samples may not generalize across brands, languages, registries, or time.`,
+      `A family remains an insufficient sample below ${MIN_LOOKALIKE_CALIBRATION_SAMPLE} reviewed candidates, and even larger local samples may not generalise across brands, languages, registries, or time.`,
       'Candidate identifiers, domains, notes, and evidence are intentionally omitted from output. Retain the reviewed source dataset under an appropriate local privacy policy.',
     ],
   };

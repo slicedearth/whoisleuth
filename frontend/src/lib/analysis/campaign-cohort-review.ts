@@ -10,10 +10,11 @@ import { latestCaseEvidence } from '../../../../packages/cases/case-evidence-mod
 import { MAX_CASES } from '../../../../packages/contracts/case-portability.mts';
 import { normalizeCaseStore } from '../../../../packages/cases/case-migration-model.mts';
 import { normalizeDomain } from '../../../../packages/evidence/domain-name.mts';
+import { isNonPublicAddressRelationship } from '../../../../packages/comparison/relationship-provenance.mts';
 import type { CaseRecord } from './case-model.ts';
 import type { CasePinCompleteness } from './case-response-model.ts';
 import { MAX_CASE_RELATIONSHIP_GROUPS, type CaseRelationshipGroup, type CaseRelationshipSummary } from './case-relationships.ts';
-import { classifyCommonInfrastructureAddress } from './common-infrastructure.ts';
+import { classifyCommonInfrastructureAddress, type CommonInfrastructureSnapshot } from './common-infrastructure.ts';
 import { observationEnvelopeId } from './observation-envelope.ts';
 import { normalizeOpaqueReferenceId } from './opaque-reference-id.ts';
 
@@ -107,6 +108,7 @@ export type CampaignCohortReviewInput = Readonly<{
   cases?: unknown;
   profiles?: unknown;
   relationshipSummary?: CaseRelationshipSummary | null;
+  infrastructureEdition?: CommonInfrastructureSnapshot | undefined;
   selectedBrandProfileId?: unknown;
   sourceStates?: Readonly<{
     cases?: CampaignCohortSourceState;
@@ -222,9 +224,8 @@ function registrationValue(record: CaseRecord): RegistrationValue | null {
   });
 }
 
-function relationshipKind(type: string, value: string, commonality: unknown): CampaignCohortRationaleKind {
+function relationshipKind(type: string, catalogueMatch: boolean, commonality: unknown): CampaignCohortRationaleKind {
   if (type === 'favicon') return 'bounded_similarity';
-  const catalogueMatch = type === 'ip_address' && classifyCommonInfrastructureAddress(value).length > 0;
   if (catalogueMatch || (COMMON_INFRASTRUCTURE_TYPES.has(type) && commonality === 'widespread')) {
     return 'common_infrastructure';
   }
@@ -235,6 +236,7 @@ function relationshipRationales(
   summary: CaseRelationshipSummary | null | undefined,
   allowed: ReadonlyMap<string, CampaignCohortMember>,
   omitted: { relationshipGroups: number; relationshipMembers: number; rationales: number },
+  infrastructureEdition?: CommonInfrastructureSnapshot,
 ): CampaignCohortRationale[] {
   const rawGroups = Array.isArray(summary?.groups) ? summary.groups : [];
   const groups = rawGroups.slice(0, MAX_RELATIONSHIP_INPUTS);
@@ -259,11 +261,13 @@ function relationshipRationales(
       .map((item) => [item.caseId, item])).values()]
       .sort((left, right) => left.domain.localeCompare(right.domain));
     if (members.length < 2) continue;
-    const kind = relationshipKind(type, value, group.commonality);
+    const nonPublicAddress = isNonPublicAddressRelationship(type, value);
+    const infrastructure = type === 'ip_address' && !nonPublicAddress ? classifyCommonInfrastructureAddress(value, infrastructureEdition) : [];
+    const kind = relationshipKind(type, infrastructure.length > 0, nonPublicAddress ? null : group.commonality);
     const sources = [...new Set((Array.isArray(group.sources) ? group.sources : []).slice(0, 20).map((item) => text(item, 120)).filter(Boolean))].sort();
     const limitations = [...new Set((Array.isArray(group.limitations) ? group.limitations : []).slice(0, 16).map((item) => text(item)).filter(Boolean))];
     if (kind === 'common_infrastructure' && type === 'ip_address') {
-      for (const match of classifyCommonInfrastructureAddress(value).slice(0, 4).reverse()) {
+      for (const match of infrastructure.reverse()) {
         limitations.unshift(text(`Exact catalogue qualification: ${match.sourceLabel}; ${match.cidr}; source date ${match.sourceDate}; SHA-256 ${match.sourceDigestSha256}. ${match.limitation}`, 240));
       }
     } else if (kind === 'common_infrastructure') {
@@ -421,7 +425,7 @@ export function buildCampaignCohortReview(input: CampaignCohortReviewInput): Cam
   omissions.caseInputs += matchingScope.length - scopedRecords.length;
   const allowed = new Map(scopedRecords.map((record) => [record.id, member(record)]));
   const rationaleCandidates = selectedScope ? [
-    ...relationshipRationales(input.relationshipSummary, allowed, omissions),
+    ...relationshipRationales(input.relationshipSummary, allowed, omissions, input.infrastructureEdition),
     ...temporalRationales(scopedRecords, omissions),
   ] : [];
   const rationaleIdentityCounts = new Map<string, number>();

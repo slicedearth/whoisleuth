@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { decodeBoundedUtf8, readBoundedRegularFileWithin } from '../lib/bounded-file.mts';
 import { MAX_FORWARDING_SOURCE_BYTES, moduleForwardingSpecifier, moduleIsTypeOnly } from './module-forwarding.mts';
 import { nodeTestFiles, runUnitTests } from './toolchain-compatibility.mts';
+import { summaryText, writeCiSummary } from './ci-summary.mts';
 
 export const MAX_PRODUCTION_COVERAGE_BYTES = 16 * 1024 * 1024;
 export const MAX_PRODUCTION_COVERAGE_FILES = 2_000;
@@ -455,6 +456,7 @@ export function productionCoverageArguments(testPattern?: string): string[] {
     ...GENERATED_SOURCE_GLOBS.map((pattern) => `--test-coverage-exclude=${pattern}`),
     '--test-reporter=spec', '--test-reporter-destination=stdout',
     '--test-reporter=lcov', '--test-reporter-destination=test-coverage.lcov',
+    `--test-reporter=${new URL('./ci-test-results-reporter.mts', import.meta.url).href}`, '--test-reporter-destination=stdout',
     ...(testPattern ? [testPattern] : nodeTestFiles('unit', REPOSITORY_ROOT)),
   ];
 }
@@ -484,9 +486,12 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     } catch (error) { problems.push(error instanceof Error ? error.message : 'Production coverage inventory failed.'); }
     if (problems.length) throw new Error(problems.join('\n'));
     process.stdout.write(`${formatProductionCoverage(report, inventory)}\n`);
+    writeCiSummary(`## Production coverage\n\n${report.records.length} source files measured. Lines: ${formatMetric(report.global.lines)}; branches: ${formatMetric(report.global.branches)}; functions: ${formatMetric(report.global.functions)}.\n`);
     return 0;
   } catch (error) {
-    process.stderr.write(`${error instanceof Error ? error.message : 'Production coverage validation failed.'}\n`);
+    const message = error instanceof Error ? error.message : 'Production coverage validation failed.';
+    process.stderr.write(`${message}\n`);
+    writeCiSummary(`## Production coverage could not be accepted\n\n${message.split('\n').slice(0, 10).map(line => `- ${summaryText(line)}`).join('\n')}\n`);
     return 2;
   }
 }

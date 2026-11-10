@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { summaryText, writeCiSummary } from './ci-summary.mts';
+
 import { Buffer } from 'node:buffer';
 import { spawnSync } from 'node:child_process';
 import { statSync } from 'node:fs';
@@ -123,8 +125,15 @@ export function main(args = process.argv.slice(2)): number {
       process.stdout.write(`Critical mutation gate v${result.version}: ${result.killed} killed, ${result.survived} survived, ${result.errors} errors in ${result.durationMs} ms.\n`);
       for (const item of result.outcomes) process.stdout.write(`${item.id}: ${item.status}; ${item.tests} tests; ${item.durationMs} ms.\n`);
     }
+    writeCiSummary([
+      '## Critical regression assertions', '',
+      `${result.killed}/${result.total} mutations rejected by tests · ${result.survived} survived · ${result.errors} execution errors.`,
+      ...result.outcomes.filter(item => item.status !== 'killed').map(item =>
+        `- ${summaryText(item.id)}: ${item.status === 'survived' ? 'the regression assertions accepted the mutation' : summaryText(item.detail)}.`),
+    ].join('\n'));
     return result.killed === result.total && result.survived === 0 && result.errors === 0 ? 0 : 2;
   } catch (error) {
+    writeCiSummary('## Critical regression assertions: unavailable\n\nThe mutation harness could not complete; no assertion coverage was inferred.');
     process.stderr.write(`${error instanceof Error ? error.message : 'Critical mutation gate failed.'}\n`);
     return 2;
   }

@@ -146,7 +146,7 @@ function normalizeRdapSearchHelp(value: unknown): RdapSearchHelpSummary {
   if (truncated) limitations.push(`Only the first ${MAX_HELP_ENTRIES} advertised properties were reviewed.`);
   if (rejectedCount > 0) limitations.push(`${rejectedCount} malformed or excess properties were not used.`);
   if (capabilities.some((entry) => entry.state === 'unsupported')) {
-    limitations.push('Unrecognized advertised tuples remain visible but cannot be planned by this release.');
+    limitations.push('Unrecognised advertised tuples remain visible but cannot be planned by this release.');
   }
   if (supportedCount === 0) limitations.push('No supported reverse-search tuple was advertised.');
 

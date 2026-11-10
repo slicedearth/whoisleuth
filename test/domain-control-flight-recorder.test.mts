@@ -99,7 +99,7 @@ describe('domain-control flight recorder', () => {
         id: 'delegated_nameservers', source: 'DNS', state: 'observed', values,
       }])],
       approvedWindows: [],
-    }, secondAt), new RegExp(`at most ${MAX_FLIGHT_RECORDER_VALUES} unique normalized values`, 'u'));
+    }, secondAt), new RegExp(`at most ${MAX_FLIGHT_RECORDER_VALUES} unique normalised values`, 'u'));
 
     const withinLimit = values.slice(0, MAX_FLIGHT_RECORDER_VALUES);
     const report = buildDomainControlFlightRecorder({

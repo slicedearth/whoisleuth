@@ -1,6 +1,3 @@
-import {
-  appendFileSync,
-} from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -11,6 +8,7 @@ import {
   readVerificationTimingProfile,
 } from './verification-timing-profile.mts';
 import { playwrightRunArtifacts } from './playwright-run-artifacts.mts';
+import { summaryText as markdown, writeCiSummary } from './ci-summary.mts';
 
 export const MAX_PLAYWRIGHT_RESULTS_BYTES = 64 * 1024 * 1024;
 
@@ -38,6 +36,9 @@ type PlaywrightTestResult = Readonly<{
   retried: boolean;
   extraAttempts: number;
   attachments: readonly string[];
+  line: number | null;
+  project: string;
+  reason: string | null;
 }>;
 
 export type PlaywrightResultSummary = Readonly<{
@@ -57,6 +58,8 @@ export type PlaywrightResultSummary = Readonly<{
   projectedImbalanceMs: number | null;
   truncated: boolean;
   slowest: readonly PlaywrightTestResult[];
+  findings: readonly PlaywrightTestResult[];
+  runErrors: readonly string[];
   failureAttachments: readonly string[];
 }>;
 
@@ -99,10 +102,27 @@ function resultStatus(test: RecordValue, results: readonly RecordValue[]): Playw
   return 'failed';
 }
 
+function failureReason(error: unknown, status?: unknown): string {
+  const value = record(error);
+  const message = typeof value?.message === 'string' ? value.message.slice(0, 2_000) : '';
+  // Report the failure class, not a stack, actual assertion values, target
+  // URLs, attachment contents or machine-specific paths from the report.
+  if (/SIG(?:SEGV|ABRT|KILL)|process (?:crashed|exited)|browser (?:has been )?closed|target page, context or browser has been closed|target closed/iu.test(message)) {
+    return 'Browser or worker stopped before completion';
+  }
+  if (/no tests found/iu.test(message)) return 'No tests matched the selection';
+  if (/webServer|failed to launch|browserType\.launch|executable does(?:n.t| not) exist/iu.test(message)) return 'Browser or test server could not start';
+  if (/expect\(|ERR_ASSERTION|assertion error/iu.test(message)) return 'An assertion was not satisfied';
+  if (status === 'timedOut' || /timeout|timed out/iu.test(message)) return 'The operation timed out';
+  if (status === 'interrupted') return 'Execution was interrupted';
+  return 'Execution failed; see the original diagnostic';
+}
+
 function testResult(
   rawTest: unknown,
   title: string,
   file: string,
+  line: unknown,
 ): PlaywrightTestResult | null {
   const test = record(rawTest);
   if (!test) return null;
@@ -120,14 +140,26 @@ function testResult(
       : 0
   ));
   const extraAttempts = Math.max(results.length - 1, ...retryValues, 0);
+  const status = resultStatus(test, results);
+  let failedAttempt: RecordValue | undefined;
+  for (let index = results.length - 1; index >= 0; index--) {
+    const attempt = results[index]!;
+    if (!['failed', 'timedOut', 'interrupted'].includes(String(attempt.status))) continue;
+    failedAttempt = attempt;
+    break;
+  }
+  const error = failedAttempt?.error ?? (Array.isArray(failedAttempt?.errors) ? failedAttempt.errors[0] : undefined);
   return Object.freeze({
     title: boundedText(title) || '(unnamed test)',
     file: relativeFile(file),
-    status: resultStatus(test, results),
+    status,
     durationMs: results.reduce((total, result) => total + finiteDuration(result.duration), 0),
     retried: extraAttempts > 0,
     extraAttempts,
     attachments,
+    line: Number.isSafeInteger(line) && Number(line) > 0 ? Number(line) : null,
+    project: boundedText(test.projectName),
+    reason: status === 'failed' || status === 'flaky' ? failureReason(error, failedAttempt?.status) : null,
   });
 }
 
@@ -159,7 +191,7 @@ function collectSuites(
         if (!Array.isArray(spec.tests)) continue;
         for (const rawTest of spec.tests) {
           if (output.length >= MAX_TEST_RESULTS) return true;
-          const projected = testResult(rawTest, title, file);
+          const projected = testResult(rawTest, title, file, spec.line);
           if (projected) output.push(projected);
         }
       }
@@ -219,17 +251,10 @@ export function summarizePlaywrightResults(
     slowest: [...results]
       .sort((left, right) => right.durationMs - left.durationMs || left.title.localeCompare(right.title))
       .slice(0, SLOW_TEST_LIMIT),
+    findings: [...failures, ...diagnostics.filter(result => result.status === 'flaky')].slice(0, 12),
+    runErrors: Array.isArray(root.errors) ? [...new Set(root.errors.slice(0, 12).map(error => failureReason(error)))].slice(0, 5) : [],
     failureAttachments: [...new Set(diagnostics.flatMap(({ attachments }) => attachments))].slice(0, 20),
   });
-}
-
-function markdown(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('|', '&#124;')
-    .replaceAll('`', '&#96;');
 }
 
 export function renderPlaywrightResultSummary(summary: PlaywrightResultSummary): string {
@@ -255,6 +280,14 @@ export function renderPlaywrightResultSummary(summary: PlaywrightResultSummary):
     ...(summary.shard === null ? [] : [
       `Balanced shard ${markdown(summary.shard)} planned weight: ${summary.plannedWeightMs} ms; projected complete-plan imbalance: ${summary.projectedImbalanceMs} ms.`,
     ]),
+    ...(summary.runErrors.length ? ['', '### Run or setup errors', '', ...summary.runErrors.map(reason => `- ${reason}.`)] : []),
+    ...(summary.findings.length ? [
+      '', '### Failed or flaky tests', '',
+      ...summary.findings.map(result => `- ${markdown(result.file)}${result.line ? `:${result.line}` : ''}`
+        + `${result.project ? ` (${markdown(result.project)})` : ''} — ${markdown(result.title)}: ${result.reason ?? 'Unavailable'}`
+        + (result.status === 'flaky' ? ' (passed on retry; still flaky).' : '.')),
+      ...(summary.failed + summary.flaky > summary.findings.length ? ['- More failures are listed in the retained report.'] : []),
+    ] : []),
     '',
     '### Slowest tests',
     '',
@@ -301,12 +334,11 @@ async function main(): Promise<void> {
     }
     output = renderPlaywrightResultSummary(summarizePlaywrightResults(parsed, process.env.WHOISLEUTH_PLAYWRIGHT_RUN_LABEL, planning));
   } catch (error) {
-    const detail = error instanceof Error ? boundedText(error.message) : 'unknown diagnostic error';
-    output = `## Playwright result summary\n\nResult data was unavailable: ${markdown(detail)}.\n`;
+    const detail = error instanceof TypeError ? boundedText(error.message) : 'a readable result file was not produced';
+    output = `## Playwright result summary\n\nResult data was unavailable: ${markdown(detail)}. Check the build, browser installation or runner-startup steps before treating this as a failed test.\n`;
   }
   process.stdout.write(output);
-  const summaryPath = process.env.GITHUB_STEP_SUMMARY;
-  if (summaryPath) appendFileSync(summaryPath, output, 'utf8');
+  writeCiSummary(output);
 }
 
 const entryPoint = process.argv[1];

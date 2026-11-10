@@ -59,7 +59,7 @@ function publicationMetadataDisplay(value: unknown): HomepageMetadataDisplay | n
       { id: 'publication.robots.state', label: 'Robots declarations', value: sourceState(robots.status) },
       {
         id: 'publication.robots.directives',
-        label: 'Recognized robots directives',
+        label: 'Recognised robots directives',
         value: directives.join(', ') || (robots.status === 'not_observed' ? 'None observed' : 'Not established'),
       },
       {
@@ -153,7 +153,7 @@ function deliveryMetadataDisplay(value: unknown): HomepageMetadataDisplay | null
         value: encoding.encoded === true ? 'Yes' : encoding.encoded === false ? 'No' : 'Not established',
       },
       { id: 'delivery.cache.state', label: 'Cache declarations', value: sourceState(cache.status) },
-      { id: 'delivery.cache.directives', label: 'Recognized cache directives', value: cacheDirectives },
+      { id: 'delivery.cache.directives', label: 'Recognised cache directives', value: cacheDirectives },
       { id: 'delivery.cache.max_age', label: 'max-age', value: seconds(cache.maxAgeSeconds, cache.maxAgePresent, cache.status) },
       { id: 'delivery.cache.shared_max_age', label: 's-maxage', value: seconds(cache.sMaxAgeSeconds, cache.sMaxAgePresent, cache.status) },
       { id: 'delivery.cache.age', label: 'Age header', value: seconds(cache.ageSeconds, cache.agePresent, cache.status, true) },

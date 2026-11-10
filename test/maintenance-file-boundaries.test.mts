@@ -32,6 +32,7 @@ async function runTool(script: string, args: readonly string[]): Promise<{
   return await new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [script, ...args], {
       cwd: process.cwd(),
+      env: { ...process.env, GITHUB_STEP_SUMMARY: undefined },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stdout = '';

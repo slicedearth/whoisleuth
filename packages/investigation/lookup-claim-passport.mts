@@ -270,7 +270,7 @@ export async function buildLookupClaimPassport(input: Readonly<{
     } as const,
     limitations: uniqueText([
       input.readiness.limitation,
-      'This portable passport records evidence sufficiency for one point-in-time statement. It does not establish that the statement is true, current, safe, authorized, or attributable to an owner or actor.',
+      'This portable passport records evidence sufficiency for one point-in-time statement. It does not establish that the statement is true, current, safe, authorised, or attributable to an owner or actor.',
       'The SHA-256 digest detects changes to this file. It does not authenticate the analyst, collection source, signer, or truth of the retained states.',
       'Raw registry responses, contacts, page values, request paths, credentials, and browser-local records are excluded.',
     ]),

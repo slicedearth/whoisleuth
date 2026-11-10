@@ -275,7 +275,7 @@ export function formatInterchangeFidelityReport(report: InterchangeFidelityRepor
   return [
     'Interchange fidelity report',
     `Interchange contract ${report.recognised ? 'registered' : 'not registered'}`,
-    `Artifact       ${report.artifact.id ?? 'unrecognised'}`,
+    `Artefact       ${report.artifact.id ?? 'unrecognised'}`,
     `Version        ${report.artifact.version ?? 'unavailable'}${report.artifact.versionSupported ? '' : ' (unsupported)'}`,
     `Verification   ${report.verification.state}`,
     `Assurance      ${report.verification.requiredAssurance ?? 'unregistered'} · ${report.verification.assuranceSatisfied ? 'satisfied' : 'withheld'}`,
