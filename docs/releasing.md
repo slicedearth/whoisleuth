@@ -20,18 +20,16 @@ unsupported future versions, and document migration or comparison behaviour.
 
 ## Prepare a release
 
-The upcoming 2.8.2 maintenance notes should include compatible updates to the
-bounded HTTP client, PDF and QR intake, HTML parsing, network context, hosted
-storage, charting, build and verification dependencies. The HTTP client includes
-upstream security fixes. Browser verification and capture use matching
-Playwright 1.65.0 pins. Node 24.22.2 and TypeScript 6.0.3 remain unchanged.
+Version 2.9.0 adds an opt-in [retained source edition channel](source-maintenance.md#refresh-a-data-edition-without-a-build)
+for reviewing and refreshing supported public datasets without a rebuild. The
+bundled editions remain the fallback. Default installations and previews do
+not read the hosted edition store.
 
-The 7 November review refreshes retained SSLBL fingerprints, exploited-
-vulnerability identifiers, browser-library advisories and registrar standing.
-The root-zone membership, RDAP bootstrap and extension registry, infrastructure
-lists and Unicode mapping matched their retained data. No new runtime requests
-or evidence formats are introduced; DNS trust anchors and historical fixtures
-are unchanged.
+The release also refreshes bundled certificate fingerprints, known-exploited
+vulnerability identifiers and browser-library advisories, updates compatible
+dependencies including the hosted storage client, and makes verification job
+summaries easier to act on. Node 24.22.2, TypeScript 6.0.3 and the matching
+Playwright 1.65.0 pins remain unchanged.
 
 Work on a focused branch and prepare the approved explicit version:
 
