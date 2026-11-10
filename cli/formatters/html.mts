@@ -21,7 +21,7 @@ function renderComparison(comparison: { fields: ComparisonField[]; omitted: numb
   const omitted = comparison.omitted
     ? `<p class="omission">${escapeHtml(comparison.omitted)} additional comparison fields omitted.</p>`
     : '';
-  return `<div class="table-scroll"><table><caption>Normalized registry publication comparison</caption><thead><tr><th scope="col">Field</th><th scope="col">Result</th><th scope="col">RDAP</th><th scope="col">WHOIS</th></tr></thead><tbody>${rows}</tbody></table></div>${omitted}`;
+  return `<div class="table-scroll"><table><caption>Normalised registry publication comparison</caption><thead><tr><th scope="col">Field</th><th scope="col">Result</th><th scope="col">RDAP</th><th scope="col">WHOIS</th></tr></thead><tbody>${rows}</tbody></table></div>${omitted}`;
 }
 
 function renderRegistrarComparison(comparison: { fields: PublicationComparisonField[]; omitted: number }): string {
@@ -29,7 +29,7 @@ function renderRegistrarComparison(comparison: { fields: PublicationComparisonFi
   const omitted = comparison.omitted
     ? `<p class="omission">${escapeHtml(comparison.omitted)} additional comparison fields omitted.</p>`
     : '';
-  return `<div class="table-scroll"><table><caption>Normalized registry and registrar RDAP publication comparison</caption><thead><tr><th scope="col">Field</th><th scope="col">Result</th><th scope="col">Registry RDAP</th><th scope="col">Registrar RDAP</th></tr></thead><tbody>${rows}</tbody></table></div>${omitted}`;
+  return `<div class="table-scroll"><table><caption>Normalised registry and registrar RDAP publication comparison</caption><thead><tr><th scope="col">Field</th><th scope="col">Result</th><th scope="col">Registry RDAP</th><th scope="col">Registrar RDAP</th></tr></thead><tbody>${rows}</tbody></table></div>${omitted}`;
 }
 
 function formatLookupEvidenceHtml(

@@ -291,7 +291,7 @@ export async function verifyEvidencePackageSignature(
         : 'The signature is internally valid for the embedded public key, but signer identity was not authenticated because no trusted public key was supplied.',
       'The signature authenticates the canonical sorted-JSON content, not the original whitespace, indentation, or object-key order of the serialised file.',
       ...(artifactVerification
-        ? [`Embedded-artifact assurance is reported separately as ${artifactVerification.state}; it does not change the cryptographic signature result.`]
+        ? [`Embedded artefact assurance is reported separately as ${artifactVerification.state}; it does not change the cryptographic signature result.`]
         : ['The embedded artefact did not pass a supported local assurance contract. The cryptographic signature remains valid for its bytes, but no structure or inner-integrity claim is made.']),
       'A valid signature proves the canonical package content has not changed since signing; it does not establish that the retained observations or analyst statements are accurate.',
       'WHOISleuth does not generate, store, recover, rotate, or publish signing keys.',
@@ -308,7 +308,7 @@ export function formatEvidenceSignatureVerification(
     `State: ${report.state}`,
     ...(includeStandaloneTrust ? [`Signer trust: ${report.signature.signerTrust}`] : []),
     `Artifact: ${report.artifact.kind} · ${report.artifact.schema ?? 'unrecognised'} v${report.artifact.version ?? 'unrecognised'}`,
-    `Artifact assurance: ${report.artifact.assurance.state}`,
+    `Artefact assurance: ${report.artifact.assurance.state}`,
     `Signed: ${report.signature.signedAt}`,
     `Key ID: sha256:${report.signature.keyIdSha256}`,
     `Trusted public key: ${report.signature.publicKeyMatched === null ? 'not supplied' : 'matched'}`,

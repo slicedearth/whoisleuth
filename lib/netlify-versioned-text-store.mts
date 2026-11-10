@@ -6,6 +6,13 @@ export type VersionedTextStore = {
   read: (key: string, options?: { signal?: AbortSignal }) => Promise<VersionedTextSnapshot>;
   compareAndSet: (key: string, expectedVersion: string | null, nextValue: string, options?: { signal?: AbortSignal }) => Promise<boolean>;
 };
+export type ConditionalVersionedTextReader = Pick<VersionedTextStore, 'read'> & {
+  readIfChanged: (key: string, version: string, options?: { signal?: AbortSignal }) => Promise<VersionedTextSnapshot | 'unchanged'>;
+};
+
+export class InvalidVersionedTextEntry extends TypeError {
+  constructor() { super('Netlify Blobs returned an invalid versioned text entry.'); }
+}
 
 type NetlifyBlobReadResult = {
   data: unknown;
@@ -19,7 +26,7 @@ type NetlifyBlobWriteResult = {
 type NetlifyBlobStore = {
   getWithMetadata: (
     key: string,
-    options: { consistency: 'strong'; type: 'stream' },
+    options: { consistency: 'strong'; type: 'stream'; etag?: string },
   ) => Promise<NetlifyBlobReadResult | null>;
   set: (
     key: string,
@@ -53,6 +60,12 @@ function validEtag(value: unknown): value is string {
     && value.length > 0
     && value.length <= MAX_ETAG_LENGTH
     && !CONTROL_RE.test(value);
+}
+
+// Versions remain opaque for writes. Only a single strong HTTP validator is
+// suitable for reusing bytes; weak, wildcard and non-HTTP versions are not.
+function strongHttpEtag(value: string): boolean {
+  return validEtag(value) && /^"[\u0021\u0023-\u007e\u0080-\u00ff]+"$/u.test(value);
 }
 
 function validStore(value: unknown): value is NetlifyBlobStore {
@@ -96,7 +109,7 @@ function releaseQuietly(reader: StreamReader | null): void {
 
 async function readBoundedBlobText(value: unknown, maximumBytes: number, signal?: AbortSignal): Promise<string> {
   const reader = streamReader(value);
-  if (!reader) throw new TypeError('Netlify Blobs returned an invalid versioned text entry.');
+  if (!reader) throw new InvalidVersionedTextEntry();
   const cancel = () => cancelQuietly(reader, 'versioned text Blob read cancelled');
   signal?.addEventListener('abort', cancel, { once: true });
   const chunks: Uint8Array[] = [];
@@ -107,7 +120,7 @@ async function readBoundedBlobText(value: unknown, maximumBytes: number, signal?
       const result = await abortable(() => reader.read(), signal);
       if (!result || typeof result !== 'object' || typeof result.done !== 'boolean') {
         cancelQuietly(reader, 'invalid Blob stream result');
-        throw new TypeError('Netlify Blobs returned an invalid versioned text entry.');
+        throw new InvalidVersionedTextEntry();
       }
       if (result.done) {
         completed = true;
@@ -115,11 +128,11 @@ async function readBoundedBlobText(value: unknown, maximumBytes: number, signal?
       }
       if (!(result.value instanceof Uint8Array)) {
         cancelQuietly(reader, 'invalid Blob stream chunk');
-        throw new TypeError('Netlify Blobs returned an invalid versioned text entry.');
+        throw new InvalidVersionedTextEntry();
       }
       if (result.value.byteLength > maximumBytes - total) {
         cancelQuietly(reader, 'versioned text entry exceeded its byte bound');
-        throw new TypeError('Netlify Blobs returned an invalid versioned text entry.');
+        throw new InvalidVersionedTextEntry();
       }
       if (result.value.byteLength === 0) continue;
       total += result.value.byteLength;
@@ -141,47 +154,53 @@ async function readBoundedBlobText(value: unknown, maximumBytes: number, signal?
   try {
     return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
   } catch {
-    throw new TypeError('Netlify Blobs returned an invalid versioned text entry.');
+    throw new InvalidVersionedTextEntry();
   }
 }
 
-function createNetlifyBlobTextStore(store: NetlifyBlobStore, maximumBytes: number): VersionedTextStore {
+function createNetlifyBlobTextStore(store: NetlifyBlobStore, maximumBytes: number): VersionedTextStore & ConditionalVersionedTextReader {
   if (!validStore(store) || !Number.isSafeInteger(maximumBytes) || maximumBytes < 1) {
     throw new Error('A Netlify Blob store is required for versioned text.');
   }
 
-  return {
-    async read(key, options = {}) {
-      if (!validBlobKey(key)) throw new Error('Versioned text Blob key is invalid.');
-      const entry = await abortable(async () => {
-        const value = await store.getWithMetadata(key, {
-          consistency: 'strong',
-          type: 'stream',
-        });
-        if (options.signal?.aborted) {
-          const reader = streamReader(value?.data);
-          cancelQuietly(reader, 'versioned text Blob response arrived after cancellation');
-          releaseQuietly(reader);
-          options.signal.throwIfAborted();
-        }
-        return value;
-      }, options.signal);
-      if (entry === null) return { value: null, version: null };
-      if (!entry
-        || typeof entry !== 'object'
-        || Array.isArray(entry)
-        || !validEtag(entry.etag)) {
-        const reader = entry && typeof entry === 'object' && !Array.isArray(entry)
-          ? streamReader(entry.data)
-          : null;
-        try {
-          cancelQuietly(reader, 'invalid versioned text entry metadata');
-        } finally {
-          releaseQuietly(reader);
-        }
-        throw new TypeError('Netlify Blobs returned an invalid versioned text entry.');
+  function readBlob(key: string, signal?: AbortSignal): Promise<VersionedTextSnapshot>;
+  function readBlob(key: string, signal: AbortSignal | undefined, etag: string): Promise<VersionedTextSnapshot | 'unchanged'>;
+  async function readBlob(key: string, signal?: AbortSignal, etag?: string): Promise<VersionedTextSnapshot | 'unchanged'> {
+    if (!validBlobKey(key)) throw new Error('Versioned text Blob key is invalid.');
+    const entry = await abortable(async () => {
+      const value = await store.getWithMetadata(key, {
+        consistency: 'strong', type: 'stream', ...(etag === undefined ? {} : { etag }),
+      });
+      if (signal?.aborted) {
+        const reader = streamReader(value?.data);
+        cancelQuietly(reader, 'versioned text Blob response arrived after cancellation');
+        releaseQuietly(reader);
+        signal.throwIfAborted();
       }
-      return { value: await readBoundedBlobText(entry.data, maximumBytes, options.signal), version: entry.etag };
+      return value;
+    }, signal);
+    if (entry === null) return { value: null, version: null };
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry) || !validEtag(entry.etag)) {
+      const reader = entry && typeof entry === 'object' && !Array.isArray(entry) ? streamReader(entry.data) : null;
+      try {
+        cancelQuietly(reader, 'invalid versioned text entry metadata');
+      } finally {
+        releaseQuietly(reader);
+      }
+      throw new InvalidVersionedTextEntry();
+    }
+    // The SDK projects a 304 to a null stream. Require the same validator so
+    // that missing data or an unrelated response cannot confirm the cache.
+    if (etag !== undefined && entry.etag === etag && entry.data === null) return 'unchanged';
+    return { value: await readBoundedBlobText(entry.data, maximumBytes, signal), version: entry.etag };
+  }
+
+  return {
+    read(key, options = {}) {
+      return readBlob(key, options.signal);
+    },
+    readIfChanged(key, version, options = {}) {
+      return strongHttpEtag(version) ? readBlob(key, options.signal, version) : readBlob(key, options.signal);
     },
 
     async compareAndSet(key, expectedVersion, nextValue, options = {}) {

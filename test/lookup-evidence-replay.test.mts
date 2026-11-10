@@ -410,7 +410,7 @@ test('replay rejects current documents that carry excluded or arbitrary publicat
     const serialized = JSON.stringify(document);
     await assert.rejects(
       () => parseLookupEvidenceReplay(serialized),
-      /privacy-minimized publication boundary/iu,
+      /privacy-minimised publication boundary/iu,
     );
     await assert.rejects(
       () => verifyOfflineArtifact(serialized),
@@ -480,7 +480,7 @@ test('current readers reject type-invalid and over-bound normalized registration
     const serialized = JSON.stringify(document);
     await assert.rejects(
       () => parseLookupEvidenceReplay(serialized),
-      /privacy-minimized publication boundary/iu,
+      /privacy-minimised publication boundary/iu,
     );
     await assert.rejects(
       () => verifyOfflineArtifact(serialized),

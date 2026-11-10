@@ -349,7 +349,7 @@ async function parseDmarcAggregateReport(file: ExpandedFile): Promise<DmarcAggre
   return Object.freeze({
     kind: 'dmarc',
     source: await sourceFor(file),
-    organization: singletonXmlValue(metadata, 'org_name', 'DMARC reporting organization', 200),
+    organization: singletonXmlValue(metadata, 'org_name', 'DMARC reporting organisation', 200),
     reportId: singletonXmlValue(metadata, 'report_id', 'DMARC report identifier', 300),
     domain: singletonXmlValue(policy, 'domain', 'DMARC policy domain', 253)?.toLowerCase() ?? null,
     periodStart: epoch(singletonXmlValue(dateRange, 'begin', 'DMARC period start', 20)),

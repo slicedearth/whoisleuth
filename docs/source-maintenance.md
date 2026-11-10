@@ -23,9 +23,10 @@ The weekly **Source and registry drift audit** notes verified routine certificat
 and known-exploited catalogue updates in the job summary without failing that
 job. It compares the bundled data, not the deployment. Removals, rollback,
 inconsistent provenance, overdue publisher data and unavailable sources still
-require attention. Review reports are retained for seven days. The job does not
-open pull requests, change pins or publish data. Ordinary pull-request checks
-stay fixture-based.
+require attention. Missing or malformed reports cannot pass the audit, even if
+the check commands exit successfully. Review reports are retained for seven
+days. The job does not open pull requests, change pins or publish data.
+Ordinary pull-request checks stay fixture-based.
 For `sources:drift`, exit 0 means compared sources match, 1 means drift/review is
 due, and 2 means at least one comparison is inconclusive. Inspect individual
 rows: an unavailable source is not an empty catalogue.
@@ -104,10 +105,12 @@ if longer rollback history is required.
 Authenticated production Deep domain Lookups use fixed public edition keys.
 Each worker caches the result for up to ten minutes. A brief transport outage
 may reuse the last verified edition for up to one hour without changing its
-dates; absent or invalid state uses the bundled fallback. Fast, Compact, Bulk,
-monitoring and IP/ASN lookups do not read this store. Publisher and store
-requests do not include targets or investigation data. A stale miss does not
-establish absence.
+dates; absent or invalid state uses the bundled fallback. Warm workers can
+revalidate an unchanged edition without downloading it again when the store
+confirms its strong version identifier. This does not renew the source dates.
+Fast, Compact, Bulk, monitoring and IP/ASN lookups do not read this store.
+Publisher and store requests do not include targets or investigation data. A
+stale miss does not establish absence.
 
 Use one local certificate, KEV or registrar file with
 `whoisleuth lookup example.test --deep --source-edition FILE --source-digest sha256:…`.
@@ -142,7 +145,7 @@ Lookup evidence retains its review date and selects the corresponding semantic
 catalogue epoch; future or unsupported review dates are rejected. A date-only
 review updates the current review date, without copying a catalogue. A genuine
 interpretation change adds an immutable epoch by extending the previous table.
-Keep epochs required by supported saved-artifact versions, and verify historical
+Keep epochs required by supported saved-artefact versions, and verify historical
 readers without regenerating their fixtures.
 
 Cloudflare's publisher date can remain old while its complete ranges are

@@ -457,7 +457,7 @@ async function analyzeBrowserLibraries(input: BrowserLibraryProfileInput = {}) {
   }
   if (input.sourceTruncated === true) limitations.push('The captured homepage body was truncated, so script evidence may be incomplete.');
   if (htmlAnalysis.inputLimitReached) limitations.push(`Only the first ${MAX_LIBRARY_HTML_CHARS} HTML characters were evaluated.`);
-  if (htmlAnalysis.tagLimitReached) limitations.push('Static HTML tokenization reached its tag or attribute boundary.');
+  if (htmlAnalysis.tagLimitReached) limitations.push('Static HTML tokenisation reached its tag or attribute boundary.');
   if (htmlAnalysis.scriptLimitReached) limitations.push(`Only the first ${MAX_SCRIPT_ELEMENTS} script elements were evaluated.`);
   if (htmlAnalysis.inlineLimitReached) limitations.push(`Inline script evaluation reached its ${MAX_INLINE_SCRIPT_TOTAL_CHARS}-character cumulative boundary.`);
   if (inlineSignatureLimitReached) limitations.push(`Passive library signature matching evaluated a deterministic ${MAX_INLINE_LIBRARY_SCAN_TOTAL_CHARS}-character cumulative sample across inline scripts; full-content hashes still used the complete bounded script content.`);

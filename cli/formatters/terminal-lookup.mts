@@ -440,7 +440,7 @@ function formatTerminalLookup(
         const purposeValues = Array.isArray(purposes.values) ? purposes.values : [];
         const visiblePurposes = purposeValues.slice(0, MAX_TLS_TERMINAL_PURPOSES).map((value) => {
           const purpose = terminalRecord(value);
-          return safeTerminalValue(purpose.name || purpose.oid || 'Unrecognized purpose');
+          return safeTerminalValue(purpose.name || purpose.oid || 'Unrecognised purpose');
         });
         if (visiblePurposes.length) tlsLines.push(`Purposes       ${boundedTerminalList(visiblePurposes, Math.max(0, purposeValues.length - visiblePurposes.length))}${purposes.truncated ? ' · truncated' : ''}`);
         const findings = boundedFindingLabels(tls.findings, (finding) => safeTerminalValue(finding.label, 'Unlabelled finding'));

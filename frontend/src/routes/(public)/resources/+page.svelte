@@ -49,7 +49,7 @@
   const resourceSections = [
     { href: '#start', label: 'Start here' },
     { href: '#topics', label: 'Topics' },
-    { href: '#practice', label: 'Practice' },
+    { href: '#practice', label: 'Practice exercises' },
     { href: '#tools', label: 'Tools' },
     { href: '#reference', label: 'Reference' },
     { href: '#privacy', label: 'Privacy' },

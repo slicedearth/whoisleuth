@@ -407,7 +407,7 @@ async function verifySignedArtifact(
 ): Promise<OfflineArtifactVerificationCore> {
   const routes = SIGNED_ARTIFACT_ROUTES[schema] ?? [];
   if (!routes.some((route) => route.version === version)) {
-    throw new UnsupportedOfflineArtifactError('This signed review-artifact schema or version is not supported.');
+    throw new UnsupportedOfflineArtifactError('This signed review artefact schema or version is not supported.');
   }
   validateSignedDigestArtifactStructure(schema, value);
   const integrity = record(value.integrity);

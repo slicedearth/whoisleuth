@@ -171,16 +171,16 @@ export function validateInvestigationManifest(value: UnknownRecord): asserts val
   const maximumFiles = current ? MAX_INVESTIGATION_MANIFEST_ARTIFACTS : 16;
   const maximumFileBytes = current ? MAX_INVESTIGATION_MANIFEST_ARTIFACT_BYTES : 16 * 1024 * 1024;
   const maximumTotalBytes = current ? MAX_INVESTIGATION_MANIFEST_TOTAL_BYTES : 32 * 1024 * 1024;
-  const artifacts = array(root.artifacts, 'Investigation manifest artifacts', maximumFiles, 1);
+  const artifacts = array(root.artifacts, 'Investigation manifest artefacts', maximumFiles, 1);
   const steps = array(root.steps, 'Investigation manifest steps', maximumFiles, 1);
   if (steps.length !== artifacts.length) fail('Investigation manifest step count');
   let totalBytes = 0;
   for (const [index, candidate] of artifacts.entries()) {
-    const item = exact(candidate, ['sequence', 'id', 'schema', 'version', 'byteLength', 'contentDigestSha256', 'canonicalDigestSha256', ...(current ? ['mediaType', 'source'] : []), ...(withImageDerivation ? ['imageDerivation'] : [])], `Investigation manifest artifact ${index + 1}`);
-    if (integer(item.sequence, 'Investigation manifest artifact sequence', 1, artifacts.length) !== index + 1 || item.id !== `artifact-${index + 1}`) fail('Investigation manifest artifact order');
-    if (item.schema !== null) text(item.schema, 'Investigation manifest artifact schema', 160);
-    if (item.version !== null) integer(item.version, 'Investigation manifest artifact version', 1, 1_000);
-    totalBytes += integer(item.byteLength, 'Investigation manifest artifact bytes', 1, maximumFileBytes);
+    const item = exact(candidate, ['sequence', 'id', 'schema', 'version', 'byteLength', 'contentDigestSha256', 'canonicalDigestSha256', ...(current ? ['mediaType', 'source'] : []), ...(withImageDerivation ? ['imageDerivation'] : [])], `Investigation manifest artefact ${index + 1}`);
+    if (integer(item.sequence, 'Investigation manifest artefact sequence', 1, artifacts.length) !== index + 1 || item.id !== `artifact-${index + 1}`) fail('Investigation manifest artefact order');
+    if (item.schema !== null) text(item.schema, 'Investigation manifest artefact schema', 160);
+    if (item.version !== null) integer(item.version, 'Investigation manifest artefact version', 1, 1_000);
+    totalBytes += integer(item.byteLength, 'Investigation manifest artefact bytes', 1, maximumFileBytes);
     digest(item.contentDigestSha256, 'Investigation manifest content digest');
     const mediaType = current ? enumeration(item.mediaType, INVESTIGATION_FILE_MEDIA_TYPES, 'Artefact media type') : 'application/json';
     if (mediaType === 'application/json') digest(item.canonicalDigestSha256, 'Investigation manifest canonical digest');
@@ -199,7 +199,7 @@ export function validateInvestigationManifest(value: UnknownRecord): asserts val
     if (current && (step.action !== 'packaged' || step.occurredAt !== root.generatedAt)) fail('Investigation manifest packaging event');
   }
   const summary = exact(root.summary, ['artifactCount', 'totalBytes'], 'Investigation manifest summary');
-  if (integer(summary.artifactCount, 'Investigation manifest artifact count', 1, maximumFiles) !== artifacts.length
+  if (integer(summary.artifactCount, 'Investigation manifest artefact count', 1, maximumFiles) !== artifacts.length
     || integer(summary.totalBytes, 'Investigation manifest total bytes', 1, maximumTotalBytes) !== totalBytes) fail('Investigation manifest summary');
   strings(root.limitations, 'Investigation manifest limitations', 8, 600);
   validateIntegrity(root.integrity, 'Investigation manifest integrity', root.version, version);
@@ -226,7 +226,7 @@ export function investigationImageParentIncluded(
 
 export function formatInvestigationManifest(manifest: SupportedInvestigationManifest): string {
   const lines = ['Investigation manifest', `Workflow       ${manifest.workflow}`, `Tool version   ${manifest.application.version}`,
-    `Artifacts      ${manifest.summary.artifactCount}`, `Total bytes    ${manifest.summary.totalBytes}`,
+    `Artefacts      ${manifest.summary.artifactCount}`, `Total bytes    ${manifest.summary.totalBytes}`,
     `Configuration  ${manifest.configuration.digestSha256 ?? 'not supplied'}`, `Integrity      ${manifest.integrity.digestSha256}`, '', 'Ordered artefacts:'];
   for (const artifact of manifest.artifacts) {
     lines.push(`  ${artifact.sequence}. ${artifact.schema ?? (artifact.canonicalDigestSha256 ? 'unversioned JSON' : 'opaque file')}${artifact.version ? ` v${artifact.version}` : ''} · ${artifact.contentDigestSha256}`);

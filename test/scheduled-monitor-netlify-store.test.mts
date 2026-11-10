@@ -11,7 +11,7 @@ import { MAX_ENVELOPE_BYTES } from '../lib/scheduled-monitor-crypto.mts';
 import { deferred } from './deferred.mts';
 
 type BlobRead = Awaited<ReturnType<NetlifyBlobStore['getWithMetadata']>>;
-type BlobReadCall = { key: string; options: { consistency: 'strong'; type: 'stream' } };
+type BlobReadCall = { key: string; options: Parameters<NetlifyBlobStore['getWithMetadata']>[1] };
 type BlobWriteCall = {
   key: string;
   value: string;
@@ -99,6 +99,21 @@ describe('scheduled monitoring Netlify Blobs adapter', () => {
       value: '{"ciphertext":"opaque"}',
       version: 'W/"opaque-version"',
     });
+  });
+
+  test('only a matching strong validator can confirm a bodyless conditional read', async () => {
+    const blobs = new FakeBlobStore();
+    const store = createNetlifyBlobVersionedTextStore(blobs);
+    blobs.entry = { data: null, etag: '"v1"' };
+    assert.equal(await store.readIfChanged('state', '"v1"'), 'unchanged');
+    assert.equal(blobs.reads.at(-1)?.options.etag, '"v1"');
+    await assert.rejects(store.readIfChanged('state', '"different"'), TypeError);
+
+    for (const version of ['W/"v1"', '*', '"v1", "v2"']) {
+      blobs.entry = { data: blobStream('ciphertext'), etag: '"v2"' };
+      assert.deepEqual(await store.readIfChanged('state', version), { value: 'ciphertext', version: '"v2"' });
+      assert.equal(blobs.reads.at(-1)?.options.etag, undefined);
+    }
   });
 
   test('creates only when absent and updates only when the observed ETag still matches', async () => {

@@ -301,7 +301,7 @@ describe('scoped CLI package contract', () => {
     assert.throws(() => selectMaterializedPackageSources(
       ['bin/whoisleuth.mts', 'cli/runner.mts', 'lib/unreferenced.mts'],
       ['bin/whoisleuth.mts', 'cli/runner.mts', 'lib/needed.mts'],
-    ), /not reachable from the materialized entrypoint closure/iu);
+    ), /not reachable from the materialised entrypoint closure/iu);
   });
 
   test('generates a private version-aligned manifest with exact locked runtime dependencies', () => {

@@ -406,7 +406,7 @@ export function buildRegistryInsights(input: {
       redactedCount,
       unavailableCount,
       summary: conflictCount
-        ? `${conflictCount} normalized registry conflict${conflictCount === 1 ? '' : 's'} require source review.`
+        ? `${conflictCount} normalised registry conflict${conflictCount === 1 ? '' : 's'} require source review.`
         : unavailableCount
           ? 'The comparison is partial because at least one publication was unavailable or incomplete.'
           : sourceOnlyCount || redactedCount

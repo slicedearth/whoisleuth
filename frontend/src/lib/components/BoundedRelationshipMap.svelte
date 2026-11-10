@@ -157,7 +157,7 @@
       class="map-frame"
       style:max-width={`${graph.width}px`}
       role="img"
-      aria-label={`${title}. ${graph.nodes.length} nodes and ${graph.links.length} relationships.${graph.truncated ? ` ${omittedInputCount} visual inputs omitted after bounded normalization.` : ''} Exact evidence follows the visual.`}
+      aria-label={`${title}. ${graph.nodes.length} nodes and ${graph.links.length} relationships.${graph.truncated ? ` ${omittedInputCount} visual inputs omitted after bounded normalisation.` : ''} Exact evidence follows the visual.`}
     >
       <svg class="data-chart" width={graph.width} height={graph.height} viewBox={`0 0 ${graph.width} ${graph.height}`} aria-hidden="true">
         {#if directed}<defs><marker id={markerId} markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 4 L0 8 Z" class="direction-marker" /></marker></defs>{/if}
@@ -236,7 +236,7 @@
     <div
       class="map-mobile"
       role="img"
-      aria-label={`${title}. ${graph.nodes.length} nodes and ${graph.links.length} relationships.${graph.truncated ? ` ${omittedInputCount} visual inputs omitted after bounded normalization.` : ''} Exact evidence follows the visual.`}
+      aria-label={`${title}. ${graph.nodes.length} nodes and ${graph.links.length} relationships.${graph.truncated ? ` ${omittedInputCount} visual inputs omitted after bounded normalisation.` : ''} Exact evidence follows the visual.`}
     >
       <ul aria-hidden="true">
         {#each mobileLinks.slice(0, 12) as link (link.id)}

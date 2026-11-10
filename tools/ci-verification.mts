@@ -40,6 +40,7 @@ export const CI_PREFLIGHT_SCRIPTS = Object.freeze([
 ] as const);
 
 export const CI_UNIT_SCRIPTS = Object.freeze([
+  'verification:redis:check',
   'test:coverage',
   'test:integration',
 ] as const);
@@ -375,7 +376,7 @@ function assertFrontendBuildArtifactFlow(workflow: Workflow): void {
   const paths = String(upload?.with?.path ?? '').trim().split(/\r?\n/u).map((value) => value.trim()).sort();
   if (!upload || condition(upload.if) || upload.with?.['if-no-files-found'] !== 'error'
     || JSON.stringify(paths) !== JSON.stringify([...FRONTEND_BROWSER_ARTIFACT_PATHS].sort())) {
-    throw new Error('Hosted browser-build artifact publication must contain the served build and its identity only.');
+    throw new Error('Hosted browser-build artefact publication must contain the served build and its identity only.');
   }
   const buildVerification = build.steps.findIndex((step) => stepScripts(step).includes('frontend:build:integrity'));
   if (buildVerification < 0 || buildVerification >= build.steps.indexOf(upload)) {
@@ -388,7 +389,7 @@ function assertFrontendBuildArtifactFlow(workflow: Workflow): void {
     if (!download || condition(download.if) || download.with?.path !== 'frontend'
       || download.with?.pattern !== undefined || download.with?.['merge-multiple'] !== undefined
       || !dependencies(consumer).includes('browser-build')) {
-      throw new Error('Hosted browser build download must use the exact verified build artifact.');
+      throw new Error('Hosted browser build download must use the exact verified build artefact.');
     }
     const execution = consumer.steps.flatMap((step, index) => stepScripts(step).map(script => ({ script, index })));
     const integrity = execution.findIndex(({ script }) => script === 'frontend:build:integrity');

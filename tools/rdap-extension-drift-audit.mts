@@ -241,7 +241,7 @@ function format(report: RdapExtensionDriftAudit): string {
   for (const [label, values] of [
     ['Added', report.changes.added],
     ['Removed', report.changes.removed],
-    ['Unrecognized', report.changes.unrecognized],
+    ['Unrecognised', report.changes.unrecognized],
     ['Local only', report.changes.localOnly],
   ] as const) {
     lines.push(`${label}: ${values.length ? values.join(', ') : 'none'}`);

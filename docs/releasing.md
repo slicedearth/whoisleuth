@@ -148,7 +148,7 @@ and SLSA provenance records are reported as observed metadata; this check does n
 independently verify their cryptography. It never installs or executes the
 published package and does not inherit npm credentials. The manual workflow
 requires both the version and the release-workflow run ID so it downloads the
-reviewed candidate artifact rather than reconstructing one. Run it only after
+reviewed candidate artefact rather than reconstructing one. Run it only after
 registry publication; an unavailable, still-staged, or non-identical tar
 payload fails.
 The workflow retains the reviewed candidate for 90 days, subject to the hosting
@@ -180,7 +180,7 @@ installed dependency graph to one candidate identity. It does not rerun an
 advisory audit, certify historical check results, contact a registry or publish
 anything. The release workflow runs it before upload and after download using
 the exact reviewed source. Retained files can supply the explicit paths for
-later post-publication verification after workflow artifact expiry. If no exact
+later post-publication verification after workflow artefact expiry. If no exact
 copy remains, assemble and review a fresh candidate instead of reconstructing
 the prior archive. Publishing durable release assets or changing repository
 permissions requires separate approval; this workflow does neither.

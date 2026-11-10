@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { getStore } from '@netlify/blobs';
 import { createNetlifyBlobTextStore, type NetlifyBlobStore } from '../lib/netlify-versioned-text-store.mts';
 import { createRetainedLookupSourceReader } from '../lib/retained-source-reader.mts';
 import { MAX_EDITION_STATE_BYTES, parseEditionState, runSourceEditionCycle } from '../lib/retained-source-channel.mts';
@@ -153,6 +154,72 @@ test('coalesces source reads and distinguishes a short provider outage from a su
   source.seed('state/sslbl', active(null, initial));
   time += 10 * 60_000;
   assert.equal((await read()).sslbl, undefined);
+});
+
+test('revalidates a verified edition without a body, and discards changed invalid or deleted state', async () => {
+  const first = await edition(ssl(14, FIRST));
+  const next = await edition(ssl(15, FIRST, SECOND));
+  let upstream: { etag: string; text: string } | null = { etag: '"v1"', text: active(first) };
+  let conflictingConfirmation = false;
+  let time = NOW.getTime();
+  const requests: (string | null)[] = [];
+  let transfers = 0;
+  const backend = getStore({
+    name: 'fixture-editions', siteID: 'fixture-site', token: '<example-token>',
+    edgeURL: 'https://cache.example', uncachedEdgeURL: 'https://blobs.example',
+    fetch: async (input, init) => {
+      const url = new URL(input instanceof Request ? input.url : input);
+      assert.equal(url.origin, 'https://blobs.example');
+      if (!url.pathname.endsWith('/state/sslbl')) return new Response(null, { status: 404 });
+      const tag = new Headers(init?.headers).get('if-none-match');
+      requests.push(tag);
+      if (!upstream) return new Response(null, { status: 404 });
+      if (conflictingConfirmation) return new Response(null, { status: 304, headers: { etag: '"conflicting"' } });
+      const headers = { etag: upstream.etag };
+      if (tag === upstream.etag) return new Response(null, { status: 304, headers });
+      transfers++;
+      return new Response(upstream.text, { headers });
+    },
+  });
+  const read = createRetainedLookupSourceReader(() => createNetlifyBlobTextStore(backend, MAX_EDITION_STATE_BYTES), () => time);
+  const expire = () => { time += 10 * 60_000; };
+  const admitted = (await read()).sslbl;
+  assert.equal(admitted?.entryCount, 1);
+  assert.strictEqual((await read()).sslbl, admitted);
+  assert.deepEqual(requests, [null]);
+  expire();
+  assert.strictEqual((await read()).sslbl, admitted, 'Do not reparse or renew the publisher provenance.');
+  assert.deepEqual(requests, [null, '"v1"']);
+  assert.equal(transfers, 1);
+
+  upstream = { etag: '"v2"', text: active(next, first) };
+  expire();
+  assert.equal((await read()).sslbl?.entryCount, 2);
+  assert.equal(requests.at(-1), '"v1"');
+  assert.equal(transfers, 2);
+
+  upstream = { etag: '"bad"', text: active({ ...next, text: 'damaged' }, first) };
+  expire();
+  assert.equal((await read()).sslbl, undefined);
+  assert.equal(requests.at(-1), '"v2"');
+
+  upstream = { etag: '"restored"', text: active(first) };
+  expire();
+  assert.equal((await read()).sslbl?.entryCount, 1);
+  assert.equal(requests.at(-1), null);
+  upstream = null;
+  expire();
+  assert.equal((await read()).sslbl, undefined);
+  assert.equal(requests.at(-1), '"restored"');
+
+  upstream = { etag: '"v3"', text: active(next) };
+  expire();
+  assert.equal((await read()).sslbl?.entryCount, 2);
+  assert.equal(requests.at(-1), null);
+  conflictingConfirmation = true;
+  expire();
+  assert.equal((await read()).sslbl, undefined, 'A conflicting bodyless response does not justify serving the cached edition.');
+  assert.equal(requests.at(-1), '"v3"');
 });
 
 test('a fixed publisher response cannot redirect, truncate or introduce invalid UTF-8', async () => {

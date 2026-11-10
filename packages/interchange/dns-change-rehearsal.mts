@@ -271,7 +271,7 @@ function recordSetFinding(
     return finding(id, 'unknown', `Current ${label.toLowerCase()} is unavailable`, `The intended set contains ${proposed.length} record${proposed.length === 1 ? '' : 's'}, but no compatible current observation was retained for comparison.`);
   }
   return sameSet(observed, proposed)
-    ? finding(id, 'ready', `${label} is unchanged`, `The intended and observed sets contain the same ${proposed.length} normalized record${proposed.length === 1 ? '' : 's'}.`)
+    ? finding(id, 'ready', `${label} is unchanged`, `The intended and observed sets contain the same ${proposed.length} normalised record${proposed.length === 1 ? '' : 's'}.`)
     : finding(id, 'review', `${label} change proposed`, `Observed: ${observed.join(' | ')}. Intended: ${proposed.join(' | ')}.`);
 }
 

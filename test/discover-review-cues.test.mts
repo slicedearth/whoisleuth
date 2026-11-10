@@ -15,7 +15,7 @@ test('builds a fixed explainable cue list from already-derived candidate evidenc
   }), [
     'source or profile character match',
     'mixed writing scripts',
-    'internationalized domain',
+    'internationalised domain',
     'multiple generation paths',
     'certificate-log observation',
   ]);

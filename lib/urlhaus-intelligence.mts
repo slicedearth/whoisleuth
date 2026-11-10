@@ -374,7 +374,7 @@ function createUrlhausIntelligenceAdapter(dependencies: AdapterDependencies = {}
           'The provider tracks malware-distribution URLs, not phishing pages generally.',
           'A listed host may have been compromised, cleaned, or reassigned; record status and timestamps require analyst review.',
           ...(discarded > 0
-            ? [`${discarded} provider record${discarded === 1 ? ' was' : 's were'} omitted because it could not be safely normalized.`]
+            ? [`${discarded} provider record${discarded === 1 ? ' was' : 's were'} omitted because it could not be safely normalised.`]
             : []),
         ],
       }, observedAt);

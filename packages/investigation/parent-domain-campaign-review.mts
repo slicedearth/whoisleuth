@@ -895,7 +895,7 @@ export function validateParentDomainCampaignReviewExport(value: unknown): void {
 }
 
 export function serializeParentDomainCampaignReviewExport(value: unknown): string {
-  assertWorkspaceInputGraph(value, 'Parent-domain campaign review export serialization input');
+  assertWorkspaceInputGraph(value, 'Parent-domain campaign review export serialisation input');
   let serialized: string;
   try {
     serialized = `${JSON.stringify(value, null, 2)}\n`;

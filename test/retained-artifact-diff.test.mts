@@ -269,7 +269,7 @@ describe('retained artifact diff', () => {
     (tampered.unknownCounts as Record<string, unknown>).dns = 99;
     assert.throws(() => buildCliRetainedArtifactDiff(report, JSON.stringify(tampered)), /derived fields/iu);
     const bulk = bulkExport([bulkSession('right', LATER, [bulkResult('one.example')])], LATER);
-    assert.throws(() => buildCliRetainedArtifactDiff(report, bulk), /same supported artifact family/iu);
+    assert.throws(() => buildCliRetainedArtifactDiff(report, bulk), /same supported artefact family/iu);
   });
 
   test('keeps index completeness partial when an omission falls beyond the exact-row cap', () => {

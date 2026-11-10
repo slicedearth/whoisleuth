@@ -404,7 +404,7 @@ function certificatePurposes(value: unknown, state: Tracker): CertificatePurpose
   for (const entry of source.slice(0, MAX_EXTENDED_KEY_USAGES)) {
     const oid = normalizeOid(entry, state);
     if (!oid || values.some((purpose) => purpose.oid === oid)) continue;
-    values.push({ oid, name: EXTENDED_KEY_USAGE_NAMES[oid] || 'Unrecognized purpose' });
+    values.push({ oid, name: EXTENDED_KEY_USAGE_NAMES[oid] || 'Unrecognised purpose' });
   }
   values.sort((left, right) => left.oid.localeCompare(right.oid));
   if (truncated) state.truncated = true;

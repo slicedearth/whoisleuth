@@ -288,7 +288,7 @@ test('executes the final gate against every result, including newly added lanes'
   assert.match(execute({ ...successes, 'future-verification': { result: 'skipped' } }).stdout, /future-verification \| Not run/u);
 });
 
-test('explains source drift in the job summary while retaining the failing result', async () => {
+test('requires readable registry evidence, reports unresolved drift and accepts verified routine updates', async () => {
   const workflow = parse(WORKFLOW);
   const review = workflow.jobs.audit.steps.find(
     (step: { env?: Record<string, string> }) => step.env?.REGISTRAR_EXIT_CODE,
@@ -296,15 +296,34 @@ test('explains source drift in the job summary while retaining the failing resul
   assert.ok(review);
   const directory = await mkdtemp(path.join(tmpdir(), 'registry-review-summary-'));
   const summary = path.join(directory, 'summary.md');
+  const registrar = path.join(directory, 'registrar-standing-report.json');
+  const sources = path.join(directory, 'source-drift-report.json');
+  const execute = async (exits: Record<string, string> = {}) => {
+    await writeFile(summary, '');
+    const result = spawnSync(unitTestExecutablePath('bash'), ['-e', '-o', 'pipefail', '-c', review.run], {
+      cwd: directory,
+      encoding: 'utf8',
+      env: {
+        ...process.env, GITHUB_STEP_SUMMARY: summary,
+        REGISTRY_EXIT_CODE: '0', FIXTURE_EXIT_CODE: '0', REGISTRAR_EXIT_CODE: '0', SOURCE_EXIT_CODE: '0',
+        ...exits,
+      },
+      timeout: 10_000,
+      maxBuffer: 64 * 1024,
+    });
+    assert.ifError(result.error);
+    assert.equal(result.signal, null);
+    return { ...result, rendered: await readFile(summary, 'utf8') };
+  };
   try {
     await Promise.all([
-      writeFile(path.join(directory, 'registry-drift-report.json'), JSON.stringify({ checks: [] })),
+      writeFile(path.join(directory, 'registry-drift-report.json'), JSON.stringify({ checks: [{ id: 'rdap', status: 'current' }] })),
       writeFile(
         path.join(directory, 'registry-fixture-freshness-report.json'),
-        JSON.stringify({ files: [] }),
+        JSON.stringify({ files: [{ path: 'fixtures/registry.json', state: 'current' }] }),
       ),
       writeFile(
-        path.join(directory, 'source-drift-report.json'),
+        sources,
         JSON.stringify({
           checks: [
             {
@@ -324,7 +343,7 @@ test('explains source drift in the job summary while retaining the failing resul
         }),
       ),
       writeFile(
-        path.join(directory, 'registrar-standing-report.json'),
+        registrar,
         JSON.stringify({
           checks: [
             {
@@ -340,27 +359,9 @@ test('explains source drift in the job summary while retaining the failing resul
         }),
       ),
     ]);
-    const result = spawnSync(
-      unitTestExecutablePath('bash'),
-      ['-e', '-o', 'pipefail', '-c', review.run],
-      {
-        cwd: directory,
-        encoding: 'utf8',
-        env: {
-          ...process.env,
-          GITHUB_STEP_SUMMARY: summary,
-          REGISTRY_EXIT_CODE: '0',
-          FIXTURE_EXIT_CODE: '0',
-          REGISTRAR_EXIT_CODE: '1',
-          SOURCE_EXIT_CODE: '2',
-        },
-        timeout: 10_000,
-        maxBuffer: 64 * 1024,
-      },
-    );
-    assert.ifError(result.error);
+    const result = await execute({ REGISTRAR_EXIT_CODE: '1', SOURCE_EXIT_CODE: '2' });
     assert.equal(result.status, 1, result.stderr);
-    const rendered = await readFile(summary, 'utf8');
+    const { rendered } = result;
     assert.match(rendered, /Registrar standing \| Review needed/u);
     assert.match(rendered, /iana_registrar_ids: drift; records 10 → 11/u);
     assert.match(rendered, /Normalised digest a{64} → b{64}/u);
@@ -370,27 +371,29 @@ test('explains source drift in the job summary while retaining the failing resul
     assert.doesNotMatch(rendered, /<source>|`/u);
     assert.match(result.stdout, /::error title=Registry maintenance requires review::/u);
 
-    await writeFile(path.join(directory, 'registrar-standing-report.json'), '{invalid');
-    const unavailable = spawnSync(
-      unitTestExecutablePath('bash'),
-      ['-e', '-o', 'pipefail', '-c', review.run],
-      {
-        cwd: directory,
-        encoding: 'utf8',
-        env: {
-          ...process.env,
-          GITHUB_STEP_SUMMARY: summary,
-          REGISTRY_EXIT_CODE: '0',
-          FIXTURE_EXIT_CODE: '0',
-          REGISTRAR_EXIT_CODE: '2',
-        },
-        timeout: 10_000,
-        maxBuffer: 64 * 1024,
-      },
-    );
-    assert.ifError(unavailable.error);
-    assert.equal(unavailable.status, 1);
-    assert.match(await readFile(summary, 'utf8'), /Registrar standing report is unavailable or malformed/u);
+    const routine = { id: 'sslbl', status: 'drift', routineUpdate: true };
+    await writeFile(sources, JSON.stringify({ checks: [routine] }));
+    await writeFile(registrar, JSON.stringify({ checks: [{ id: 'iana_registrar_ids', status: 'current' }] }));
+    const accepted = await execute();
+    assert.equal(accepted.status, 0, accepted.stderr);
+    assert.match(accepted.rendered, /Retained source catalogues \| Passed/u);
+    assert.match(accepted.rendered, /sslbl: routine publisher update/u);
+
+    for (const invalid of [null, '{invalid', '{"checks":[]}', '{"checks":[{"id":"iana_registrar_ids"}]}']) {
+      if (invalid === null) await rm(registrar);
+      else await writeFile(registrar, invalid);
+      const rejected = await execute();
+      assert.equal(rejected.status, 1, rejected.stderr);
+      assert.match(rejected.rendered, /Registrar standing \| Check incomplete/u);
+      assert.match(rejected.rendered, /Registrar standing report is unavailable or malformed/u);
+      assert.doesNotMatch(rejected.rendered, /No manual review was required/u);
+    }
+    await writeFile(registrar, JSON.stringify({ checks: [{ id: 'iana_registrar_ids', status: 'current' }] }));
+    await writeFile(sources, JSON.stringify({ checks: [{ ...routine, status: 'inconclusive' }] }));
+    const inconsistent = await execute();
+    assert.equal(inconsistent.status, 1, inconsistent.stderr);
+    assert.match(inconsistent.rendered, /Retained source catalogues \| Check incomplete/u);
+    assert.doesNotMatch(inconsistent.rendered, /routine publisher update/u);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

@@ -62,12 +62,12 @@ function resolveArtifactCanonicalization(
   version: unknown,
   declaredCanonicalization: unknown,
   routes: readonly ArtifactCanonicalizationRoute[],
-  label = 'Artifact',
+  label = 'Artefact',
 ): ArtifactCanonicalization {
   const route = routes.find((candidate) => candidate.version === version);
   const expectedDeclaration = route?.explicit ? route.canonicalization : undefined;
   if (!route || declaredCanonicalization !== expectedDeclaration) {
-    throw new TypeError(`${label} has an unsupported version or canonicalization.`);
+    throw new TypeError(`${label} has an unsupported version or canonicalisation.`);
   }
   return route.canonicalization;
 }

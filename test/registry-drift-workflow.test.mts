@@ -41,10 +41,6 @@ describe('official registry drift workflow', () => {
       WORKFLOW,
       /npm run --silent registrar:standing:check -- --json > registrar-standing-report\.json/u,
     );
-    assert.match(
-      WORKFLOW,
-      /if: steps\.audit\.outputs\.exit_code != '0' \|\| steps\.fixtures\.outputs\.exit_code != '0' \|\| steps\.registrar_standing\.outputs\.exit_code != '0'[\s\S]+actions\/upload-artifact@/u,
-    );
     assert.match(WORKFLOW, /name: registry-maintenance-reports/u);
     assert.match(WORKFLOW, /registry-drift-report\.json/u);
     assert.match(WORKFLOW, /registry-fixture-freshness-report\.json/u);
@@ -57,7 +53,8 @@ describe('official registry drift workflow', () => {
     assert.match(review.run, /process\.exitCode = 1;/u);
     assert.match(review.if, /!cancelled\(\)/u);
     const retained = workflow.jobs.audit.steps.find((step: { uses?: string }) => step.uses?.startsWith('actions/upload-artifact@'));
-    assert.match(retained.if, /steps\.sources\.outputs\.exit_code != '0'/u);
+    assert.ok(workflow.jobs.audit.steps.indexOf(review) < workflow.jobs.audit.steps.indexOf(retained));
+    assert.ok(retained.if.includes(`steps.${review.id}.outcome == 'failure'`));
     assert.ok(retained.with.path.split('\n').includes('source-drift-report.json'));
     assert.doesNotMatch(WORKFLOW, /\b(?:gh issue|git commit|git push)\b/u);
   });

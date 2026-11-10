@@ -270,7 +270,7 @@ async function collectionDigest(codec: BrowserLocalDataCodec, collection: string
 }
 
 export function assertSerializedBound(value: string, maximumBytes: number, label: string): number {
-  if (typeof value !== 'string') throw new BrowserLocalDataError('INVALID_LOCAL_DATA', `${label} did not serialize to text.`);
+  if (typeof value !== 'string') throw new BrowserLocalDataError('INVALID_LOCAL_DATA', `${label} did not serialise to text.`);
   const bytes = byteLength(value);
   if (bytes > maximumBytes) {
     throw new BrowserLocalDataError('LOCAL_DATA_QUOTA', `${label} exceeds its ${maximumBytes}-byte application limit.`);
@@ -514,7 +514,7 @@ export async function prepareLocalDataContent(
   let document: unknown;
   try { document = definition.normalize(input); }
   catch (cause) {
-    throw new BrowserLocalDataError('INVALID_LOCAL_DATA', `${definition.label} could not be normalized.`, { cause });
+    throw new BrowserLocalDataError('INVALID_LOCAL_DATA', `${definition.label} could not be normalised.`, { cause });
   }
   const serialized = definition.serialize(document);
   const serializedBytes = assertSerializedBound(serialized, definition.maximumBytes, definition.label);

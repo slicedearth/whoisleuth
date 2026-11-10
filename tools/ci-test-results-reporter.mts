@@ -1,6 +1,7 @@
 import type { TestEvent } from 'node:test/reporters';
 import path from 'node:path';
 import { summaryText, writeCiSummary } from './ci-summary.mts';
+import { REDIS_VERIFICATION_GUIDANCE, REDIS_VERIFICATION_SETUP_CODE } from './redis-verification.mts';
 
 const MAX_FAILURES = 12;
 
@@ -18,16 +19,21 @@ export default async function* ciTestResultsReporter(source: AsyncIterable<TestE
         totals += '. The runner did not accept the run; check coverage or startup diagnostics';
       }
     }
-    if (event.type !== 'test:fail' || event.data.details.type === 'suite') continue;
+    if (event.type !== 'test:fail') continue;
+    const { file, line, name, details } = event.data;
+    const error = details.error as Error & { code?: string; cause?: { code?: string }; failureType?: string };
+    // Node reports an aggregate failure for a parent and cancellation for each
+    // child when a suite hook fails. Keep the hook, not the duplicate symptoms.
+    if (error.failureType === 'subtestsFailed' || error.failureType === 'cancelledByParent') continue;
     failures++;
     if (findings.length >= MAX_FAILURES) continue;
-    const { file, line, name, details } = event.data;
     const relative = file ? path.relative(process.cwd(), file).split(path.sep).join('/') : '';
     const location = /^test\/[\w.-]+\.test\.mts$/u.test(relative) ? `${relative}${line ? `:${line}` : ''}` : 'Test runner';
-    const error = details.error as Error & { code?: string; cause?: { code?: string } };
-    const reason = error.cause?.code === 'ERR_ASSERTION' || error.code === 'ERR_ASSERTION'
-      ? 'Assertion failed' : 'Test or worker did not complete successfully';
-    findings.push(`- ${summaryText(location)} — ${summaryText(name)}: ${reason}.`);
+    const reason = error.failureType === 'hookFailed'
+      ? error.cause?.code === REDIS_VERIFICATION_SETUP_CODE ? `Isolated Redis setup failed. ${REDIS_VERIFICATION_GUIDANCE}` : 'A setup or teardown hook failed.'
+      : error.cause?.code === 'ERR_ASSERTION' || error.code === 'ERR_ASSERTION'
+        ? 'Assertion failed.' : 'Test or worker did not complete successfully.';
+    findings.push(`- ${summaryText(location)} — ${summaryText(name)}: ${reason}`);
   }
   if (totals === null && failures === 0) return;
   const seed = process.env.WHOISLEUTH_FAST_CHECK_SEED;

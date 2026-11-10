@@ -291,7 +291,7 @@ function formatTerminalTls(document: TerminalRecord): string {
     `Protocol       ${safeTerminalValue(document.protocol)}`,
     `ALPN           ${safeTerminalValue(document.alpnProtocol)}`,
     `Cipher         ${safeTerminalValue(cipher.standardName || cipher.name)}`,
-    `Authorized     ${authorization.authorized === true ? 'Yes' : authorization.authorized === false ? 'No' : 'Unknown'}`,
+    `Authorised     ${authorization.authorized === true ? 'Yes' : authorization.authorized === false ? 'No' : 'Unknown'}`,
     `Hostname match ${hostname.matches === true ? 'Yes' : hostname.matches === false ? 'No' : 'Unknown'}`,
     `Validity       ${titleCase(validity.status)}`,
     `Subject        ${safeTerminalValue(Array.isArray(subject.commonNames) ? subject.commonNames.join(', ') : null)}`,
@@ -305,7 +305,7 @@ function formatTerminalTls(document: TerminalRecord): string {
       : []),
     ...(Object.keys(purposes).length
       ? [`Purposes       ${purposeValues.length
-        ? purposeValues.map((purpose) => safeTerminalValue(`${purpose.name || 'Unrecognized purpose'} (${purpose.oid || 'unknown OID'})`)).join(', ')
+        ? purposeValues.map((purpose) => safeTerminalValue(`${purpose.name || 'Unrecognised purpose'} (${purpose.oid || 'unknown OID'})`)).join(', ')
         : 'None declared'}${Array.isArray(purposes.values) && purposes.values.length > purposeValues.length ? ` (+${purposes.values.length - purposeValues.length} more)` : ''}${purposes.truncated ? ' (source truncated)' : ''}`]
       : []),
     `Alt names      ${visibleAltNames.length ? visibleAltNames.map((value) => safeTerminalValue(value)).join(', ') : '—'}${omittedAltNames > 0 ? ` (+${omittedAltNames} more)` : ''}`,

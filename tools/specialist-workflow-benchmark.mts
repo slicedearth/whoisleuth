@@ -218,7 +218,7 @@ function registryParsingScenario(): ScenarioResult<Record<string, unknown>> {
     'Registry family parsing',
     assertions,
     metrics,
-    `${fixtures.length} sanitized WHOIS fixtures matched their authority-aware parser expectations.`,
+    `${fixtures.length} sanitised WHOIS fixtures matched their authority-aware parser expectations.`,
     fieldsChecked + fixtures.length + 2,
     failures.length,
   );

@@ -223,7 +223,7 @@ const RESPONSE_POLICY_FINDINGS: Readonly<Record<string, ResponsePolicyFindingDef
   },
   cookies_missing_secure: {
     label: 'Response cookies without Secure',
-    detail: (count) => `${count} selected response cookie${count === 1 ? '' : 's'} did not declare Secure. Cookie purpose and application behavior were not inspected.`,
+    detail: (count) => `${count} selected response cookie${count === 1 ? '' : 's'} did not declare Secure. Cookie purpose and application behaviour were not inspected.`,
   },
   cookies_missing_http_only: {
     label: 'Response cookies without HttpOnly',
@@ -395,7 +395,7 @@ function tlsFindings(tlsValue: unknown): PostureFinding[] {
       )
       : finding(
         'certificate_authorization_unavailable', 'certificate', 'unavailable', 'neutral', 'Certificate authorisation unavailable',
-        'The retained TLS observation did not include a conclusive chain-authorization result.', ['TLS handshake'],
+        'The retained TLS observation did not include a conclusive chain authorisation result.', ['TLS handshake'],
       ));
 
   findings.push(hostname.matches === true

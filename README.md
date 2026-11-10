@@ -2,7 +2,7 @@
 <h1 align="center">WHOISleuth</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/license-AGPL--3.0--only-blue.svg" alt="License: AGPL-3.0-only" />
+  <img src="https://img.shields.io/badge/licence-AGPL--3.0--only-blue.svg" alt="Licence: AGPL-3.0-only" />
   <img src="https://img.shields.io/badge/node-%3E%3D24-brightgreen" alt="Node >= 24" />
   <img src="https://img.shields.io/badge/frontend-SvelteKit%20%2B%20Vite-ff3e00" alt="SvelteKit and Vite" />
   <a href="https://www.npmjs.com/package/@slicedearth/whoisleuth-cli"><img src="https://img.shields.io/npm/v/@slicedearth/whoisleuth-cli?label=cli&logo=npm" alt="Published CLI version" /></a>

@@ -128,7 +128,7 @@ function reviewFor(item: BulkLookupResult, domain: string, allowlist: ReadonlySe
   let lane: ReviewLane;
   if (allowlist.has(domain)) {
     lane = 'suppressed';
-    reasons.push('The domain matches the analyst-supplied allowlist. Evidence is retained but deprioritized.');
+    reasons.push('The domain matches the analyst-supplied allowlist. Evidence is retained but deprioritised.');
   } else if (!item.ok || state === 'unknown') {
     lane = 'retry';
     reasons.push('Collection failed or authoritative registration evidence remained inconclusive.');

@@ -428,7 +428,7 @@ export function buildCliRetainedArtifactDiff(
   }
   const left = parseDocument(leftRaw, 'Left retained diff input');
   const right = parseDocument(rightRaw, 'Right retained diff input');
-  if (left.schema !== right.schema) throw new CliUsageError('diff requires two retained documents from the same supported artifact family.');
+  if (left.schema !== right.schema) throw new CliUsageError('diff requires two retained documents from the same supported artefact family.');
   if (left.schema === SAVED_LOOKUP_SCHEMA) {
     if (options.leftSessionId || options.rightSessionId) throw new CliUsageError('Saved-session selectors apply only to Bulk session exports.');
     return buildCliLookupDiff(leftRaw, rightRaw, generatedAt, { domainMode: 'auto' });
@@ -444,7 +444,7 @@ export function buildCliRetainedArtifactDiff(
 export function formatCliRetainedArtifactDiff(document: CliRetainedArtifactDiffDocument): string {
   if (document.schema !== CLI_COMPARISON_LEDGER_SCHEMA) return formatCliLookupDiff(document);
   const lines = [
-    'Retained artifact comparison ledger',
+    'Retained artefact comparison ledger',
     `Family           ${safeTerminalValue(document.artifactFamily).replaceAll('_', ' ')}`,
     `Left             ${safeTerminalValue(document.left.label)} · ${safeTerminalValue(document.left.id)}`,
     `Right            ${safeTerminalValue(document.right.label)} · ${safeTerminalValue(document.right.id)}`,

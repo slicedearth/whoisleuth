@@ -344,12 +344,12 @@ function createUrlscanIntelligenceAdapter(dependencies: AdapterDependencies = {}
           ? overLimit
             ? `Found ${findings.length} archived malicious-verdict match${findings.length === 1 ? '' : 'es'} among the newest ${reviewed} bounded scan${reviewed === 1 ? '' : 's'}; older scans may exist.`
             : invalid > 0
-              ? `Found ${findings.length} archived malicious-verdict match${findings.length === 1 ? '' : 'es'}; ${invalid} provider record${invalid === 1 ? ' was' : 's were'} omitted because it could not be safely normalized.`
+              ? `Found ${findings.length} archived malicious-verdict match${findings.length === 1 ? '' : 'es'}; ${invalid} provider record${invalid === 1 ? ' was' : 's were'} omitted because it could not be safely normalised.`
               : `Found ${findings.length} archived malicious-verdict match${findings.length === 1 ? '' : 'es'} among ${reviewed} recent scan${reviewed === 1 ? '' : 's'}.`
           : overLimit
             ? `No malicious verdict was found among the newest ${reviewed} bounded scan${reviewed === 1 ? '' : 's'}; older scans may exist.`
             : invalid > 0
-              ? `No malicious verdict was found among ${reviewed} normalized recent scan${reviewed === 1 ? '' : 's'}; ${invalid} provider record${invalid === 1 ? ' was' : 's were'} omitted.`
+              ? `No malicious verdict was found among ${reviewed} normalised recent scan${reviewed === 1 ? '' : 's'}; ${invalid} provider record${invalid === 1 ? ' was' : 's were'} omitted.`
               : `No malicious verdict was found among ${reviewed} recent scan${reviewed === 1 ? '' : 's'} in the last ${URLSCAN_SEARCH_DAYS} days.`,
         upstreamStatus,
         findings,

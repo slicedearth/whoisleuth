@@ -147,7 +147,7 @@ async function runVerifyArtifactCommand(
     async () => dependencies.readArtifactInput
       ? await dependencies.readArtifactInput(args.source)
       : await context.readInput(args.source, MAX_OFFLINE_ARTIFACT_BYTES, 'Artefact input'),
-    'artifact input',
+    'artefact input',
     'verify-artifact requires one JSON file or an artefact on stdin.',
   );
 

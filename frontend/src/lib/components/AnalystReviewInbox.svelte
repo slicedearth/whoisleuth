@@ -281,7 +281,7 @@
       <label class="field">Age
         <select bind:value={ageFilter} onchange={() => { page = 1; }}>
           <option value="">Any age</option>
-          <option value="current">Current</option><option value="aging">Aging</option><option value="stale">Stale</option><option value="unknown">Age unknown</option>
+          <option value="current">Current</option><option value="aging">Ageing</option><option value="stale">Stale</option><option value="unknown">Age unknown</option>
         </select>
       </label>
       <label class="field">Case

@@ -1093,10 +1093,10 @@ export function buildLookupEvidence(response: unknown, options: LookupEvidenceOp
     whoisSource(whois, whoisDiagnostics),
   );
   if (!projectedRdap) {
-    throw new TypeError('Lookup evidence cannot publish successful RDAP without normalized publication data.');
+    throw new TypeError('Lookup evidence cannot publish successful RDAP without normalised publication data.');
   }
   if (!projectedWhois) {
-    throw new TypeError('Lookup evidence cannot publish complete WHOIS without normalized publication data.');
+    throw new TypeError('Lookup evidence cannot publish complete WHOIS without normalised publication data.');
   }
   const projectedRdapRecord = recordOrNull(projectedRdap) || {};
   const projectedWhoisRecord = recordOrNull(projectedWhois) || {};

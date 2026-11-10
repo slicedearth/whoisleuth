@@ -67,7 +67,7 @@ describe('Discover candidate sorting', () => {
   test('explains the cues used by review-signal ordering', () => {
     assert.deepEqual(candidateReviewCues(candidates[1]!, metadata.get('alpha.example')), [
       'source or profile character match',
-      'internationalized domain',
+      'internationalised domain',
       'multiple generation paths',
       'certificate-log observation',
     ]);

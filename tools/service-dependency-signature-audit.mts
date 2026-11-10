@@ -72,7 +72,7 @@ export function auditServiceDependencySignatures(options: AuditOptions = {}) {
     }
     if (!signature.evidenceTypes?.includes('dns_target_suffix')) issues.push('DNS target-suffix evidence type is not declared.');
     if (!signature.source?.trim()) issues.push('Source is not declared.');
-    if (!signature.license?.trim()) issues.push('License treatment is not declared.');
+    if (!signature.license?.trim()) issues.push('Licence treatment is not declared.');
     const sourceDate = typeof signature.sourceDate === 'string' && Number.isFinite(Date.parse(signature.sourceDate))
       ? Date.parse(signature.sourceDate)
       : Number.NaN;

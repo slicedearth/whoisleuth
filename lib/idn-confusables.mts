@@ -473,7 +473,7 @@ export function analyzeDomainIdn(rawDomain: unknown, referenceDomains: unknown =
     id: 'official_skeleton_match',
     tone: 'warning',
     label: 'Confusable with an official domain',
-    detail: `The normalized visual skeleton matches ${referenceMatches.map((item) => item.asciiDomain).join(', ')}. This is similarity evidence, not proof of impersonation.`,
+    detail: `The normalised visual skeleton matches ${referenceMatches.map((item) => item.asciiDomain).join(', ')}. This is similarity evidence, not proof of impersonation.`,
   });
 
   return {

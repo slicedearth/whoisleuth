@@ -69,7 +69,7 @@ jobs:
           path: test-coverage.lcov
           if-no-files-found: ignore
           retention-days: 7
-      - name: Clean generated unit artifacts
+      - name: Clean generated unit artefacts
         if: always()
         run: npm run verification:artifacts -- --cleanup=unit
 
@@ -150,7 +150,7 @@ jobs:
       - name: Record isolated authenticated performance and verify loading contracts
         if: ${{ matrix.kind == 'performance' }}
         run: npm run frontend:authenticated-loading-report
-      - name: Summarize Playwright result data
+      - name: Summarise Playwright result data
         if: always()
         env:
           WHOISLEUTH_PLAYWRIGHT_RUN_LABEL: ${{ matrix.label }}
@@ -174,7 +174,7 @@ jobs:
             test-results/
           if-no-files-found: ignore
           retention-days: 7
-      - name: Clean generated browser artifacts and verify port state
+      - name: Clean generated browser artefacts and verify port state
         if: always()
         run: npm run verification:artifacts -- --cleanup=browser
 
