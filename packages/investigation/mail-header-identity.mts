@@ -6,6 +6,10 @@ export const AUTHENTICATION_METHODS = MAIL_AUTHENTICATION_METHODS;
 export type AuthenticationMethod = typeof AUTHENTICATION_METHODS[number];
 export type AuthenticationState = 'fail' | 'mixed' | 'neutral' | 'none' | 'pass' | 'permerror' | 'softfail' | 'temperror' | 'unknown';
 
+export function hasUnsupportedMailHeaderControls(value: string): boolean {
+  return /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]|\p{Default_Ignorable_Code_Point}/u.test(value);
+}
+
 export function normalizeHeaderDomain(value: string): string | null {
   const normalized = value.trim().toLowerCase().replace(/^\[|\]$/gu, '').replace(/\.$/u, '');
   return isValidAsciiDomainName(normalized, { requireLowercase: true }) ? normalized : null;
@@ -91,6 +95,7 @@ function angleAddress(value: string): string | null {
 }
 
 function addressDomain(value: string): string | null {
+  if (hasUnsupportedMailHeaderControls(value)) return null;
   let candidate = '';
   let quoted = false;
   let escaped = false;

@@ -20,16 +20,16 @@ unsupported future versions, and document migration or comparison behaviour.
 
 ## Prepare a release
 
-Version 2.9.0 adds an opt-in [retained source edition channel](source-maintenance.md#refresh-a-data-edition-without-a-build)
-for reviewing and refreshing supported public datasets without a rebuild. The
-bundled editions remain the fallback. Default installations and previews do
-not read the hosted edition store.
+Version 2.9.1 refreshes bundled certificate fingerprints, known-exploited
+vulnerability identifiers and browser-library advisories, and updates compatible
+runtime and development dependencies. Mail review no longer attributes a sender
+domain from a mailbox containing unsupported control characters.
 
-The release also refreshes bundled certificate fingerprints, known-exploited
-vulnerability identifiers and browser-library advisories, updates compatible
-dependencies including the hosted storage client, and makes verification job
-summaries easier to act on. Node 24.22.2, TypeScript 6.0.3 and the matching
-Playwright 1.65.0 pins remain unchanged.
+The infrastructure catalogue retains verified edge-network ranges and reviewed
+public resolvers; cloud-platform lists beyond the existing freshness window are
+excluded rather than presented as current. The optional
+[retained source edition channel](source-maintenance.md#refresh-a-data-edition-without-a-build)
+and bundled fallback behaviour are unchanged.
 
 Work on a focused branch and prepare the approved explicit version:
 

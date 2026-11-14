@@ -1,4 +1,4 @@
-import { lexicalSegments, normalizeHeaderDomain, addressDomains, type AuthenticationMethod, type AuthenticationState } from './mail-header-identity.mts';
+import { lexicalSegments, normalizeHeaderDomain, addressDomains, hasUnsupportedMailHeaderControls, type AuthenticationMethod, type AuthenticationState } from './mail-header-identity.mts';
 import { MAX_AUTHENTICATION_HEADERS, MAX_AUTHENTICATION_CLAUSES, MAX_AUTHENTICATION_VALUE_LENGTH,
   MAIL_AUTHENTICATION_METHODS, MAIL_AUTHENTICATION_PROPERTIES,
   type MailAuthenticationClaim, type MailAuthenticationHeader, type MailAuthenticationProperty,
@@ -79,7 +79,7 @@ function readHeader(input: HeaderInput, part: number, headerIndex: number, dupli
   const issues = new Set<string>();
   const invalid = (issue: string): MailAuthenticationHeader => ({ ...base, authservId: null, state: 'malformed', claims: [], issues: [issue] });
   if (input.value.length > MAX_AUTHENTICATION_VALUE_LENGTH) return invalid('Header value exceeds the authentication review bound.');
-  if (/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]|\p{Default_Ignorable_Code_Point}/u.test(input.value)) return invalid('Header value contains unsupported control characters.');
+  if (hasUnsupportedMailHeaderControls(input.value)) return invalid('Header value contains unsupported control characters.');
   const segments = lexicalSegments(input.value, ';');
   if (!segments) return invalid('Header has unbalanced quoting or comments.');
   const clauses = segments.slice(0, MAX_AUTHENTICATION_CLAUSES + 1).map(withoutComments);

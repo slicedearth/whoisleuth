@@ -64,7 +64,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ================================================================================
-@napi-rs/canvas@1.1.0
+@napi-rs/canvas@1.1.1
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: LICENSE
@@ -125,77 +125,77 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ================================================================================
-@napi-rs/canvas-android-arm64@1.1.0
+@napi-rs/canvas-android-arm64@1.1.1
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: locked optional platform package metadata
 
 This optional platform package declares MIT. It is installed separately on supported platforms, not included in this artefact. Its installed package provides its own licence notices.
 ================================================================================
-@napi-rs/canvas-darwin-arm64@1.1.0
+@napi-rs/canvas-darwin-arm64@1.1.1
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: locked optional platform package metadata
 
 This optional platform package declares MIT. It is installed separately on supported platforms, not included in this artefact. Its installed package provides its own licence notices.
 ================================================================================
-@napi-rs/canvas-darwin-x64@1.1.0
+@napi-rs/canvas-darwin-x64@1.1.1
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: locked optional platform package metadata
 
 This optional platform package declares MIT. It is installed separately on supported platforms, not included in this artefact. Its installed package provides its own licence notices.
 ================================================================================
-@napi-rs/canvas-linux-arm-gnueabihf@1.1.0
+@napi-rs/canvas-linux-arm-gnueabihf@1.1.1
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: locked optional platform package metadata
 
 This optional platform package declares MIT. It is installed separately on supported platforms, not included in this artefact. Its installed package provides its own licence notices.
 ================================================================================
-@napi-rs/canvas-linux-arm64-gnu@1.1.0
+@napi-rs/canvas-linux-arm64-gnu@1.1.1
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: locked optional platform package metadata
 
 This optional platform package declares MIT. It is installed separately on supported platforms, not included in this artefact. Its installed package provides its own licence notices.
 ================================================================================
-@napi-rs/canvas-linux-arm64-musl@1.1.0
+@napi-rs/canvas-linux-arm64-musl@1.1.1
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: locked optional platform package metadata
 
 This optional platform package declares MIT. It is installed separately on supported platforms, not included in this artefact. Its installed package provides its own licence notices.
 ================================================================================
-@napi-rs/canvas-linux-riscv64-gnu@1.1.0
+@napi-rs/canvas-linux-riscv64-gnu@1.1.1
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: locked optional platform package metadata
 
 This optional platform package declares MIT. It is installed separately on supported platforms, not included in this artefact. Its installed package provides its own licence notices.
 ================================================================================
-@napi-rs/canvas-linux-x64-gnu@1.1.0
+@napi-rs/canvas-linux-x64-gnu@1.1.1
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: locked optional platform package metadata
 
 This optional platform package declares MIT. It is installed separately on supported platforms, not included in this artefact. Its installed package provides its own licence notices.
 ================================================================================
-@napi-rs/canvas-linux-x64-musl@1.1.0
+@napi-rs/canvas-linux-x64-musl@1.1.1
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: locked optional platform package metadata
 
 This optional platform package declares MIT. It is installed separately on supported platforms, not included in this artefact. Its installed package provides its own licence notices.
 ================================================================================
-@napi-rs/canvas-win32-arm64-msvc@1.1.0
+@napi-rs/canvas-win32-arm64-msvc@1.1.1
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: locked optional platform package metadata
 
 This optional platform package declares MIT. It is installed separately on supported platforms, not included in this artefact. Its installed package provides its own licence notices.
 ================================================================================
-@napi-rs/canvas-win32-x64-msvc@1.1.0
+@napi-rs/canvas-win32-x64-msvc@1.1.1
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: locked optional platform package metadata
@@ -617,7 +617,7 @@ Apache License
    See the License for the specific language governing permissions and
    limitations under the License.
 ================================================================================
-@opentelemetry/api-logs@0.223.1
+@opentelemetry/api-logs@0.223.2
 Relationship: transitive production dependency
 Declared licence: Apache-2.0
 Licence source: LICENSE
@@ -1238,7 +1238,7 @@ Apache License
    See the License for the specific language governing permissions and
    limitations under the License.
 ================================================================================
-@opentelemetry/instrumentation@0.223.1
+@opentelemetry/instrumentation@0.223.2
 Relationship: transitive production dependency
 Declared licence: Apache-2.0
 Licence source: LICENSE
@@ -4909,7 +4909,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ================================================================================
-maxmind@5.0.8
+maxmind@5.1.0
 Relationship: direct production dependency
 Declared licence: MIT
 Licence source: LICENSE
@@ -5582,7 +5582,7 @@ Apache License
 
    END OF TERMS AND CONDITIONS
 ================================================================================
-postal-mime@4.2.0
+postal-mime@4.2.1
 Relationship: direct production dependency
 Declared licence: MIT-0
 Licence source: LICENSE.txt
@@ -6286,7 +6286,7 @@ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ================================================================================
-tldts@7.4.19
+tldts@7.5.2
 Relationship: direct production dependency
 Declared licence: MIT
 Licence source: LICENSE
@@ -6305,7 +6305,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
  WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ================================================================================
-tldts-core@7.4.20
+tldts-core@7.5.2
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: LICENSE
