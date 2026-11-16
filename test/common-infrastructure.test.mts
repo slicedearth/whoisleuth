@@ -16,7 +16,9 @@ import {
   commonInfrastructureHealth,
   parseSource,
   SOURCE_DEFINITIONS,
+  CLOUDFLARE_RANGE_URLS,
 } from '../tools/common-infrastructure-snapshot.mts';
+import { OFFICIAL_CLOUD_RANGE_URLS } from '../packages/contracts/common-infrastructure.mts';
 import { infrastructureSource } from './fixtures/common-infrastructure-sources.mts';
 import {
   classifyCommonInfrastructureAddress,
@@ -39,10 +41,10 @@ function warningList(version: number, list: string[]) {
 function verifiedWarningFetch(version: number): typeof fetch {
   return async input => {
     const url = String(input);
-    if (url.endsWith('/ips-v4')) return new Response('198.19.0.0/24\n');
-    if (url.endsWith('/ips-v6')) return new Response('2001:db8::/32\n');
-    return new Response(infrastructureSource(url.includes('amazonaws.com') ? 'amazon-aws'
-      : url.includes('gstatic.com') ? 'google-gcp' : 'cloudflare', version, ['198.19.0.0/24', '2001:db8::/32']));
+    if (url === CLOUDFLARE_RANGE_URLS[0]) return new Response('198.19.0.0/24\n');
+    if (url === CLOUDFLARE_RANGE_URLS[1]) return new Response('2001:db8::/32\n');
+    return new Response(infrastructureSource(url === OFFICIAL_CLOUD_RANGE_URLS['amazon-aws'] ? 'amazon-aws'
+      : url === OFFICIAL_CLOUD_RANGE_URLS['google-gcp'] ? 'google-gcp' : 'cloudflare', version, ['198.19.0.0/24', '2001:db8::/32']));
   };
 }
 
