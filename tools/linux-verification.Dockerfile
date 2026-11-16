@@ -7,16 +7,16 @@ FROM ${COMPATIBILITY_NODE_IMAGE} AS compatibility-node
 FROM ${REDIS_IMAGE} AS redis-verification
 FROM ${BROWSER_IMAGE}
 
-ARG CODEQL_VERSION=2.27.1
-ARG POWERSHELL_VERSION=7.6.6
+ARG CODEQL_VERSION=2.27.4
+ARG POWERSHELL_VERSION=7.6.10
 ARG TARGETARCH
 
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends git zsh fish curl ca-certificates zstd \
     && rm -rf /var/lib/apt/lists/*
 RUN case "$TARGETARCH" in \
-      amd64) CODEQL_PLATFORM=linux64; CODEQL_SHA256=1ec99cfa9420f04c2330784b4ddb8363a0dd67c3e4471cd93963c50e6c433717 ;; \
-      arm64) CODEQL_PLATFORM=linux-arm64; CODEQL_SHA256=5e87cf7254bc948b002ae444066ecc6f913960361ac675d049862dcb62d7786a ;; \
+      amd64) CODEQL_PLATFORM=linux64; CODEQL_SHA256=da3e952c7fe978a0b6b93e75d9cbabbdf8535667ca0810bd4b2ae37bc840ffee ;; \
+      arm64) CODEQL_PLATFORM=linux-arm64; CODEQL_SHA256=1c015b411c6e1c7f7e767eb8c9408fc6a2012d24d78b177cf22f29edc5772d10 ;; \
       *) exit 1 ;; \
     esac \
     && curl --fail --location --retry 2 --output /tmp/codeql.tar.zst \
@@ -25,8 +25,8 @@ RUN case "$TARGETARCH" in \
     && tar --zstd -xf /tmp/codeql.tar.zst -C /opt \
     && rm /tmp/codeql.tar.zst
 RUN case "$TARGETARCH" in \
-      amd64) POWERSHELL_PLATFORM=x64; POWERSHELL_SHA256=ddbc4a2d113bbd46d283cfedcbcd117a70caefd7673f41f2b4e0000badf103bc ;; \
-      arm64) POWERSHELL_PLATFORM=arm64; POWERSHELL_SHA256=924829e54c983648f6f1419a2dc7f9433c861b2fb5bd57736ff096c24f133729 ;; \
+      amd64) POWERSHELL_PLATFORM=x64; POWERSHELL_SHA256=e261cabc91c78a9afe8d1e5f24731ab0d38204735ab2ec94b0af55102652e10d ;; \
+      arm64) POWERSHELL_PLATFORM=arm64; POWERSHELL_SHA256=439432cdecf4418413b9a8f547e3ab4d9b40e8e4258913ec3d15fc92c67a9235 ;; \
       *) exit 1 ;; \
     esac \
     && mkdir /opt/pwsh \
