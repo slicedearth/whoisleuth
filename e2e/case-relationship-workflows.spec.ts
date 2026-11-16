@@ -65,6 +65,15 @@ function retainedRelationship(type: 'certificate' | 'favicon' | 'ip_address', va
   };
 }
 
+function cohortAddress() {
+  const address = COMMON_INFRASTRUCTURE_SNAPSHOT.sources
+    .flatMap(source => source.values)
+    .find(value => /^\d/u.test(value))
+    ?.split('/')[0];
+  expect(address).toBeTruthy();
+  return address!;
+}
+
 function cohortStorage(profileName = 'P'.repeat(100)) {
   const cases = [
     caseRecord({
@@ -83,11 +92,6 @@ function cohortStorage(profileName = 'P'.repeat(100)) {
     caseRecord({ id: 'cohort-ungrouped', domain: 'cohort-ungrouped.invalid', brandProfileIds: [COHORT_PROFILE_ID] }),
     caseRecord({ id: 'cohort-outside', domain: 'cohort-outside.invalid', brandProfileIds: [COHORT_OTHER_PROFILE_ID] }),
   ];
-  const commonAddress = COMMON_INFRASTRUCTURE_SNAPSHOT.sources
-    .flatMap((source) => source.values)
-    .find((value) => /^\d/u.test(value))
-    ?.split('/')[0];
-  expect(commonAddress).toBeTruthy();
   const faviconValue = [
     'cohort-beta.invalid=dhash:0000000000000000',
     'cohort-gamma.invalid=dhash:0000000000000001',
@@ -107,7 +111,7 @@ function cohortStorage(profileName = 'P'.repeat(100)) {
       observations: [
         retainedRelationship('certificate', 'a'.repeat(64), ['cohort-alpha.invalid', 'cohort-beta.invalid', 'cohort-outside.invalid']),
         retainedRelationship('favicon', faviconValue, ['cohort-beta.invalid', 'cohort-gamma.invalid']),
-        retainedRelationship('ip_address', commonAddress!, ['cohort-alpha.invalid', 'cohort-gamma.invalid']),
+        retainedRelationship('ip_address', cohortAddress(), ['cohort-alpha.invalid', 'cohort-gamma.invalid']),
       ],
     }),
   };
@@ -328,11 +332,18 @@ test.describe('browser-local campaigns', () => {
     await expect(region).toContainText('S'.repeat(400));
 
     await page.clock.setFixedTime(new Date(COHORT_NOW));
+    const commonAddress = cohortAddress();
+    const reviewedSources = [
+      { id: 'amazon-aws', category: 'cloud_platform', values: ['192.0.2.0/24'] },
+      { id: 'cloudflare', category: 'cdn_edge', values: [`${commonAddress}/32`] },
+      { id: 'google-gcp', category: 'cloud_platform', values: ['203.0.113.0/24'] },
+      { id: 'public-dns-core', category: 'public_resolver', values: ['2001:db8::/32'] },
+    ].map(source => ({ ...source, sourceDate: COHORT_NOW.slice(0, 10),
+      sourceDigestSha256: '1'.repeat(64), label: 'Fixture reviewed ranges' }));
     const reviewed = await encodeRetainedSourceEdition('infrastructure', {
       ...COMMON_INFRASTRUCTURE_SNAPSHOT, generatedAt: COHORT_NOW,
-      sources: COMMON_INFRASTRUCTURE_SNAPSHOT.sources.map(source => ({
-        ...source, sourceDate: COHORT_NOW.slice(0, 10), label: 'Fixture reviewed ranges',
-      })),
+      entryCount: reviewedSources.reduce((count, source) => count + source.values.length, 0),
+      sources: reviewedSources,
       excludedSources: [],
     });
     await region.getByText('Use a reviewed infrastructure edition', { exact: true }).click();
