@@ -25,12 +25,17 @@ only exact SHA-1 fingerprints plus source timestamps and integrity digests. It
 omits listing reasons and performs matching locally. Source:
 https://sslbl.abuse.ch/blacklist/
 
-The checked-in Common-infrastructure snapshot is a bounded projection of
-selected MISP warning-lists. It retains exact CIDR entries, source dates,
-source digests, the pinned upstream commit, and attribution needed to qualify
-shared cloud, delivery, and reviewed public-resolver ranges. MISP
-warning-lists are available under CC0 1.0 Universal or the BSD 2-Clause
-"Simplified" License. Source:
+The checked-in Common-infrastructure snapshot retains bounded exact CIDR
+projections, publication dates, raw-source digests and attribution. AWS and
+Google Cloud ranges come directly from their public publisher feeds:
+https://ip-ranges.amazonaws.com/ip-ranges.json
+https://www.gstatic.com/ipranges/cloud.json
+
+The separately pinned edge input comes from selected MISP warning-lists,
+available under CC0 1.0 Universal or the BSD 2-Clause "Simplified" License.
+That licence statement applies to the warning-list input, not to the independent
+publisher feeds. The snapshot also includes reviewed public-resolver ranges.
+Warning-list source:
 https://github.com/MISP/misp-warninglists
 
 The exact locked production-dependency inventories and licence documents are

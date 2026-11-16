@@ -9,7 +9,8 @@ import {
 test('Redis verification has no application network, persistence, public port or host mount', () => {
   const args = redisVerificationContainerArguments('fixture-only');
   const value = (flag: string) => args[args.indexOf(flag) + 1];
-  assert.match(REDIS_VERIFICATION_IMAGE, /^redis:7\.2\.16-bookworm@sha256:[a-f0-9]{64}$/u);
+  assert.match(REDIS_VERIFICATION_IMAGE, /^redis:7\.2\.\d+-bookworm@sha256:[a-f0-9]{64}$/u);
+  assert.ok(REDIS_VERIFICATION_IMAGE.startsWith(`redis:${REDIS_VERIFICATION_VERSION}-bookworm@sha256:`));
   assert.equal(value('--network'), 'none');
   assert.equal(value('--cap-drop'), 'ALL');
   assert.equal(value('--security-opt'), 'no-new-privileges');

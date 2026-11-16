@@ -2,11 +2,11 @@
 // browser-library catalogue. Apache-2.0 licensed source; do not edit by hand.
 
 const RETIRE_BROWSER_CATALOG = Object.freeze({
-  catalogVersion: "retire.js-2026.11.09",
-  sourceRevision: "9c6abc0c5844c8418b0050f4d66ef8d401e6401b",
-  sourceUpdatedAt: "2026-11-09T19:30:37.000Z",
-  sourceSha256: "f134daeccb7c448e62e6cb9498373c7a0d3c6ab8a825fb048dce3da922f55829",
-  sourceUrl: "https://github.com/RetireJS/retire.js/blob/9c6abc0c5844c8418b0050f4d66ef8d401e6401b/repository/jsrepository.json",
+  catalogVersion: "retire.js-2026.11.11",
+  sourceRevision: "0a997046b9a38c073dea8c864b015e515fc677ec",
+  sourceUpdatedAt: "2026-11-11T21:21:53.000Z",
+  sourceSha256: "829ac69ca802668081d260293a99d71039a481bf052e12f10beca135dfa0fbe8",
+  sourceUrl: "https://github.com/RetireJS/retire.js/blob/0a997046b9a38c073dea8c864b015e515fc677ec/repository/jsrepository.json",
   components: {
   "jquery": {
     "extractors": {
@@ -10718,7 +10718,8 @@ const RETIRE_BROWSER_CATALOG = Object.freeze({
         ],
         "identifiers": {
           "CVE": [
-            "CVE-2025-15056"
+            "CVE-2025-15056",
+            "CVE-2026-120350"
           ],
           "githubID": "GHSA-V3M3-F69X-JF25"
         }

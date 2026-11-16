@@ -64,7 +64,7 @@ describe('isolated Linux verification', () => {
     const manifest = { manifests: [amd, arm, { platform: { os: 'unknown', architecture: 'unknown' } }] };
     assert.equal(linuxVerificationImageReference('node:24.19.0-bookworm-slim', manifest, 'linux/arm64'), `node:24.19.0-bookworm-slim@${arm.digest}`);
     assert.equal(linuxVerificationImageReference('node:24.19.0-bookworm-slim', manifest, 'linux/amd64'), `node:24.19.0-bookworm-slim@${amd.digest}`);
-    assert.equal(linuxVerificationImageReference(REDIS_VERIFICATION_IMAGE, manifest, 'linux/arm64'), `redis:7.2.16-bookworm@${arm.digest}`);
+    assert.equal(linuxVerificationImageReference(`redis:7.2.16-bookworm@sha256:${'c'.repeat(64)}`, manifest, 'linux/arm64'), `redis:7.2.16-bookworm@${arm.digest}`);
     for (const invalid of [null, {}, { manifests: [amd] }, { manifests: [arm, arm] }, { manifests: [{ ...arm, digest: 'mutable' }] }]) {
       assert.throws(() => linuxVerificationImageReference('node:24.19.0-bookworm-slim', invalid, 'linux/arm64'), /unique immutable manifest/u);
     }

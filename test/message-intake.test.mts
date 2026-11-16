@@ -249,6 +249,15 @@ test('Unicode whitespace cannot turn an invalid field name into sender evidence'
   }
 });
 
+test('control characters in a mailbox cannot establish a claimed sender domain', async () => {
+  for (const control of ['\u0000', '\u0001', '\u007f']) {
+    const source = `From: sen${control}der@claimed.example\r\nReply-To: sender@reply.example\r\nContent-Type: text/plain\r\n\r\nReview only`;
+    const { report } = await reviewMessageInput(bytes(source), 'email', now);
+    assert.deepEqual(report.identities.filter(item => item.role === 'from'), []);
+    assert.deepEqual(report.identities.filter(item => item.role === 'reply_to').map(item => item.domain), ['reply.example']);
+  }
+});
+
 test('MIME nesting admits the supported boundary and rejects the next level without parser details', async () => {
   function multipart(levels: number): Uint8Array {
     let message = 'Content-Type: text/plain\r\n\r\nhttps://nested.example/';

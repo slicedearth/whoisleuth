@@ -14,12 +14,19 @@ import {
   SNAPSHOT_PATH,
   verifyCloudflareRanges,
   commonInfrastructureHealth,
+  parseSource,
+  SOURCE_DEFINITIONS,
+  CLOUDFLARE_RANGE_URLS,
 } from '../tools/common-infrastructure-snapshot.mts';
+import { OFFICIAL_CLOUD_RANGE_URLS } from '../packages/contracts/common-infrastructure.mts';
+import { infrastructureSource } from './fixtures/common-infrastructure-sources.mts';
 import {
   classifyCommonInfrastructureAddress,
   COMMON_INFRASTRUCTURE_SNAPSHOT,
   parseCommonInfrastructureSnapshot,
 } from '../frontend/src/lib/analysis/common-infrastructure.ts';
+import { encodeRetainedSourceEdition } from '../packages/evidence/retained-source-edition.mts';
+import { readCurrentInfrastructureEdition } from '../packages/relationships/infrastructure-edition.mts';
 
 function warningList(version: number, list: string[]) {
   return JSON.stringify({
@@ -34,9 +41,10 @@ function warningList(version: number, list: string[]) {
 function verifiedWarningFetch(version: number): typeof fetch {
   return async input => {
     const url = String(input);
-    if (url.endsWith('/ips-v4')) return new Response('198.19.0.0/24\n');
-    if (url.endsWith('/ips-v6')) return new Response('2001:db8::/32\n');
-    return new Response(warningList(version, ['198.19.0.0/24', '2001:db8::/32']));
+    if (url === CLOUDFLARE_RANGE_URLS[0]) return new Response('198.19.0.0/24\n');
+    if (url === CLOUDFLARE_RANGE_URLS[1]) return new Response('2001:db8::/32\n');
+    return new Response(infrastructureSource(url === OFFICIAL_CLOUD_RANGE_URLS['amazon-aws'] ? 'amazon-aws'
+      : url === OFFICIAL_CLOUD_RANGE_URLS['google-gcp'] ? 'google-gcp' : 'cloudflare', version, ['198.19.0.0/24', '2001:db8::/32']));
   };
 }
 
@@ -51,6 +59,47 @@ function snapshotWithRanges(values: string[]) {
 }
 
 describe('Common-infrastructure catalogue', () => {
+  test('projects current official cloud ranges with exact source identity, both families and historical compatibility', () => {
+    const now = new Date('2026-09-23T12:00:00.000Z');
+    for (const id of ['amazon-aws', 'google-gcp']) {
+      const definition = SOURCE_DEFINITIONS.find(item => item.id === id)!;
+      const text = infrastructureSource(id, 20260923, ['192.0.2.0/24', '2001:db8::/32', '192.0.2.0/24']);
+      const { snapshot, ageDays } = parseSource(definition, text, now);
+      assert.equal(ageDays, 0);
+      assert.deepEqual(snapshot.values, ['192.0.2.0/24', '2001:db8::/32']);
+      assert.equal(snapshot.sourceDate, '2026-09-23');
+      assert.match(snapshot.sourcePath, /^https:/u);
+      const raw = snapshotWithRanges([]);
+      const index = raw.sources.findIndex(item => item.id === id);
+      // Historical snapshots may have excluded this provider.
+      if (index >= 0) raw.sources.splice(index, 1);
+      raw.sources.push({ ...snapshot, values: [...snapshot.values] });
+      raw.excludedSources = raw.excludedSources.filter(item => item.id !== id);
+      raw.entryCount = snapshot.values.length;
+      const admitted = parseCommonInfrastructureSnapshot(raw);
+      const match = classifyCommonInfrastructureAddress('192.0.2.1', admitted).find(item => item.sourceId === id)!;
+      assert.ok(match);
+      assert.ok(match.provenance.includes(snapshot.sourcePath));
+      assert.equal(match.sourceDigestSha256, snapshot.sourceDigestSha256);
+      const compact = parseSource(definition, infrastructureSource(id, 20260923, [
+        '192.0.2.0/25', '192.0.2.128/26', '192.0.2.192/26', '192.0.2.4/32',
+        '198.51.100.0/25', '198.51.100.192/26',
+        '2001:db8::/33', '2001:db8:8000::/33', '2001:db8::1/128',
+      ]), now).snapshot;
+      assert.deepEqual(compact.values, ['192.0.2.0/24', '198.51.100.0/25', '198.51.100.192/26', '2001:db8::/32']);
+      const legacy = structuredClone(raw);
+      const provider = legacy.sources.find(item => item.id === id)!;
+      Object.assign(provider, { sourcePath: `lists/${id}/list.json` });
+      assert.match(classifyCommonInfrastructureAddress('192.0.2.1', parseCommonInfrastructureSnapshot(legacy))[0]!.provenance, /warning-lists/u);
+      for (const bad of [
+        infrastructureSource(id, 20260924, snapshot.values),
+        infrastructureSource(id, 20260231, snapshot.values),
+        text.replace('192.0.2.0/24', 'private invalid range'),
+        text.replace('syncToken', 'missingToken'),
+        text.replace('00-00-00', '99-00-00').replace('T00:00:00', 'T99:00:00'),
+      ]) assert.throws(() => parseSource(definition, bad, now), /future|valid|malformed/u);
+    }
+  });
   test('keeps publisher age separate from bounded official verification and rejects altered proof', async () => {
     const now = new Date('2026-09-23T12:00:00.000Z');
     const snapshot = await buildCommonInfrastructureSnapshot(DEFAULT_UPSTREAM_COMMIT, { now: () => now, fetchImpl: verifiedWarningFetch(20260811) });
@@ -69,6 +118,25 @@ describe('Common-infrastructure catalogue', () => {
       assert.throws(() => commonInfrastructureHealth(now, { ...snapshot, sources: snapshot.sources.map(source => source.id === 'cloudflare'
         ? { ...source, verification: { ...proof, ...mutation } } : source) }), /provenance/u);
     }
+  });
+  test('keeps official attribution through a verified edition without changing historical edition support', async () => {
+    const now = new Date('2026-09-23T12:00:00.000Z');
+    const snapshot = await buildCommonInfrastructureSnapshot(DEFAULT_UPSTREAM_COMMIT, { now: () => now, fetchImpl: verifiedWarningFetch(20260923) });
+    const file = await encodeRetainedSourceEdition('infrastructure', snapshot);
+    const admitted = await readCurrentInfrastructureEdition(file.text, file.digest, now);
+    const cloudMatches = classifyCommonInfrastructureAddress('2001:db8::1', admitted).filter(item => item.category === 'cloud_platform');
+    assert.equal(cloudMatches.length, 2);
+    assert.ok(cloudMatches.every(item => item.provenance.includes('https://')));
+    await assert.rejects(readCurrentInfrastructureEdition(file.text + ' ', file.digest, now), /digest/u);
+    const historical = structuredClone(snapshot);
+    for (const source of historical.sources) Object.assign(source, { sourcePath: `lists/${source.id}/list.json` });
+    const legacyFile = await encodeRetainedSourceEdition('infrastructure', historical);
+    const legacy = await readCurrentInfrastructureEdition(legacyFile.text, legacyFile.digest, now);
+    assert.equal(classifyCommonInfrastructureAddress('2001:db8::1', legacy).length, 3);
+    const wrongPublisher = structuredClone(snapshot);
+    Object.assign(wrongPublisher.sources[0]!, { sourcePath: 'https://publisher.example/ranges.json' });
+    const invalidFile = await encodeRetainedSourceEdition('infrastructure', wrongPublisher);
+    await assert.rejects(readCurrentInfrastructureEdition(invalidFile.text, invalidFile.digest, now), /publisher URL/u);
   });
   test('uses the checked-in bounded, attributed snapshot without a runtime request', () => {
     assert.equal(COMMON_INFRASTRUCTURE_SNAPSHOT.schema, 'whoisleuth.common-infrastructure');
@@ -199,9 +267,9 @@ describe('Common-infrastructure catalogue', () => {
 
   test('distinguishes an old publication date from an independently verified allocation', async () => {
     const bodies = [
-      warningList(20260720, ['198.18.0.0/24']),
+      infrastructureSource('amazon-aws', 20260720, ['198.18.0.0/24', '2001:db8::/32']),
       warningList(20260720, ['198.19.0.0/24']),
-      warningList(20260720, ['2001:4860::/32']),
+      infrastructureSource('google-gcp', 20260720, ['2001:4860::/32']),
     ];
     let calls = 0;
     const snapshot = await buildCommonInfrastructureSnapshot('a'.repeat(40), {
@@ -214,7 +282,7 @@ describe('Common-infrastructure catalogue', () => {
 
     assert.equal(snapshot.sources.length, 4);
     assert.deepEqual(snapshot.excludedSources, []);
-    assert.equal(snapshot.entryCount, 9);
+    assert.equal(snapshot.entryCount, 10);
 
     const stale = await buildCommonInfrastructureSnapshot('a'.repeat(40), {
       now: () => new Date('2026-07-31T00:00:00.000Z'),
@@ -229,7 +297,7 @@ describe('Common-infrastructure catalogue', () => {
 
     const exactBoundary = await buildCommonInfrastructureSnapshot('a'.repeat(40), {
       now: () => new Date('2026-07-31T00:00:00.000Z'),
-      fetchImpl: async () => new Response(warningList(20260701, ['198.19.0.0/24'])),
+      fetchImpl: verifiedWarningFetch(20260701),
     });
     assert.equal(exactBoundary.sources.length, 4, `A source exactly ${FRESHNESS_DAYS} days old remains active.`);
     const beyondBoundary = await buildCommonInfrastructureSnapshot('a'.repeat(40), {
@@ -242,7 +310,7 @@ describe('Common-infrastructure catalogue', () => {
     await assert.rejects(
       buildCommonInfrastructureSnapshot('a'.repeat(40), {
         now: () => new Date('2026-03-01T00:00:00.000Z'),
-        fetchImpl: async () => new Response(warningList(20260231, ['198.19.0.0/24'])),
+        fetchImpl: verifiedWarningFetch(20260231),
       }),
       /not a valid date/iu,
     );
@@ -287,7 +355,7 @@ describe('Common-infrastructure catalogue', () => {
           calls += 1;
           return calls === 2
             ? new Response('temporarily unavailable', { status: 503 })
-            : new Response(warningList(20260720, ['198.18.0.0/24']));
+            : new Response(infrastructureSource('amazon-aws', 20260720, ['198.18.0.0/24', '2001:db8::/32']));
         },
       }),
       /HTTP 503/iu,
@@ -299,9 +367,9 @@ describe('Common-infrastructure catalogue', () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'whoisleuth-common-infrastructure-'));
     const outputPath = path.join(directory, SNAPSHOT_PATH);
     const bodies = [
-      warningList(20260720, ['198.18.0.0/24']),
+      infrastructureSource('amazon-aws', 20260720, ['198.18.0.0/24', '2001:db8::/32']),
       warningList(20260720, ['198.19.0.0/24']),
-      warningList(20260720, ['2001:4860::/32']),
+      infrastructureSource('google-gcp', 20260720, ['2001:4860::/32']),
     ];
     const buildOptions = () => {
       let calls = 0;

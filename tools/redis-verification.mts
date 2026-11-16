@@ -8,8 +8,8 @@ import { fileURLToPath } from 'node:url';
 import { summaryText, writeCiSummary } from './ci-summary.mts';
 
 // Official multi-platform image. Verification only: never an application service.
-export const REDIS_VERIFICATION_VERSION = '7.2.16';
-export const REDIS_VERIFICATION_IMAGE = 'redis:7.2.16-bookworm@sha256:0637954999d01b7c9ce9167db2da50656e2590d3b884f1c600c5f63bb6e6773c';
+export const REDIS_VERIFICATION_VERSION = '7.2.17';
+export const REDIS_VERIFICATION_IMAGE = `redis:${REDIS_VERIFICATION_VERSION}-bookworm@sha256:5b816bb37d9707a70f10ef5002ecf8ee431750d397010fc4314c93dca887962f`;
 export const REDIS_VERIFICATION_SETUP_CODE = 'ERR_REDIS_VERIFICATION_SETUP';
 export const REDIS_VERIFICATION_GUIDANCE = `Start a reachable local Docker engine or set WHOISLEUTH_VERIFICATION_REDIS_BIN_DIR to the pinned Redis ${REDIS_VERIFICATION_VERSION} binaries.`;
 const MAX_OUTPUT_BYTES = 64 * 1024;
