@@ -11,6 +11,7 @@ import { readBoundedRegularTextFile } from '../lib/bounded-file.mts';
 import { readTextCapped, safeFetchDetailed } from '../lib/safe-fetch.mts';
 import retainedSnapshot from '../packages/relationships/common-infrastructure-snapshot.json' with { type: 'json' };
 import { parseCommonInfrastructureSnapshot } from '../packages/relationships/common-infrastructure.mts';
+import { addressValue, canonicalIpAddress } from '../packages/contracts/ip-address.mts';
 import { CLOUDFLARE_RANGE_URLS, FRESHNESS_DAYS } from '../packages/relationships/common-infrastructure-health.mts';
 export { CLOUDFLARE_RANGE_URLS, FRESHNESS_DAYS, commonInfrastructureHealth } from '../packages/relationships/common-infrastructure-health.mts';
 import {
@@ -18,6 +19,7 @@ import {
   COMMON_INFRASTRUCTURE_VERSION,
   MAX_SNAPSHOT_BYTES,
   MAX_SNAPSHOT_ENTRIES,
+  OFFICIAL_CLOUD_RANGE_URLS,
 } from '../packages/contracts/common-infrastructure.mts';
 export {
   COMMON_INFRASTRUCTURE_SCHEMA,
@@ -33,6 +35,8 @@ type SourceDefinition = Readonly<{
   label: string;
   category: 'cdn_edge' | 'cloud_platform';
   list: string;
+  url?: string;
+  maximumBytes: number;
 }>;
 type SourceSnapshot = Readonly<{
   id: string;
@@ -84,7 +88,7 @@ type MainOptions = Readonly<{
 
 export const SNAPSHOT_PATH = 'packages/relationships/common-infrastructure-snapshot.json';
 export const DEFAULT_UPSTREAM_COMMIT = retainedSnapshot.source.commit;
-export const MAX_SOURCE_BYTES = 1024 * 1024;
+export const MAX_SOURCE_BYTES = 6 * 1024 * 1024;
 export const REVIEWED_PUBLIC_RESOLVERS_SOURCE_DATE = '2026-08-10';
 export const SOURCE_DEFINITIONS = Object.freeze([
   Object.freeze({
@@ -92,18 +96,23 @@ export const SOURCE_DEFINITIONS = Object.freeze([
     label: 'Amazon Web Services',
     category: 'cloud_platform',
     list: 'amazon-aws',
+    url: OFFICIAL_CLOUD_RANGE_URLS['amazon-aws'],
+    maximumBytes: MAX_SOURCE_BYTES,
   }),
   Object.freeze({
     id: 'cloudflare',
     label: 'Cloudflare shared edge',
     category: 'cdn_edge',
     list: 'cloudflare',
+    maximumBytes: 1024 * 1024,
   }),
   Object.freeze({
     id: 'google-gcp',
     label: 'Google Cloud Platform',
     category: 'cloud_platform',
     list: 'google-gcp',
+    url: OFFICIAL_CLOUD_RANGE_URLS['google-gcp'],
+    maximumBytes: 1024 * 1024,
   }),
 ] satisfies readonly SourceDefinition[]);
 export const REVIEWED_PUBLIC_RESOLVERS = Object.freeze([
@@ -195,6 +204,9 @@ export function parseSource(
   rawText: string,
   now: Date,
 ): ParsedSource {
+  if (Buffer.byteLength(rawText, 'utf8') > definition.maximumBytes) {
+    throw new TypeError('Upstream range response exceeds its byte limit.');
+  }
   let parsed: unknown;
   try {
     parsed = JSON.parse(rawText);
@@ -202,6 +214,7 @@ export function parseSource(
     throw new TypeError(`${definition.id} warning list is not valid JSON.`);
   }
   const data = record(parsed, `${definition.id} warning list`);
+  if (definition.url) return parseOfficialCloudSource(definition, data, rawText, now);
   if (data.type !== 'cidr') throw new TypeError(`${definition.id} must use exact CIDR matching.`);
   const date = sourceDate(data.version);
   const rawValues = Array.isArray(data.list) ? data.list : [];
@@ -229,6 +242,85 @@ export function parseSource(
     throw new TypeError(`${definition.id} source date is in the future.`);
   }
   return Object.freeze({ snapshot, ageDays });
+}
+
+// The publisher can list overlapping service ranges. Preserve their exact
+// union, as the warning-list projection did, rather than shipping duplicates
+// or expanding the runtime catalogue when the source representation changes.
+function compactRanges(values: ReadonlySet<string>): string[] {
+  const ranges = [...values].map(cidr => {
+    const [text, prefixText] = cidr.split('/');
+    const address = addressValue(text)!;
+    const prefix = Number(prefixText);
+    const size = 1n << BigInt((address.family === 4 ? 32 : 128) - prefix);
+    return { family: address.family, prefix, size, network: BigInt(address.value) & ~(size - 1n) };
+  }).sort((a, b) => a.family - b.family || (a.network < b.network ? -1 : a.network > b.network ? 1 : a.prefix - b.prefix));
+  const compact: typeof ranges = [];
+  for (let range of ranges) {
+    let last = compact.at(-1);
+    if (last?.family === range.family && last.network + last.size >= range.network + range.size) continue;
+    while (last?.family === range.family && range.prefix > 0 && last.prefix === range.prefix
+      && last.network + range.size === range.network && last.network % (range.size * 2n) === 0n) {
+      compact.pop();
+      range = { ...range, prefix: range.prefix - 1, size: range.size * 2n, network: last.network };
+      last = compact.at(-1);
+    }
+    compact.push(range);
+  }
+  return compact.map(range => {
+    const address = range.family === 4
+      ? [24, 16, 8, 0].map(shift => String((range.network >> BigInt(shift)) & 255n)).join('.')
+      : canonicalIpAddress(Array.from({ length: 8 }, (_, index) =>
+        ((range.network >> BigInt((7 - index) * 16)) & 0xffffn).toString(16)).join(':'))!;
+    return `${address}/${range.prefix}`;
+  }).sort((left, right) => left.localeCompare(right));
+}
+
+function parseOfficialCloudSource(definition: SourceDefinition, data: JsonRecord, text: string, now: Date): ParsedSource {
+  const aws = definition.id === 'amazon-aws';
+  const published = aws ? data.createDate : data.creationTime;
+  const datePattern = aws ? /^\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}$/u
+    : /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})?$/u;
+  if (typeof published !== 'string' || !datePattern.test(published)
+    || typeof data.syncToken !== 'string' || !/^\d{1,20}$/u.test(data.syncToken)) {
+    throw new TypeError('Official cloud ranges have invalid publication metadata.');
+  }
+  const date = sourceDate(Number(published.slice(0, 10).replaceAll('-', '')));
+  const clock = published.slice(11).split(aws ? '-' : ':');
+  if (Number(clock[0]) > 23 || Number(clock[1]) > 59 || Number(clock[2]?.slice(0, 2)) > 59) {
+    throw new TypeError('Official cloud ranges have invalid publication metadata.');
+  }
+  const groups = aws ? [data.prefixes, data.ipv6_prefixes] : [data.prefixes];
+  let count = 0;
+  for (const group of groups) {
+    if (!Array.isArray(group) || !group.length || group.length > MAX_SNAPSHOT_ENTRIES - count) {
+      throw new TypeError('Official cloud range count is outside the accepted bounds.');
+    }
+    count += group.length;
+  }
+  const values = new Set<string>();
+  for (const [index, group] of groups.entries()) {
+    for (const raw of group as unknown[]) {
+      const entry = record(raw, 'Official cloud range');
+      const cidr = aws ? entry[index === 0 ? 'ip_prefix' : 'ipv6_prefix'] : entry.ipv4Prefix ?? entry.ipv6Prefix;
+      const expectedFamily = aws ? index === 0 ? 4 : 6 : entry.ipv4Prefix !== undefined ? 4 : 6;
+      if ((!aws && entry.ipv4Prefix !== undefined && entry.ipv6Prefix !== undefined)
+        || typeof cidr !== 'string' || normalizedCidr(cidr) !== cidr || isIP(cidr.split('/')[0]!) !== expectedFamily) {
+        throw new TypeError('Official cloud ranges contain malformed entries.');
+      }
+      // A provider may repeat a prefix for several services. Keep its exact
+      // address coverage once, without turning service labels into attribution.
+      values.add(cidr);
+    }
+  }
+  const ageDays = Math.floor((now.getTime() - Date.parse(`${date}T00:00:00.000Z`)) / 86_400_000);
+  if (ageDays < 0) throw new TypeError('Official cloud range publication date is in the future.');
+  return Object.freeze({ ageDays, snapshot: Object.freeze({
+    id: definition.id, label: definition.label, category: definition.category, type: 'cidr',
+    sourcePath: definition.url!, sourceVersion: Number(date.replaceAll('-', '')), sourceDate: date,
+    sourceDigestSha256: createHash('sha256').update(text).digest('hex'),
+    values: Object.freeze(compactRanges(values)),
+  }) });
 }
 
 async function fetchSource(url: string, init?: RequestInit): Promise<Response> {
@@ -283,12 +375,13 @@ export async function buildCommonInfrastructureSnapshot(
   const excludedSources: Array<Readonly<{ id: string; reason: string }>> = [];
 
   for (const definition of SOURCE_DEFINITIONS) {
-    const url = `https://raw.githubusercontent.com/MISP/misp-warninglists/${commit}/lists/${definition.list}/list.json`;
+    const url = 'url' in definition ? definition.url
+      : `https://raw.githubusercontent.com/MISP/misp-warninglists/${commit}/lists/${definition.list}/list.json`;
     const response = await fetchImpl(url, {
       headers: { accept: 'application/json', 'user-agent': 'WHOISleuth catalogue maintenance' },
       signal: AbortSignal.timeout(10_000),
     });
-    const text = await boundedResponseText(response, MAX_SOURCE_BYTES);
+    const text = await boundedResponseText(response, definition.maximumBytes);
     const parsed = parseSource(definition, text, now);
     if (parsed.ageDays > FRESHNESS_DAYS && definition.id === 'cloudflare') {
       // Unchanged allocations are not stale merely because their publisher has
@@ -343,6 +436,7 @@ export async function buildCommonInfrastructureSnapshot(
       'Non-matches are inconclusive because the catalogue is deliberately bounded and does not cover every provider, product, address, hosting service, resolver, or historical allocation.',
       'The snapshot is used locally and never causes a provider request during Lookup, Bulk, Monitor, cases, or graph review.',
       'An older warning list is excluded unless its complete range set is independently verified against the recorded official provider sources. Publisher change dates and verification times remain distinct.',
+      'Cloud ranges come directly from the recorded official publisher URLs. The warning-list revision and licence describe the separately retained edge list, not those publisher feeds.',
     ]),
   });
 }

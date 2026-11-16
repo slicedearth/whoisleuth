@@ -205,7 +205,7 @@ export async function buildSourceHealthReport(options: BuildOptions = {}) {
         detail: health.state === 'unavailable' ? 'The retained source or verification dates cannot be evaluated against this clock.'
           : `${health.excludedCount} excluded sources; ${FRESHNESS_DAYS}-day source/verification review window.`,
         limitation: 'A verified unchanged provider range retains its publisher date. The separate digest-bound verification date controls its review age.',
-        action: 'Check current warning lists and official edge ranges before refreshing the retained snapshot.', strictCommand: 'npm run common-infrastructure:check' });
+        action: 'Check official cloud ranges, the retained edge list and official edge ranges before refreshing the snapshot.', strictCommand: 'npm run common-infrastructure:check' });
     }),
     observedEntry('sslbl_certificate_snapshot', 'SSL certificate intelligence snapshot', 'retained_dataset', 'npm run sslbl:status', async () => {
       const health = await builders.sslbl(now);

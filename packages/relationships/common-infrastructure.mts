@@ -4,7 +4,7 @@
 // ownership, intent, safety, or maliciousness.
 
 import snapshotValue from './common-infrastructure-snapshot.json' with { type: 'json' };
-import { COMMON_INFRASTRUCTURE_SCHEMA, COMMON_INFRASTRUCTURE_VERSION, MAX_SNAPSHOT_ENTRIES } from '../contracts/common-infrastructure.mts';
+import { COMMON_INFRASTRUCTURE_SCHEMA, COMMON_INFRASTRUCTURE_VERSION, MAX_SNAPSHOT_ENTRIES, OFFICIAL_CLOUD_RANGE_URLS } from '../contracts/common-infrastructure.mts';
 import { addressValue, type AddressValue } from '../contracts/ip-address.mts';
 
 type JsonRecord = Record<string, unknown>;
@@ -29,6 +29,7 @@ type Source = Readonly<{
   category: CommonInfrastructureCategory;
   sourceDate: string;
   sourceDigestSha256: string;
+  sourcePath?: string;
   values: readonly string[];
 }>;
 
@@ -146,6 +147,11 @@ export function parseCommonInfrastructureSnapshot(value: unknown): Snapshot {
       throw new TypeError('Common-infrastructure source has an invalid contract.');
     }
     seenSourceIds.add(id);
+    const officialUrl = OFFICIAL_CLOUD_RANGE_URLS[id as keyof typeof OFFICIAL_CLOUD_RANGE_URLS];
+    if (typeof item.sourcePath === 'string' && /^https?:/u.test(item.sourcePath)
+      && id !== 'public-dns-core' && item.sourcePath !== officialUrl) {
+      throw new TypeError('Common-infrastructure publisher URL is not supported.');
+    }
     const ranges = item.values.map((value) => {
       const range = compileCidr(value);
       if (!range) throw new TypeError('Common-infrastructure source has an invalid contract.');
@@ -157,6 +163,7 @@ export function parseCommonInfrastructureSnapshot(value: unknown): Snapshot {
       category: expectedCategory,
       sourceDate: item.sourceDate,
       sourceDigestSha256: digest,
+      ...(officialUrl && item.sourcePath === officialUrl ? { sourcePath: officialUrl } : {}),
       values: Object.freeze(ranges.map((range) => range.cidr)),
     });
     sources.push(admitted);
@@ -232,7 +239,8 @@ export function classifyCommonInfrastructureAddress(
       sourceDate: source.sourceDate,
       sourceDigestSha256: source.sourceDigestSha256,
       snapshotGeneratedAt: snapshot.generatedAt,
-      provenance: `${snapshot.source.project} at ${snapshot.source.commit}`,
+      provenance: source.sourcePath ? `${source.label} published ranges at ${source.sourcePath}`
+        : `${snapshot.source.project} at ${snapshot.source.commit}`,
       limitation: 'This exact range match identifies shared infrastructure, not an origin host, tenant, account, operator, ownership, intent, safety, or maliciousness.',
     }));
     if (matches.length >= 4) break;

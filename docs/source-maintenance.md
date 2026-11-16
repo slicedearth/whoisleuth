@@ -31,9 +31,9 @@ For `sources:drift`, exit 0 means compared sources match, 1 means drift/review i
 due, and 2 means at least one comparison is inconclusive. Inspect individual
 rows: an unavailable source is not an empty catalogue.
 
-The source check covers SSLBL, KEV, browser-library advisories, selected shared
-infrastructure lists, both official Cloudflare range lists, the latest Unicode
-confusables release and RDAP extensions. Unrelated changes elsewhere in an
+The source check covers SSLBL, KEV, browser-library advisories, official AWS and
+Google Cloud ranges, the retained edge list, both official Cloudflare range lists,
+the latest Unicode confusables release and RDAP extensions. Unrelated changes elsewhere in an
 upstream repository do not require a new pin.
 
 To check and prepare routine certificate and KEV updates in one pass, use
@@ -69,9 +69,9 @@ npm run sources:prepare -- registrar /tmp/registrar-edition.json /tmp/registrars
 npm run sources:prepare -- infrastructure /tmp/infrastructure-edition.json --upstream '<reviewed-full-revision>'
 ```
 
-Only `--upstream` makes requests, to check the pinned public range sources and
-the official edge ranges. Infrastructure also accepts a reviewed snapshot JSON
-instead. The tool does not overwrite files. Review the data and record the
+Only `--upstream` makes requests, to the official cloud range feeds, pinned
+edge list and official edge ranges. Infrastructure also accepts a reviewed
+snapshot JSON instead. The tool does not overwrite files. Review the data and record the
 printed `sha256:…` receipt separately. The digest identifies exact reviewed
 bytes; it is not a publisher signature.
 
@@ -135,7 +135,7 @@ exported cluster reviews or the bundled range catalogue.
 | SSLBL | `npm run sslbl:snapshot -- --input=/path/to/sslblacklist.csv`; repeat with `--check-only` |
 | KEV | Pins in `tools/cisa-kev-catalog.mts`; `npm run catalog:kev -- --source /path/to/feed.json --write`, then `--check` |
 | Browser-library advisories | Pins in `tools/retire-browser-catalog.mts`; `npm run catalog:retire -- --source /path/to/jsrepository.json --write`, then `--check`; expression qualification is mandatory |
-| Infrastructure ranges | `npm run common-infrastructure:update -- --commit <reviewed-full-revision>`; then `npm run common-infrastructure:check` |
+| Infrastructure ranges | `npm run common-infrastructure:update -- --commit <reviewed-full-revision>` reads the official cloud publishers and pinned edge list; then `npm run common-infrastructure:check` |
 | Unicode | Source policy in `lib/idn-confusable-policy.mts`; [projection and calibration](idn-confusables.md) |
 | Registrars and notices | `npm run registrar:standing:update -- --iana-source /path/to/registrars.csv --icann-source /path/to/notices.html --observed-at <ISO-timestamp>`; then `npm run registrar:standing:check` |
 | Root zone, RDAP bootstrap and extensions | [Registry data contract](registry-data-contract.md); refresh the reviewed baseline and capability projections together |
@@ -147,6 +147,15 @@ review updates the current review date, without copying a catalogue. A genuine
 interpretation change adds an immutable epoch by extending the previous table.
 Keep epochs required by supported saved-artefact versions, and verify historical
 readers without regenerating their fixtures.
+
+AWS and Google Cloud ranges are projected directly from their official feeds,
+not delayed warning-list copies. Each source retains its publisher date, exact
+URL and raw-response digest; the warning-list revision and licence refer only
+to that separate input. Overlapping and adjacent service prefixes are compacted
+without changing their address coverage or inferring a tenant or account.
+A stale official feed is still excluded.
+These infrastructure projections remain bundled or explicitly supplied local
+editions; the deployed certificate/KEV refresh does not update them.
 
 Cloudflare's publisher date can remain old while its complete ranges are
 unchanged. The range owner verifies both official lists and records a separate,

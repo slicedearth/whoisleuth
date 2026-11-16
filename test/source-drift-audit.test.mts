@@ -14,6 +14,8 @@ import { RDAP_EXTENSION_SOURCE_URL } from '../tools/rdap-extension-drift-audit.m
 import { RDAP_EXTENSION_REGISTRY_FIXTURE } from '../fixtures/rdap-extension-registry.mts';
 import { sha256Text as sha256 } from '../tools/maintainer-tool-helpers.mts';
 import { decodeRetainedSourceEdition } from '../packages/evidence/retained-source-edition.mts';
+import { infrastructureSource } from './fixtures/common-infrastructure-sources.mts';
+import { OFFICIAL_CLOUD_RANGE_URLS } from '../packages/contracts/common-infrastructure.mts';
 
 const NOW = new Date('2026-09-23T12:00:00.000Z');
 const COMMIT = 'a'.repeat(40);
@@ -34,8 +36,9 @@ async function fixture() {
     [CLOUDFLARE_RANGE_URLS[0]!, '198.19.0.0/24\n'], [CLOUDFLARE_RANGE_URLS[1]!, '2001:db8::/32\n'],
   ]);
   for (const id of ['amazon-aws', 'cloudflare', 'google-gcp']) bodies.set(
-    `https://raw.githubusercontent.com/MISP/misp-warninglists/${COMMIT}/lists/${id}/list.json`,
-    JSON.stringify({ type: 'cidr', version: id === 'cloudflare' ? 20260811 : 20260908, list: ['198.19.0.0/24', '2001:db8::/32'] }),
+    id === 'cloudflare' ? `https://raw.githubusercontent.com/MISP/misp-warninglists/${COMMIT}/lists/${id}/list.json`
+      : OFFICIAL_CLOUD_RANGE_URLS[id as keyof typeof OFFICIAL_CLOUD_RANGE_URLS],
+    infrastructureSource(id, id === 'cloudflare' ? 20260811 : 20260908, ['198.19.0.0/24', '2001:db8::/32']),
   );
   const requests: string[] = [];
   const fetchSource = async (url: string, init: RequestInit): Promise<Response> => {
@@ -140,6 +143,24 @@ describe('read-only retained source drift', () => {
     assert.equal(report.checks.find(item => item.id === 'infrastructure_amazon-aws')?.status, 'drift');
     assert.equal(report.checks.find(item => item.id === 'sslbl')?.status, 'drift');
     assert.equal(report.checks.find(item => item.id === 'kev')?.status, 'drift');
+  });
+
+  test('uses fresh official cloud data rather than stale mirrors and detects changed or unavailable publishers independently', async () => {
+    const setup = await fixture();
+    const url = OFFICIAL_CLOUD_RANGE_URLS['amazon-aws'];
+    setup.bodies.set(`https://raw.githubusercontent.com/MISP/misp-warninglists/${COMMIT}/lists/amazon-aws/list.json`,
+      JSON.stringify({ type: 'cidr', version: 20240101, list: ['192.0.2.0/24'] }));
+    assert.equal((await auditSourceDrift(setup)).checks.find(item => item.id === 'infrastructure_amazon-aws')?.status, 'current');
+    setup.bodies.set(url, infrastructureSource('amazon-aws', 20260923, ['192.0.2.0/24', '2001:db8::/32']));
+    let report = await auditSourceDrift(setup);
+    assert.equal(report.checks.find(item => item.id === 'infrastructure_amazon-aws')?.status, 'drift');
+    report = await auditSourceDrift({ ...setup, fetchSource: (input, init) => input === INFRASTRUCTURE_REVISION_URL
+      ? Promise.resolve(new Response(null, { status: 503 })) : setup.fetchSource(input, init) });
+    assert.equal(report.checks.find(item => item.id === 'infrastructure_google-gcp')?.status, 'current');
+    report = await auditSourceDrift({ ...setup, fetchSource: (input, init) => input === url
+      ? Promise.resolve(new Response(null, { status: 503 })) : setup.fetchSource(input, init) });
+    assert.equal(report.checks.find(item => item.id === 'infrastructure_amazon-aws')?.status, 'inconclusive');
+    assert.equal(report.checks.find(item => item.id === 'infrastructure_google-gcp')?.status, 'current');
   });
 
   test('bounds a stalled source and continues independent checks without automatic retries', async () => {

@@ -29,7 +29,7 @@ import {
 } from '../lib/cisa-kev-source.mts';
 import { MAX_SOURCE_BYTES as BROWSER_CATALOGUE_BYTES, MAX_CATALOGUE_COMPONENTS } from './retire-browser-catalog.mts';
 import {
-  SOURCE_DEFINITIONS, MAX_SOURCE_BYTES as INFRASTRUCTURE_BYTES, FRESHNESS_DAYS,
+  SOURCE_DEFINITIONS, FRESHNESS_DAYS,
   parseSource, verifyCloudflareRanges, commonInfrastructureHealth,
   OfficialRangeMismatchError, type Snapshot,
 } from './common-infrastructure-snapshot.mts';
@@ -215,9 +215,10 @@ export async function auditSourceDrift(options: Options = {}) {
   });
   for (const definition of SOURCE_DEFINITIONS) {
     await check(`infrastructure_${definition.id}`, definition.label, async () => {
-      if (!infrastructureRevision) throw new SourceUnavailable('The upstream revision is unavailable; no comparison was possible.');
-      const url = `https://raw.githubusercontent.com/MISP/misp-warninglists/${infrastructureRevision}/lists/${definition.list}/list.json`;
-      const parsed = parseSource(definition, await text(url, INFRASTRUCTURE_BYTES), now);
+      if (!('url' in definition) && !infrastructureRevision) throw new SourceUnavailable('The upstream revision is unavailable; no comparison was possible.');
+      const url = 'url' in definition ? definition.url
+        : `https://raw.githubusercontent.com/MISP/misp-warninglists/${infrastructureRevision}/lists/${definition.list}/list.json`;
+      const parsed = parseSource(definition, await text(url, definition.maximumBytes), now);
       const previous = baseline.infrastructure.sources.find(item => item.id === definition.id);
       let officialMismatch = false;
       if (definition.id === 'cloudflare') {
@@ -239,7 +240,7 @@ export async function auditSourceDrift(options: Options = {}) {
         detail: officialMismatch ? 'Official edge ranges differ from the warning list; review both sources before refreshing.'
           : reviewDue ? 'Source verification is due; refresh only after reviewing current upstream evidence.'
           : definition.id === 'cloudflare' ? 'Warning list compared with both official address-family lists; publisher date remains unchanged.'
-            : 'Selected warning-list bytes match when current; unrelated repository revisions do not require repinning.' };
+            : 'Official publisher ranges and publication date compared directly; no warning-list mirror is used.' };
     });
   }
   checks.sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
