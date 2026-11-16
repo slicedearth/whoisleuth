@@ -499,8 +499,8 @@ test('HTTP scope separates failed requests from retained final destinations', as
     ]);
     await expect(page.getByRole('heading', { name: 'scope.example.test', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Run lookup', exact: true })).toBeEnabled();
-    const expand = page.getByRole('button', { name: 'Expand details: Web and DNS evidence' });
-    if (await expand.isVisible()) await expand.click();
+    await page.getByRole('navigation', { name: 'Result sections' })
+      .getByRole('link', { name: 'Web & DNS', exact: true }).click();
     const card = page.locator('.http-card');
     await expect(card.locator(':scope > summary .evidence-status')).toHaveText(shouldFail ? 'error' : 'success');
     await card.locator(':scope > summary').focus();
