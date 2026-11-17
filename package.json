@@ -1,6 +1,6 @@
 {
   "name": "whoisleuth",
-  "version": "2.9.1",
+  "version": "2.9.2",
   "private": true,
   "license": "AGPL-3.0-only",
   "description": "Open-source, local-first domain intelligence and brand protection console for WHOIS, RDAP, DNS, certificate transparency, lookalike domains, and web evidence.",
@@ -156,7 +156,7 @@
     "@types/express": "^5.0.6",
     "@types/node": "^24.19.2",
     "ajv": "^8.20.0",
-    "dependency-cruiser": "^18.7.2",
+    "dependency-cruiser": "^18.8.0",
     "fast-check": "^4.10.2",
     "prettier": "3.10.1",
     "prettier-plugin-svelte": "4.1.1",

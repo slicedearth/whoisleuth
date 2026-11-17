@@ -7,10 +7,10 @@ const REGISTRAR_STANDING_CATALOGUE = Object.freeze({
   schema: REGISTRAR_STANDING_CATALOGUE_SCHEMA,
   version: REGISTRAR_STANDING_CATALOGUE_VERSION,
   ...{
-  "generatedAt": "2026-11-07T05:05:21.024Z",
+  "generatedAt": "2026-11-17T16:29:36.147Z",
   "iana": {
     "sourceUrl": "https://www.iana.org/assignments/registrar-ids/registrar-ids-1.csv",
-    "observedAt": "2026-11-07T05:05:21.024Z",
+    "observedAt": "2026-11-17T16:29:36.147Z",
     "normalizedSha256": "3cf2c4cae9e8ca5f2183ae910b5b1ffd3dd689d922acdceb794f75610116361d",
     "rows": 4508,
     "counts": {
@@ -22,7 +22,7 @@ const REGISTRAR_STANDING_CATALOGUE = Object.freeze({
   },
   "icann": {
     "sourceUrl": "https://www.icann.org/compliance/notices",
-    "reviewedAt": "2026-11-07T05:05:21.024Z",
+    "reviewedAt": "2026-11-17T16:29:36.147Z",
     "catalogueYear": 2026,
     "normalizedSha256": "b00d20cd7b4ff794a343d5ac317076b1f821f3b30adc37996e66e08d2078fc31",
     "notices": [
