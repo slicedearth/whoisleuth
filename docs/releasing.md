@@ -20,16 +20,14 @@ unsupported future versions, and document migration or comparison behaviour.
 
 ## Prepare a release
 
-Version 2.9.1 refreshes bundled certificate fingerprints, known-exploited
-vulnerability identifiers and browser-library advisories, and updates compatible
-runtime and development dependencies. Mail review no longer attributes a sender
-domain from a mailbox containing unsupported control characters.
-
-The infrastructure catalogue retains verified edge-network ranges and reviewed
-public resolvers; cloud-platform lists beyond the existing freshness window are
-excluded rather than presented as current. The optional
+Review bundled source updates through their existing owners, including publisher
+dates, digests and source-specific freshness checks. Cloud ranges come from their
+official publishers; a later verification date does not replace a publication
+date. The optional
 [retained source edition channel](source-maintenance.md#refresh-a-data-edition-without-a-build)
-and bundled fallback behaviour are unchanged.
+can refresh supported hosted data between deployments, but does not update the
+installed CLI or its bundled fallbacks. Include applicable fallback updates in
+the release rather than assuming the hosted edition covers every consumer.
 
 Work on a focused branch and prepare the approved explicit version:
 
