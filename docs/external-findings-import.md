@@ -41,6 +41,29 @@ fields. The existing WACZ package digest remains a source reference in imported
 evidence; member paths, member digests and record locations are preview-only.
 A generated archive summary has no single original scalar location.
 
+## Existing reconnaissance results
+
+Select a dnsx or httpx producer before choosing a `.jsonl` or `.ndjson` file.
+The same offline conversion is available in the CLI:
+
+```bash
+whoisleuth map-observations dns-results.jsonl --input-format dnsx-jsonl --json --output findings.json
+whoisleuth map-observations http-results.jsonl --input-format httpx-jsonl --json --output findings.json
+```
+
+Inputs are limited to 384 KiB, 500 rows and 64 KiB per row. Each accepted row
+needs an exact hostname and explicit timestamp. Hostnames are not collapsed to
+their parent domain; collection completeness remains unknown. DNS answer values
+and HTTP status/title/server metadata are retained, not raw response bodies,
+headers, query-bearing URLs or local paths. Missing answers do not establish
+removal. A failed HTTP observation remains partial.
+
+The preview reports excluded rows and retained-limit omissions. CLI conversion
+returns exit 4 for either and keeps notices on stderr, with valid findings JSON
+on stdout. A `sha256-jsonl-row` reference identifies the complete original row
+text, excluding its line ending. Keep the original file; converted fields have
+no invented original-file locations. No DNS query or HTTP request is repeated.
+
 ## Current and historical schemas
 
 The current writer emits version 5. The reader supports versions 4 and 5.

@@ -1,6 +1,6 @@
 // Generated from canonical runtime-neutral metadata. Do not edit by hand.
 export const PUBLIC_CLI_INDEX = {
-  "commandCount": 54,
+  "commandCount": 55,
   "groups": [
     "investigate",
     "respond",
@@ -367,6 +367,13 @@ export const PUBLIC_CLI_INDEX = {
       "summary": "Read or browse a saved Lookup offline",
       "group": "investigate",
       "common": true,
+      "mode": "offline"
+    },
+    {
+      "id": "mcp",
+      "summary": "Serve selected evidence read-only over local MCP",
+      "group": "utilities",
+      "common": false,
       "mode": "offline"
     },
     {

@@ -612,6 +612,24 @@ deliberately selects a local file. Existing files are refused unless replacement
 is explicit. CLI files are not uploaded to WHOISleuth and remain under the
 operator's retention and deletion control.
 
+The optional `mcp --stdio --allow-model-disclosure` adapter exposes only
+explicitly selected, immutable local file snapshots to a compatible connected
+client. Tools can list identities, inspect minimised facts, verify artefacts,
+compare observations and prepare no-request plans. They cannot write, collect,
+run commands or read another path. Raw registry publications, contacts,
+free-text page data and Case notes are excluded. Selected snapshots stay in
+process memory until the session ends; no index, background access or public
+listener is created. The connected client may send returned evidence to its
+model provider. Local transport and read-only annotations do not prevent that
+disclosure or sandbox the client; startup acknowledgement and deliberate file
+selection are required.
+
+Selected dnsx/httpx JSONL imports are processed locally through the existing
+findings preview. They preserve exact hostnames, explicit timestamps and a
+digest of each complete source row, with unknown collection completeness.
+Raw bodies, headers, sensitive URL paths/queries and local paths are excluded.
+No collection is repeated and no Case is changed before deliberate import.
+
 Explicit `--brand-profile` on Lookup, Bulk or Discover scan reads one bounded
 local Brand Profile export for Risk failure-policy comparisons. Only its
 normalised domain declarations and favicon references are used in memory; the

@@ -30,6 +30,7 @@ type SharingReviewArguments = {
 type MapObservationsArguments = {
   action: 'map-observations';
   source: string | null;
+  inputFormat?: 'mapping' | 'dnsx-jsonl' | 'httpx-jsonl';
   output: 'terminal' | 'json';
 } & TerminalOptions;
 
@@ -112,7 +113,8 @@ function parseSharingReviewArguments(parsed: ParsedCommandArguments<SharingRevie
 export const ASSURANCE_ARGUMENT_PARSERS = Object.freeze({
   manifest: parseManifestArguments,
   'map-observations': (parsed: ParsedCommandArguments<MapObservationsArguments['action']>): MapObservationsArguments =>
-    singleInputAction('map-observations', parsed),
+    ({ ...singleInputAction('map-observations', parsed), ...(parsed.optionValue('--input-format')
+      ? { inputFormat: parsed.optionValue('--input-format') as NonNullable<MapObservationsArguments['inputFormat']> } : {}) }),
   'oam-export': (parsed: ParsedCommandArguments<OamExportArguments['action']>): OamExportArguments =>
     singleInputAction('oam-export', parsed),
   'ct-intake': (parsed: ParsedCommandArguments<CtIntakeArguments['action']>): CtIntakeArguments => singleInputAction('ct-intake', parsed),

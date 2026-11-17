@@ -1,7 +1,26 @@
 import { LOOKUP_EVIDENCE_SCHEMA_VERSION, V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../packages/contracts/lookup-evidence.mts';
 import { PUBLISHED_V2_LOOKUP_EVIDENCE_VERSIONS, positional, OPTIONAL_FILE_POSITIONAL, constraint, EMPTY_CONSTRAINTS, commandSeed } from './command-definition.mts';
+import { MAX_MCP_EVIDENCE_FILES, MAX_MCP_EVIDENCE_BYTES, MAX_MCP_TOTAL_BYTES, MAX_MCP_MESSAGE_BYTES, MAX_MCP_OUTPUT_BYTES } from '../packages/contracts/local-tool-adapter.mts';
 
 export const HISTORY_COMMAND_DEFINITIONS = Object.freeze({
+  mcp: commandSeed({
+    reference: {
+      description: 'Serve minimised selected evidence to a compatible local MCP client over stdio.',
+      example: 'whoisleuth mcp --stdio --allow-model-disclosure lookup.json evidence.json',
+      boundary: 'Offline and read-only: inspect selected immutable evidence, verify artefacts, compare saved Lookups and prepare no-request collection plans. No arbitrary paths, shell commands, writes, live collection, public port or default file discovery. The connected client may send returned evidence to its model provider; acknowledge this at startup. Raw publications, contacts, page text and Case notes are not exposed. Stdout is reserved for protocol messages.',
+    },
+    collection: { scope: `Reads 1 to ${MAX_MCP_EVIDENCE_FILES} explicit files, at most ${MAX_MCP_EVIDENCE_BYTES / 1024 / 1024} MiB each and ${MAX_MCP_TOTAL_BYTES / 1024 / 1024} MiB combined. Protocol input is limited to ${MAX_MCP_MESSAGE_BYTES / 1024} KiB per message and tool output to ${MAX_MCP_OUTPUT_BYTES / 1024} KiB.` },
+    summary: 'Serve selected evidence read-only over local MCP',
+    options: ['--stdio', '--allow-model-disclosure'],
+    commonOptions: ['--help'],
+    positionals: Object.freeze([positional('sources', 'file', 1, MAX_MCP_EVIDENCE_FILES)]),
+    constraints: Object.freeze([
+      constraint({ kind: 'required', options: ['--stdio', '--allow-model-disclosure'] }),
+    ]),
+    handlerOwner: 'history', networkEffect: 'offline', common: false,
+    schemaIdentifiers: Object.freeze([]), primaryArtefacts: Object.freeze(['Minimised selected evidence']),
+    planSupport: false, additionalOutputFormats: Object.freeze([]), bootstrapProfile: 'allowed',
+  }),
   view: commandSeed({
     reference: {
       description: 'Read one saved Lookup without collecting again.',

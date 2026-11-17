@@ -59,7 +59,7 @@ This catalogue describes existing execution, disclosure, retention and assurance
 
 ## CLI operation catalogue
 
-The public command catalogue keeps its version 1 offline/network label for all 54 installed CLI operations. These operation records retain the more precise plane, activation, credential, export and scoring contract.
+The public command catalogue keeps its version 1 offline/network label for all 55 installed CLI operations. These operation records retain the more precise plane, activation, credential, export and scoring contract.
 
 | Operation | Capability family | Legacy collection | Trigger | Planes | Network | Disclosure | Recipients | Credentials | Retention | Export | Scoring | Authorisation |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -114,6 +114,7 @@ The public command catalogue keeps its version 1 offline/network label for all 5
 | `command.cli.workflow-run` | `workflow_execution` | network | explicit cli command | local cli offline<br>local cli network | conditional bounded passive | normalised target<br>registry query<br>whois query<br>dns question<br>public ip address<br>homepage request<br>tls handshake<br>mta sts policy request<br>certificate search term | registry service<br>dns resolver<br>target public service<br>certificate transparency service | none | local output deliberate | local output | none | explicit network approval |
 | `command.cli.diff` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
 | `command.cli.view` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
+| `command.cli.mcp` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
 | `command.cli.reconcile` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
 | `command.cli.timeline` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
 | `command.cli.export` | `portable_evidence` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | deliberate bounded | none | explicit action |
@@ -270,6 +271,7 @@ Runtime configuration and admission remain with their existing enforcement owner
 | `command.cli.workflow-run` | variant specific | collector specific | command bounded | step stops admission | explicit step | complete<br>partial<br>blocked | complete<br>partial<br>awaiting network approval<br>awaiting analyst selection<br>awaiting review confirmation<br>step failed |
 | `command.cli.diff` | none | bounded local input | none | bounded atomic | explicit per source | complete<br>partial | None |
 | `command.cli.view` | none | bounded local input | none | bounded atomic | all or nothing | complete | None |
+| `command.cli.mcp` | none | bounded local input | none | bounded atomic | all or nothing | complete | None |
 | `command.cli.reconcile` | none | bounded local input | none | bounded atomic | explicit per source | complete<br>partial | None |
 | `command.cli.timeline` | none | bounded local input | none | bounded atomic | explicit per source | complete<br>partial | None |
 | `command.cli.export` | none | bounded portable document | none | bounded atomic | all or nothing | complete | None |
@@ -493,6 +495,7 @@ Runtime configuration and admission remain with their existing enforcement owner
 | `command.cli.workflow-run` | Only fixed installed recipe steps can run, and every network invocation requires explicit approval. |
 | `command.cli.diff` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.view` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
+| `command.cli.mcp` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.reconcile` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.timeline` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.export` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |

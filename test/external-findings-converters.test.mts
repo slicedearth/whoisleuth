@@ -1,5 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
+import { Writable } from 'node:stream';
+import { createHash } from 'node:crypto';
+import { convertReconJsonl } from '../packages/interchange/recon-jsonl-import.mts';
+import { mergeExternalFindingsIntoCases } from '../packages/interchange/external-findings-import.mts';
+import { buildCaseExport, mergeCases } from '../packages/cases/case-model.mts';
+import { runCli } from '../cli/runner.mts';
+import EXIT_CODES from '../cli/exit-codes.mts';
 import {
   EXTERNAL_FINDING_ROWS_SCHEMA,
   CERTIFICATE_OBSERVATION_ROWS_SCHEMA,
@@ -13,6 +20,62 @@ import {
 const observedAt = '2026-07-01T00:00:00.000Z';
 
 describe('external findings converters', () => {
+  test('converts producer JSONL offline and preserves exact host, time and complete-row identity through Case round trips', () => {
+    const raw = JSON.stringify({ host: 'Mail.Example.Test.', timestamp: observedAt, status_code: 'NOERROR',
+      a: ['192.0.2.10'], mx: ['mx.example.test'], raw: 'private original DNS payload' });
+    const report = convertReconJsonl(`${raw}\r\n${raw}\n{"host":"bad.test"}`, 'dnsx-jsonl');
+    assert.equal(report.accepted, 2);
+    assert.equal(report.duplicates, 2);
+    assert.equal(report.rejected, 1);
+    assert.ok(report.document.findings.every(finding => finding.domain === 'mail.example.test'
+      && finding.observedAt === observedAt && finding.completeness === 'unknown'));
+    assert.equal(report.document.findings[0]!.reference, `sha256-jsonl-row:${createHash('sha256').update(raw).digest('hex')}`);
+    const merged = mergeExternalFindingsIntoCases([], report.document, observedAt);
+    const restored = mergeCases([], buildCaseExport(merged.cases, observedAt));
+    assert.equal(restored.cases[0]!.domain, 'mail.example.test');
+    assert.ok(restored.cases[0]!.evidencePins.every(pin => pin.observationHostname === 'mail.example.test'
+      && pin.completeness === 'unknown' && pin.observedAt === observedAt));
+    assert.ok(restored.cases[0]!.evidencePins.every(pin => pin.limitations.some(value => value.includes(createHash('sha256').update(raw).digest('hex')))));
+    assert.doesNotMatch(JSON.stringify(restored.cases), /private original DNS payload/u);
+  });
+
+  test('keeps unsuccessful HTTP collection and unknown negative DNS scope distinct without retaining private payloads', () => {
+    const rows = [
+      { url: 'https://portal.example.test/private?token=secret', timestamp: observedAt, failed: false,
+        status_code: 200, title: 'Example sign-in', webserver: 'Example server', body: 'private-body',
+        header: { authorization: 'private-header' }, stored_response_path: '/private/local-file' },
+      { url: 'https://portal.example.test/', timestamp: observedAt, failed: true, status_code: 0, error: 'private transport detail' },
+    ];
+    const report = convertReconJsonl(rows.map(row => JSON.stringify(row)).join('\n'), 'httpx-jsonl');
+    assert.deepEqual(report.document.findings.map(finding => finding.completeness), ['unknown', 'partial']);
+    assert.match(report.document.findings[0]!.summary, /HTTP 200.*Example sign-in/u);
+    assert.doesNotMatch(JSON.stringify(report.document), /token=|private-body|private-header|local-file|transport detail/u);
+    const empty = convertReconJsonl(JSON.stringify({ host: 'example.test', timestamp: observedAt, status_code: 'NXDOMAIN' }), 'dnsx-jsonl');
+    assert.equal(empty.document.findings[0]!.completeness, 'unknown');
+    const long = { ...rows[0], title: 'x'.repeat(900) };
+    const distinct = convertReconJsonl([JSON.stringify(long), JSON.stringify({ ...long, title: `${'x'.repeat(899)}y` })].join('\n'), 'httpx-jsonl');
+    assert.equal(distinct.accepted, 2);
+    assert.notEqual(distinct.document.findings[0]!.reference, distinct.document.findings[1]!.reference);
+    assert.throws(() => convertReconJsonl('{"host":"a.test","host":"b.test"}', 'dnsx-jsonl'));
+    assert.throws(() => convertReconJsonl(`${' '.repeat(384 * 1024)}x`, 'dnsx-jsonl'));
+    const oversized = `${JSON.stringify({ host: 'example.test', timestamp: observedAt, raw: 'x'.repeat(65 * 1024) })}\n${JSON.stringify({ host: 'other.test', timestamp: observedAt })}`;
+    assert.equal(convertReconJsonl(oversized, 'dnsx-jsonl').rejected, 1);
+  });
+
+  test('runs the production JSONL command with valid structured output and partial notices on stderr', async () => {
+    const input = `${JSON.stringify({ host: 'child.example.test', timestamp: observedAt, a: ['192.0.2.10'] })}\nnot-json`;
+    let stdout = '', stderr = '';
+    const code = await runCli(['map-observations', 'input.jsonl', '--input-format', 'dnsx-jsonl', '--json'], {
+      readArtifactInput: () => input,
+      stdout: new Writable({ write(chunk, _encoding, done) { stdout += chunk; done(); } }),
+      stderr: new Writable({ write(chunk, _encoding, done) { stderr += chunk; done(); } }),
+      runUnifiedLookup: () => assert.fail('Import must remain offline'),
+      now: () => observedAt,
+    });
+    assert.equal(code, EXIT_CODES.PARTIAL_FAILURE);
+    assert.equal(JSON.parse(stdout).findings[0].domain, 'child.example.test');
+    assert.match(stderr, /1 rejected/u);
+  });
   test('supported rows disclose per-domain omissions without discarding other valid domains', () => {
     for (const count of [20, 21, 30]) {
       const report = convertSupportedExternalFindings({ schema: DNS_OBSERVATION_ROWS_SCHEMA, schemaVersion: 1,

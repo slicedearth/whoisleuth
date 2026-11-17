@@ -8,6 +8,7 @@ import { CLI_FAIL_POLICIES_BY_COMMAND, type CliFailPolicyCommand } from './fail-
 import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS } from '../packages/investigation/investigation-manifest.mts';
 import { IDENTITY_ACTIONS } from '../packages/contracts/message-intake.mts';
 import { bulkQueryLimit, bulkConcurrencyLimit } from '../lib/bulk-limits.mts';
+import { RECON_JSONL_FORMATS } from '../packages/contracts/external-observation-interchange.mts';
 
 const LEGACY_WORKSPACE_ARCHIVE_VERSIONS = SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS
   .filter((version) => version !== WORKSPACE_ARCHIVE_VERSION);
@@ -150,8 +151,8 @@ const REGISTRY_SCAFFOLD_COMMON_OPTIONS = Object.freeze(
   COMMON_OPTIONS.filter((option) => option !== '--config' && option !== '--profile'),
 );
 
-function commonOptionsForSeed(seed: Pick<CliCommandSeed, 'bootstrapProfile'>): readonly CliOption[] {
-  return seed.bootstrapProfile === 'command_owned' ? REGISTRY_SCAFFOLD_COMMON_OPTIONS : COMMON_OPTIONS;
+function commonOptionsForSeed(seed: Pick<CliCommandSeed, 'bootstrapProfile' | 'commonOptions'>): readonly CliOption[] {
+  return seed.commonOptions ?? (seed.bootstrapProfile === 'command_owned' ? REGISTRY_SCAFFOLD_COMMON_OPTIONS : COMMON_OPTIONS);
 }
 
 function positional(
@@ -234,6 +235,9 @@ const integer = (description: string, ranges: (command: CliCommand) => readonly 
 );
 
 const CLI_OPTION_DEFINITIONS = Object.freeze({
+  '--input-format': enumeration('Select the local observation input format.', ['mapping', ...RECON_JSONL_FORMATS], 'mapping'),
+  '--stdio': flag('Serve the optional local read-only MCP protocol on stdin/stdout.'),
+  '--allow-model-disclosure': flag('Acknowledge that the connected client may send selected evidence to its model provider.'),
   '--help': optionDefinition('flag', 'Show command usage, options and an example without executing it.', { metaAction: 'help' }),
   '--output': file('Write output atomically to this local file.'),
   '--force': flag('Allow replacement of the selected output file.'),
@@ -418,18 +422,19 @@ function optionSpec(command: CliCommand, option: CliOption, scope: CliOptionScop
 function grammarConstraints(
   commandOptions: readonly CliOption[],
   commandConstraints: readonly CliGrammarConstraint[],
+  commonOptions: readonly CliOption[] = COMMON_OPTIONS,
 ): readonly CliGrammarConstraint[] {
   const machineOutputOptions = commandOptions.filter((option) => MACHINE_OUTPUT_OPTIONS.includes(option));
   return Object.freeze([
-    ...FILE_OUTPUT_CONSTRAINTS,
-    ...(commandOptions.includes('--quiet') ? [QUIET_OUTPUT_CONSTRAINT] : []),
+    ...(commonOptions.includes('--output') ? FILE_OUTPUT_CONSTRAINTS : []),
+    ...(commandOptions.includes('--quiet') && commonOptions.includes('--output') ? [QUIET_OUTPUT_CONSTRAINT] : []),
     ...(commandOptions.includes('--quiet') && machineOutputOptions.length > 0
       ? [constraint({ kind: 'excludes_all', option: '--quiet', excludedOptions: machineOutputOptions })]
       : []),
-    ...(commandOptions.includes('--events')
+    ...(commandOptions.includes('--events') && commonOptions.includes('--output')
       ? [constraint({ kind: 'mutually_exclusive', options: ['--events', '--output'] })]
       : []),
-    ...(commandOptions.includes('--browse')
+    ...(commandOptions.includes('--browse') && commonOptions.includes('--output')
       ? [constraint({ kind: 'mutually_exclusive', options: ['--browse', '--output'] })]
       : []),
     ...commandConstraints,
@@ -447,6 +452,7 @@ type CliCommandSeed = Readonly<{
   handlerOwner: CliExecutionOwner;
   networkEffect: CliNetworkEffect;
   common: boolean;
+  commonOptions?: readonly typeof COMMON_OPTIONS[number][];
   schemaIdentifiers: readonly string[];
   primaryArtefacts: readonly string[];
   planSupport: boolean;
@@ -474,6 +480,7 @@ function commandSeed<const Owner extends CliExecutionOwner, const Options extend
       scope: seed.collection.scope,
     }),
     options: Object.freeze([...seed.options]),
+    ...(seed.commonOptions ? { commonOptions: Object.freeze([...seed.commonOptions]) } : {}),
     ...(seed.optionOverrides ? { optionOverrides: Object.freeze({ ...seed.optionOverrides }) } : {}),
     positionals: Object.freeze([...seed.positionals]),
     constraints: Object.freeze([...seed.constraints]),

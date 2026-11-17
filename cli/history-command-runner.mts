@@ -30,6 +30,7 @@ import { browseLookupDocument, browseLookupComparison, canBrowseLookup, type Loo
 import type { BoundedTextStream } from './bulk.mts';
 import type { TerminalEnvironment } from './terminal-presentation.mts';
 import { HISTORY_INLINE_COMMANDS } from './inline-command-families.mts';
+import { MAX_MCP_TOTAL_BYTES } from '../packages/contracts/local-tool-adapter.mts';
 
 import { runDiscriminatedCommandHandler, type DiscriminatedCommandHandlerMap } from './discriminated-command-handlers.mts';
 
@@ -44,6 +45,28 @@ export type HistoryCommandDependencies = {
 
 type HistoryInlineCommand = typeof HISTORY_INLINE_COMMANDS[number];
 type HistoryCommandArguments = Extract<CliArguments, { action: HistoryInlineCommand }>;
+
+async function runMcpCommand(
+  args: Extract<HistoryCommandArguments, { action: 'mcp' }>, dependencies: HistoryCommandDependencies, context: CliCommandContext,
+): Promise<number> {
+  context.setFailureLabel('Local evidence MCP');
+  const { serveReadOnlyMcp } = await import('./mcp-server.mts');
+  const inputs: string[] = [];
+  let total = 0;
+  for (const source of args.sources) {
+    if (total >= MAX_MCP_TOTAL_BYTES) throw new CliUsageError('Selected evidence exceeds the combined MCP byte limit.');
+    const input = dependencies.readDiffInput ? await dependencies.readDiffInput(source)
+      : await context.readInput(source, Math.min(MAX_SAVED_LOOKUP_INPUT_BYTES, MAX_MCP_TOTAL_BYTES - total), 'Selected MCP evidence');
+    total += Buffer.byteLength(input, 'utf8');
+    if (total > MAX_MCP_TOTAL_BYTES) throw new CliUsageError('Selected evidence exceeds the combined MCP byte limit.');
+    inputs.push(input);
+  }
+  context.writeStderr('Read-only local evidence session. Selected results may be sent to the connected client’s model provider. No live collection or writes are available.\n');
+  await serveReadOnlyMcp({ inputs, input: dependencies.stdin || process.stdin, output: context.stdout,
+    version: context.packageVersion, now: context.now, diagnostic: context.writeStderr,
+    ...(dependencies.signal ? { signal: dependencies.signal } : {}) });
+  return EXIT_CODES.SUCCESS;
+}
 
 function offlineBrowserOptions(
   sources: readonly (string | null)[], dependencies: HistoryCommandDependencies, context: CliCommandContext, color: boolean,
@@ -205,6 +228,7 @@ async function runExportCommand(
 }
 
 const HISTORY_COMMAND_HANDLERS = Object.freeze({
+  'mcp': runMcpCommand,
   'view': runViewCommand,
   'diff': runRetainedDiffCommand,
   'reconcile': runReconciliationCommand,

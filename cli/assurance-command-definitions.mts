@@ -37,13 +37,13 @@ export const ASSURANCE_COMMAND_DEFINITIONS = Object.freeze({
   }),
   "map-observations": commandSeed({
     reference: {
-      description: 'Apply one bounded declarative field-mapping profile to local source observations.',
+      description: 'Convert selected local observations using a declarative profile or a bounded dnsx/httpx JSONL adapter.',
       example: 'whoisleuth map-observations mapping.json --json',
-      boundary: 'Profiles select allowlisted dotted fields only. They execute no scripts, make no requests, and emit the browser-compatible external-findings contract.',
+      boundary: 'Profiles select allowlisted dotted fields only. --input-format dnsx-jsonl or httpx-jsonl reads 384 KiB and 500 rows at most, preserving exact hostnames and supplied timestamps without inferring complete collection. Raw bodies, headers, query-bearing URLs and file paths are excluded. No scripts or requests run. Output uses the existing browser-compatible external-findings contract; malformed rows or retained-limit omissions produce exit 4 with a notice on stderr.',
     },
-    collection: { scope: 'Reads one mapping document capped at 4 MiB and executes no scripts or requests.' },
+    collection: { scope: 'Reads one mapping document capped at 4 MiB, or selected producer JSONL capped at 384 KiB. Executes no scripts or requests.' },
     summary: 'Apply a declarative observation map offline',
-    options: ['--json', '--quiet', '--no-color'],
+    options: ['--input-format', '--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
     handlerOwner: 'assurance',

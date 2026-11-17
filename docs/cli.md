@@ -119,6 +119,31 @@ Browser Lookup evidence can be verified or packaged in the CLI. `brief`,
 `export`, `compare`, `registry-doctor` and `source-report` instead require a
 saved CLI Lookup; they do not reconstruct it from a browser export.
 
+### Local read-only tool adapter
+
+A compatible MCP client can inspect deliberately selected evidence over local
+stdio. Configure it to launch the installed executable with these arguments:
+
+```bash
+whoisleuth mcp --stdio --allow-model-disclosure lookup.json evidence.json
+```
+
+The five tools list selected file identities, inspect minimised Lookup facts,
+verify artefacts, compare retained domain observations and prepare collection
+plans. They cannot collect, write, run commands, select new files or open a
+network listener. Selection is frozen at startup; restart to select changed
+bytes. Each file is limited to 8 MiB, with eight files and 16 MiB combined.
+Protocol messages are capped at 32 KiB; tool output is capped at 64 KiB and
+comparison rows are paginated. Stop the client session to release the evidence.
+
+**Local does not mean private from the connected assistant.** Its client can
+send returned evidence to its model provider. Select only files you intend to
+share. Raw registry publications, contacts, free-text page data and Case notes
+are excluded from the tool view, but target names and selected evidence remain
+sensitive. Tool read-only annotations describe behaviour; the restricted
+handlers and fixed file selection enforce it. Local stdio support depends on
+the client; this is not a hosted connector or a sandbox for the client itself.
+
 Registration source states are independent: `unsupported` means no RDAP or
 WHOIS service is published for the target, while `skipped` means no query was
 issued in that mode or under the registry access policy. Neither is a transport

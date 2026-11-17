@@ -46,6 +46,8 @@ const SHA256_RE = /^[a-f0-9]{64}$/iu;
 const DNS_TYPES = new Set(['A', 'AAAA', 'CAA', 'CNAME', 'DS', 'MX', 'NS', 'SOA', 'SVCB', 'HTTPS', 'TXT']);
 
 export type ExternalFindingConversionFormat =
+  | 'dnsx-jsonl'
+  | 'httpx-jsonl'
   | 'certificate-observations-v1'
   | 'dns-observations-v1'
   | 'domain-observations-v1';
@@ -245,7 +247,7 @@ function mappedCertificateObservation(value: unknown): Record<string, unknown> |
 
 export function convertSupportedExternalFindings(
   value: unknown,
-  format: ExternalFindingConversionFormat,
+  format: Exclude<ExternalFindingConversionFormat, 'dnsx-jsonl' | 'httpx-jsonl'>,
 ): ExternalFindingConversionReport {
   const config = format === 'domain-observations-v1'
     ? { schema: DOMAIN_OBSERVATION_ROWS_SCHEMA, map: mappedDomainObservation }

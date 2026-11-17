@@ -651,7 +651,7 @@ describe('canonical CLI command registry', () => {
       CLI_COMMAND_REGISTRY
         .filter((definition) => definition.documentation.supportedSchemaIdentifiers.length === 0)
         .map((definition) => definition.command),
-      ['completion', 'manual', 'registry-scaffold'],
+      ['completion', 'manual', 'registry-scaffold', 'mcp'],
     );
   });
 

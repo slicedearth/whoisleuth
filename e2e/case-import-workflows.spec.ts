@@ -14,6 +14,36 @@ import { MAX_CASE_IMPORT_BYTES, MAX_CASE_STORE_BYTES } from '../packages/contrac
 
 // Bounded external evidence imports, Case management and Bulk handoff coverage.
 
+test('selected reconnaissance JSONL is reviewed locally before exact-host Case import', async ({ page }, testInfo) => {
+  await openCasesView(page);
+  const importer = page.locator('details').filter({ has: page.getByText('Import external observations and claims', { exact: true }) });
+  await importer.locator(':scope > summary').click();
+  await importer.getByRole('combobox', { name: 'For JSONL files, select the producer' }).selectOption('httpx-jsonl');
+  await importer.locator('input[type="file"]').setInputFiles({ name: 'observations.jsonl', mimeType: 'application/x-ndjson',
+    buffer: Buffer.from(JSON.stringify({ url: 'https://portal.example.test/private?token=secret',
+      timestamp: '2026-08-01T00:00:00.000Z', status_code: 200, failed: false, title: 'Retained example page', body: 'private-body' })) });
+  const review = importer.getByRole('region', { name: 'Import content review' });
+  await expect(review).toContainText('Retained example page');
+  await expect(review).toContainText('unknown');
+  await expect(page.locator('.case-head')).toHaveCount(0);
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) await testInfo.attach(`recon-import-${width}-${theme}`, {
+        body: await importer.screenshot(), contentType: 'image/png',
+      });
+    }
+  }
+  await review.getByRole('button', { name: 'Import into cases', exact: true }).click();
+  await expect(page.locator('.case-head')).toContainText('portal.example.test');
+  const saved = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  const retained = JSON.stringify(saved.records);
+  expect(retained).toContain('portal.example.test');
+  expect(retained).not.toMatch(/token=|private-body/);
+});
+
 test('a complete maximum-size Case file imports without losing records or notes', async ({ page }, testInfo) => {
   const source = caseStoreAtCapacity();
   const raw = JSON.stringify(buildCaseExport(source.cases, '2026-09-13T00:00:00.000Z'), null, 2);

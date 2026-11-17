@@ -15,7 +15,7 @@ type DiffArguments = {
   leftSessionId: string | null;
   rightSessionId: string | null;
   output: 'terminal' | 'json';
-  browse: boolean;
+  browse?: boolean;
 } & TerminalOptions;
 
 type ViewArguments = {
@@ -24,6 +24,8 @@ type ViewArguments = {
   browse: boolean;
   output: 'terminal' | 'json';
 } & TerminalOptions;
+
+type McpArguments = { action: 'mcp'; sources: readonly string[] };
 
 type ReconcileArguments = {
   action: 'reconcile';
@@ -57,10 +59,15 @@ function parseDiffArguments(parsed: ParsedCommandArguments<DiffArguments['action
       throw new CliUsageError(`${option} requires one bounded saved-session ID.`);
     }
   }
-  return { action: 'diff', ...compared, leftSessionId, rightSessionId, browse: parsed.hasOption('--browse') };
+  return { action: 'diff', ...compared, leftSessionId, rightSessionId, ...(parsed.hasOption('--browse') ? { browse: true } : {}) };
 }
 
 export const HISTORY_ARGUMENT_PARSERS = Object.freeze({
+  mcp: (parsed: ParsedCommandArguments<McpArguments['action']>): McpArguments => {
+    const sources = parsed.positionalValues('sources');
+    if (sources.includes('-') || new Set(sources).size !== sources.length) throw new CliUsageError('MCP requires distinct named evidence files; stdin is reserved for the protocol.');
+    return { action: 'mcp', sources };
+  },
   view: (parsed: ParsedCommandArguments<ViewArguments['action']>): ViewArguments => ({
     action: 'view', source: parsed.positionalValue('source'), browse: parsed.hasOption('--browse'),
     output: jsonOutput(parsed), ...terminalOptions(parsed),

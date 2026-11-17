@@ -181,7 +181,7 @@ const CLI_COMMAND_REGISTRY: readonly CliCommandDefinition[] = Object.freeze(
       ...commonOptions.map((option) => optionSpec(command, option, 'common', commandOptionDefinition(command, option))),
       ...commandOptions.map((option) => optionSpec(command, option, 'command', commandOptionDefinition(command, option))),
     ]);
-    const constraints = grammarConstraints(commandOptions, seed.constraints);
+    const constraints = grammarConstraints(commandOptions, seed.constraints, commonOptions);
     return Object.freeze({
       command,
       order,
