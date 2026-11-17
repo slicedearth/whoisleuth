@@ -4238,7 +4238,7 @@ export const PUBLIC_CLI_GRAMMAR = {
 "diff": {
   "parserKey": "diff",
   "bootstrapProfile": "allowed",
-  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[119], SHARED_OPTIONS[120], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[119], SHARED_OPTIONS[120], SHARED_OPTIONS[32], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
   "positionals": [
     {
       "name": "sources",
@@ -4270,6 +4270,80 @@ export const PUBLIC_CLI_GRAMMAR = {
       "option": "--quiet",
       "excludedOptions": [
         "--json"
+      ]
+    },
+    {
+      "kind": "mutually_exclusive",
+      "options": [
+        "--browse",
+        "--output"
+      ]
+    },
+    {
+      "kind": "excludes_all",
+      "option": "--browse",
+      "excludedOptions": [
+        "--json",
+        "--quiet",
+        "--left-session",
+        "--right-session"
+      ]
+    }
+  ],
+  "metaActions": [
+    "help"
+  ]
+},
+"view": {
+  "parserKey": "view",
+  "bootstrapProfile": "allowed",
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[32], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
+  "positionals": [
+    {
+      "name": "source",
+      "valueKind": "file",
+      "minimum": 0,
+      "maximum": 1,
+      "values": [],
+      "inputSource": "argv_or_stdin",
+      "requiredWhenOptions": []
+    }
+  ],
+  "constraints": [
+    {
+      "kind": "requires_all",
+      "option": "--force",
+      "requiredOptions": [
+        "--output"
+      ]
+    },
+    {
+      "kind": "mutually_exclusive",
+      "options": [
+        "--quiet",
+        "--output"
+      ]
+    },
+    {
+      "kind": "excludes_all",
+      "option": "--quiet",
+      "excludedOptions": [
+        "--json"
+      ]
+    },
+    {
+      "kind": "mutually_exclusive",
+      "options": [
+        "--browse",
+        "--output"
+      ]
+    },
+    {
+      "kind": "excludes_all",
+      "option": "--browse",
+      "excludedOptions": [
+        "--json",
+        "--quiet"
       ]
     }
   ],

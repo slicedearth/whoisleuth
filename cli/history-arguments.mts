@@ -15,6 +15,14 @@ type DiffArguments = {
   leftSessionId: string | null;
   rightSessionId: string | null;
   output: 'terminal' | 'json';
+  browse: boolean;
+} & TerminalOptions;
+
+type ViewArguments = {
+  action: 'view';
+  source: string | null;
+  browse: boolean;
+  output: 'terminal' | 'json';
 } & TerminalOptions;
 
 type ReconcileArguments = {
@@ -49,10 +57,14 @@ function parseDiffArguments(parsed: ParsedCommandArguments<DiffArguments['action
       throw new CliUsageError(`${option} requires one bounded saved-session ID.`);
     }
   }
-  return { action: 'diff', ...compared, leftSessionId, rightSessionId };
+  return { action: 'diff', ...compared, leftSessionId, rightSessionId, browse: parsed.hasOption('--browse') };
 }
 
 export const HISTORY_ARGUMENT_PARSERS = Object.freeze({
+  view: (parsed: ParsedCommandArguments<ViewArguments['action']>): ViewArguments => ({
+    action: 'view', source: parsed.positionalValue('source'), browse: parsed.hasOption('--browse'),
+    output: jsonOutput(parsed), ...terminalOptions(parsed),
+  }),
   diff: parseDiffArguments,
   reconcile: (parsed: ParsedCommandArguments<ReconcileArguments['action']>): ReconcileArguments => ({
     action: 'reconcile',

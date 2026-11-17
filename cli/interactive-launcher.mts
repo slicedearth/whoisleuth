@@ -54,12 +54,22 @@ async function launchInteractiveCli(options: InteractiveLauncherOptions): Promis
       '  2  Deep Lookup',
       '  3  Build an investigation workflow plan (offline)',
       '  4  List commands',
+      '  5  Browse a saved Lookup (offline)',
+      '  6  Compare two saved Lookups (offline)',
       '  q  Exit',
       '',
     ].join('\n'));
   const selection = (await ask('Select: ')).toLowerCase();
   if (selection === 'q' || selection === 'quit' || selection === 'exit' || selection === '') return null;
   if (selection === '4') return ['commands'];
+  if (selection === '5' || selection === '6') {
+    const left = await ask(selection === '5' ? 'Saved Lookup file: ' : 'Earlier or left Lookup file: ');
+    if (!left || left === '-') throw new CliUsageError('Choose a named saved Lookup file.');
+    if (selection === '5') return ['view', '--browse', '--', left];
+    const right = await ask('Later or right Lookup file: ');
+    if (!right || right === '-') throw new CliUsageError('Choose a second named saved Lookup file.');
+    return ['diff', '--browse', '--', left, right];
+  }
   if (selection === '3') {
     write(`\n${INVESTIGATION_PLAN_RECIPES.map((recipe, index) => `  ${index + 1}  ${INVESTIGATION_PLAN_RECIPE_LABELS[recipe]}`).join('\n')}\n\n`);
     const recipeSelection = await ask('Workflow: ');
@@ -69,7 +79,7 @@ async function launchInteractiveCli(options: InteractiveLauncherOptions): Promis
     if (!subject) throw new CliUsageError('A workflow plan requires one domain or brand subject.');
     return ['workflow-plan', recipe, subject];
   }
-  if (selection !== '1' && selection !== '2') throw new CliUsageError('Choose 1, 2, 3, 4, or q.');
+  if (selection !== '1' && selection !== '2') throw new CliUsageError('Choose a listed number or q.');
 
   const query = await ask('Domain, IP address, or ASN: ');
   if (!isDirectLookupTarget(query)) {

@@ -1,4 +1,5 @@
 import type { UnknownRecord } from './saved-lookup.mts';
+import type { CliLookupDiffDocument } from './lookup-diff.mts';
 import { formatTerminalLookup, safeTerminalValue } from './formatters/terminal.mts';
 import {
   presentTerminalOutput,
@@ -133,6 +134,30 @@ function buildLookupBrowserPanels(document: UnknownRecord): LookupBrowserPanel[]
       lines: Object.freeze(lines),
     })];
   });
+}
+
+function buildLookupDiffBrowserPanels(document: CliLookupDiffDocument): LookupBrowserPanel[] {
+  const panels: LookupBrowserPanel[] = [{
+    id: 'overview', label: 'Overview', lines: [
+      `Left: ${safeTerminalValue(document.left.domain)} · ${safeTerminalValue(document.left.generatedAt)}`,
+      `Right: ${safeTerminalValue(document.right.domain)} · ${safeTerminalValue(document.right.generatedAt)}`,
+      ...Object.entries(document.comparison.counts).map(([state, count]) => `${state.replaceAll('_', ' ')}: ${count}`),
+      '', ...document.limitations.map((value) => safeTerminalValue(value)),
+    ],
+  }];
+  for (const category of new Set(document.comparison.rows.map((row) => row.category))) {
+    panels.push({
+      id: category, label: `${category[0]!.toUpperCase()}${category.slice(1)}`,
+      lines: document.comparison.rows.filter((row) => row.category === category).flatMap((row) => [
+        `${safeTerminalValue(row.label)} [${row.state.replaceAll('_', ' ')}]`,
+        `  Left: ${safeTerminalValue(row.left)}`,
+        `  Right: ${safeTerminalValue(row.right)}`,
+        `  Source: ${safeTerminalValue(row.source)}`,
+        ...row.limitations.map((value) => `  ${safeTerminalValue(value)}`), '',
+      ]),
+    });
+  }
+  return panels;
 }
 
 function browserTabLine(panels: readonly LookupBrowserPanel[], activeIndex: number, width: number): string {
@@ -312,6 +337,7 @@ function buildLookupBrowserFrame(
   document: UnknownRecord,
   options: Readonly<{
     activeIndex?: number;
+    panels?: readonly LookupBrowserPanel[];
     scrollOffset?: number;
     width?: number;
     height?: number;
@@ -321,7 +347,7 @@ function buildLookupBrowserFrame(
     searchStatus?: string;
   }> = {},
 ): LookupBrowserFrame {
-  const panels = buildLookupBrowserPanels(document);
+  const panels = options.panels ?? buildLookupBrowserPanels(document);
   const { width, height } = boundedBrowserDimensions(options);
   if (!panels.length) return Object.freeze({
     value: `${clipTerminalLine('WHOISleuth evidence browser', width)}\n${clipTerminalLine('No bounded terminal panels were available.', width)}\n`,
@@ -395,6 +421,7 @@ export {
   buildLookupBrowserHelpFrame,
   buildLookupBrowserFrame,
   buildLookupBrowserPanels,
+  buildLookupDiffBrowserPanels,
   buildLookupBrowserSearchFrame,
   buildLookupCollectionFrame,
   findLookupBrowserMatches,

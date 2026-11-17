@@ -403,6 +403,7 @@ const CLI_OPERATION_POLICY = Object.freeze({
   'domain-feed': offlinePolicy('explicit_per_item', COMPLETE_OR_PARTIAL, 'none', 'cooperative'),
   'workflow-run': Object.freeze({ kind: 'workflow_run' }),
   diff: OFFLINE_PER_SOURCE,
+  view: OFFLINE_ALL_OR_NOTHING,
   reconcile: OFFLINE_PER_SOURCE,
   timeline: OFFLINE_PER_SOURCE,
   export: OFFLINE_ALL_OR_NOTHING,

@@ -105,6 +105,7 @@ export const CLI_COMMAND_SEMANTICS = Object.freeze({
   'domain-feed': semantic('investigate', CAPABILITY_IDS.OFFLINE_REVIEW),
   'workflow-run': semantic('assure', CAPABILITY_IDS.WORKFLOW_EXECUTION),
   diff: semantic('assure', CAPABILITY_IDS.OFFLINE_REVIEW),
+  view: semantic('investigate', CAPABILITY_IDS.OFFLINE_REVIEW),
   reconcile: semantic('assure', CAPABILITY_IDS.OFFLINE_REVIEW),
   timeline: semantic('assure', CAPABILITY_IDS.OFFLINE_REVIEW),
   export: semantic('respond', CAPABILITY_IDS.PORTABLE_EVIDENCE),

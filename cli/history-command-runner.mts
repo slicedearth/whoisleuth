@@ -23,12 +23,20 @@ import {
   formatCliRetainedArtifactDiff,
 } from './retained-artifact-diff.mts';
 import type { CliCommandContext } from './runner-types.mts';
-import { MAX_SAVED_LOOKUP_INPUT_BYTES } from './saved-lookup.mts';
+import { MAX_SAVED_LOOKUP_INPUT_BYTES, parseCliLookupDocument } from './saved-lookup.mts';
+import { formatTerminalLookup } from './formatters/terminal.mts';
+import { CLI_LOOKUP_DIFF_SCHEMA } from './lookup-diff.mts';
+import { browseLookupDocument, browseLookupComparison, canBrowseLookup, type LookupBrowserOptions } from './lookup-browser.mts';
+import type { BoundedTextStream } from './bulk.mts';
+import type { TerminalEnvironment } from './terminal-presentation.mts';
 import { HISTORY_INLINE_COMMANDS } from './inline-command-families.mts';
 
 import { runDiscriminatedCommandHandler, type DiscriminatedCommandHandlerMap } from './discriminated-command-handlers.mts';
 
 export type HistoryCommandDependencies = {
+  stdin?: BoundedTextStream;
+  environment?: TerminalEnvironment;
+  signal?: AbortSignal;
   readDiffInput?: (source: string) => string | Promise<string>;
   readExportInput?: (source?: string | null) => string | Promise<string>;
   loadEvidenceExport?: () => Promise<typeof import('../lib/evidence-export.mts')>;
@@ -37,6 +45,35 @@ export type HistoryCommandDependencies = {
 type HistoryInlineCommand = typeof HISTORY_INLINE_COMMANDS[number];
 type HistoryCommandArguments = Extract<CliArguments, { action: HistoryInlineCommand }>;
 
+function offlineBrowserOptions(
+  sources: readonly (string | null)[], dependencies: HistoryCommandDependencies, context: CliCommandContext, color: boolean,
+): LookupBrowserOptions {
+  if (sources.some((source) => !source || source === '-')) {
+    throw new CliUsageError('--browse requires named files because interactive stdin is reserved for navigation.');
+  }
+  const input = dependencies.stdin || process.stdin;
+  const environment = dependencies.environment || process.env;
+  if (!canBrowseLookup(input, context.stdout, environment)) {
+    throw new CliUsageError('--browse requires interactive terminal input and output. Omit it when redirecting.');
+  }
+  return { input, output: context.stdout, environment, color, palette: context.presentation(color).palette,
+    ...(dependencies.signal ? { signal: dependencies.signal } : {}) };
+}
+
+async function runViewCommand(
+  args: Extract<HistoryCommandArguments, { action: 'view' }>, dependencies: HistoryCommandDependencies, context: CliCommandContext,
+): Promise<number> {
+  context.setFailureLabel('Saved Lookup');
+  const browser = args.browse ? offlineBrowserOptions([args.source], dependencies, context, args.color) : null;
+  const input = dependencies.readDiffInput
+    ? await dependencies.readDiffInput(args.source || '-')
+    : await context.readInput(args.source, MAX_SAVED_LOOKUP_INPUT_BYTES, 'Saved Lookup');
+  const document = parseCliLookupDocument(input);
+  if (browser) await browseLookupDocument(document, browser);
+  else if (!args.quiet) context.writeStdout(args.output === 'json'
+    ? formatJsonDocument(document) : context.terminal(formatTerminalLookup(document, { detail: 'verbose' }), args.color));
+  return EXIT_CODES.SUCCESS;
+}
 
 async function runRetainedDiffCommand(
   args: Extract<HistoryCommandArguments, { action: 'diff' }>,
@@ -44,6 +81,7 @@ async function runRetainedDiffCommand(
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Retained artefact diff');
+  const browser = args.browse ? offlineBrowserOptions([args.leftSource, args.rightSource], dependencies, context, args.color) : null;
   const readDiffInput = dependencies.readDiffInput
     || ((source: string) => context.readInput(source, MAX_RETAINED_ARTIFACT_DIFF_BYTES, 'Retained diff input'));
   let leftInput: string;
@@ -63,7 +101,10 @@ async function runRetainedDiffCommand(
     { leftSessionId: args.leftSessionId, rightSessionId: args.rightSessionId },
     context.now(),
   );
-  if (!args.quiet) {
+  if (browser) {
+    if (document.schema !== CLI_LOOKUP_DIFF_SCHEMA) throw new CliUsageError('--browse currently supports two saved Lookup files. Omit it for other retained artefacts.');
+    await browseLookupComparison(document, browser);
+  } else if (!args.quiet) {
     context.writeStdout(args.output === 'json'
       ? formatJsonDocument(document)
       : context.terminal(formatCliRetainedArtifactDiff(document), args.color));
@@ -164,6 +205,7 @@ async function runExportCommand(
 }
 
 const HISTORY_COMMAND_HANDLERS = Object.freeze({
+  'view': runViewCommand,
   'diff': runRetainedDiffCommand,
   'reconcile': runReconciliationCommand,
   'timeline': runTimelineCommand,

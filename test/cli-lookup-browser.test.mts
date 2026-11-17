@@ -26,6 +26,8 @@ import {
 import { formatTerminalLookup } from '../cli/formatters/terminal.mts';
 import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
+import { classifyQuery } from '../lib/classify.mts';
+import { buildCliLookupDocument, serializeCliLookupDocument } from '../cli/saved-lookup.mts';
 
 function lookupDocument() {
   return {
@@ -151,6 +153,56 @@ class BrowserOutput extends EventEmitter {
 }
 
 describe('lookup terminal evidence browser', () => {
+  test('opens validated saved evidence and comparisons through the real offline command paths', async () => {
+    const earlier = serializeCliLookupDocument(buildCliLookupDocument('example.test', classifyQuery('example.test'), lookupDocument(), '2026-08-13T00:00:00.000Z', 'deep'));
+    const laterResult = lookupDocument();
+    laterResult.availability.dns.records.a = ['192.0.2.20'];
+    const later = serializeCliLookupDocument(buildCliLookupDocument('example.test', classifyQuery('example.test'), laterResult, '2026-08-14T00:00:00.000Z', 'deep'));
+    for (const argv of [['view', 'earlier.json', '--browse'], ['diff', 'earlier.json', 'later.json', '--browse']]) {
+      const input = new BrowserInput();
+      const output = new BrowserOutput();
+      const stderr = capture();
+      let reads = 0;
+      input.resume = () => {
+        input.paused = false;
+        queueMicrotask(() => input.emit('data', '/192.0.2.10\r'));
+        queueMicrotask(() => input.emit('data', 'q'));
+      };
+      const code = await runCli(argv, {
+        stdin: input, stdout: output, stderr: stderr.stream, environment: { TERM: 'xterm' },
+        now: () => '2026-08-15T00:00:00.000Z',
+        readDiffInput: (source) => { reads += 1; return source === 'earlier.json' ? earlier : later; },
+        runUnifiedLookup: () => assert.fail('Offline viewing must not collect'),
+      });
+      assert.equal(code, EXIT_CODES.SUCCESS, stderr.value());
+      assert.equal(reads, argv[0] === 'view' ? 1 : 2);
+      assert.match(output.value, /192\.0\.2\.10/u);
+      if (argv[0] === 'diff') {
+        assert.match(output.value, /192\.0\.2\.20/u);
+        assert.match(output.value, /different/u);
+        assert.match(output.value, /not recorded|unavailable/u);
+      }
+      assert.equal(input.isRaw, false);
+      assert.equal(input.paused, true);
+      assert.equal(input.listenerCount('data'), 0);
+      assert.equal(stderr.value(), '');
+    }
+  });
+
+  test('rejects noninteractive or stdin browsing and incompatible output before reading files', async () => {
+    for (const argv of [
+      ['view', 'earlier.json', '--browse'], ['view', '--browse'],
+      ['diff', '-', 'later.json', '--browse'], ['diff', 'earlier.json', 'later.json', '--browse', '--json'],
+      ['view', 'earlier.json', '--browse', '--output', 'result.txt'],
+    ]) {
+      const code = await runCli(argv, {
+        stdout: capture().stream, stderr: capture().stream,
+        readDiffInput: () => assert.fail('Invalid browsing must not read evidence'),
+      });
+      assert.equal(code, EXIT_CODES.USAGE);
+    }
+  });
+
   test('builds bounded DNS, mail, web, TLS, source, and collection panels from one retained result', () => {
     const document = lookupDocument();
     const panels = buildLookupBrowserPanels(document);

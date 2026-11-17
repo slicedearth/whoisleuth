@@ -2,17 +2,41 @@ import { LOOKUP_EVIDENCE_SCHEMA_VERSION, V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSIO
 import { PUBLISHED_V2_LOOKUP_EVIDENCE_VERSIONS, positional, OPTIONAL_FILE_POSITIONAL, constraint, EMPTY_CONSTRAINTS, commandSeed } from './command-definition.mts';
 
 export const HISTORY_COMMAND_DEFINITIONS = Object.freeze({
+  view: commandSeed({
+    reference: {
+      description: 'Read one saved Lookup without collecting again.',
+      example: 'whoisleuth view lookup.json --browse',
+      boundary: 'The command validates one saved Lookup offline. --browse opens the existing searchable terminal panels and reserves interactive stdin for navigation; it cannot be combined with redirected output. No file is modified and no source is contacted.',
+    },
+    collection: { scope: 'Reads one saved Lookup capped at 8 MiB.' },
+    summary: 'Read or browse a saved Lookup offline',
+    options: ['--browse', '--json', '--quiet', '--no-color'],
+    positionals: OPTIONAL_FILE_POSITIONAL,
+    constraints: Object.freeze([
+      constraint({ kind: 'excludes_all', option: '--browse', excludedOptions: ['--json', '--quiet'] }),
+    ]),
+    handlerOwner: 'history',
+    networkEffect: 'offline',
+    common: true,
+    schemaIdentifiers: Object.freeze(['whoisleuth.cli.lookup']),
+    primaryArtefacts: Object.freeze(['Saved Lookup']),
+    planSupport: false,
+    additionalOutputFormats: Object.freeze([]),
+    bootstrapProfile: 'allowed',
+  }),
   diff: commandSeed({
     reference: {
       description: 'Compare an earlier and later artefact from the same retained Lookup, Bulk-session, or domain-portfolio family.',
       example: 'whoisleuth diff earlier.json later.json --json',
-      boundary: 'Comparison is offline: the left input is earlier and the right input is later. Inputs must belong to the same supported family. Saved Lookups can describe the same or different domains; same-domain comparisons preserve observation times and collection uncertainty. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.',
+      boundary: 'Comparison is offline: the left input is earlier and the right input is later. Inputs must belong to the same supported family. Saved Lookups can describe the same or different domains; --browse opens their searchable comparison panels. Same-domain comparisons preserve observation times and collection uncertainty. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.',
     },
     collection: { scope: 'Reads two compatible retained artefacts capped at 8 MiB each and retains no source paths.' },
     summary: 'Compare two compatible retained artefacts',
-    options: ['--left-session', '--right-session', '--json', '--quiet', '--no-color'],
+    options: ['--left-session', '--right-session', '--browse', '--json', '--quiet', '--no-color'],
     positionals: Object.freeze([positional('sources', 'file', 2, 2)]),
-    constraints: EMPTY_CONSTRAINTS,
+    constraints: Object.freeze([
+      constraint({ kind: 'excludes_all', option: '--browse', excludedOptions: ['--json', '--quiet', '--left-session', '--right-session'] }),
+    ]),
     handlerOwner: 'history',
     networkEffect: 'offline',
     common: true,

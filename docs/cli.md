@@ -70,6 +70,19 @@ whoisleuth lookup example.test --deep --browse
 whoisleuth lookup example.test --deep --markdown --output lookup.md
 ```
 
+Reopen a private saved Lookup without collecting again, or browse a retained
+comparison interactively:
+
+```bash
+whoisleuth view lookup.json --browse
+whoisleuth diff earlier.json later.json --browse
+```
+
+The launcher offers both offline actions. In the terminal browser, use the arrow
+keys to change panels, `/` to search, `?` for help and `q` to close. Omit
+`--browse` for ordinary output or add `--json` for scripts. Comparison panels
+retain source uncertainty; an unavailable value is not an observed absence.
+
 Pasted URLs normally select only their hostname. To collect one particular
 page, use `whoisleuth lookup 'https://portal.example.test/review' --deep --exact-url`.
 This sends the path and query to the website, without the fragment. Review
