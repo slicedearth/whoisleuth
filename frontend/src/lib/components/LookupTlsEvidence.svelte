@@ -87,13 +87,16 @@
     {#if validationDetails.length}
       <details class="tls-detail http-detail disclosure"><summary>Collection and validation detail</summary><dl>{#each validationDetails as row}<dt>{row.label}</dt><dd>{row.value}</dd>{/each}</dl></details>
     {/if}
-    {#if limitations.length}<p class="callout warn">{limitations.join(' ')}</p>{/if}
-    <p class="card-note">Point-in-time evidence from one connection to one validated public address. Trust and hostname findings describe this runtime observation; wildcard certificates and shared certificate infrastructure are not inherently suspicious.</p>
+    {#if limitations.length}
+      <details class="disclosure evidence-scope-notes" open={!complete || status !== 'success'}>
+        <summary>Collection scope and limits</summary>
+        <ul>{#each limitations as limitation}<li>{limitation}</li>{/each}</ul>
+      </details>
+    {/if}
   </div>
 </details>
 
 <style>
-  .card-note{margin:12px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
   .tls-grid .danger-text{color:var(--danger)}
   .finding-list{display:grid;gap:7px;margin:12px 0 0;padding:0;list-style:none}
   .finding-list .callout{margin:0}

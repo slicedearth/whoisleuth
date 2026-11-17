@@ -1,4 +1,4 @@
-# Threat Model
+# Threat model
 
 This threat model covers the [current product boundaries](product-boundary.md).
 It supplements the

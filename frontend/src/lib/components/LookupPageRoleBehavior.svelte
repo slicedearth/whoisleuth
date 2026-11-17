@@ -72,7 +72,12 @@
           </article>
         {/each}
       </div>
-      {#if roleLimitations.length}<p class="callout info">{roleLimitations.join(' ')}</p>{/if}
+      {#if roleLimitations.length}
+        <details class="disclosure evidence-scope-notes" open={!roleComplete || roleStatus !== 'success'}>
+          <summary>Page-role scope and limits</summary>
+          <ul>{#each roleLimitations as limitation}<li>{limitation}</li>{/each}</ul>
+        </details>
+      {/if}
     </section>
 
     <section aria-labelledby="client-behavior-title">
@@ -98,7 +103,12 @@
       {:else}
         <p class="empty-state">No fixed behaviour indicator matched the retained static evidence. Referenced scripts were not inspected.</p>
       {/if}
-      {#if behaviorLimitations.length}<p class="callout info">{behaviorLimitations.join(' ')}</p>{/if}
+      {#if behaviorLimitations.length}
+        <details class="disclosure evidence-scope-notes" open={!behaviorComplete || behaviorStatus !== 'success'}>
+          <summary>Static-script scope and limits</summary>
+          <ul>{#each behaviorLimitations as limitation}<li>{limitation}</li>{/each}</ul>
+        </details>
+      {/if}
     </section>
   </div>
 </details>

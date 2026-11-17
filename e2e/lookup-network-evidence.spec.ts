@@ -855,7 +855,10 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   await expect(delivery).toContainText('ETag Syntactically valid');
   await expect(delivery).not.toContainText('fixture-private-etag');
   await expect(card).not.toContainText('secret');
-  await expect(card.getByText(/missing security headers do not establish maliciousness/i)).toBeVisible();
+  const httpScope = card.locator('details.evidence-scope-notes');
+  await expect(httpScope).not.toHaveAttribute('open', '');
+  await httpScope.locator(':scope > summary').click();
+  await expect(httpScope.getByText('URL query strings were omitted from retained provenance.', { exact: true })).toBeVisible();
 
   const pageCard = page.locator('.page-card');
   await expect(pageCard).not.toHaveAttribute('open', '');
@@ -887,7 +890,6 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   await expect(pageCard.getByText('c'.repeat(16), { exact: true })).toBeVisible();
   await expect(pageCard.getByText(/visible-text SimHash is fuzzy comparison data/i)).toBeVisible();
   await expect(pageCard).not.toContainText('secret');
-  await expect(pageCard.getByText(/normalised markup, and visible text are not retained/i)).toBeVisible();
   const publication = pageCard.locator('details.metadata-disclosure');
   await expect(publication.locator(':scope > summary')).toContainText('Publisher-declared publication metadata');
   await expect(publication.locator(':scope > summary')).toContainText('Partial');
@@ -916,7 +918,6 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   await expect(structuredCard.getByText('Organization, WebSite', { exact: true })).toBeVisible();
   await expect(structuredCard.getByText('https://login.example.test/', { exact: true })).toBeVisible();
   await expect(structuredCard.getByText('social.example.test', { exact: true })).toBeVisible();
-  await expect(structuredCard.getByText(/does not use this evidence for availability or Risk scoring/i)).toBeVisible();
 
   const credentialCard = page.locator('.credential-card');
   await expect(credentialCard).not.toHaveAttribute('open', '');
@@ -1016,7 +1017,6 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   await expect(missingCsp.getByText('Needs review', { exact: true })).toBeVisible();
   await expect(postureCard.getByText('No cleartext resource origin observed', { exact: true })).toBeVisible();
   await expect(postureCard.locator('.state')).toHaveText(['Needs review']);
-  await expect(postureCard.getByText(/review signals, not confirmed vulnerabilities/i)).toBeVisible();
 
   const pageComparison = page.locator('.page-comparison');
   await expect(pageComparison.getByRole('heading', { name: 'Official-site comparison' })).toBeVisible();
@@ -1292,7 +1292,10 @@ test('TLS evidence presents one-connection certificate evidence without narrow-w
   await expect(card.getByText('*.example.test', { exact: true })).toBeVisible();
   await card.locator('.tls-detail').last().locator('summary').click();
   await expect(card.getByText('UNABLE_TO_VERIFY_LEAF_SIGNATURE', { exact: true })).toBeVisible();
-  await expect(card.getByText(/one connection to one validated public address/i)).toBeVisible();
+  const tlsScope = card.locator('details.evidence-scope-notes');
+  await expect(tlsScope).not.toHaveAttribute('open', '');
+  await tlsScope.locator(':scope > summary').click();
+  await expect(tlsScope.getByText('This is a point-in-time TLS handshake to one validated public address.', { exact: true })).toBeVisible();
 
   const policyCard = page.locator('#evidence-certificate-policy');
   await expect(policyCard).not.toHaveAttribute('open', '');

@@ -64,8 +64,12 @@
       <p class="callout info">No curated Organisation, Brand, WebSite, WebPage, or related identity declaration was retained. This does not mean the page publishes no structured data.</p>
     {/if}
 
-    {#if limitations.length}<p class="callout warn">{limitations.join(' ')}</p>{/if}
-    <p class="card-note">WHOISleuth reads capped JSON-LD already present in the captured page. It retains only curated types, labels, origins, and hostnames, makes no additional request, and does not use this evidence for availability or Risk scoring.</p>
+    {#if limitations.length}
+      <details class="disclosure evidence-scope-notes" open={!complete || status !== 'success'}>
+        <summary>Collection scope and limits</summary>
+        <ul>{#each limitations as limitation}<li>{limitation}</li>{/each}</ul>
+      </details>
+    {/if}
   </div>
 </details>
 
@@ -80,7 +84,6 @@
   dt{color:var(--muted)}
   dd{min-width:0;margin:0;overflow-wrap:anywhere}
   .callout{margin-top:12px}
-  .card-note{margin:12px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
   @media(max-width:650px){
     .entity-head{display:grid;gap:4px}
     .entity-head span{justify-self:start;text-align:left}

@@ -1,3 +1,5 @@
+import { tokenLabel } from '../../packages/analysis/display-label.mts';
+
 const MAX_TERMINAL_VALUE_LENGTH = 240;
 const MAX_TLS_TERMINAL_ALT_NAMES = 10;
 const MAX_TLS_TERMINAL_PURPOSES = 8;
@@ -65,8 +67,7 @@ function boundedTerminalWithSuffix(value: string, suffix: string): string {
 }
 
 function titleCase(value: unknown): string {
-  const text = safeTerminalValue(value, 'unknown').replaceAll('_', ' ');
-  return text.charAt(0).toUpperCase() + text.slice(1);
+  return tokenLabel(safeTerminalValue(value, 'unknown'));
 }
 
 function terminalRecord(value: unknown): TerminalRecord {

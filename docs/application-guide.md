@@ -387,6 +387,10 @@ records remain incomplete. Cancelling before a valid final response leaves no
 completed receipt. Deliberate source refreshes remain separate observations.
 The source and analysis records keep each state, time and provenance together;
 expand a record's **Limitations and scope** for its detailed evidence notes.
+Completed evidence panels keep technical collection limits in disclosures;
+incomplete collection keeps those details open alongside its source state.
+Saved Case snapshots also qualify retained web values when collection was
+incomplete or unknown; a stored false flag is not presented as a confirmed absence.
 
 **What each source describes** separates the submitted hostname and registration
 request from the domains actually returned by registry, registrar and WHOIS

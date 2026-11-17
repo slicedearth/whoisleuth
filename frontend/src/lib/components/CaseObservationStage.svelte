@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tokenLabel } from '../../../../packages/analysis/display-label.mts';
   import {
     CASE_PIN_COMPLETENESS,
     CASE_SIGHTING_CATEGORIES,
@@ -130,7 +131,7 @@
           <p class="notice">Date and time fields use UTC.</p>
           <label class="field">Completeness
             <select bind:value={pinDraft.value.pinCompleteness}>
-              {#each CASE_PIN_COMPLETENESS as value}<option {value}>{value}</option>{/each}
+              {#each CASE_PIN_COMPLETENESS as value}<option {value}>{tokenLabel(value)}</option>{/each}
             </select>
           </label>
         </fieldset>
@@ -167,12 +168,12 @@
       <div class="two-columns">
         <label class="field">Sighting state
           <select bind:value={sightingDraft.value.sightingState}>
-            {#each CASE_SIGHTING_STATES as value}<option {value}>{value.replaceAll('_', ' ')}</option>{/each}
+            {#each CASE_SIGHTING_STATES as value}<option {value}>{tokenLabel(value)}</option>{/each}
           </select>
         </label>
         <label class="field">Evidence category
           <select bind:value={sightingDraft.value.sightingCategory}>
-            {#each CASE_SIGHTING_CATEGORIES as value}<option {value}>{value}</option>{/each}
+            {#each CASE_SIGHTING_CATEGORIES as value}<option {value}>{tokenLabel(value)}</option>{/each}
           </select>
         </label>
         <label class="field">Source
@@ -185,7 +186,7 @@
         </div>
         <label class="field">Completeness
           <select bind:value={sightingDraft.value.sightingCompleteness}>
-            {#each CASE_PIN_COMPLETENESS as value}<option {value}>{value}</option>{/each}
+            {#each CASE_PIN_COMPLETENESS as value}<option {value}>{tokenLabel(value)}</option>{/each}
           </select>
         </label>
         {#if record.evidencePins.length}

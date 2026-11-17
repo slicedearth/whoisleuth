@@ -402,7 +402,18 @@ input:where([type="text"], [type="search"], [type="password"], [type="email"], [
   padding: 0 12px;
 }
 select { min-height: var(--control-h); padding: 0 10px; }
-select:not([multiple]):not([size]) { height: max(var(--control-h), 2.25em); }
+select:not([multiple]):not([size]) {
+  appearance: none;
+  height: max(var(--control-h), 2.25em);
+  padding-inline: 12px 36px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 17px) center, calc(100% - 12px) center;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+}
+@media (forced-colors: active) {
+  select:not([multiple]):not([size]) { appearance: auto; background-image: none; }
+}
 textarea { padding: 10px 12px; resize: vertical; }
 input[type="checkbox"], input[type="radio"] {
   width: 17px;
@@ -602,6 +613,8 @@ details.evidence-card > summary.evidence-summary { font: inherit; }
 .evidence-status.error { border-color: rgb(var(--danger-rgb) / var(--semantic-border-alpha)); background: rgb(var(--danger-rgb) / var(--semantic-fill-alpha)); color: var(--danger); }
 .evidence-status.neutral { border-color: var(--muted); border-style: dotted; background: transparent; color: var(--muted); }
 .evidence-body { margin: 0 var(--card-pad) var(--card-pad); padding-top: 14px; border-top: 1px solid var(--border); }
+.evidence-scope-notes { margin-top: 12px; font-size: var(--text-xs); }
+.evidence-scope-notes > ul { margin: 10px 12px; padding-left: 18px; color: var(--muted); line-height: 1.55; }
 @media (max-width: 650px) {
   .evidence-summary-row { display: inline-grid; gap: 10px; }
   .evidence-status { justify-self: start; }

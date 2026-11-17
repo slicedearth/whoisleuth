@@ -2,6 +2,7 @@
   import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import { untrack } from 'svelte';
   import type { DecisionFact } from '../../../../packages/evidence/decision-fact.mts';
+  import { tokenLabel } from '../../../../packages/analysis/display-label.mts';
   import { buildLookupEvidenceQualityModel, buildLookupCollectionOutcomeReview } from '#lib/analysis/lookup-evidence-quality-model.ts';
   import { buildLookupEvidenceScope } from '#lib/analysis/lookup-evidence-scope.ts';
   import type { LookupEvidenceQualityMatrix } from '#lib/analysis/lookup-decision-support.ts';
@@ -109,7 +110,7 @@
       <ul class="outcome-groups" aria-label="Completed collection source outcomes">
         {#each collectionReview.groups as group (group.id)}
           <li data-planned-source={group.id}>
-            <div class="outcome-heading"><strong>{group.label}</strong><span>{group.expectation}</span></div>
+            <div class="outcome-heading"><strong>{group.label}</strong><span>{tokenLabel(group.expectation)}</span></div>
             <p class="outcome-diagnostic">{group.diagnosticState ? `Collection diagnostic: ${group.diagnosticState.replaceAll('_', ' ')}.` : 'No collection diagnostic retained.'}{group.expectation === 'optional' ? (original.collectionReceipt ? ' Selection recorded above.' : ' Original selection unknown.') : ''}</p>
             {#if !original.collectionReceipt}<p>{group.explanation}</p>{/if}
             {#if group.id === 'domain_evidence'}<p>The domain diagnostic describes the availability branch; DNS, HTTP and TLS outcomes remain separate below.</p>{/if}
@@ -284,7 +285,8 @@
   .outcome-groups p{margin:7px 0;color:var(--muted);font-size:var(--text-2xs)}
   .outcome-records{display:grid;gap:9px;margin:12px 0 0;padding:0;list-style:none}
   .outcome-records>li{padding-top:9px;border-top:1px solid var(--border)}
-  .outcome-records>li>div{display:flex;flex-wrap:wrap;align-items:baseline;gap:3px 10px;font-size:var(--text-2xs)}
+  .outcome-records>li>div{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:3px 10px;font-size:var(--text-2xs)}
+  .outcome-records>li>div>span{margin-left:auto;text-align:right}
   .outcome-records span,.outcome-records small{color:var(--muted);font-size:var(--text-2xs)}
   .outcome-records small{display:block;margin-top:3px}
   summary{padding:12px 0;color:var(--text);font:680 var(--text-xs) var(--mono);cursor:pointer}
@@ -327,6 +329,7 @@
   .contributors strong{color:var(--text);font-size:var(--text-2xs)}
   .contributors small{color:var(--muted);font:var(--text-2xs) var(--font-sans)}
   .contributors .presentation-icon{margin-top:1px}
+  .contributors .presentation-icon::before{transform:translateY(.5px)}
   .truncated{display:block;width:max-content;margin-top:5px;color:var(--amber);font:650 var(--text-2xs) var(--mono)}
   .observation-time,.timing span,.supports{color:var(--text);font-size:var(--text-2xs);line-height:1.45;overflow-wrap:anywhere}
   .observed .freshness{margin-top:4px}

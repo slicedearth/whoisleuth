@@ -59,8 +59,8 @@ const KINDS = [
 ] as const;
 
 const KIND_LABELS: Readonly<Record<AbuseRecipientKind, string>> = Object.freeze({
-  registrar: 'Registrar contact',
-  registry: 'Registry contact',
+  registrar: 'Registrar-published contact',
+  registry: 'Registry-published contact',
   security_txt: 'security.txt contact',
   application_platform: 'Application-platform reporting route',
   observed_edge: 'Observed edge-service reporting route',
@@ -176,15 +176,17 @@ function registryRecipients(registryInsightsRaw: unknown): ResolvedAbuseRecipien
   return records(registryInsights.abuseRouting).slice(0, MAX_RECIPIENTS).flatMap((route) => {
     const kind = route.kind === 'registry' ? 'registry' : route.kind === 'registrar' ? 'registrar' : null;
     if (!kind) return [];
+    const limitations = [
+      ...records(route.limitations).map((item) => text(item.detail)),
+      ...(Array.isArray(route.limitations) ? route.limitations.map((item) => text(item)) : []),
+    ].filter(Boolean);
     const resolved = recipient(
       kind,
       route.contact,
       route.source,
       route.channel,
       publicationTime(route.source),
-      [
-        ...records(route.limitations).map((item) => text(item.detail)),
-        ...(Array.isArray(route.limitations) ? route.limitations.map((item) => text(item)) : []),
+      limitations.length ? limitations : [
         'Publication does not verify that the destination is monitored or appropriate for this incident.',
       ],
     );

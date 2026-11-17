@@ -1,4 +1,4 @@
-# Dependency Maintenance and SBOM Export
+# Dependency maintenance and SBOM export
 
 WHOISleuth keeps dependency updates reviewable and uses the repository
 dependency graph as the default software-bill-of-materials source.

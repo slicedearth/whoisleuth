@@ -432,12 +432,12 @@
 <style>
   .command-description{margin:0 0 20px;max-width:75ch;font-size:var(--text-sm);line-height:1.65;overflow-wrap:anywhere}
   .catalogue-heading>div{max-width:720px}.catalogue-heading h2,.recipes h3{margin:.3rem 0 .55rem;font:700 clamp(1.45rem,2.5vw,1.9rem)/1.3 var(--font-sans);letter-spacing:-.025em}.catalogue-heading p:not(.eyebrow),.recipes p{margin:0;color:var(--muted);line-height:1.6}
-  .filters{display:grid;position:sticky;z-index:6;top:8px;grid-template-columns:minmax(200px,1fr) 145px 130px auto;gap:8px;align-items:end;margin-top:22px;padding:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.filters label{display:grid;gap:6px;min-width:0}.filters label>span{color:var(--muted);font:650 var(--text-2xs) var(--mono)}.filters input[type='search'],.filters select{width:100%;min-width:0;padding:9px 10px}.filters .check{display:flex;min-height:40px;align-items:center;gap:8px;padding:0 5px}.filters .check input{width:18px;height:18px;margin:0}.filters .check span{color:var(--text)}
+  .filters{display:grid;position:sticky;z-index:6;top:8px;grid-template-columns:minmax(200px,1fr) 145px 130px auto;gap:8px;align-items:end;margin-top:22px;padding:13px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.filters label{display:grid;gap:6px;min-width:0}.filters label>span{color:var(--muted);font:650 var(--text-2xs) var(--mono)}.filters input[type='search'],.filters select{width:100%;min-width:0;padding-block:9px}.filters .check{display:flex;min-height:40px;align-items:center;gap:8px;padding:0 5px}.filters .check input{width:18px;height:18px;margin:0}.filters .check span{color:var(--text)}
   .filter-status{margin:10px 0;color:var(--muted);font-size:var(--text-2xs)}.load-error{display:flex;min-width:0;align-items:center;justify-content:space-between;gap:12px;padding:10px;border-left:2px dotted var(--muted);background:var(--panel-raised);color:var(--muted);font-size:var(--text-xs)}.load-error p,.load-error small{margin:0;overflow-wrap:anywhere}.load-error p{color:var(--danger)}.load-error small{flex:1}.load-error button{flex:0 0 auto}
   [hidden] { display: none; }
   .command-jump { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 28px; }
   .command-jump span { color: var(--muted); font-size: var(--text-xs); }
-  .command-jump select { width: min(100%, 320px); min-height: 44px; padding: 8px 10px; }
+  .command-jump select { width: min(100%, 320px); min-height: 44px; padding-block: 8px; }
   .command-list { border-block: 1px solid var(--border); }
   .command-list article { min-width: 0; }
   .command-list article + article { border-top: 1px solid var(--border); }

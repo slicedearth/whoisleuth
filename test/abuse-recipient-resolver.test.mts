@@ -7,8 +7,8 @@ import {
 
 describe('abuse recipient resolver', () => {
   test('uses evidence-limited analyst labels without changing durable route kinds', () => {
-    assert.equal(abuseRecipientKindLabel('registrar'), 'Registrar contact');
-    assert.equal(abuseRecipientKindLabel('registry'), 'Registry contact');
+    assert.equal(abuseRecipientKindLabel('registrar'), 'Registrar-published contact');
+    assert.equal(abuseRecipientKindLabel('registry'), 'Registry-published contact');
     assert.equal(abuseRecipientKindLabel('security_txt'), 'security.txt contact');
     assert.equal(abuseRecipientKindLabel('application_platform'), 'Application-platform reporting route');
     assert.equal(abuseRecipientKindLabel('observed_edge'), 'Observed edge-service reporting route');
@@ -99,8 +99,10 @@ describe('abuse recipient resolver', () => {
     ]);
     assert.equal(result.recipients[0]?.contact, 'abuse@example.test');
     assert.equal(result.recipients[0]?.observedAt, '2026-07-30T01:02:00.000Z');
+    assert.deepEqual(result.recipients[0]?.limitations, ['Mailbox monitoring is not verified.']);
     assert.equal(result.recipients[1]?.contact, 'https://registry.example/report');
     assert.equal(result.recipients[1]?.observedAt, '2026-07-30T01:00:00.000Z');
+    assert.ok(result.recipients[1]?.limitations.length);
     assert.equal(result.recipients[2]?.actionType, 'security_contact_report');
     assert.equal(result.recipients[2]?.reviewAfter, '2026-08-01T00:00:00.000Z');
     assert.equal(result.recipients[3]?.kind, 'application_platform');

@@ -242,7 +242,6 @@ export function buildBulkRiskPresentation(
       provenanceLabel,
       factors,
       limitations: Object.freeze([
-        reason,
         'The retained exact result remains inspectable when present, but it is excluded from the current Risk sort and high-Risk filter.',
       ]),
     });
@@ -262,9 +261,6 @@ export function buildBulkRiskPresentation(
     factors,
     limitations: Object.freeze([
       'Comparable only within the displayed cohort that shares this model, Brand Profile provenance, scan depth, and exact source states.',
-      ...(band.band === 'lower'
-        ? ['A lower Risk band is not evidence of safety, legitimacy, ownership, or absence of concern.']
-        : ['Risk is explainable triage only and does not establish maliciousness, ownership, control, or intent.']),
     ]),
   });
 }

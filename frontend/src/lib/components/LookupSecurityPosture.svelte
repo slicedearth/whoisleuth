@@ -57,8 +57,12 @@
       {#if !findings.length}<p class="detail">No posture findings were retained.</p>{/if}
     </div>
 
-    {#if limitations.length}<p class="callout warn">{limitations.join(' ')}</p>{/if}
-    <p class="card-note">These findings interpret existing point-in-time HTTP, static page, TLS, DNSSEC, and CAA evidence. They make no additional request and are review signals, not confirmed vulnerabilities or a claim that the site is safe.</p>
+    {#if limitations.length}
+      <details class="disclosure evidence-scope-notes" open={!complete || status !== 'success'}>
+        <summary>Collection scope and limits</summary>
+        <ul>{#each limitations as limitation}<li>{limitation}</li>{/each}</ul>
+      </details>
+    {/if}
   </div>
 </details>
 
@@ -76,8 +80,6 @@
   .state-review{border-color:color-mix(in srgb,var(--amber) 45%,var(--border));color:var(--amber)}
   .detail{margin:9px 0 0;font-size:var(--text-xs);line-height:1.5;overflow-wrap:anywhere}
   .evidence{margin:7px 0 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.45;overflow-wrap:anywhere}
-  .callout{margin-top:12px}
-  .card-note{margin:12px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
   @media(max-width:650px){
     .finding-head{display:grid;gap:7px}
     .state{justify-self:start}

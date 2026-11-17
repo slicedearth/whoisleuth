@@ -184,7 +184,12 @@
             evidenceComplete={delegation.complete && rehearsalEvidence.evidenceComplete !== false}
           />
         {/if}
-        {#each delegation.limitations as limitation}<p class="delegation-limitation">{limitation}</p>{/each}
+        {#if delegation.limitations.length}
+          <details class="disclosure evidence-scope-notes" open={!delegation.complete}>
+            <summary>Delegation scope and limits</summary>
+            <ul>{#each delegation.limitations as limitation}<li>{limitation}</li>{/each}</ul>
+          </details>
+        {/if}
       </section>
     {/if}
     <p class="card-note">{note}{truncated ? ' Some record inventories were capped.' : ''}</p>
@@ -196,7 +201,7 @@
   .delegation{margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
   .delegation-head,.delegation-finding>div,.authority-detail article>div{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
   .delegation-head h5{margin:2px 0 0;font-size:var(--text-md)}
-  .delegation-detail,.delegation-limitation{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
+  .delegation-detail{margin:8px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
   .delegation-sources{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}
   .delegation-sources article,.delegation-finding,.authority-detail article{min-width:0;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
   .delegation-sources small,.delegation-sources strong{display:block}

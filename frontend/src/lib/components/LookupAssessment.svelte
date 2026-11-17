@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tokenLabel } from '../../../../packages/analysis/display-label.mts';
   import {
     type OpportunityExplanation,
     type RiskExplanation,
@@ -131,7 +132,7 @@
     <div>
       <p class="eyebrow">Evidence assessment</p>
       <h4 id="lookup-assessment-title">{detail}</h4>
-      <p>{confidence} confidence. Review the source evidence and its limits before using these triage results.</p>
+      <p>{tokenLabel(confidence)} confidence. Review the source evidence and its limits before using these triage results.</p>
     </div>
   </header>
 

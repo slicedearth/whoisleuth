@@ -10,8 +10,9 @@ import {
 } from '../../../../packages/cases/case-evidence-model.mts';
 import type { CaseEvidenceSnapshot } from './case-model.ts';
 import { httpSecurityHeaderLabel } from './http-summary.ts';
-import { webCollectionScoreLimitation } from '../../../../packages/evidence/collection-quality.mts';
+import { webCollectionAllowsComparison, webCollectionScoreLimitation } from '../../../../packages/evidence/collection-quality.mts';
 import { MAX_RESPONSE_VALUE_LENGTH } from '../../../../packages/contracts/case-portability.mts';
+import { tokenLabel } from '../../../../packages/analysis/display-label.mts';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -77,7 +78,7 @@ export type TimelineEntry = ReturnType<typeof caseEvidenceTimeline>[number] & {
 };
 type SnapshotGroup = {
   name: string;
-  rows: Array<{ field: SnapshotField; label: string; value: unknown }>;
+  rows: Array<{ field: SnapshotField; label: string; value: unknown; collectionLimited?: true }>;
 };
 
 const FIELD_GROUPS: Array<{ name: string; fields: SnapshotField[] }> = [
@@ -145,6 +146,8 @@ export function fieldLabel(field: string): string {
 export function formatSnapshotValue(field: string, value: unknown): string {
   if (value === null || value === undefined) return 'Not observed';
   if (field === 'webObservationMode' && value === 'selected_url') return 'Selected URL; path and query not retained';
+  if (typeof value === 'string' && ['availability', 'confidence', 'activityStatus', 'profileContextState', 'httpEvidenceStatus'].includes(field)) return tokenLabel(value);
+  if (field === 'httpTransportSecurity' && (value === 'http' || value === 'https')) return value.toUpperCase();
   if (typeof value === 'boolean') return value ? 'Detected' : 'Not detected';
   if (Array.isArray(value)) {
     if (value.length === 0) return 'None';
@@ -180,7 +183,10 @@ export function snapshotFieldGroups(snapshot: Readonly<Partial<CaseEvidenceSnaps
     for (const field of group.fields) {
       const value = snapshot[field];
       if (isPresentValue(value)) {
-        rows.push({ field, label: fieldLabel(field), value });
+        rows.push({ field, label: fieldLabel(field), value,
+          ...(!webCollectionAllowsComparison(field, snapshot.webCollectionQuality, snapshot.scanDepth ?? 'unknown')
+            ? { collectionLimited: true as const } : {}),
+        });
       }
     }
     if (rows.length) groups.push({ name: group.name, rows });
@@ -327,6 +333,8 @@ export function currentEvidenceSummary(evidenceHistory: CaseEvidenceSnapshot[] |
     riskCollectionLimitation: latest.riskScore === null ? null : webCollectionScoreLimitation(latest.webCollectionQuality, latest.scanDepth),
     registrar: latest.registrar,
     activityStatus: latest.activityStatus,
+    activityCollectionLimited: latest.activityStatus !== null
+      && !webCollectionAllowsComparison('activityStatus', latest.webCollectionQuality, latest.scanDepth),
     profileContextState: latest.profileContextState ?? null,
     profileContextLimitation: latest.profileContextLimitation ?? null,
     capturedAt: latest.capturedAt,

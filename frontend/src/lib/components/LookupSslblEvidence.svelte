@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tokenLabel } from '../../../../packages/analysis/display-label.mts';
   import { evidenceStatusTone } from '#lib/analysis/evidence-status-tone.ts';
 
   let {
@@ -51,8 +52,8 @@
   </summary>
   <div class="evidence-body">
     <div class="stat-grid">
-      <article><small>Comparison state</small><strong>{status}</strong></article>
-      <article><small>Exact result</small><strong class:listed>{verdict.replaceAll('_', ' ')}</strong></article>
+      <article><small>Comparison state</small><strong>{tokenLabel(status)}</strong></article>
+      <article><small>Exact result</small><strong class:listed>{tokenLabel(verdict)}</strong></article>
       <article><small>Snapshot updated</small><strong>{sourceUpdatedAt || 'Unavailable'}</strong></article>
       <article><small>Snapshot entries</small><strong>{entryCount === null ? 'Unavailable' : entryCount.toLocaleString()}</strong></article>
     </div>

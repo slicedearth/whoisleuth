@@ -357,7 +357,7 @@
   {#if inbox.truncated}
     <div class="admission-warning">
       <p class="warning">
-        Showing {inbox.admission.displayed} of {inbox.admission.totalIsExact ? '' : 'at least '}{inbox.admission.totalAtLeast} Review Items.
+        Showing {inbox.admission.displayed} of {inbox.admission.totalIsExact ? '' : 'at least '}{inbox.admission.totalAtLeast} review items.
         {#if inbox.admission.omittedAtLeast > 0} At least {inbox.admission.omittedAtLeast} lower-ranked {inbox.admission.omittedAtLeast === 1 ? 'item is' : 'items are'} omitted.{:else} One or more sources reached an earlier bound, so additional items may be omitted.{/if}
       </p>
       <details>

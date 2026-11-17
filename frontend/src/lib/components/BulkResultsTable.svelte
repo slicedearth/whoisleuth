@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tokenLabel } from '../../../../packages/analysis/display-label.mts';
   import Pagination from '#lib/components/Pagination.svelte';
   import BulkRiskSummary from '#lib/components/BulkRiskSummary.svelte';
   import CasePicker from './CasePicker.svelte';
@@ -157,7 +158,7 @@
         {@const incidents=casesForDomain(caseRecords,row.domain)}
         <tr id={`bulk-result-${row.resultIndex}`} class:error-row={row.errorRow} class:trusted-row={Boolean(row.trusted)} class:mobile-expanded={expandedRows.has(row.resultIndex)}>
           <td data-label="Domain"><div class="domain"><button class="star" class:unavailable={!shortlistAvailable} disabled={!shortlistAvailable} aria-label={shortlistAvailable?`${row.shortlisted ? 'Remove' : 'Add'} ${row.domain} ${row.shortlisted ? 'from' : 'to'} shortlist`:shortlistSourceState==='loading'?`Shortlist state loading for ${row.domain}`:shortlistSourceState==='idle'?`Shortlist state not loaded for ${row.domain}`:`Shortlist state unavailable for ${row.domain}`} aria-pressed={shortlistAvailable?row.shortlisted:undefined} onclick={() => toggleSaved(row.resultIndex)}><IntelligenceIcon name={shortlistAvailable ? (row.shortlisted ? 'star-filled' : 'star') : shortlistSourceState === 'loading' ? 'ellipsis' : 'minus'} size={16} /></button><div class="domain-content"><strong>{row.domain}</strong>{#if shortlistSourceState === 'loading'}<small class="source-unavailable">Shortlist loading</small>{:else if shortlistSourceState === 'idle'}<small class="source-unavailable">Shortlist not loaded</small>{:else if !shortlistAvailable}<small class="source-unavailable">Shortlist unavailable</small>{/if}{#if row.unicodeDomain}<small class="idn-label">Unicode: {row.unicodeDomain}</small>{/if}{#if row.mixedScript}<small class="warn-label">Mixed writing scripts</small>{/if}{#if row.referenceMatch}<small class="warn-label">Official-domain skeleton match</small>{/if}{#if row.trusted}<small class="trusted-label">{row.trusted}</small>{/if}{#if !row.profileContextReady}<small class="warn-label">Brand Profile context unevaluated{row.profileContextLimitation ? ` — ${row.profileContextLimitation}` : ''}</small>{/if}{#if row.faviconMatch}<small class="danger-label">Favicon match</small>{:else if row.faviconNearMatch}<small class="warn-label">Favicon near-match</small>{/if}{#if row.reusesOfficialAssets}<small class="warn-label">Observed official-asset relationship</small>{/if}{#if row.hasPasswordField}<small class="warn-label">Password field</small>{/if}{#if row.phishingLanguageMatch}<small class="danger-label">Matched phishing-language pattern</small>{/if}{#if row.ct}<details class="ct-source"><summary>Certificate Transparency</summary><div class="ct-source-detail">{#if row.ct.lastObservedAt}<span>Latest CT observation <time datetime={row.ct.lastObservedAt}>{row.ct.lastObservedAt.slice(0, 10)}</time></span>{/if}<span>{row.ct.hostnameCount} observed hostname{row.ct.hostnameCount === 1 ? '' : 's'}</span><span>{row.ct.certificateCount} distinct certificate{row.ct.certificateCount === 1 ? '' : 's'}</span></div></details>{/if}{#if row.error}<small>{row.error}</small>{/if}</div></div><button class="mobile-row-toggle" type="button" aria-expanded={expandedRows.has(row.resultIndex)} aria-label={`${expandedRows.has(row.resultIndex) ? 'Hide' : 'Show'} details for ${row.domain}`} onclick={() => toggleRowDetails(row.resultIndex)}>{expandedRows.has(row.resultIndex) ? 'Hide details' : 'Show details'}</button></td>
-          {#if columns.includes('registration')}<td data-label="Registration"><span class="state" data-registration-state={row.availability}>{row.availability.replace('_', ' ')}</span><small class="confidence">{row.confidence} confidence</small></td>{/if}
+          {#if columns.includes('registration')}<td data-label="Registration"><span class="state" data-registration-state={row.availability}>{tokenLabel(row.availability)}</span><small class="confidence">{tokenLabel(row.confidence)} confidence</small></td>{/if}
           {#if columns.includes('risk')}<td data-label="Risk" class:high={row.highRisk}><BulkRiskSummary risk={row.risk} domain={row.domain} /></td>{/if}
           {#if columns.includes('website')}<td class="mobile-secondary" data-label="Website">{row.activity}</td>{/if}
           {#if columns.includes('registrar')}<td class="mobile-secondary" data-label="Registrar">{row.registrar}</td>{/if}
@@ -204,10 +205,10 @@
   .ct-source-detail{display:flex;flex-direction:column;gap:2px;margin-top:4px}
   .ct-source-detail span{color:var(--muted);font-size:var(--text-2xs);overflow-wrap:anywhere}
   .ct-source-detail time{color:var(--text)}
-  .state{color:var(--text);text-transform:capitalize}
+  .state{color:var(--text)}
   .state[data-registration-state='error'],.state[data-registration-state='failed']{color:var(--danger)}
   .state[data-registration-state='unknown'],.state[data-registration-state='unavailable'],.state[data-registration-state='not_collected']{color:var(--muted)}
-  td .confidence{color:var(--muted);text-transform:capitalize}
+  td .confidence{color:var(--muted)}
   .high{color:var(--danger);font-weight:800}
   .error-row{background:rgb(var(--danger-rgb) / .03)}
   .trusted-row{background:rgb(var(--accent2-rgb) / .03)}

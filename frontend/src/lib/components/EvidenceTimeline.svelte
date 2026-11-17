@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tokenLabel } from '../../../../packages/analysis/display-label.mts';
   import { getContext } from 'svelte';
   import { CONSOLE_PRESENTATION_CONTEXT, type ConsolePresentationContext } from '../appearance.ts';
   import type { CaseRecord } from '#lib/cases.ts';
@@ -64,11 +65,11 @@
 {#if selection.limitation}<p class="timeline-incomparable-note">{selection.limitation} Review the retained snapshots below.</p>{/if}
 {#if summary}
   <dl class="evidence">
-    <dt>Availability</dt><dd>{summary.availability ?? '—'}</dd>
+    <dt>Availability</dt><dd>{tokenLabel(summary.availability ?? '—')}</dd>
     <dt>Risk</dt><dd>{summary.riskScore ?? '—'}{#if summary.riskModelVersion !== null} · model v{summary.riskModelVersion}{/if}{#if summary.riskCollectionLimitation}<small>{summary.riskCollectionLimitation}</small>{/if}</dd>
-    <dt>Profile context</dt><dd>{summary.profileContextState ?? 'Not observed'}{#if summary.profileContextLimitation}<small>{summary.profileContextLimitation}</small>{/if}</dd>
+    <dt>Profile context</dt><dd>{tokenLabel(summary.profileContextState ?? 'Not observed')}{#if summary.profileContextLimitation}<small>{summary.profileContextLimitation}</small>{/if}</dd>
     <dt>Registrar</dt><dd>{summary.registrar ?? '—'}</dd>
-    <dt>Website</dt><dd>{summary.activityStatus ?? '—'}</dd>
+    <dt>Website</dt><dd>{tokenLabel(summary.activityStatus ?? '—')}{#if summary.activityCollectionLimited}<small>Collection incomplete or unknown</small>{/if}</dd>
     <dt>Captured</dt><dd>{date(summary.capturedAt)}</dd>
   </dl>
 {/if}
@@ -132,7 +133,12 @@
               {#each snapshotFieldGroups(entry.snapshot) as group}
                 <section class="timeline-group">
                   <h4>{group.name}</h4>
-                  <dl>{#each group.rows as row}<dt>{row.label}</dt><dd>{formatSnapshotValue(row.field,row.value)}</dd>{/each}</dl>
+                  <dl>{#each group.rows as row}<dt>{row.label}</dt><dd>
+                    {#if row.collectionLimited}<small class="collection-limit">Retained value · collection incomplete or unknown</small>{/if}
+                    {#if (row.field === 'riskFactors' || row.field === 'opportunityFactors') && Array.isArray(row.value)}
+                      <ul class="snapshot-factors">{#each row.value as factor}<li>{formatSnapshotValue(row.field,[factor])}</li>{/each}</ul>
+                    {:else}{row.collectionLimited && typeof row.value === 'boolean' ? tokenLabel(String(row.value)) : formatSnapshotValue(row.field,row.value)}{/if}
+                  </dd>{/each}</dl>
                 </section>
               {/each}
             </div>
@@ -154,4 +160,6 @@
   .timeline-changes{gap:5px;margin-top:10px}.timeline-change{display:grid;grid-template-columns:minmax(100px,1fr) 80px minmax(0,1fr);gap:8px;padding:7px 9px;border-left:3px solid var(--border);font-size:var(--text-xs)}.timeline-change.tone-danger{border-color:var(--danger)}.timeline-change.tone-warn{border-color:var(--amber)}.timeline-change.tone-good{border-color:var(--accent2)}.change-kind{color:var(--muted);font-size:var(--text-2xs);text-transform:capitalize}.change-values{display:flex;flex-wrap:wrap;gap:4px;min-width:0}.change-values span{overflow-wrap:anywhere;word-break:break-word}.change-arrow{color:var(--muted)}
   .timeline-detail{margin-top:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.timeline-group:not(:last-child){margin-bottom:10px}.timeline-group h4{margin:0 0 6px;color:var(--muted);font:600 var(--text-2xs) var(--mono);letter-spacing:.05em;text-transform:uppercase}.timeline-group dl{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;margin:0;font-size:var(--text-xs)}.timeline-group dt{color:var(--muted)}.timeline-group dd{margin:0;overflow-wrap:anywhere;word-break:break-word}.timeline-filter-note{margin-top:10px}
   @media(max-width:800px){.timeline-change,.timeline-group dl{grid-template-columns:1fr}.timeline-entry-head{align-items:flex-start;flex-direction:column}.timeline-toggle{width:100%;justify-content:flex-start}.change-values{display:grid;grid-template-columns:1fr}}
+  .collection-limit{display:block;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
+  .snapshot-factors{display:grid;gap:6px;margin:0;padding-left:18px}
 </style>
