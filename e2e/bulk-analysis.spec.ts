@@ -444,7 +444,7 @@ test('a small scan completes and reports the correct error count', async ({ page
 
   await expect(page.locator('.filters button', { hasText: 'all' }).locator('span')).toHaveText(String(domains.length));
   await expect(page.locator('.filters button', { hasText: 'errors' }).locator('span')).toHaveText(String(domains.length));
-  await expect(page.locator('.results-table .confidence')).toHaveText(Array(domains.length).fill('unknown confidence'));
+  await expect(page.locator('.results-table .confidence')).toHaveText(Array(domains.length).fill(/^unknown confidence$/iu));
   const outcomes = page.locator('.outcomes');
   await expect(outcomes).toHaveAttribute('aria-label', 'Settled scan outcomes');
   await expect(outcomes.locator('div', { hasText: 'Failed' })).toContainText(String(domains.length));
@@ -849,14 +849,14 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
   const beforeShortcut = await readBrowserLocalCollection(page, 'bulk_review');
   await page.keyboard.press('Alt+r');
   await expect(inspectRight).toBeFocused();
-  await expect(cockpit.locator('.result-queue li').filter({ hasText: 'left-review.example' })).toContainText('unreviewed');
-  await expect(cockpit.locator('.result-queue li').filter({ hasText: 'right-review.example' })).toContainText('unreviewed');
+  await expect(cockpit.locator('.result-queue li').filter({ hasText: 'left-review.example' })).toContainText(/\bunreviewed\b/iu);
+  await expect(cockpit.locator('.result-queue li').filter({ hasText: 'right-review.example' })).toContainText(/\bunreviewed\b/iu);
   expect(await readBrowserLocalCollection(page, 'bulk_review')).toEqual(beforeShortcut);
   await inspectRight.click();
   await markReviewed.focus();
   await page.keyboard.press('Alt+r');
-  await expect(cockpit.locator('.review-state')).toHaveText('reviewed');
-  await expect(cockpit.locator('.result-queue li').filter({ hasText: 'left-review.example' })).toContainText('unreviewed');
+  await expect(cockpit.locator('.review-state')).toHaveText(/^reviewed$/iu);
+  await expect(cockpit.locator('.result-queue li').filter({ hasText: 'left-review.example' })).toContainText(/\bunreviewed\b/iu);
   const afterShortcut = await readBrowserLocalCollection(page, 'bulk_review', { minimumRecords: 1 });
   expect(afterShortcut.records.map(record => record.value)).toMatchObject([
     { kind: 'row', domain: 'right-review.example', state: 'reviewed' },
@@ -870,7 +870,7 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
     element.querySelector<HTMLButtonElement>('[aria-pressed="true"]')!.dispatchEvent(event);
     return event.defaultPrevented;
   })).toBe(true);
-  await expect(cockpit.locator('.review-state')).toHaveText('reviewed');
+  await expect(cockpit.locator('.review-state')).toHaveText(/^reviewed$/iu);
   await inspectRight.click();
   await expect(cockpit.getByRole('heading', { name: 'right-review.example', exact: true })).toBeVisible();
   await expect(page).toHaveURL(/\/bulk/u);
@@ -1058,7 +1058,7 @@ test('a malformed successful response remains an explicit failure in exports and
   await openBulkFilters(page);
   const row = page.locator('.results-table tbody tr');
   await expect(page.locator('.filters button', { hasText: 'errors' }).locator('span')).toHaveText('1');
-  await expect(row.locator('td[data-label="Registration"]')).toContainText('error');
+  await expect(row.locator('.state')).toHaveText(/^error$/iu);
   expect(await row.locator('.state').evaluate((element) => {
     const probe = document.createElement('span');
     probe.style.color = 'var(--danger)';

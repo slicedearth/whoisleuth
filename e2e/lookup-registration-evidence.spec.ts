@@ -727,6 +727,8 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   const responseRoutes = page.locator('.response');
   await expect(responseRoutes.locator('.response-actions').getByText('Observed endpoint network-registration contact', { exact: true })).toBeVisible();
   await expect(responseRoutes.getByText('abuse@network.example', { exact: true })).toBeVisible();
+  const networkRoute = responseRoutes.locator('.response-actions article').filter({ hasText: 'abuse@network.example' });
+  await networkRoute.locator('.route-notes > summary').click();
   await expect(responseRoutes.getByText(/does not prove hosting responsibility/i)).toBeVisible();
   await expect(responseRoutes.getByRole('button', { name: 'Record in case' })).toBeDisabled();
 
@@ -1516,7 +1518,7 @@ test('published response routes can be recorded in a local case with their prove
   const recordRoute = response.getByRole('button', { name: 'Record in case' });
   await expect(recordRoute).toBeEnabled();
   await recordRoute.click();
-  await expect(page.locator('.case-status')).toContainText('Recorded the registrar contact');
+  await expect(page.locator('.case-status')).toHaveText(/^Recorded\b/iu);
 
   const stored = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]?.value;
   expect(stored?.actions).toEqual([

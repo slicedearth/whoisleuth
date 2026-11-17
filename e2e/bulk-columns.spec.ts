@@ -77,6 +77,6 @@ test('saved Bulk columns survive reload without collecting targets or dropping r
   }
   await page.setViewportSize({ width: 1280, height: 900 });
   await picker.getByRole('button', { name: 'Show all columns' }).click();
-  await expect(row.locator('td[data-label="Registration"]')).toContainText('registered');
+  await expect(row.locator('td[data-label="Registration"] .state')).toHaveText(/^registered$/iu);
   expect(requests).toBe(2);
 });

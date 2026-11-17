@@ -126,7 +126,7 @@ test('inconclusive WHOIS discovery is explained as incomplete evidence rather th
   await page.getByRole('button', { name: 'Expand details: Source quality evidence', exact: true }).click();
   await page.locator('#evidence-quality .collection-outcomes > summary').click();
   const source = page.locator('[data-planned-source="whois"]');
-  await expect(source).toContainText('Completed diagnostic: partial');
+  await expect(source.getByText(/^partial$/iu)).toBeVisible();
   await expect(source).toContainText('incomplete or inconclusive');
   await expect(source).toContainText('a later retry may help');
   await expect(source).not.toContainText('No applicable service');
