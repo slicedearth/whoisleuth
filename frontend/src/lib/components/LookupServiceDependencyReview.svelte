@@ -105,14 +105,16 @@
 
 <details class="dependency-review card">
   <summary>
-    <span>Service dependency review</span>
-    <span class:attention={review.state === 'review'} class:unavailable={review.state === 'unavailable'}>{review.label}</span>
+    <span class="disclosure-heading">
+      <span>Service dependency review</span>
+      <span class="review-status" class:attention={review.state === 'review'}>{review.label}</span>
+    </span>
   </summary>
   <div class="body">
     {#if unreviewed.length}
       <p role="note">Records not reviewed: {unreviewed.map(([kind, count]) => `${count} ${kind}`).join(', ')}. Their validity and dependencies are unknown. The accepted DNS records remain available in DNS evidence.</p>
     {/if}
-    <p class="intro">Surface observed DNS and HTTP service dependencies for a conservative manual review. WHOISleuth does not follow targets or test whether a service can be claimed.</p>
+    <p class="intro">Review the DNS and HTTP dependencies observed in this Lookup. Nameserver and mail targets provide context; they are not evaluated for hosted-service deprovisioning. WHOISleuth does not follow targets or test whether a service can be claimed.</p>
     <label class="scope-control">
       <span>Reviewed service scope <small>Optional, local to this Lookup view</small></span>
       <textarea
@@ -165,14 +167,16 @@
                 </dl>
               </details>
             {/if}
-            <p class="qualification">{qualificationLabel(dependency.qualification)}</p>
+            {#if dependency.qualification !== 'not_applicable'}
+              <p class="qualification">{qualificationLabel(dependency.qualification)}</p>
+            {/if}
             {#if dependency.scope !== 'unspecified'}
               <p class:scope-match={dependency.scope === 'authorized'} class="scope-state">
                 {dependency.scope === 'authorized' ? 'Within reviewed scope' : 'Outside reviewed scope'}
               </p>
             {/if}
             <p>{dependency.detail}</p>
-            <p>{dependency.qualificationDetail}</p>
+            {#if dependency.qualification !== 'not_applicable'}<p>{dependency.qualificationDetail}</p>{/if}
             <small>{dependency.provenance}</small>
           </article>
         {/each}
@@ -191,11 +195,10 @@
 
 <style>
   .dependency-review{min-width:0;padding:0}
-  .dependency-review>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;cursor:pointer;font:700 var(--text-xs) var(--mono)}
+  .dependency-review>summary{padding:12px 14px;cursor:pointer;font:700 var(--text-xs) var(--mono)}
   .dependency-review>summary:focus-visible,.limits>summary:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
-  .dependency-review>summary span:last-child{color:var(--muted);font-size:var(--text-2xs);text-align:right}
-  .dependency-review>summary span.attention{color:var(--amber)}
-  .dependency-review>summary span.unavailable{color:var(--muted)}
+  .review-status{color:var(--muted);font-size:var(--text-2xs);text-align:right}
+  .review-status.attention{color:var(--amber)}
   .body{display:grid;gap:11px;padding:0 var(--card-pad) var(--card-pad);border-top:1px solid var(--border)}
   .intro{max-width:820px;margin:12px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .scope-control{display:grid;gap:6px;max-width:760px;padding:10px 11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
@@ -230,8 +233,8 @@
   .next-steps ol,.limits ul{margin:8px 0 0;padding-left:20px;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
   .limits>summary{color:var(--muted);font:650 var(--text-2xs) var(--mono);cursor:pointer}
   @media(max-width:760px){
-    .dependency-review>summary{align-items:flex-start}
-    .dependency-review>summary span:last-child{max-width:48%}
+    .dependency-review>summary .disclosure-heading{align-items:flex-start}
+    .review-status{max-width:48%}
     .dependency-grid{grid-template-columns:minmax(0,1fr)}
   }
 </style>

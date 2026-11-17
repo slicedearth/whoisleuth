@@ -374,7 +374,7 @@ benefit; **Before you continue** covers prerequisites and request disclosure. Un
 or unbound sources remain gaps, not available collection actions. Opening a
 review path starts no request and does not change saved evidence.
 
-Under **Source quality**, expand **Compare the completed plan and source outcomes**
+Under **Source quality**, expand **Compare source outcomes**
 for the finished target and mode, separately dated source records and diagnostic
 states. Older results have no original optional selections; missing output does
 not establish that a source was declined or had no findings.
@@ -385,6 +385,8 @@ not rewrite that receipt. Expand **Collector execution** for each source family;
 a started collector is not proof of network delivery, and incomplete child
 records remain incomplete. Cancelling before a valid final response leaves no
 completed receipt. Deliberate source refreshes remain separate observations.
+The source and analysis records keep each state, time and provenance together;
+expand a record's **Limitations and scope** for its detailed evidence notes.
 
 **What each source describes** separates the submitted hostname and registration
 request from the domains actually returned by registry, registrar and WHOIS

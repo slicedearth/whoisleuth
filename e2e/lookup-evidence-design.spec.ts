@@ -699,9 +699,14 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
 
   const limitationCell = sourceQualityTable.getByRole('cell', { name: 'Limitations for Reverse DNS' });
   await expect(limitationCell).toHaveAttribute('aria-colspan', '5');
-  await expect(limitationCell).toContainText('PTR context does not prove hosting control.');
+  const recordNotes = limitationCell.locator('details');
+  await expect(recordNotes).not.toHaveAttribute('open', '');
+  await recordNotes.locator(':scope > summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(recordNotes).toHaveAttribute('open', '');
   const reverseDnsLimitations = limitationCell.locator('section[aria-label="Limitations from Reverse DNS"]');
   await expect(reverseDnsLimitations).toHaveCount(1);
+  await expect(reverseDnsLimitations).toBeVisible();
   await expect(reverseDnsLimitations).toContainText('Reverse DNS');
   await expect(reverseDnsLimitations).toContainText('PTR context does not prove hosting control.');
 

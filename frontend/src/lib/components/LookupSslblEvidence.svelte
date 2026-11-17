@@ -63,7 +63,6 @@
         <dt>Snapshot digest</dt><dd class="hash">{digest || 'Unavailable'}</dd>
       </dl>
     {/if}
-    <p class:list-warning={listed} class="callout">{detail}</p>
     <p class="source-note">
       Source: <a href="https://sslbl.abuse.ch/blacklist/" target="_blank" rel="noopener noreferrer">SSLBL certificate blacklist<span class="sr-only"> (opens in a new tab)</span></a>.
       {#if safeReferenceUrl}<a href={safeReferenceUrl} target="_blank" rel="noopener noreferrer">Review the matching provider record<span class="sr-only"> (opens in a new tab)</span></a>.{/if}
@@ -81,7 +80,6 @@
   .detail-grid dd{min-width:0;margin:0;overflow-wrap:anywhere}
   .hash{font-family:var(--mono)}
   .callout{margin:12px 0 0}
-  .list-warning{border-color:color-mix(in srgb,var(--danger) 45%,var(--border));color:var(--danger)}
   .source-note,.card-note{margin:10px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
   .source-note a+a{margin-left:10px}
   @media(max-width:650px){
