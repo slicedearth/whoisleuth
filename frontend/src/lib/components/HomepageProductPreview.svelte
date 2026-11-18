@@ -208,6 +208,8 @@
             <title id="homepage-evidence-svg-title">Separately attributed evidence flow</title>
             <desc id="homepage-evidence-svg-description">Registry, DNS, website, and certificate observations remain separate. They feed an assessment layer, which suggests review or another bounded collection step.</desc>
             <path class="evidence-edge" d="M142 44 C210 44 216 95 278 104 M142 102 C210 102 218 110 278 112 M142 160 C210 160 216 127 278 120 M478 70 C430 70 420 101 342 108 M478 150 C430 150 420 126 342 118 M342 114 C420 114 430 114 492 114" />
+            <!-- Decorative flow in reading order: each source into the assessment, then out to the next review action. -->
+            <path class="evidence-flow chart-flow" aria-hidden="true" d="M142 44 C210 44 216 95 278 104 M142 102 C210 102 218 110 278 112 M142 160 C210 160 216 127 278 120 M478 70 C430 70 420 101 342 108 M342 118 C420 126 430 150 478 150" />
             <g class={`map-node state-${topologyNodes[0]?.status}`} transform="translate(18 22)"><rect width="124" height="44" rx="9"/><text x="12" y="18">Registry</text><text class="node-state" x="12" y="34">{topologyNodes[0]?.status}</text></g>
             <g class={`map-node state-${topologyNodes[1]?.status}`} transform="translate(18 80)"><rect width="124" height="44" rx="9"/><text x="12" y="18">DNS</text><text class="node-state" x="12" y="34">{topologyNodes[1]?.status}</text></g>
             <g class={`map-node state-${topologyNodes[2]?.status}`} transform="translate(18 138)"><rect width="124" height="44" rx="9"/><text x="12" y="18">Website</text><text class="node-state" x="12" y="34">{topologyNodes[2]?.status}</text></g>
@@ -289,6 +291,7 @@
   .preview-evidence-map{min-width:0;padding:10px 12px 7px;background:linear-gradient(145deg,var(--panel),color-mix(in srgb,var(--panel-raised) 84%,var(--accent) 3%))}
   .preview-evidence-map svg{display:block;width:100%;height:auto;max-height:238px;overflow:visible}
   .evidence-edge{fill:none;stroke:var(--border-strong);stroke-width:1.6;stroke-linecap:round}
+  .evidence-flow{stroke:var(--accent);stroke-width:1.8;stroke-linecap:round;opacity:.8}
   .map-node rect{fill:var(--panel-raised);stroke:var(--border-strong);stroke-width:1.5}
   .map-node text{fill:var(--text);font:700 11px var(--mono)}.map-node .node-state{fill:var(--muted);font-size:9px;text-transform:uppercase}
   .map-node.state-success rect{stroke:var(--accent2)}.map-node.state-partial rect,.map-node.state-inconclusive rect{stroke:var(--amber)}.map-node.state-unavailable rect{stroke:var(--muted);stroke-dasharray:4 3}

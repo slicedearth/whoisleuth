@@ -8,6 +8,7 @@
   import IntelligenceIcon from '#lib/components/IntelligenceIcon.svelte';
   import { publicGuideGoals } from '#lib/public-guide.ts';
   import { PUBLIC_RESOURCES } from '#lib/public-resources.ts';
+  import { revealOnScroll } from '#lib/reveal.ts';
 
   const evidenceSources = [
     { title: 'Registration first', description: 'WHOIS and RDAP stay separate. Authoritative registry evidence takes priority; positive authoritative DNS delegation can support registered status when registry results are inconclusive.' },
@@ -41,23 +42,23 @@
   </div>
 </section>
 
-<section class="jobs" id="features" aria-labelledby="jobs-title">
+<section class="jobs" id="features" aria-labelledby="jobs-title" use:revealOnScroll>
   <div class="section-intro"><p class="eyebrow">Investigate · Respond · Assure</p><h2 id="jobs-title">Start with the work in front of you</h2><p>Choose a domain, a suspicious message, a brand candidate or a saved case. The guides and worked examples are open to everyone; your own investigations use the console.</p></div>
   <PublicGoalPaths goals={publicGuideGoals} />
 </section>
 
-<section class="evidence" aria-labelledby="evidence-title">
+<section class="evidence" aria-labelledby="evidence-title" use:revealOnScroll>
   <div class="section-intro"><h2 id="evidence-title">Follow the evidence behind a finding</h2><p>Collect relevant sources or start with supplied material. Compare observations, keep the useful evidence and choose what to share.</p></div>
   <div class="evidence-grid">{#each evidenceSources as source}<article><h3>{source.title}</h3><div><p>{source.description}</p>{#if source.guide}<a class="evidence-guide" href={source.guide.href}>{source.guide.label} <IntelligenceIcon name="arrow-right" size={16} /></a>{/if}</div></article>{/each}</div>
 </section>
 
-<section class="learn" aria-labelledby="learn-title">
+<section class="learn" aria-labelledby="learn-title" use:revealOnScroll>
   <div class="section-intro"><h2 id="learn-title">Learn how the evidence fits together</h2><p>Choose a source, follow a worked example and decide what to review next.</p></div>
   <PublicResourceCards resources={PUBLIC_RESOURCES.slice(0,4)} compact />
   <a class="all-resources" href="/resources">Browse the topic library <IntelligenceIcon name="arrow-right" size={16} /></a>
 </section>
 
-<section class="principles card" aria-labelledby="principles-title">
+<section class="principles card" aria-labelledby="principles-title" use:revealOnScroll>
   <div><p class="eyebrow">Privacy and storage</p><h2 id="principles-title">Browser-local by default</h2><p>Profiles, cases, watchlists, campaigns, selected relationships and search baselines stay in the current browser by default. Optional scheduled monitoring is a separate configured service.</p></div>
 </section>
 
