@@ -377,8 +377,10 @@ This optional local command sends one ASN to PeeringDB and displays minimal
 community-maintained network, scope, peering-policy and source-update context.
 It makes one request, without contact expansion, retries, a cache or export file.
 No directory entry means only that no matching entry was returned; a failed
-request exits `4`, not a registration or reachability verdict. Quiet mode retains
-that exit behaviour. Normal lookups do not invoke it.
+request exits `4`, not a registration or reachability verdict. Directory text
+with control, invisible or bidirectional formatting characters is reported as an
+invalid response rather than displayed. Quiet mode retains that exit behaviour.
+Normal lookups do not invoke it.
 
 Before using it, confirm your operational purpose is permitted or you already
 have the provider’s permission under its [acceptable-use policy](https://www.peeringdb.com/aup).

@@ -3,6 +3,7 @@ import { safeFetch } from './safe-fetch.mts';
 import { requestJsonCapped } from './bounded-json-response.mts';
 import { parseBoundedJson } from './bounded-json.mts';
 import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
+import { hasUnsafeRetainedText } from '../packages/interchange/retained-text.mts';
 
 const ENDPOINT = 'https://www.peeringdb.com/api/net';
 const FIELDS = 'id,asn,name,info_scope,policy_general,updated,status';
@@ -26,7 +27,8 @@ const object = (value: unknown): Record<string, unknown> => {
 };
 function text(value: unknown, maximum: number): string | null {
   if (value === undefined || value === null || value === '') return null;
-  if (typeof value !== 'string' || value.length > maximum || /[\u0000-\u001f\u007f]/u.test(value)) throw new TypeError('Invalid directory field.');
+  // Community-edited text reaches the terminal, so C1 and invisible/bidi controls fail closed too.
+  if (typeof value !== 'string' || value.length > maximum || hasUnsafeRetainedText(value)) throw new TypeError('Invalid directory field.');
   return value.trim() || null;
 }
 

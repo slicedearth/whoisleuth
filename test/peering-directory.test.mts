@@ -42,7 +42,9 @@ test('missing directory entries remain distinct from failed, ambiguous and misma
   assert.equal((await collect({ data: [] })).state, 'not_listed');
   for (const body of [{ data: [NETWORK, NETWORK] }, { data: [{ ...NETWORK, asn: 64497 }] },
     { data: [{ ...NETWORK, status: 'deleted' }] }, { data: [{ ...NETWORK, updated: 'yesterday' }] },
-    { data: [{ ...NETWORK, name: 'x'.repeat(301) }] }, { message: 'private error' }]) {
+    { data: [{ ...NETWORK, name: 'x'.repeat(301) }] }, { message: 'private error' },
+    { data: [{ ...NETWORK, name: 'Example\u009b31m network' }] }, { data: [{ ...NETWORK, name: 'Example ‮network' }] },
+    { data: [{ ...NETWORK, info_scope: 'Regional​' }] }, { data: [{ ...NETWORK, policy_general: 'Open\u0085' }] }]) {
     const result = await collect(body);
     assert.equal(result.state, 'unavailable'); assert.equal(result.failure, 'invalid_response'); assert.equal(result.network, null);
   }
