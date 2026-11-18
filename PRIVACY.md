@@ -657,9 +657,10 @@ material. The operator controls retention of CLI input and output files.
 Monitoring workload previews read existing watchlists without scheduling,
 collecting or saving new data. Selected shared-service/scanner context compares
 identifiers already in the view with one local warning-list file and optional
-declared provenance. These browser inputs and results stay in page memory until
-replaced, the selected target context changes or the view closes. Nothing is
-uploaded, saved, suppressed or rescored; the CLI reads only its selected input.
+declared provenance. Warning data and provenance stay in page memory until
+replaced or the view closes; reports clear when the selected target context
+changes. Nothing is uploaded, saved, suppressed or rescored; the CLI reads only
+its selected input.
 
 Selected dnsx/httpx JSONL imports are processed locally through the existing
 findings preview. They preserve exact hostnames, explicit timestamps and a
