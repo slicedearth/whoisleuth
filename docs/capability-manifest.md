@@ -61,7 +61,7 @@ This catalogue describes existing execution, disclosure, retention and assurance
 
 ## CLI operation catalogue
 
-The public command catalogue keeps its version 1 offline/network label for all 57 installed CLI operations. These operation records retain the more precise plane, activation, credential, export and scoring contract.
+The public command catalogue keeps its version 1 offline/network label for all 58 installed CLI operations. These operation records retain the more precise plane, activation, credential, export and scoring contract.
 
 | Operation | Capability family | Legacy collection | Trigger | Planes | Network | Disclosure | Recipients | Credentials | Retention | Export | Scoring | Authorisation |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -109,6 +109,7 @@ The public command catalogue keeps its version 1 offline/network label for all 5
 | `command.cli.case-pack` | `portable_evidence` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | deliberate bounded | none | explicit action |
 | `command.cli.domain-control` | `portable_evidence` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | deliberate bounded | none | explicit action |
 | `command.cli.monitor-once` | `lookup` | network | explicit cli command | local cli network | bounded passive | normalised target<br>registry query<br>whois query<br>dns question<br>public ip address<br>homepage request<br>tls handshake | registry service<br>dns resolver<br>target public service | none | local output deliberate | local output | none | explicit action |
+| `command.cli.monitor-tick` | `lookup` | network | explicit cli command | local cli offline<br>local cli network | conditional bounded passive | normalised target<br>registry query<br>whois query<br>dns question<br>homepage request<br>tls handshake | registry service<br>dns resolver<br>target public service | none | local output deliberate | local output | none | explicit network approval |
 | `command.cli.assurance` | `portable_evidence` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | deliberate bounded | none | explicit action |
 | `command.cli.change-packet` | `portable_evidence` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | deliberate bounded | none | explicit action |
 | `command.cli.sharing-review` | `portable_evidence` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | deliberate bounded | none | explicit action |
@@ -143,6 +144,8 @@ Variant rows override the aggregate operation boundary; no-request variants neve
 | `command.cli.discover-scan` | `plan_deep` | explicit cli command | local cli offline | none | none | none | none | bounded runtime report | none | none | local output deliberate | metadata only | none | explicit action | bounded atomic | all or nothing | complete | None |
 | `command.cli.discover-scan` | `collect_fast` | explicit cli command | local cli network | bounded passive | normalised target<br>registry query<br>dns question | registry service<br>dns resolver | registry light | collector specific | command bounded | none | local output deliberate | local output | bounded risk and acquisition input | explicit action | queue stops admission | explicit per item | complete<br>partial | None |
 | `command.cli.discover-scan` | `collect_deep` | explicit cli command | local cli network | bounded passive | normalised target<br>registry query<br>whois query<br>dns question<br>homepage request<br>tls handshake | registry service<br>dns resolver<br>target public service | registry deep | collector specific | command bounded | none | local output deliberate | local output | bounded risk and acquisition input | explicit action | queue stops admission | explicit per item | complete<br>partial | None |
+| `command.cli.monitor-tick` | `preview` | explicit cli command | local cli offline | none | none | none | none | bounded local input | none | none | local output deliberate | local output | none | explicit action | bounded atomic | explicit document | complete<br>partial | None |
+| `command.cli.monitor-tick` | `approved_cycle` | explicit cli command | local cli network | bounded passive | normalised target<br>registry query<br>whois query<br>dns question<br>homepage request<br>tls handshake | registry service<br>dns resolver<br>target public service | collector specific | collector specific | command bounded | none | local output deliberate | local output | none | explicit network approval | queue stops admission | explicit per item | complete<br>partial | None |
 | `command.cli.workflow-run` | `unapproved_run` | explicit cli command | local cli offline | none | none | none | none | bounded local input | command bounded | none | local output deliberate | local output | none | explicit action | step stops admission | explicit step | complete<br>partial<br>blocked | complete<br>partial<br>awaiting network approval<br>awaiting analyst selection<br>awaiting review confirmation<br>step failed |
 | `command.cli.workflow-run` | `approved_run` | explicit cli command | local cli offline<br>local cli network | conditional bounded passive | normalised target<br>registry query<br>whois query<br>dns question<br>public ip address<br>homepage request<br>tls handshake<br>mta sts policy request<br>certificate search term | registry service<br>dns resolver<br>target public service<br>certificate transparency service | workflow step specific | collector specific | command bounded | none | local output deliberate | local output | none | explicit network approval | step stops admission | explicit step | complete<br>partial<br>blocked | complete<br>partial<br>awaiting analyst selection<br>awaiting review confirmation<br>step failed |
 
@@ -271,6 +274,7 @@ Runtime configuration and admission remain with their existing enforcement owner
 | `command.cli.case-pack` | none | bounded portable document | none | bounded atomic | all or nothing | complete | None |
 | `command.cli.domain-control` | none | bounded portable document | none | bounded atomic | explicit per source | complete<br>partial | None |
 | `command.cli.monitor-once` | collector specific | collector specific | command bounded | queue stops admission | explicit per item | complete<br>partial | None |
+| `command.cli.monitor-tick` | collector specific | collector specific | command bounded | queue stops admission | explicit per item | complete<br>partial | None |
 | `command.cli.assurance` | none | bounded portable document | none | bounded atomic | explicit per source | complete<br>partial | None |
 | `command.cli.change-packet` | none | bounded portable document | none | bounded atomic | explicit document | complete<br>partial<br>blocked | None |
 | `command.cli.sharing-review` | none | bounded portable document | none | bounded atomic | explicit document | complete<br>partial<br>blocked | None |
@@ -407,6 +411,7 @@ Runtime configuration and admission remain with their existing enforcement owner
 - Each admitted resource request discloses its exact URL, including path and query, its GET or HEAD method, and ordinary allowlisted request headers to that public resource endpoint; DNS questions are disclosed to the configured resolver.
 - Structured outputs exclude request paths, queries, headers and bodies, but the control-sanitised page title and screenshot retain page-controlled content that may reproduce a path or query.
 - Rendered capture executes page JavaScript and remains separate from hosted Lookup and the distributable CLI.
+- An optional local plan selects up to four subsequent URLs in fresh pages within the same total collection bounds; declared selection steps do not establish clicks, form submission or a redirect chain.
 
 ### Offline rendered capture comparison
 
@@ -507,6 +512,7 @@ Runtime configuration and admission remain with their existing enforcement owner
 | `command.cli.case-pack` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.domain-control` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.monitor-once` | The one-shot monitor reads selected local control state and performs only the bounded scheduled review collection.<br>Its checkpoint and review evidence do not calculate Risk or Opportunity scores. |
+| `command.cli.monitor-tick` | A selected private local file retains compact evidence, quota counters and the existing dispatcher cursor; no hosted schedule is enabled.<br>The plan selects collection purpose and cadence independently from review priority. No Brand-based risk score is calculated. |
 | `command.cli.assurance` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.change-packet` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.sharing-review` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
