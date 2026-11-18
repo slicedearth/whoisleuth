@@ -344,12 +344,16 @@ export function validateCompiledPackageFiles(
   const entries = Object.freeze(packResult.files.map((entry, index) => (
     boundedSafeRelativePath(record(entry, `Packed entry ${index + 1}`).path, `Packed entry ${index + 1} path`)
   )));
-  if (new Set(entries).size !== entries.length || options.exact && entries.length !== requiredEntries.length) {
-    throw new TypeError('Packed package differs from its complete compiled output inventory.');
+  const actual = new Set<string>(), duplicates = new Set<string>();
+  for (const entry of entries) { if (actual.has(entry)) duplicates.add(entry); actual.add(entry); }
+  const required = new Set(requiredEntries);
+  const missing = requiredEntries.filter(entry => !actual.has(entry));
+  const unexpected = options.exact ? entries.filter(entry => !required.has(entry)) : [];
+  const describe = (values: readonly string[]) => `${values.slice(0, 5).map(value => value.slice(0, 160)).join(', ') || 'none'}${values.length > 5 ? ` (+${values.length - 5} more)` : ''}`;
+  if (duplicates.size || options.exact && (missing.length || unexpected.length)) {
+    throw new TypeError(`Packed package differs from its complete compiled output inventory. Required: ${requiredEntries.length}; packed: ${entries.length}. Missing: ${describe(missing)}; unexpected: ${describe(unexpected)}; duplicated: ${describe([...duplicates])}.`);
   }
-  for (const required of requiredEntries) {
-    if (!entries.includes(required)) throw new TypeError(`Packed package is missing ${required}.`);
-  }
+  if (missing.length) throw new TypeError(`Packed package is missing ${describe(missing)}.`);
   if (entries.some((entry) => /^(?:e2e|netlify|test|tools|frontend\/src\/routes)(?:\/|$)/u.test(entry))) {
     throw new TypeError('Packed package contains an excluded application or test path.');
   }

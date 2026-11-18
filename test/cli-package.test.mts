@@ -103,6 +103,13 @@ describe('scoped CLI package contract', () => {
       ['package.json'], { exact: true }), /complete compiled output/u);
     assert.throws(() => validateCompiledPackageFiles({ files: [{ path: 'package.json' }, { path: 'package.json' }] }),
       /complete compiled output/u);
+    assert.throws(() => validateCompiledPackageFiles({ files: [{ path: 'package.json' }, { path: 'lib/unexpected.mjs' }] },
+      ['package.json', 'lib/required.mjs'], { exact: true }), error => error instanceof TypeError
+        && error.message.includes('lib/required.mjs') && error.message.includes('lib/unexpected.mjs'));
+    assert.throws(() => validateCompiledPackageFiles({ files: [{ path: 'package.json' }] },
+      ['package.json', ...Array.from({ length: 30 }, (_, index) => `lib/required-${index}.mjs`)], { exact: true }),
+    error => error instanceof TypeError && error.message.includes('lib/required-0.mjs')
+      && !error.message.includes('lib/required-29.mjs') && error.message.includes('more'));
   });
 
   test('packs a newly discovered domain without another directory registration', async () => {
