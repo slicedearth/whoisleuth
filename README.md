@@ -51,11 +51,9 @@ the [application guide](docs/application-guide.md) covers tools and saved work.
 Collection and sharing are deliberate actions. WHOISleuth prepares response
 material; it does not submit reports.
 
-Watchlist workload plans, selected shared-service warning data and offline
-certificate-log/timestamp checks help review plans and supplied evidence. An
-explicitly approved local monitoring cycle can apply per-domain purposes and
-cadences with bounded requests and resumable private state. See the
-[CLI guide](docs/cli.md) for supported inputs and execution boundaries.
+Monitoring plans show the workload a watchlist would create. The CLI can run an
+approved local monitoring cycle with per-domain purposes and cadences, bounded
+requests and resumable private state; see the [CLI guide](docs/cli.md).
 
 The separate [local application](packages/local-application/README.md) can be
 assembled locally as an installable archive; it is not a published npm package.
@@ -113,10 +111,10 @@ npm exec --yes --ignore-scripts --package=@slicedearth/whoisleuth-cli -- whoisle
 [Getting started](docs/getting-started.md) for local development and browser
 tests, or the [CLI guide](docs/cli.md) for installed commands.
 
-Saved Lookups can be browsed and compared offline in the terminal. The CLI also
-offers selected-file assistant access, reconnaissance imports, certificate/logo
-checks and deliberate resolver or network-directory reviews; see the
-[offline tools and collection boundaries](docs/cli.md#first-commands).
+Saved Lookups and evidence exports can be browsed and compared offline in the
+terminal. The CLI also offers selected-file assistant access, reconnaissance
+imports, certificate and logo checks, and deliberate resolver or
+network-directory reviews; see [first commands](docs/cli.md#first-commands).
 
 For changes to the project, see [Contributing](CONTRIBUTING.md) and the
 [Code of Conduct](CODE_OF_CONDUCT.md).
