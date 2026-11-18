@@ -362,8 +362,11 @@ whoisleuth resolver-compare host.example.test --resolvers cloudflare,google --js
 This sends A and AAAA questions over HTTPS to the selected resolvers, with four
 requests maximum, no retries and a ten-second deadline. It does not contact the
 target or run automatically in Lookup, Bulk or monitoring. Each question retains
-its outcome; aliases, truncation, missing negative proof and failed queries do
-not become empty agreement. Exit `4` means some comparison evidence is incomplete;
+its outcome. A single unbranched CNAME chain of up to eight names is followed
+within each resolver's own answer and reported per resolver, so answers for an
+aliased hostname remain comparable. DNAME, branching, looping or other-name
+answers, truncation, missing negative proof and failed queries do not become
+empty agreement. Exit `4` means some comparison evidence is incomplete;
 different complete answers still exit `0`. Agreement is not authoritative truth,
 local DNSSEC validation or a safety verdict. Provider privacy policies apply.
 

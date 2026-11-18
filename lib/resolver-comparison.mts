@@ -4,11 +4,10 @@ import { requestJsonCapped } from './bounded-json-response.mts';
 import { parseBoundedJson } from './bounded-json.mts';
 import { reviewDnsConvergence, DNS_CONVERGENCE_INPUT_SCHEMA, DNS_CONVERGENCE_INPUT_VERSION } from './dns-convergence-review.mts';
 import { canonicalIpAddress, addressValue } from '../packages/contracts/ip-address.mts';
-import { isValidAsciiHostname } from '../packages/contracts/domain-name.mts';
 import {
   RESOLVER_PROVIDERS, RESOLVER_RECORD_TYPES, RESOLVER_RESPONSE_BYTES, RESOLVER_COMPARISON_TIMEOUT_MS,
-  RESOLVER_COMPARISON_SCHEMA, RESOLVER_COMPARISON_VERSION, normaliseResolverComparisonRequest,
-  readResolverComparison, type ResolverQuery, type ResolverRecordType,
+  RESOLVER_COMPARISON_SCHEMA, RESOLVER_COMPARISON_VERSION, MAX_RESOLVER_ALIAS_HOPS, normaliseResolverComparisonRequest,
+  readResolverComparison, resolverDnsName, type ResolverQuery, type ResolverRecordType,
 } from '../packages/evidence/resolver-comparison.mts';
 
 const QUERY_TYPES = Object.freeze({ A: 1, AAAA: 28 });
@@ -24,8 +23,8 @@ const record = (value: unknown): Record<string, unknown> => {
 const name = (value: unknown): string => {
   if (typeof value !== 'string' || value.length > 254) throw new TypeError('Invalid DNS owner.');
   if (value === '.') return '.';
-  const result = value.toLowerCase().replace(/\.$/u, '');
-  if (!isValidAsciiHostname(result, { requireDot: false })) throw new TypeError('Invalid DNS owner.');
+  const result = resolverDnsName(value);
+  if (!result) throw new TypeError('Invalid DNS owner.');
   return result;
 };
 function answerRows(value: unknown) {
@@ -41,6 +40,24 @@ function answerRows(value: unknown) {
     return { owner: name(row.name), type: Number(row.type), ttl: Number(row.TTL), data: row.data };
   });
 }
+/** Follow only an unbranched CNAME chain from the hostname inside one resolver answer. */
+function followAliases(answers: ReturnType<typeof answerRows>, hostname: string) {
+  const aliases = answers.filter(row => row.type === 5);
+  const chain: string[] = [];
+  const seen = new Set([hostname]);
+  let current = hostname, bounded = false;
+  for (;;) {
+    const next = aliases.filter(row => row.owner === current);
+    if (!next.length) break;
+    if (next.length > 1) throw new TypeError('Contradictory DNS alias.');
+    if (chain.length >= MAX_RESOLVER_ALIAS_HOPS) { bounded = true; break; }
+    const target = name(next[0]!.data);
+    if (target === '.' || seen.has(target)) throw new TypeError('Invalid DNS alias chain.');
+    seen.add(target); chain.push(target); current = target;
+  }
+  const followedOwners = new Set([hostname, ...chain].slice(0, chain.length));
+  return { chain, finalOwner: current, unfollowed: bounded || aliases.some(row => !followedOwners.has(row.owner)) };
+}
 function negativeSoa(row: ReturnType<typeof answerRows>[number], hostname: string) {
   if (row.type !== 6 || row.owner !== '.' && hostname !== row.owner && !hostname.endsWith(`.${row.owner}`)) return false;
   const parts = row.data.trim().split(/\s+/u);
@@ -49,7 +66,7 @@ function negativeSoa(row: ReturnType<typeof answerRows>[number], hostname: strin
   return parts.slice(2).every(part => /^\d{1,10}$/u.test(part) && Number(part) <= 0xffff_ffff);
 }
 function parseAnswer(raw: unknown, hostname: string, type: ResolverRecordType): Pick<ResolverQuery,
-  'outcome' | 'comparisonState' | 'values' | 'authenticatedData' | 'aliasObserved' | 'truncated'> {
+  'outcome' | 'comparisonState' | 'values' | 'authenticatedData' | 'aliasObserved' | 'truncated' | 'aliasChain'> {
   const input = record(raw);
   if (!Number.isSafeInteger(input.Status) || Number(input.Status) < 0 || Number(input.Status) > 15
     || typeof input.TC !== 'boolean' || typeof input.RA !== 'boolean' || typeof input.AD !== 'boolean'
@@ -59,21 +76,23 @@ function parseAnswer(raw: unknown, hostname: string, type: ResolverRecordType): 
   const answers = answerRows(input.Answer);
   const authority = answerRows(input.Authority);
   answerRows(input.Additional);
-  const aliasObserved = answers.some(row => row.type === 5 || row.type === 39
-    || row.type === QUERY_TYPES[type] && row.owner !== hostname);
-  const values = answers.filter(row => row.owner === hostname && row.type === QUERY_TYPES[type]).map(row => {
+  const alias = followAliases(answers, hostname);
+  // DNAME, branches beyond the followed chain and records for other names stay partial.
+  const aliasObserved = alias.unfollowed || answers.some(row => row.type === 39
+    || row.type === QUERY_TYPES[type] && row.owner !== alias.finalOwner);
+  const values = answers.filter(row => row.owner === alias.finalOwner && row.type === QUERY_TYPES[type]).map(row => {
     const value = canonicalIpAddress(row.data);
     if (!value || addressValue(value)?.family !== (type === 'A' ? 4 : 6)) throw new TypeError('Invalid address answer.');
     return { value, ttl: row.ttl };
   });
-  const base = { authenticatedData: input.AD, aliasObserved, truncated: input.TC };
+  const base = { authenticatedData: input.AD, aliasObserved, truncated: input.TC, aliasChain: Object.freeze(alias.chain) };
   if (input.Status !== 0) {
     if (values.length) throw new TypeError('Contradictory DNS response.');
     return { ...base, outcome: input.Status === 3 ? 'name_not_found' : input.Status === 2 ? 'server_failure'
       : input.Status === 5 ? 'refused' : 'invalid_response', comparisonState: 'unavailable', values: [] };
   }
   if (!input.RA) throw new TypeError('Recursive resolution unavailable.');
-  const outcome = values.length ? 'records' : !aliasObserved && authority.some(row => negativeSoa(row, hostname)) ? 'no_data' : 'empty_answer';
+  const outcome = values.length ? 'records' : !aliasObserved && authority.some(row => negativeSoa(row, alias.finalOwner)) ? 'no_data' : 'empty_answer';
   const complete = !input.TC && !aliasObserved && outcome !== 'empty_answer';
   return { ...base, outcome, comparisonState: complete ? 'observed' : 'partial', values };
 }
@@ -94,7 +113,7 @@ export async function collectResolverComparison(hostname: unknown, selection: un
       options.signal?.throwIfAborted();
       if (signal.aborted) {
         queries.push({ provider, type, observedAt: now(), requestStarted: false, outcome: 'skipped',
-          comparisonState: 'unavailable', values: [], authenticatedData: null, aliasObserved: false, truncated: false });
+          comparisonState: 'unavailable', values: [], authenticatedData: null, aliasObserved: false, truncated: false, aliasChain: [] });
         continue;
       }
       const plan = planEncryptedDnsQuery(adapter, { name: request.hostname, type });
@@ -121,7 +140,7 @@ export async function collectResolverComparison(hostname: unknown, selection: un
         options.signal?.throwIfAborted();
         const timeout = signal.aborted || error instanceof Error && 'code' in error && error.code === 'timeout';
         queries.push({ provider, type, observedAt: now(), requestStarted: true, outcome: timeout ? 'timeout' : responseReceived ? 'invalid_response' : 'error',
-          comparisonState: 'unavailable', values: [], authenticatedData: null, aliasObserved: false, truncated: false });
+          comparisonState: 'unavailable', values: [], authenticatedData: null, aliasObserved: false, truncated: false, aliasChain: [] });
       }
     }
     return queries;
@@ -145,6 +164,6 @@ export async function collectResolverComparison(hostname: unknown, selection: un
 
 export function formatResolverComparison(report: Awaited<ReturnType<typeof collectResolverComparison>>) {
   return [`Resolver comparison · ${report.hostname}`, ...report.rows.map(row => `${row.type}: ${row.state}`),
-    ...report.queries.map(query => `${RESOLVER_PROVIDERS.find(provider => provider.id === query.provider)!.label} ${query.type}: ${query.outcome}${query.values.length ? ` · ${query.values.map(value => value.value).join(', ')}` : ''}`),
-    'Resolver agreement is not an authority, DNSSEC validation or safety verdict. Negative answers and unavailable queries remain distinct.'].join('\n');
+    ...report.queries.map(query => `${RESOLVER_PROVIDERS.find(provider => provider.id === query.provider)!.label} ${query.type}: ${query.outcome}${query.values.length ? ` · ${query.values.map(value => value.value).join(', ')}` : ''}${query.aliasChain.length ? ` · via alias ${query.aliasChain.join(' → ')}` : ''}${query.aliasObserved ? ' · unfollowed alias or other-name answer' : ''}`),
+    'Resolver agreement is not an authority, DNSSEC validation or safety verdict. Alias chains are followed only within each resolver\u2019s own answer. Negative answers and unavailable queries remain distinct.'].join('\n');
 }

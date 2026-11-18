@@ -54,7 +54,8 @@ test('negative, aliased, truncated, failed and malformed answers cannot become e
     { override: { Status: 2, Answer: [] }, outcome: 'server_failure', state: 'incomplete' },
     { override: { Status: 5, Answer: [] }, outcome: 'refused', state: 'incomplete' },
     { override: { TC: true }, outcome: 'records', state: 'incomplete' },
-    { override: { Answer: [{ name: `${HOST}.`, type: 5, TTL: 300, data: 'sibling.example.test.' }], Authority: soa }, outcome: 'empty_answer', state: 'incomplete' },
+    { override: { Answer: [{ name: 'other.example.test.', type: 5, TTL: 300, data: 'sibling.example.test.' }], Authority: soa }, outcome: 'empty_answer', state: 'incomplete' },
+    { override: { Answer: [{ name: 'example.test.', type: 39, TTL: 300, data: 'example.net.' }], Authority: soa }, outcome: 'empty_answer', state: 'incomplete' },
     { override: { Question: [{ name: 'sibling.example.test.', type: 1 }] }, outcome: 'invalid_response', state: 'incomplete' },
   ];
   for (const item of cases) {
@@ -66,6 +67,50 @@ test('negative, aliased, truncated, failed and malformed answers cannot become e
   const divergent = await collect(fixture((url, body) => new URL(url).hostname === 'dns.google'
     ? { ...body, Answer: body.Answer.map(row => ({ ...row, data: row.type === 1 ? '192.0.2.2' : '2001:db8::2' })) } : body).dependencies);
   assert.ok(divergent.rows.every(row => row.state === 'divergent'));
+});
+
+test('validated alias chains stay comparable and attributed while unfollowable aliases remain partial', async () => {
+  const alias = (data: string, owner = HOST) => ({ name: `${owner}.`, type: 5, TTL: 60, data });
+  const address = (owner: string, type: number, data: string) => ({ name: `${owner}.`, type, TTL: 30, data });
+  const viaCdn = (resolverHost: string, type: number) => resolverHost === 'dns.google'
+    ? [alias('edge.cdn.example.net.'), address('edge.cdn.example.net', type, type === 1 ? '192.0.2.10' : '2001:db8::10')]
+    : [alias('_svc.example.test.'), alias('edge.cdn.example.net.', '_svc.example.test'), address('edge.cdn.example.net', type, type === 1 ? '192.0.2.10' : '2001:db8::10')];
+  const report = await collect(fixture((url, body) => ({ ...body, Answer: viaCdn(new URL(url).hostname, body.Question[0]!.type) })).dependencies);
+  assert.deepEqual(report.rows.map(row => row.state), ['converged', 'converged']);
+  assert.ok(report.queries.every(query => query.comparisonState === 'observed' && !query.aliasObserved && query.values.length === 1));
+  assert.deepEqual(report.queries.find(query => query.provider === 'google')?.aliasChain, ['edge.cdn.example.net']);
+  assert.deepEqual(report.queries.find(query => query.provider === 'cloudflare')?.aliasChain, ['_svc.example.test', 'edge.cdn.example.net']);
+  assert.deepEqual(readResolverComparison(JSON.parse(JSON.stringify(report)), HOST), report);
+
+  const soa = [{ name: 'cdn.example.net.', type: 6, TTL: 300, data: 'ns.cdn.example.net. hostmaster.cdn.example.net. 1 2 3 4 5' }];
+  const noData = await collect(fixture((_url, body) => ({ ...body, Answer: [alias('edge.cdn.example.net.')], Authority: soa })).dependencies);
+  assert.ok(noData.queries.every(query => query.outcome === 'no_data' && query.comparisonState === 'observed'));
+  assert.ok(noData.rows.every(row => row.state === 'converged'));
+
+  const partial = [
+    [alias('edge.cdn.example.net.'), address(HOST, 1, '192.0.2.1')],
+    [alias('edge.cdn.example.net.'), alias('stray.example.net.', 'unrelated.example.net'), address('edge.cdn.example.net', 1, '192.0.2.10')],
+    [...Array.from({ length: 9 }, (_, index) => alias(`hop${index + 1}.example.net.`, index ? `hop${index}.example.net` : HOST)), address('hop9.example.net', 1, '192.0.2.10')],
+  ];
+  for (const answer of partial) {
+    const result = await collect(fixture((url, body) => new URL(url).searchParams.get('type') === 'A' ? { ...body, Answer: answer } : body).dependencies);
+    const query = result.queries.find(item => item.type === 'A')!;
+    assert.equal(query.aliasObserved, true); assert.equal(query.comparisonState, 'partial'); assert.equal(result.rows[0]?.state, 'incomplete');
+  }
+  for (const answer of [[alias('loop.example.net.'), alias(`${HOST}.`, 'loop.example.net')],
+    [alias('one.example.net.'), alias('two.example.net.')], [alias('not a name.')]]) {
+    const result = await collect(fixture((_url, body) => ({ ...body, Answer: answer })).dependencies);
+    assert.ok(result.queries.every(query => query.outcome === 'invalid_response' && !query.aliasChain.length));
+  }
+  for (const chain of [[HOST], ['edge.example.net', 'edge.example.net'], ['Edge.example.net'], Array.from({ length: 9 }, (_, index) => `h${index}.example.net`)]) {
+    const tampered = JSON.parse(JSON.stringify(report));
+    tampered.queries[0].aliasChain = chain;
+    assert.throws(() => readResolverComparison(tampered, HOST));
+  }
+  const stdout = capture();
+  await runCli(['resolver-compare', HOST, '--resolvers', 'cloudflare,google'], { stdout: stdout.stream, stderr: capture().stream,
+    collectResolverComparison: async () => report });
+  assert.match(stdout.value(), /via alias _svc\.example\.test → edge\.cdn\.example\.net/u);
 });
 
 test('IPv6 remains comparable when IPv4 fails; caps, cancellation and invalid selection do not expand collection', async () => {

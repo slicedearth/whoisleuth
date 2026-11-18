@@ -8,6 +8,7 @@ export const RESOLVER_COMPARISON_VERSION = 1;
 export const RESOLVER_RESPONSE_BYTES = 64 * 1024;
 export const RESOLVER_COMPARISON_BYTES = 128 * 1024;
 export const RESOLVER_COMPARISON_TIMEOUT_MS = 10_000;
+export const MAX_RESOLVER_ALIAS_HOPS = 8;
 export const RESOLVER_PROVIDERS = Object.freeze([
   Object.freeze({ id: 'cloudflare', label: 'Cloudflare', endpoint: 'https://cloudflare-dns.com/dns-query',
     termsUrl: 'https://developers.cloudflare.com/1.1.1.1/terms-of-use/',
@@ -25,12 +26,23 @@ export type ResolverQuery = Readonly<{
   comparisonState: 'observed' | 'partial' | 'unavailable';
   values: readonly Readonly<{ value: string; ttl: number }>[];
   authenticatedData: boolean | null; aliasObserved: boolean; truncated: boolean;
+  /** CNAME targets followed from the hostname within this resolver's own answer. */
+  aliasChain: readonly string[];
 }>;
 export type ResolverComparison = Readonly<{
   schema: typeof RESOLVER_COMPARISON_SCHEMA; version: 1; hostname: string;
   startedAt: string; completedAt: string; queries: readonly ResolverQuery[];
   rows: readonly Readonly<{ type: ResolverRecordType; state: 'incomplete' | 'insufficient' | 'divergent' | 'unexpected' | 'converged' }>[];
 }>;
+
+const DNS_LABEL = /^[a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9_])?$/u;
+
+/** Canonical ASCII DNS owner or alias name; service labels may contain underscores. */
+export function resolverDnsName(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length > 254) return null;
+  const name = value.toLowerCase().replace(/\.$/u, '');
+  return name.length && name.length <= 253 && name.split('.').every(label => DNS_LABEL.test(label)) ? name : null;
+}
 
 export function normaliseResolverComparisonRequest(hostname: unknown, selection: unknown) {
   if (typeof hostname !== 'string' || hostname.length > 254 || hostname.trim() !== hostname) {
@@ -68,7 +80,10 @@ export function readResolverComparison(value: unknown, expectedHostname?: string
       || !['observed', 'partial', 'unavailable'].includes(String(item.comparisonState))
       || typeof item.requestStarted !== 'boolean' || typeof item.aliasObserved !== 'boolean' || typeof item.truncated !== 'boolean'
       || item.authenticatedData !== null && typeof item.authenticatedData !== 'boolean'
-      || !Array.isArray(item.values) || item.values.length > 100) fail();
+      || !Array.isArray(item.values) || item.values.length > 100
+      || !Array.isArray(item.aliasChain) || item.aliasChain.length > MAX_RESOLVER_ALIAS_HOPS) fail();
+    const aliasChain = (item.aliasChain as unknown[]).map(entry => resolverDnsName(entry) === entry ? entry as string : fail());
+    if (new Set([hostname, ...aliasChain]).size !== aliasChain.length + 1 || !item.requestStarted && aliasChain.length) fail();
     const observedAt = normalizeExplicitIsoTimestamp(item.observedAt) ?? fail();
     if (observedAt < startedAt || observedAt > completedAt) fail();
     const key = `${String(item.provider)}:${String(item.type)}`;
@@ -89,7 +104,8 @@ export function readResolverComparison(value: unknown, expectedHostname?: string
       || item.comparisonState === 'unavailable' && values.length) fail();
     return Object.freeze({ provider: item.provider, type: item.type, observedAt, requestStarted: item.requestStarted,
       outcome: item.outcome, comparisonState: item.comparisonState, values: Object.freeze(values),
-      authenticatedData: item.authenticatedData, aliasObserved: item.aliasObserved, truncated: item.truncated }) as ResolverQuery;
+      authenticatedData: item.authenticatedData, aliasObserved: item.aliasObserved, truncated: item.truncated,
+      aliasChain: Object.freeze(aliasChain) }) as ResolverQuery;
   });
   if (!Array.isArray(root.rows) || root.rows.length !== RESOLVER_RECORD_TYPES.length) fail();
   const rows = (root.rows as unknown[]).map((raw, index) => {

@@ -483,8 +483,9 @@ mail-transport actions are separate again and never run through browser Lookup.
 In **DNS evidence**, **Compare selected resolvers** asks two explicitly selected
 public HTTPS resolvers for the observed hostname’s A and AAAA records. It makes
 at most four requests and leaves the original Lookup unchanged. Review each
-question’s outcome beside the convergence state; failed or aliased evidence
-cannot establish empty agreement.
+question’s outcome beside the convergence state. A hostname answered through a
+CNAME chain stays comparable, with each resolver’s alias path shown; failed,
+unfollowed-alias or other-name evidence cannot establish empty agreement.
 
 ### Reading the result
 

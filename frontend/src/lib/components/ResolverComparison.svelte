@@ -63,7 +63,8 @@
             <dl>{#each report.queries.filter(query => query.type === type) as query}
               <div><dt>{RESOLVER_PROVIDERS.find(provider => provider.id === query.provider)?.label}</dt><dd>{DNS_QUERY_OUTCOMES[query.outcome].label}
                 {#each query.values as value}<code>{value.value} · TTL {value.ttl}s</code>{/each}
-                {#if query.aliasObserved}<small>Alias or other-owner answer: not an exact-host comparison.</small>{/if}
+                {#if query.aliasChain.length}<small>Answered through alias: {query.aliasChain.join(' → ')}</small>{/if}
+                {#if query.aliasObserved}<small>Unfollowed alias or other-name answer: not an exact-host comparison.</small>{/if}
                 {#if query.truncated}<small>Incomplete DNS response.</small>{/if}
                 <small>Provider DNSSEC flag (AD): {query.authenticatedData === null ? 'unavailable' : query.authenticatedData ? 'set' : 'not set'}<time datetime={query.observedAt}>{formatEvidenceDate(query.observedAt)}</time></small>
               </dd></div>
@@ -71,7 +72,7 @@
           </section>
         {/each}
       </div>
-      <p class="note">Agreement is resolver context, not authoritative truth or a safety verdict. The provider’s AD flag is reported, not locally verified.</p>
+      <p class="note">Agreement is resolver context, not authoritative truth or a safety verdict. Alias chains are followed only within each resolver’s own answer. The provider’s AD flag is reported, not locally verified.</p>
     {/if}
   </div>
 </details>
