@@ -41,7 +41,8 @@
         {#each timeline.lanes as lane}
           <text x="8" y={lane.y + lane.height / 2 + 3}>{lane.label}</text>
         {/each}
-        {#each timeline.events as event}
+        {#each timeline.events as event, eventIndex}
+          <g class="chart-fade" style={`--chart-index:${eventIndex}`}>
           {#each event.cells as cell}
             <rect
               x={event.x}
@@ -58,6 +59,7 @@
             <tspan x={event.x + event.width / 2}>{new Date(event.checkedAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', timeZone: 'UTC' })}</tspan>
             <tspan x={event.x + event.width / 2} dy="15">{new Date(event.checkedAt).getUTCFullYear()}</tspan>
           </text>
+          </g>
         {/each}
       </svg>
       <div class="mobile-events" aria-hidden="true">
@@ -90,8 +92,9 @@
   .timeline-frame:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
   svg{min-width:680px}
   .mobile-events{display:none}
-  rect{fill:var(--panel);stroke:var(--border);stroke-width:1}
+  rect{fill:var(--panel);stroke:var(--border);stroke-width:1;transition:stroke .15s ease}
   rect.changed{fill:var(--accent);stroke:var(--accent)}
+  rect:hover{stroke:var(--text);stroke-width:2}
   text{fill:var(--text);font:600 12px var(--mono)}
   text.date{fill:var(--muted);font-size:12px}
   @media(max-width:620px){

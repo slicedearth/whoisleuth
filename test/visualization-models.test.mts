@@ -429,6 +429,10 @@ describe('bounded visualization models', () => {
       segment.fromId === 'check-20' || segment.toId === 'check-20'
     )), false);
     assert.equal(projected.spacing, 'elapsed_time');
+    // Area fills close at the zero line, which every plotted point sits on or above.
+    assert.equal(projected.baselineY, 190);
+    assert.equal(requiredValue(projected.ticks.find((tick) => tick.value === 0)).y, projected.baselineY);
+    assert.ok(projected.points.every((point) => point.y <= projected.baselineY));
   });
 
   test('qualifies capped trend endpoints and summaries without inventing adjacent slopes', () => {

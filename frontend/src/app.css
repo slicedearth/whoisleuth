@@ -47,6 +47,17 @@
   --elevation-frame: inset 0 1px 0 rgb(255 255 255 / .05), 0 40px 90px -40px rgb(var(--shadow-rgb) / .9);
   --frame-glow-alpha: .2;
   --ease-out: cubic-bezier(.2, .8, .2, 1);
+  /* Shared chart language. Gridlines recede, axis text stays legible, and
+     area fills fade to transparent so they never read as extra data. */
+  --chart-grid: color-mix(in srgb, var(--border) 85%, transparent);
+  --chart-grid-dash: 3 5;
+  --chart-axis-text: var(--muted);
+  --chart-surface: var(--panel-raised);
+  --chart-area-alpha: .26;
+  --motion-draw: .7s;
+  --motion-grow: .55s;
+  --motion-fade: .35s;
+  --motion-stagger: 45ms;
   --body-grid-alpha: .015;
   --body-grid-step: 3px;
   --body-ambient-alpha: .05;
@@ -209,6 +220,7 @@
   --elevation-console: 0 1px 2px rgb(var(--shadow-rgb) / .06);
   --elevation-frame: inset 0 1px 0 rgb(255 255 255 / .95), 0 32px 70px -36px rgb(var(--shadow-rgb) / .35);
   --frame-glow-alpha: .1;
+  --chart-area-alpha: .16;
   --body-grid-alpha: .008;
   --body-ambient-alpha: .025;
   --ambient-rgb: 0 95 158;
@@ -599,6 +611,31 @@ button.danger:hover:not(:disabled), .btn.danger:hover:not(:disabled) { border-co
 /* Charts declare their model's width and height on the SVG. Fit smaller
    containers without magnifying labels and spacing on wider workspaces. */
 .data-chart { display: block; max-width: 100%; height: auto; margin-inline: auto; }
+
+/* ---------- Chart language and motion ----------
+   Every animation starts from a hidden or collapsed keyframe and rests on the
+   complete, exact chart, so reduced motion and minimal effects simply remove
+   the animation without hiding data. Motion never bridges missing values. */
+.chart-grid-line { fill: none; stroke: var(--chart-grid); stroke-width: 1; stroke-dasharray: var(--chart-grid-dash); }
+.chart-axis-text { fill: var(--chart-axis-text); font: 12px var(--mono); }
+.chart-tooltip rect { fill: var(--panel); stroke: var(--border-strong); stroke-width: 1; }
+.chart-tooltip text { fill: var(--text); font: 650 11px var(--mono); }
+.chart-draw { animation: chart-draw var(--motion-draw) var(--ease-out) calc(var(--chart-index, 0) * var(--motion-stagger)) both; }
+.chart-grow { transform-box: fill-box; transform-origin: left center; animation: chart-grow var(--motion-grow) var(--ease-out) calc(var(--chart-index, 0) * var(--motion-stagger)) both; }
+.chart-fade { animation: chart-fade var(--motion-fade) ease calc(var(--chart-index, 0) * var(--motion-stagger)) both; }
+.chart-ping { transform-box: fill-box; transform-origin: center; pointer-events: none; animation: chart-ping 2.4s var(--ease-out) infinite; }
+.chart-flow { fill: none; pointer-events: none; stroke-dasharray: 3 9; animation: chart-flow 1.1s linear infinite; }
+@keyframes chart-draw { from { stroke-dasharray: 1; stroke-dashoffset: 1; } to { stroke-dasharray: 1; stroke-dashoffset: 0; } }
+@keyframes chart-grow { from { transform: scaleX(0); } }
+@keyframes chart-fade { from { opacity: 0; } }
+@keyframes chart-ping { 0% { opacity: .7; transform: scale(.6); } 80%, 100% { opacity: 0; transform: scale(2.2); } }
+@keyframes chart-flow { to { stroke-dashoffset: -12; } }
+@media (prefers-reduced-motion: reduce) {
+  .chart-draw, .chart-grow, .chart-fade { animation: none; }
+  .chart-ping, .chart-flow { display: none; }
+}
+:root[data-effects='minimal'] :is(.chart-draw, .chart-grow, .chart-fade) { animation: none; }
+:root[data-effects='minimal'] :is(.chart-ping, .chart-flow) { display: none; }
 .split-layout { display: grid; min-width: 0; grid-template-columns: minmax(0,var(--split-leading,1fr)) minmax(0,var(--split-trailing,1fr)); gap: var(--split-gap,clamp(16px,3vw,32px)); align-items: start; }
 .split-layout > * { min-width: 0; }
 .action-row { display: flex; min-width: 0; flex-wrap: wrap; gap: var(--action-gap,8px); align-items: center; }

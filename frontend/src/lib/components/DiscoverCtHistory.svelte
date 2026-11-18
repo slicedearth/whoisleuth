@@ -80,6 +80,37 @@
     return `${count} capped lower-bound check${count === 1 ? '' : 's'}`;
   }
 
+  type TrendSegment = ReturnType<typeof projectTrendPoints>['segments'][number];
+
+  // One fill per run of connected measured segments: no seams, and a capped
+  // check still breaks the run so no fill crosses an unknown change.
+  function areaRuns(segments: readonly TrendSegment[], baselineY: number): string[] {
+    const runs: TrendSegment[][] = [];
+    for (const segment of segments) {
+      const run = runs.at(-1);
+      if (run && run.at(-1)?.toId === segment.fromId) run.push(segment);
+      else runs.push([segment]);
+    }
+    return runs.map((run) => {
+      const first = run[0]!;
+      const last = run.at(-1)!;
+      const line = [`${first.x1},${first.y1}`, ...run.map((segment) => `${segment.x2},${segment.y2}`)];
+      return [...line, `${last.x2},${baselineY}`, `${first.x1},${baselineY}`].join(' ');
+    });
+  }
+
+  function hoverLabel(point: TrendPoint): string {
+    const day = axisTimestamp(point.date).slice(0, 10);
+    return `${point.partial ? 'At least ' : ''}${point.total} result${point.total === 1 ? '' : 's'} · ${day}`;
+  }
+
+  function hoverBox(point: TrendPoint) {
+    const width = Math.ceil(hoverLabel(point).length * 6.7) + 16;
+    const x = Math.min(Math.max(point.x - width / 2, 64), 850 - width);
+    const y = point.y - 40 < 24 ? point.y + 14 : point.y - 40;
+    return { x, y, width };
+  }
+
   function axisTimestamp(value: string | null): string {
     if (!value) return 'Unknown';
     const parsed = new Date(value);
@@ -139,7 +170,7 @@
           <small>Last checked {entry.updatedLabel}{entry.latestNewCount ? ` · ${entry.latestNewCount} not in the prior complete baseline` : ''}</small>
           <small>{entry.everSeenComplete ? entry.everSeenCount : `At least ${entry.everSeenCount}`} domain{entry.everSeenCount === 1 ? '' : 's'} in the retained ever-seen set{entry.everSeenComplete ? '' : ' · earlier history incomplete'}</small>
           {#if entry.checks.length}
-            <details class="ct-checks"><summary>View check history</summary>{@render Trend(entry.checks)}<ol>{#each entry.checks as check}<li><time datetime={check.checkedAt}>{check.checkedLabel}</time><span>{#if check.truncated}At least {check.resultCount} result{check.resultCount === 1 ? '' : 's'} · continuity and reappearance unclassified · capped lower bound{:else if check.classificationComplete}{check.resultCount} result{check.resultCount === 1 ? '' : 's'} · {check.firstObservedCount} first · {check.reappearedCount} reappeared · {check.continuingCount} continuing{check.historyUnknownCount ? ` · ${check.historyUnknownCount} history unknown` : ''}{:else}{check.resultCount} result{check.resultCount === 1 ? '' : 's'} · earlier-schema classification unavailable{/if}</span></li>{/each}</ol>{#if entry.discardedCheckCountKnown && entry.discardedCheckCount > 0}<p class="history-limit">Showing the {entry.checkCount} most recent retained checks. {entry.discardedCheckCountCapped ? 'At least ' : ''}{entry.discardedCheckCount} older check{entry.discardedCheckCount === 1 ? '' : 's'} {entry.discardedCheckCount === 1 ? 'was' : 'were'} discarded by local retention.</p>{:else if !entry.discardedCheckCountKnown && entry.discardedCheckCount > 0}<p class="history-limit">Showing the {entry.checkCount} most recent retained checks. At least {entry.discardedCheckCount} older check{entry.discardedCheckCount === 1 ? '' : 's'} {entry.discardedCheckCount === 1 ? 'was' : 'were'} discarded while this history was normalised or retained; any earlier schema 1 pruning remains unknown.</p>{:else if !entry.discardedCheckCountKnown}<p class="history-limit">This history was migrated from an earlier retention schema. Whether older checks were discarded before migration is unknown.</p>{:else if entry.checks.length === MAX_CT_HISTORY_EVENTS}<p class="history-limit">At capacity with {MAX_CT_HISTORY_EVENTS} retained checks. No older check has been discarded under the current retention record.</p>{/if}</details>
+            <details class="ct-checks"><summary>View check history</summary>{@render Trend(entry.checks, index)}<ol>{#each entry.checks as check}<li><time datetime={check.checkedAt}>{check.checkedLabel}</time><span>{#if check.truncated}At least {check.resultCount} result{check.resultCount === 1 ? '' : 's'} · continuity and reappearance unclassified · capped lower bound{:else if check.classificationComplete}{check.resultCount} result{check.resultCount === 1 ? '' : 's'} · {check.firstObservedCount} first · {check.reappearedCount} reappeared · {check.continuingCount} continuing{check.historyUnknownCount ? ` · ${check.historyUnknownCount} history unknown` : ''}{:else}{check.resultCount} result{check.resultCount === 1 ? '' : 's'} · earlier-schema classification unavailable{/if}</span></li>{/each}</ol>{#if entry.discardedCheckCountKnown && entry.discardedCheckCount > 0}<p class="history-limit">Showing the {entry.checkCount} most recent retained checks. {entry.discardedCheckCountCapped ? 'At least ' : ''}{entry.discardedCheckCount} older check{entry.discardedCheckCount === 1 ? '' : 's'} {entry.discardedCheckCount === 1 ? 'was' : 'were'} discarded by local retention.</p>{:else if !entry.discardedCheckCountKnown && entry.discardedCheckCount > 0}<p class="history-limit">Showing the {entry.checkCount} most recent retained checks. At least {entry.discardedCheckCount} older check{entry.discardedCheckCount === 1 ? '' : 's'} {entry.discardedCheckCount === 1 ? 'was' : 'were'} discarded while this history was normalised or retained; any earlier schema 1 pruning remains unknown.</p>{:else if !entry.discardedCheckCountKnown}<p class="history-limit">This history was migrated from an earlier retention schema. Whether older checks were discarded before migration is unknown.</p>{:else if entry.checks.length === MAX_CT_HISTORY_EVENTS}<p class="history-limit">At capacity with {MAX_CT_HISTORY_EVENTS} retained checks. No older check has been discarded under the current retention record.</p>{/if}</details>
           {/if}
         </div>
         <div><button class="btn small" aria-label={`Use ${entry.query} certificate search`} onclick={() => useEntry(entry.query)}>Use</button><button class="btn small danger" data-ct-history-delete={index} aria-label={`Delete ${entry.query} certificate history`} onclick={() => void deleteAndFocus(entry.query)}>Delete</button></div>
@@ -149,26 +180,39 @@
   <button class="btn small danger ct-clear-history" onclick={() => void clearAndFocus()}>Clear all certificate history</button>
 </details>
 
-{#snippet Trend(checks: HistoryCheck[])}
+{#snippet Trend(checks: HistoryCheck[], entryIndex: number)}
   {@const trend = checkTrend(checks)}
   {#if trend.points.length > 1}
     <figure class="ct-trend">
       <svg class="data-chart" width={trend.width} height={trend.height} viewBox={`0 0 ${trend.width} ${trend.height}`} role="img" aria-label={`Certificate search trend across ${trend.points.length} retained checks, including ${cappedCheckLabel(trend.summary.partialChecks)}, positioned by elapsed check time`}>
         <title>Certificate search result trend across {trend.points.length} retained checks, including {cappedCheckLabel(trend.summary.partialChecks)}, positioned by elapsed check time</title>
-        {#each trend.ticks as tick}<line class="grid-line" x1="64" x2="850" y1={tick.y} y2={tick.y}></line><text x="52" y={tick.y + 3} text-anchor="end">{tick.value}</text>{/each}
-        {#each trend.segments as segment}
-          <line class="trend-segment" x1={segment.x1} y1={segment.y1} x2={segment.x2} y2={segment.y2}><title>Measured change between adjacent complete retained checks</title></line>
+        <defs><linearGradient id={`ct-trend-area-${entryIndex}`} x1="0" x2="0" y1="0" y2="1"><stop offset="0" class="area-stop-top" /><stop offset="1" class="area-stop-bottom" /></linearGradient></defs>
+        {#each trend.ticks as tick}<line class="grid-line chart-grid-line" x1="64" x2="850" y1={tick.y} y2={tick.y}></line><text class="chart-axis-text" x="52" y={tick.y + 3} text-anchor="end">{tick.value}</text>{/each}
+        <!-- Each fill sits under one measured segment; capped checks keep their gaps. -->
+        {#each areaRuns(trend.segments, trend.baselineY) as points, runIndex}
+          <polygon class="trend-area chart-fade" style={`--chart-index:${runIndex + 4}`} fill={`url(#ct-trend-area-${entryIndex})`} {points}></polygon>
         {/each}
-        {#each trend.points as point}
+        {#each trend.segments as segment, segmentIndex}
+          <line class="trend-segment chart-draw" style={`--chart-index:${segmentIndex}`} pathLength="1" x1={segment.x1} y1={segment.y1} x2={segment.x2} y2={segment.y2}><title>Measured change between adjacent complete retained checks</title></line>
+        {/each}
+        {#each trend.points as point, pointIndex}
           {#if point.partial}
-            <polygon class="trend-marker capped" points={cappedMarkerPoints(point)}><title>{point.date}: at least {point.total} results, at least {point.added} new; capped lower bound</title></polygon>
+            <polygon class="trend-marker capped chart-fade" style={`--chart-index:${pointIndex}`} points={cappedMarkerPoints(point)}><title>{point.date}: at least {point.total} results, at least {point.added} new; capped lower bound</title></polygon>
           {:else}
-            <circle class="trend-marker" cx={point.x} cy={point.y} r="5"><title>{point.date}: {point.total} results, {point.added} new</title></circle>
+            <circle class="trend-marker chart-fade" style={`--chart-index:${pointIndex}`} cx={point.x} cy={point.y} r="5"><title>{point.date}: {point.total} results, {point.added} new</title></circle>
           {/if}
         {/each}
-        <text class="axis-timestamp" x="64" y="215" text-anchor="start">{axisTimestamp(trend.elapsed.firstAt)}</text>
-        <text x="450" y="215" text-anchor="middle" class="elapsed-label">Elapsed check time</text>
-        <text class="axis-timestamp" x="850" y="215" text-anchor="end">{axisTimestamp(trend.elapsed.latestAt)}</text>
+        {#each trend.points as point}
+          {@const box = hoverBox(point)}
+          <g class="trend-hover" aria-hidden="true">
+            <rect class="trend-hit" x={point.x - 14} y="20" width="28" height="174"></rect>
+            <line class="trend-guide" x1={point.x} x2={point.x} y1="24" y2={trend.baselineY}></line>
+            <g class="chart-tooltip"><rect x={box.x} y={box.y} width={box.width} height="24" rx="6"></rect><text x={box.x + 8} y={box.y + 16}>{hoverLabel(point)}</text></g>
+          </g>
+        {/each}
+        <text class="axis-timestamp chart-axis-text" x="64" y="215" text-anchor="start">{axisTimestamp(trend.elapsed.firstAt)}</text>
+        <text x="450" y="215" text-anchor="middle" class="elapsed-label chart-axis-text">Elapsed check time</text>
+        <text class="axis-timestamp chart-axis-text" x="850" y="215" text-anchor="end">{axisTimestamp(trend.elapsed.latestAt)}</text>
       </svg>
       <dl class="ct-trend-summary" aria-label="Certificate search trend summary">
         <div><dt>First</dt><dd>{trend.summary.first.label}</dd></div>
@@ -177,7 +221,7 @@
         <div><dt>Newly found</dt><dd>{trend.summary.newlyObserved.label}</dd></div>
         <div><dt>Capped checks</dt><dd>{trend.summary.partialChecks}</dd></div>
       </dl>
-      <figcaption>Horizontal spacing represents elapsed time between retained check timestamps, not equal sequence steps.{#if trend.summary.partialChecks} {trend.summary.partialChecks} capped check{trend.summary.partialChecks === 1 ? '' : 's'} {trend.summary.partialChecks === 1 ? 'is a' : 'are'} diamond lower-bound marker{trend.summary.partialChecks === 1 ? '' : 's'}. Segments touching a capped check are omitted, leaving visible gaps because the rise or drop is unknown.{/if}{#if trend.truncated} Only the latest {trend.points.length} valid checks are plotted.{/if}</figcaption>
+      <figcaption>Horizontal spacing represents elapsed time between retained check timestamps, not equal sequence steps.{#if trend.summary.partialChecks}{' '}{trend.summary.partialChecks} capped check{trend.summary.partialChecks === 1 ? '' : 's'} {trend.summary.partialChecks === 1 ? 'is a' : 'are'} diamond lower-bound marker{trend.summary.partialChecks === 1 ? '' : 's'}. Segments touching a capped check are omitted, leaving visible gaps because the rise or drop is unknown.{/if}{#if trend.truncated}{' '}Only the latest {trend.points.length} valid checks are plotted.{/if}</figcaption>
     </figure>
   {/if}
 {/snippet}
@@ -198,10 +242,14 @@
   .ct-checks li span{display:block;color:var(--muted)}
   .history-limit{margin:7px 0 0;color:var(--amber);font-size:var(--text-2xs);line-height:1.45}
   .ct-trend{max-width:100%;margin:8px 0 0;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
-  .ct-trend .grid-line{stroke:var(--border);stroke-width:1}
-  .ct-trend text{fill:var(--muted);font:12px var(--mono)}
   .ct-trend .elapsed-label{font-weight:700;text-transform:uppercase;letter-spacing:.04em}
-  .ct-trend .trend-segment{stroke:var(--accent);stroke-width:3}
+  .ct-trend .trend-segment{stroke:var(--accent);stroke-width:3;stroke-linecap:round}
+  .ct-trend .area-stop-top{stop-color:var(--accent);stop-opacity:var(--chart-area-alpha)}
+  .ct-trend .area-stop-bottom{stop-color:var(--accent);stop-opacity:0}
+  .ct-trend .trend-hit{fill:transparent}
+  .ct-trend .trend-guide{stroke:var(--accent);stroke-width:1;stroke-dasharray:2 4}
+  .ct-trend .trend-hover :is(.trend-guide,.chart-tooltip){opacity:0;transition:opacity .15s ease}
+  .ct-trend .trend-hover:hover :is(.trend-guide,.chart-tooltip){opacity:1}
   .ct-trend .trend-marker{fill:var(--panel);stroke:var(--accent);stroke-width:3}
   .ct-trend .trend-marker.capped{fill:var(--panel);stroke:var(--amber)}
   .ct-trend-summary{display:none}

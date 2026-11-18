@@ -22,6 +22,7 @@
     const widthPercent = Math.max(2, Math.min(100 - startPercent, (source.durationMs / total) * 100));
     return `--timing-start:${startPercent}%;--timing-width:${widthPercent}%`;
   }
+  const chartId = $props.id();
 </script>
 
 <section class="collection-timing" class:card={!embedded} class:embedded aria-labelledby="collection-timing-title">
@@ -71,17 +72,22 @@
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -- scrollable diagnostic chart must be keyboard reachable -->
     <div class="timing-chart" role="img" tabindex="0" aria-label={`Overlapping collection timing for ${chart.sources.length} source branches`}>
       <svg class="data-chart" width={chart.width} height={chart.height} viewBox={`0 0 ${chart.width} ${chart.height}`} aria-hidden="true">
+        <defs>
+          <linearGradient id={`${chartId}-bar`}><stop offset="0" class="bar-stop-start" /><stop offset="1" class="bar-stop-end" /></linearGradient>
+          <linearGradient id={`${chartId}-bar-rejected`} class="rejected"><stop offset="0" class="bar-stop-start" /><stop offset="1" class="bar-stop-end" /></linearGradient>
+        </defs>
         {#each chart.ticks as tick}
-          <line x1={tick.x} x2={tick.x} y1="18" y2={chart.height - 10} class="tick-line" />
-          <text x={tick.x} y="13" text-anchor="middle" class="tick-label">{formatCollectionDuration(tick.value)}</text>
+          <line x1={tick.x} x2={tick.x} y1="18" y2={chart.height - 10} class="tick-line chart-grid-line" />
+          <text x={tick.x} y="13" text-anchor="middle" class="tick-label chart-axis-text">{formatCollectionDuration(tick.value)}</text>
         {/each}
-        {#each chart.sources as source}
+        {#each chart.sources as source, sourceIndex}
           <g class:rejected={source.outcome === 'rejected'} class="timing-source">
             <text x="8" y={source.y + 13}>{displaySourceLabel(source.label)}</text>
-            <rect x={source.x} y={source.y} width={source.width} height="17" rx="4">
+            <!-- Bars grow from their exact start and rest at their exact measured width. -->
+            <rect class="chart-grow" style={`--chart-index:${sourceIndex}`} fill={`url(#${chartId}-${source.outcome === 'rejected' ? 'bar-rejected' : 'bar'})`} x={source.x} y={source.y} width={source.width} height="17" rx="4">
               <title>{formatCollectionDuration(source.durationMs)} duration, finished at +{formatCollectionDuration(source.completedAfterMs)}</title>
             </rect>
-            <circle cx={source.x + source.width} cy={source.y + 8.5} r="4" />
+            <circle class="chart-fade" style={`--chart-index:${sourceIndex + 6}`} cx={source.x + source.width} cy={source.y + 8.5} r="4" />
           </g>
         {/each}
       </svg>
@@ -90,7 +96,7 @@
           <div class:rejected={source.outcome === 'rejected'} class="mobile-timing-source">
             <span>{displaySourceLabel(source.label)}</span>
             <strong>{formatCollectionDuration(source.durationMs)} · +{formatCollectionDuration(source.completedAfterMs)}</strong>
-            <i style={mobileBarStyle(source)}><b></b></i>
+            <i style={mobileBarStyle(source)}><b class="chart-grow"></b></i>
           </div>
         {/each}
       </div>
@@ -129,11 +135,13 @@
   .timing-chart:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
   .timing-chart svg{min-width:680px}
   .mobile-timing{display:none}
-  .tick-line{stroke:var(--border);stroke-width:1}
-  .tick-label,.timing-source text{fill:var(--muted);font-family:var(--mono);font-size:12px}
-  .timing-source rect{fill:rgb(var(--accent-rgb) / .24);stroke:var(--accent)}
+  .timing-source text{fill:var(--muted);font-family:var(--mono);font-size:12px}
+  .timing-source rect{stroke:var(--accent)}
+  .bar-stop-start{stop-color:var(--accent);stop-opacity:.12}
+  .bar-stop-end{stop-color:var(--accent);stop-opacity:.36}
+  .rejected .bar-stop-start,.rejected .bar-stop-end{stop-color:var(--danger)}
   .timing-source circle{fill:var(--accent);stroke:var(--panel);stroke-width:2}
-  .timing-source.rejected rect{fill:rgb(var(--danger-rgb) / .12);stroke:var(--danger)}
+  .timing-source.rejected rect{stroke:var(--danger)}
   .timing-source.rejected circle{fill:var(--danger)}
   .timing-limit{margin:7px 0 0;color:var(--muted);font-size:var(--text-2xs)}
   .timing-data{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0;list-style:none}

@@ -45,8 +45,8 @@
           {#each activity.weekdayLabels as weekday (weekday.index)}
             <text x="12" y={weekday.y} class="day-label">{weekday.label}</text>
           {/each}
-          {#each activity.days as day (day.date)}
-            <g class:checked={day.checks > 0} class:changed={day.changes > 0} data-state={day.changes > 0 ? 'changed' : day.checks > 0 ? 'checked' : 'empty'}>
+          {#each activity.days as day, dayIndex (day.date)}
+            <g class="chart-fade" style={`--chart-index:${Math.floor(dayIndex / 7)}`} class:checked={day.checks > 0} class:changed={day.changes > 0} data-state={day.changes > 0 ? 'changed' : day.checks > 0 ? 'checked' : 'empty'}>
               <rect
                 x={day.x}
                 y={day.y}
@@ -89,9 +89,10 @@
 <style>
   .activity-layout{display:grid;grid-template-columns:max-content minmax(155px,200px);justify-content:safe center;gap:10px;padding:10px}
   svg{min-width:600px}
-  g rect{fill:var(--panel);stroke:var(--border-strong);stroke-dasharray:3 2}
+  g rect{fill:var(--panel);stroke:var(--border-strong);stroke-dasharray:3 2;transition:stroke .15s ease}
   g.checked rect{fill:color-mix(in srgb,var(--source-network-stroke) 18%,var(--panel));stroke:var(--source-network-stroke);stroke-dasharray:none}
   g.changed rect{fill:url(#activity-change-pattern);stroke:var(--source-whois-stroke);stroke-dasharray:none}
+  g:hover rect{stroke:var(--text);stroke-width:2}
   .changed-background{fill:color-mix(in srgb,var(--source-whois-stroke) 72%,var(--panel))}
   .changed-stripe{fill:none;stroke:color-mix(in srgb,var(--panel) 58%,transparent);stroke-width:1.3}
   g text{fill:var(--text);font:700 12px var(--mono)}
