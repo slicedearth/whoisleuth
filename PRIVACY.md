@@ -329,6 +329,13 @@ address and apply its own retention policy. Google queries explicitly suppress
 EDNS Client Subnet forwarding. Provider-reported DNSSEC flags are not local
 cryptographic validation; negative answers and failed queries remain distinct.
 
+The optional local `peeringdb-context` command sends one explicitly selected ASN
+to PeeringDB after a permitted-use acknowledgement. It requests only minimal
+network and policy fields, not contacts, and creates no cache or export file.
+The provider receives the ASN and this machine's source address. Its terms and
+privacy policy apply; the command does not authorise redistribution. Ordinary
+Lookup, Bulk, monitoring and the hosted application do not invoke the client.
+
 Saved recheck questions retain an analyst-entered hostname, comparison conditions
 and optional baseline reference. Answers retain the question context as reviewed.
 These remain browser-local until exported and are excluded from public Case

@@ -311,6 +311,7 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--chunk-size': integer('Set the number of candidates processed per checkpoint chunk.', () => Object.freeze([BASE_INTEGER_RANGE(1, 100)]), () => 25),
   '--resolver': text('Choose the supported DNS resolver for collection.'),
   '--resolvers': text('Explicitly select two HTTPS DNS resolvers: cloudflare,google.', true),
+  '--permitted-use': flag('Acknowledge permitted operational use or existing permission under the selected directory’s terms.'),
   '--allowlist': file('Read reviewed domains whose priority should be suppressed, without changing their evidence.'),
   '--observation-snapshot': file('Compare with this retained observation snapshot.'),
   '--acquisition-only': flag('Present only acquisition candidates.'),

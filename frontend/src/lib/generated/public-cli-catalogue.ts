@@ -792,6 +792,16 @@ const SHARED_COMMAND_OPTIONS = [
     "defaultDescription": null
   },
   {
+    "option": "--permitted-use",
+    "scope": "command",
+    "usage": "--permitted-use",
+    "description": "Acknowledge permitted operational use or existing permission under the selected directory’s terms.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
     "option": "--trust-anchor",
     "scope": "command",
     "usage": "--trust-anchor \u003cfile>",
@@ -1546,7 +1556,7 @@ const SHARED_COMMAND_OPTIONS = [
   }
 ] as const;
 export const PUBLIC_CLI_CATALOGUE = {
-  "commandCount": 56,
+  "commandCount": 57,
   "groups": [
     "investigate",
     "respond",
@@ -2870,6 +2880,74 @@ export const PUBLIC_CLI_CATALOGUE = {
       }
     },
     {
+      "id": "peeringdb-context",
+      "summary": "Read selected network-directory context",
+      "description": "Read one ASN’s minimal community-maintained network-directory context for permitted operational use.",
+      "group": "investigate",
+      "common": false,
+      "usage": "whoisleuth peeringdb-context \u003casn> --permitted-use [--quiet] [--no-color]",
+      "example": "whoisleuth peeringdb-context AS64496 --permitted-use",
+      "boundary": "One fixed HTTPS request, no authentication, retries, contact expansion, cache, hosted redistribution or export file. --permitted-use acknowledges an allowed operational purpose or existing provider permission; it does not grant rights. Directory membership is not authority, reachability, ownership or reputation.",
+      "collection": {
+        "mode": "network",
+        "scope": "Sends one explicit ASN to PeeringDB, depth zero, minimal fields, two-row ambiguity detection, 32 KiB response and eight-second deadline."
+      },
+      "inputs": [
+        {
+          "name": "asn",
+          "valueKind": "text",
+          "minimum": 1,
+          "maximum": 1,
+          "values": [],
+          "inputSource": "argv",
+          "requiredWhenOptions": []
+        }
+      ],
+      "importantOptions": [
+        "--permitted-use",
+        "--quiet",
+        "--no-color"
+      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[73], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "networkEffect": "always_network",
+      "disclosureClass": "bounded_passive",
+      "explicitAuthorisationRequired": false,
+      "planSupport": false,
+      "failurePolicySupport": false,
+      "supportedSchemaIdentifiers": [],
+      "inputLimits": [
+        "Sends one explicit ASN to PeeringDB, depth zero, minimal fields, two-row ambiguity detection, 32 KiB response and eight-second deadline.",
+        "asn: 1-1 text value"
+      ],
+      "outputLimits": [
+        "Output is bounded by the command-owned formatter and document contract."
+      ],
+      "presentationOptions": [],
+      "fileOutput": false,
+      "primaryEvidenceArtefacts": [],
+      "capability": {
+        "familyId": "network_directory",
+        "networkMode": "bounded_passive",
+        "dataSent": [
+          "normalised_target"
+        ],
+        "recipients": [
+          "selected_network_directory"
+        ],
+        "authorisation": "explicit_network_approval",
+        "retention": "local_output_deliberate",
+        "export": "none",
+        "outcomes": [
+          "complete",
+          "partial"
+        ],
+        "documentStates": [],
+        "privacyLimitations": [
+          "One ASN is sent to the selected fixed directory for acknowledged permitted operational use or existing provider permission. No contact expansion, cache, output file or automatic invocation. Provider terms still apply."
+        ]
+      }
+    },
+    {
       "id": "http",
       "summary": "Inspect one homepage request",
       "description": "Inspect one homepage request, redirects, and bounded response metadata.",
@@ -3059,7 +3137,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[61], SHARED_COMMAND_OPTIONS[73], SHARED_COMMAND_OPTIONS[74], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[61], SHARED_COMMAND_OPTIONS[74], SHARED_COMMAND_OPTIONS[75], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "always_network",
       "disclosureClass": "bounded_authorised_active",
       "explicitAuthorisationRequired": true,
@@ -3142,7 +3220,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[61], SHARED_COMMAND_OPTIONS[73], SHARED_COMMAND_OPTIONS[74], SHARED_COMMAND_OPTIONS[75], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[61], SHARED_COMMAND_OPTIONS[74], SHARED_COMMAND_OPTIONS[75], SHARED_COMMAND_OPTIONS[76], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "always_network",
       "disclosureClass": "bounded_authorised_active",
       "explicitAuthorisationRequired": true,
@@ -3445,7 +3523,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--suffix",
         "--scenario"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[76], SHARED_COMMAND_OPTIONS[77], SHARED_COMMAND_OPTIONS[78]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[77], SHARED_COMMAND_OPTIONS[78], SHARED_COMMAND_OPTIONS[79]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -3681,7 +3759,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[18], SHARED_COMMAND_OPTIONS[79], SHARED_COMMAND_OPTIONS[80], SHARED_COMMAND_OPTIONS[81], SHARED_COMMAND_OPTIONS[82], SHARED_COMMAND_OPTIONS[83], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[35], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[18], SHARED_COMMAND_OPTIONS[80], SHARED_COMMAND_OPTIONS[81], SHARED_COMMAND_OPTIONS[82], SHARED_COMMAND_OPTIONS[83], SHARED_COMMAND_OPTIONS[84], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[35], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -3845,7 +3923,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[18], SHARED_COMMAND_OPTIONS[84], SHARED_COMMAND_OPTIONS[85], SHARED_COMMAND_OPTIONS[86], SHARED_COMMAND_OPTIONS[87], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[18], SHARED_COMMAND_OPTIONS[85], SHARED_COMMAND_OPTIONS[86], SHARED_COMMAND_OPTIONS[87], SHARED_COMMAND_OPTIONS[88], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -3921,7 +3999,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "importantOptions": [
         "--private-key-file"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[88]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[89]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -3994,7 +4072,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[89], SHARED_COMMAND_OPTIONS[90], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[90], SHARED_COMMAND_OPTIONS[91], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -4383,7 +4461,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[91], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[92], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -4482,7 +4560,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[92], SHARED_COMMAND_OPTIONS[91], SHARED_COMMAND_OPTIONS[93], SHARED_COMMAND_OPTIONS[35], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[93], SHARED_COMMAND_OPTIONS[92], SHARED_COMMAND_OPTIONS[94], SHARED_COMMAND_OPTIONS[35], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -4564,7 +4642,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[94], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[35], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[95], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[35], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -4769,7 +4847,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--json",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[95], SHARED_COMMAND_OPTIONS[96], SHARED_COMMAND_OPTIONS[97], SHARED_COMMAND_OPTIONS[98], SHARED_COMMAND_OPTIONS[99], SHARED_COMMAND_OPTIONS[100], SHARED_COMMAND_OPTIONS[101], SHARED_COMMAND_OPTIONS[102], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[96], SHARED_COMMAND_OPTIONS[97], SHARED_COMMAND_OPTIONS[98], SHARED_COMMAND_OPTIONS[99], SHARED_COMMAND_OPTIONS[100], SHARED_COMMAND_OPTIONS[101], SHARED_COMMAND_OPTIONS[102], SHARED_COMMAND_OPTIONS[103], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -4943,7 +5021,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[103], SHARED_COMMAND_OPTIONS[104], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[104], SHARED_COMMAND_OPTIONS[105], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -5105,7 +5183,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[105], SHARED_COMMAND_OPTIONS[106], SHARED_COMMAND_OPTIONS[107], SHARED_COMMAND_OPTIONS[108], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[21], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[106], SHARED_COMMAND_OPTIONS[107], SHARED_COMMAND_OPTIONS[108], SHARED_COMMAND_OPTIONS[109], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[21], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "always_network",
       "disclosureClass": "bounded_passive",
       "explicitAuthorisationRequired": false,
@@ -5358,7 +5436,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[109], SHARED_COMMAND_OPTIONS[110], SHARED_COMMAND_OPTIONS[111], SHARED_COMMAND_OPTIONS[112], SHARED_COMMAND_OPTIONS[113], SHARED_COMMAND_OPTIONS[114], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[110], SHARED_COMMAND_OPTIONS[111], SHARED_COMMAND_OPTIONS[112], SHARED_COMMAND_OPTIONS[113], SHARED_COMMAND_OPTIONS[114], SHARED_COMMAND_OPTIONS[115], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -5458,7 +5536,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[115], SHARED_COMMAND_OPTIONS[116], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[116], SHARED_COMMAND_OPTIONS[117], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -5675,7 +5753,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[117], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[118], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -5785,7 +5863,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[118], SHARED_COMMAND_OPTIONS[119], SHARED_COMMAND_OPTIONS[120], SHARED_COMMAND_OPTIONS[121], SHARED_COMMAND_OPTIONS[122], SHARED_COMMAND_OPTIONS[123], SHARED_COMMAND_OPTIONS[124], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[119], SHARED_COMMAND_OPTIONS[120], SHARED_COMMAND_OPTIONS[121], SHARED_COMMAND_OPTIONS[122], SHARED_COMMAND_OPTIONS[123], SHARED_COMMAND_OPTIONS[124], SHARED_COMMAND_OPTIONS[125], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "conditional_network",
       "disclosureClass": "bounded_authorised_active",
       "explicitAuthorisationRequired": true,
@@ -5888,7 +5966,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[125], SHARED_COMMAND_OPTIONS[126], SHARED_COMMAND_OPTIONS[33], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[126], SHARED_COMMAND_OPTIONS[127], SHARED_COMMAND_OPTIONS[33], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -6045,7 +6123,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--stdio",
         "--allow-model-disclosure"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[127], SHARED_COMMAND_OPTIONS[128]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[128], SHARED_COMMAND_OPTIONS[129]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -6272,7 +6350,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--compact",
         "--no-attribution"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[22], SHARED_COMMAND_OPTIONS[23], SHARED_COMMAND_OPTIONS[129], SHARED_COMMAND_OPTIONS[24]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[22], SHARED_COMMAND_OPTIONS[23], SHARED_COMMAND_OPTIONS[130], SHARED_COMMAND_OPTIONS[24]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,

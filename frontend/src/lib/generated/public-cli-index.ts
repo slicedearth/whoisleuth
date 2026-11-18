@@ -1,6 +1,6 @@
 // Generated from canonical runtime-neutral metadata. Do not edit by hand.
 export const PUBLIC_CLI_INDEX = {
-  "commandCount": 56,
+  "commandCount": 57,
   "groups": [
     "investigate",
     "respond",
@@ -113,6 +113,13 @@ export const PUBLIC_CLI_INDEX = {
     {
       "id": "resolver-compare",
       "summary": "Compare selected DNS resolvers",
+      "group": "investigate",
+      "common": false,
+      "mode": "network"
+    },
+    {
+      "id": "peeringdb-context",
+      "summary": "Read selected network-directory context",
       "group": "investigate",
       "common": false,
       "mode": "network"

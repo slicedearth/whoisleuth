@@ -274,6 +274,24 @@ not become empty agreement. Exit `4` means some comparison evidence is incomplet
 different complete answers still exit `0`. Agreement is not authoritative truth,
 local DNSSEC validation or a safety verdict. Provider privacy policies apply.
 
+### Selected network-directory context
+
+```sh
+whoisleuth peeringdb-context AS64496 --permitted-use
+```
+
+This optional local command sends one ASN to PeeringDB and displays minimal
+community-maintained network, scope, peering-policy and source-update context.
+It makes one request, without contact expansion, retries, a cache or export file.
+No directory entry means only that no matching entry was returned; a failed
+request exits `4`, not a registration or reachability verdict. Quiet mode retains
+that exit behaviour. Normal lookups do not invoke it.
+
+Before using it, confirm your operational purpose is permitted or you already
+have the provider’s permission under its [acceptable-use policy](https://www.peeringdb.com/aup).
+The acknowledgement grants no rights. The website retains its direct-source
+pivot; this client does not enable hosted redistribution or bulk acquisition.
+
 Plans are target-specific: Fast IP and ASN plans contain RDAP only; Deep IP
 adds WHOIS and eligible reverse DNS, while Deep ASN adds WHOIS. Domain-only web,
 TLS and selected intelligence do not apply to address or ASN targets.

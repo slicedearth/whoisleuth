@@ -77,6 +77,7 @@ type CapabilityRecipientClass =
   | 'certificate_transparency_service'
   | 'configured_intelligence_provider'
   | 'selected_public_resolver'
+  | 'selected_network_directory'
   | 'selected_mail_endpoint'
   | 'configured_worker_store'
   | 'configured_control_provider';
@@ -327,6 +328,7 @@ type CliOperationPolicy =
   | Readonly<{ kind: 'ct_search' }>
   | Readonly<{ kind: 'posture' }>
   | Readonly<{ kind: 'resolver_comparison' }>
+  | Readonly<{ kind: 'network_directory' }>
   | Readonly<{ kind: 'http' }>
   | Readonly<{ kind: 'tls' }>
   | Readonly<{ kind: 'dnssec_validate' }>
@@ -365,6 +367,7 @@ const CLI_OPERATION_POLICY = Object.freeze({
   'discover-scan': Object.freeze({ kind: 'lookup', command: 'discover-scan' }),
   posture: Object.freeze({ kind: 'posture' }),
   'resolver-compare': Object.freeze({ kind: 'resolver_comparison' }),
+  'peeringdb-context': Object.freeze({ kind: 'network_directory' }),
   http: Object.freeze({ kind: 'http' }),
   tls: Object.freeze({ kind: 'tls' }),
   'dnssec-validate': Object.freeze({ kind: 'dnssec_validate' }),
@@ -931,6 +934,15 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
     privacyLimitations: [
       'PTR names are publisher-controlled context and do not prove ownership or service identity.',
     ],
+  }),
+  freezeCapability({
+    id: CAPABILITY_IDS.NETWORK_DIRECTORY, title: 'Selected network directory', job: 'investigate',
+    planes: ['local_cli_network'], trigger: 'explicit_cli_command', networkMode: 'bounded_passive', scanModes: [],
+    disclosedData: ['normalised_target'], recipients: ['selected_network_directory'], requestBudget: 'collector_specific',
+    responseBudget: 'collector_specific', concurrency: 'command_bounded', credentialModel: 'none', retention: 'transient', export: 'none',
+    scoringEffect: 'none', authorisation: 'explicit_network_approval', cancellation: 'cooperative', partialResults: 'explicit_document', outcomes: COMPLETE_OR_LIMITED,
+    privacyLimitations: ['One explicit ASN and minimal fields are sent to the fixed community-maintained directory. No contacts, bulk fetching, retries, cache, export file or hosted redistribution.',
+      'The operator must acknowledge permitted operational use or existing provider permission. Membership and missing entries do not establish ownership, reachability or reputation.'],
   }),
   freezeCapability({
     id: CAPABILITY_IDS.DOMAIN_POSTURE,
@@ -1682,6 +1694,13 @@ function cliOperation(command: CliCommand, capabilityId: CapabilityId): CliOpera
       disclosedData: ['normalised_target', 'dns_question'], recipients: ['selected_public_resolver'],
       requestBudget: 'collector_specific', partialResults: 'explicit_per_source',
       privacyLimitations: ['The explicitly selected resolvers receive four bounded A/AAAA questions over HTTPS. No target connection, retry or automatic invocation by other commands.'],
+    });
+  }
+  if (policy.kind === 'network_directory') {
+    return passiveCliOperation(command, capabilityId, {
+      disclosedData: ['normalised_target'], recipients: ['selected_network_directory'],
+      export: 'none', authorisation: 'explicit_network_approval', cancellation: 'cooperative', partialResults: 'explicit_document',
+      privacyLimitations: ['One ASN is sent to the selected fixed directory for acknowledged permitted operational use or existing provider permission. No contact expansion, cache, output file or automatic invocation. Provider terms still apply.'],
     });
   }
   if (policy.kind === 'http') {

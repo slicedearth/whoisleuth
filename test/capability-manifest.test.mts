@@ -89,6 +89,7 @@ const EXPECTED_CAPABILITY_IDS = [
   'registrar_rdap',
   'network_context',
   'reverse_dns',
+  'network_directory',
   'domain_posture',
   'resolver_comparison',
   'dnssec_validation',

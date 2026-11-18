@@ -2,6 +2,21 @@
 import { positional, OPTIONAL_FILE_POSITIONAL, constraint, EMPTY_CONSTRAINTS, commandSeed } from './command-definition.mts';
 
 export const NETWORK_COMMAND_DEFINITIONS = Object.freeze({
+  'peeringdb-context': commandSeed({
+    reference: {
+      description: 'Read one ASN’s minimal community-maintained network-directory context for permitted operational use.',
+      example: 'whoisleuth peeringdb-context AS64496 --permitted-use',
+      boundary: 'One fixed HTTPS request, no authentication, retries, contact expansion, cache, hosted redistribution or export file. --permitted-use acknowledges an allowed operational purpose or existing provider permission; it does not grant rights. Directory membership is not authority, reachability, ownership or reputation.',
+    },
+    collection: { scope: 'Sends one explicit ASN to PeeringDB, depth zero, minimal fields, two-row ambiguity detection, 32 KiB response and eight-second deadline.' },
+    summary: 'Read selected network-directory context',
+    options: ['--permitted-use', '--quiet', '--no-color'], commonOptions: ['--help'],
+    positionals: Object.freeze([positional('asn', 'text', 1, 1)]),
+    constraints: Object.freeze([constraint({ kind: 'required', options: ['--permitted-use'] })]),
+    handlerOwner: 'network', networkEffect: 'always_network', common: false,
+    schemaIdentifiers: Object.freeze([]), primaryArtefacts: Object.freeze([]),
+    planSupport: false, additionalOutputFormats: Object.freeze([]), bootstrapProfile: 'allowed',
+  }),
   'resolver-compare': commandSeed({
     reference: {
       description: 'Compare explicitly selected public resolvers for one hostname, keeping A and AAAA outcomes separate.',

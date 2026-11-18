@@ -137,6 +137,7 @@ const CAPABILITY_PRIVACY_DETAILS = Object.freeze({
   domain_feed_search: capabilityPrivacyDetail('Match explicit feed identifiers, exact hostnames and literal terms against an optional operator-maintained public feed cache without target collection.', ['exact_feed_candidates', 'snapshot_identity_and_freshness', 'unknown_per_host_event_times', 'explicit_omissions']),
   registrar_rdap: capabilityPrivacyDetail('Retrieve one eligible sponsoring-registrar RDAP publication as a separate source.', ['registrar_registration_publication', 'source_health']),
   network_context: capabilityPrivacyDetail('Add bounded public allocation context for one observed public endpoint address.', ['public_network_allocation_context', 'source_health']),
+  network_directory: capabilityPrivacyDetail('Read minimal community-maintained context for one explicitly selected ASN and permitted operational purpose.', ['directory_reported_network_context', 'source_health']),
   reverse_dns: capabilityPrivacyDetail('Resolve bounded reverse-DNS names for one public address.', ['reverse_dns_publication', 'source_health']),
   domain_posture: capabilityPrivacyDetail('Review bounded DNS and mail publication posture without changing configuration; a separate opt-in adds inherited DMARC, reporting-destination boundaries and sampled direct parent referrals.', ['normalised_posture_evidence', 'source_health']),
   dnssec_validation: capabilityPrivacyDetail('Validate an explicitly authorised DNSSEC chain against a selected local trust anchor.', ['dnssec_validation_evidence', 'source_health']),

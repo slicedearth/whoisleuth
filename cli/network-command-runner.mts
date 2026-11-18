@@ -45,8 +45,10 @@ import EXIT_CODES from './exit-codes.mts';
 import { buildPostureSarif } from './ci-report.mts';
 import { collectResolverComparison, formatResolverComparison } from '../lib/resolver-comparison.mts';
 import { normaliseResolverComparisonRequest } from '../packages/evidence/resolver-comparison.mts';
+import { collectPeeringDirectory, formatPeeringDirectory, normaliseDirectoryAsn } from '../lib/peering-directory.mts';
 
 export type NetworkCommandDependencies = {
+  collectPeeringDirectory?: typeof collectPeeringDirectory;
   collectResolverComparison?: typeof collectResolverComparison;
   signal?: AbortSignal;
   searchCertificateTransparency?: (keyword: unknown) => unknown | Promise<unknown>;
@@ -68,6 +70,18 @@ export type NetworkCommandDependencies = {
 type NetworkCommandArguments = Extract<CliArguments, { action: CliCommandFor<'network'> }>;
 
 const networkCommandHandlers = {
+  'peeringdb-context': async (args, dependencies, context) => {
+    context.setFailureLabel('Network directory context');
+    let asn;
+    try { asn = normaliseDirectoryAsn(args.asn); }
+    catch { throw new CliUsageError('peeringdb-context requires one valid ASN.'); }
+    const result = await context.withProgress('Reading selected directory context', () =>
+      (dependencies.collectPeeringDirectory ?? collectPeeringDirectory)(asn, {
+        permittedUse: args.permittedUse, ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+      }));
+    if (!args.quiet) context.writeStdout(context.terminal(formatPeeringDirectory(result), args.color));
+    return result.state === 'unavailable' ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;
+  },
   'resolver-compare': async (args, dependencies, context) => {
     context.setFailureLabel('Resolver comparison');
     let request;

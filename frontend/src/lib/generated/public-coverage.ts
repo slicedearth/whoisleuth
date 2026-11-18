@@ -33,8 +33,8 @@ export const PUBLIC_COVERAGE = {
     }
   ],
   "summary": {
-    "capabilityFamilies": 34,
-    "cliOperations": 56,
+    "capabilityFamilies": 35,
+    "cliOperations": 57,
     "registrySnapshot": {
       "schema": "whoisleuth\u002eregistry-standards-coverage",
       "version": 1,
@@ -613,6 +613,33 @@ export const PUBLIC_COVERAGE = {
       "partialResultContract": "explicit_document",
       "limitations": [
         "PTR names are publisher-controlled context and do not prove ownership or service identity."
+      ]
+    },
+    {
+      "id": "network_directory",
+      "title": "Selected network directory",
+      "job": "investigate",
+      "implemented": true,
+      "reviewBasis": "Versioned capability contract and deterministic repository verification",
+      "optionalOrConfigurationDependent": false,
+      "executionPlanes": [
+        "local_cli_network"
+      ],
+      "scanModes": [],
+      "networkMode": "bounded_passive",
+      "runtimeAvailability": "not_evaluated_by_public_catalogue",
+      "outcomes": [
+        "complete",
+        "partial",
+        "blocked",
+        "unsupported",
+        "unavailable",
+        "budget_exhausted"
+      ],
+      "partialResultContract": "explicit_document",
+      "limitations": [
+        "One explicit ASN and minimal fields are sent to the fixed community-maintained directory. No contacts, bulk fetching, retries, cache, export file or hosted redistribution.",
+        "The operator must acknowledge permitted operational use or existing provider permission. Membership and missing entries do not establish ownership, reachability or reputation."
       ]
     },
     {

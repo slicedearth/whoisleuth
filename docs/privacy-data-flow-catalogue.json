@@ -5,8 +5,8 @@
     "capabilityManifest": {
       "schema": "whoisleuth.capability-manifest",
       "version": 1,
-      "capabilityCount": 34,
-      "cliOperationCount": 56,
+      "capabilityCount": 35,
+      "cliOperationCount": 57,
       "cliVariantCount": 16
     },
     "cliCommandCatalogue": {
@@ -1145,6 +1145,79 @@
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "One observed public endpoint does not establish an origin host, hosting control or ownership."
+      ]
+    },
+    {
+      "id": "network_directory",
+      "title": "Selected network directory",
+      "requestPurpose": "Read minimal community-maintained context for one explicitly selected ASN and permitted operational purpose.",
+      "job": "investigate",
+      "executionPlanes": [
+        "local_cli_network"
+      ],
+      "trigger": "explicit_cli_command",
+      "networkMode": "bounded_passive",
+      "authorisation": "explicit_network_approval",
+      "dataSent": [
+        "normalised_target"
+      ],
+      "dataDeliberatelyNotSent": [
+        "browser_local_records",
+        "unselected_local_files",
+        "cookies_and_session_data",
+        "unrelated_evidence_values",
+        "complete_query_bearing_urls",
+        "credentials"
+      ],
+      "recipientClasses": [
+        "selected_network_directory"
+      ],
+      "returnedDataCategories": [
+        "directory_reported_network_context",
+        "source_health"
+      ],
+      "processingClasses": [
+        "transient_processing",
+        "third_party_disclosure"
+      ],
+      "requestBudget": "collector_specific",
+      "responseBudget": "collector_specific",
+      "concurrency": "command_bounded",
+      "retention": {
+        "mode": "transient",
+        "storageClass": "transient_process_memory",
+        "durationControl": "bounded_operation_or_cache_lifetime"
+      },
+      "exports": {
+        "mode": "none",
+        "classes": [
+          "none"
+        ]
+      },
+      "credentialModel": "none",
+      "credentialUse": "No operation credential is required.",
+      "cancellation": "cooperative",
+      "partialResults": "explicit_document",
+      "outcomes": [
+        "complete",
+        "partial",
+        "blocked",
+        "unsupported",
+        "unavailable",
+        "budget_exhausted"
+      ],
+      "normalisedOutcomes": {
+        "unavailable": "explicit_outcome",
+        "blocked": "explicit_outcome",
+        "partial": "explicit_outcome",
+        "unsupported": "explicit_outcome"
+      },
+      "documentStates": [],
+      "scoringEffect": "none",
+      "nonInferences": [
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "One explicit ASN and minimal fields are sent to the fixed community-maintained directory. No contacts, bulk fetching, retries, cache, export file or hosted redistribution.",
+        "The operator must acknowledge permitted operational use or existing provider permission. Membership and missing entries do not establish ownership, reachability or reputation."
       ]
     },
     {
@@ -6331,6 +6404,79 @@
         "Comparison is offline and component-based. It executes no page code and produces no aggregate similarity or maliciousness score.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
+      ],
+      "variants": []
+    },
+    {
+      "id": "command.cli.peeringdb-context",
+      "command": "peeringdb-context",
+      "capabilityFamilyId": "network_directory",
+      "title": "Read selected network-directory context",
+      "requestPurpose": "Sends one explicit ASN to PeeringDB, depth zero, minimal fields, two-row ambiguity detection, 32 KiB response and eight-second deadline.",
+      "collectionMode": "network",
+      "executionPlanes": [
+        "local_cli_network"
+      ],
+      "trigger": "explicit_cli_command",
+      "networkMode": "bounded_passive",
+      "authorisation": "explicit_network_approval",
+      "dataSent": [
+        "normalised_target"
+      ],
+      "dataDeliberatelyNotSent": [
+        "browser_local_records",
+        "unselected_local_files",
+        "cookies_and_session_data",
+        "unrelated_evidence_values",
+        "complete_query_bearing_urls",
+        "credentials"
+      ],
+      "recipientClasses": [
+        "selected_network_directory"
+      ],
+      "returnedDataCategories": [
+        "directory_reported_network_context",
+        "source_health"
+      ],
+      "processingClasses": [
+        "transient_processing",
+        "deliberate_local_file_export",
+        "third_party_disclosure"
+      ],
+      "requestBudget": "collector_specific",
+      "responseBudget": "collector_specific",
+      "concurrency": "command_bounded",
+      "retention": {
+        "mode": "local_output_deliberate",
+        "storageClass": "operator_controlled_local_output",
+        "durationControl": "no_automatic_retention_beyond_process_unless_operator_saves_output"
+      },
+      "exports": {
+        "mode": "none",
+        "classes": [
+          "none"
+        ]
+      },
+      "credentialModel": "none",
+      "credentialUse": "No operation credential is required.",
+      "cancellation": "cooperative",
+      "partialResults": "explicit_document",
+      "outcomes": [
+        "complete",
+        "partial"
+      ],
+      "normalisedOutcomes": {
+        "unavailable": "not_declared_for_boundary",
+        "blocked": "not_declared_for_boundary",
+        "partial": "explicit_outcome",
+        "unsupported": "not_declared_for_boundary"
+      },
+      "documentStates": [],
+      "scoringEffect": "none",
+      "nonInferences": [
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "One fixed HTTPS request, no authentication, retries, contact expansion, cache, hosted redistribution or export file. --permitted-use acknowledges an allowed operational purpose or existing provider permission; it does not grant rights. Directory membership is not authority, reachability, ownership or reputation.",
+        "One ASN is sent to the selected fixed directory for acknowledged permitted operational use or existing provider permission. No contact expansion, cache, output file or automatic invocation. Provider terms still apply."
       ],
       "variants": []
     },

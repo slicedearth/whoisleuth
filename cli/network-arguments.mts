@@ -60,6 +60,7 @@ type TlsArguments = {
 type ResolverComparisonArguments = {
   action: 'resolver-compare'; hostname: string; resolvers: string; output: 'terminal' | 'json';
 } & TerminalOptions;
+type PeeringDirectoryArguments = { action: 'peeringdb-context'; asn: string; permittedUse: true } & TerminalOptions;
 
 function parsePostureArguments(parsed: ParsedCommandArguments<PostureArguments['action']>): PostureArguments {
   const mailProfile =
@@ -106,6 +107,9 @@ function parseMailTransportArguments(parsed: ParsedCommandArguments<MailTranspor
 }
 
 export const NETWORK_ARGUMENT_PARSERS = Object.freeze({
+  'peeringdb-context': (parsed: ParsedCommandArguments<PeeringDirectoryArguments['action']>): PeeringDirectoryArguments => ({
+    action: 'peeringdb-context', asn: parsed.positionalValue('asn')!, permittedUse: true, ...terminalOptions(parsed),
+  }),
   'resolver-compare': (parsed: ParsedCommandArguments<ResolverComparisonArguments['action']>): ResolverComparisonArguments => ({
     action: 'resolver-compare', hostname: parsed.positionalValue('hostname')!, resolvers: parsed.optionValue('--resolvers')!,
     output: jsonOutput(parsed), ...terminalOptions(parsed),
