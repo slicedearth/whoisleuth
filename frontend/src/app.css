@@ -38,6 +38,15 @@
   --shadow-rgb: 0 0 0;
   --card-shadow-alpha: .12;
   --card-hover-shadow-alpha: .2;
+  /* Depth levels: a faint top-edge highlight plus a soft, offset shadow so
+     panels separate from the page without heavier borders. */
+  --surface-highlight: rgb(255 255 255 / .045);
+  --elevation-1: inset 0 1px 0 var(--surface-highlight), 0 1px 2px rgb(var(--shadow-rgb) / .28), 0 14px 32px -20px rgb(var(--shadow-rgb) / .75);
+  --elevation-2: inset 0 1px 0 rgb(255 255 255 / .06), 0 2px 6px rgb(var(--shadow-rgb) / .3), 0 22px 44px -22px rgb(var(--shadow-rgb) / .85), 0 0 0 1px rgb(var(--interface-accent-rgb) / .14);
+  --elevation-console: inset 0 1px 0 rgb(255 255 255 / .03), 0 1px 2px rgb(var(--shadow-rgb) / .22);
+  --elevation-frame: inset 0 1px 0 rgb(255 255 255 / .05), 0 40px 90px -40px rgb(var(--shadow-rgb) / .9);
+  --frame-glow-alpha: .2;
+  --ease-out: cubic-bezier(.2, .8, .2, 1);
   --body-grid-alpha: .015;
   --body-grid-step: 3px;
   --body-ambient-alpha: .05;
@@ -194,6 +203,12 @@
   --shadow-rgb: 23 27 34;
   --card-shadow-alpha: .035;
   --card-hover-shadow-alpha: .08;
+  --surface-highlight: rgb(255 255 255 / .9);
+  --elevation-1: inset 0 1px 0 var(--surface-highlight), 0 1px 2px rgb(var(--shadow-rgb) / .06), 0 12px 28px -18px rgb(var(--shadow-rgb) / .22);
+  --elevation-2: inset 0 1px 0 rgb(255 255 255 / .95), 0 2px 6px rgb(var(--shadow-rgb) / .08), 0 20px 40px -22px rgb(var(--shadow-rgb) / .3), 0 0 0 1px rgb(var(--interface-accent-rgb) / .14);
+  --elevation-console: 0 1px 2px rgb(var(--shadow-rgb) / .06);
+  --elevation-frame: inset 0 1px 0 rgb(255 255 255 / .95), 0 32px 70px -36px rgb(var(--shadow-rgb) / .35);
+  --frame-glow-alpha: .1;
   --body-grid-alpha: .008;
   --body-ambient-alpha: .025;
   --ambient-rgb: 0 95 158;
@@ -280,6 +295,11 @@
   --cursor-glow-alpha: 0;
   --card-shadow-alpha: 0;
   --card-hover-shadow-alpha: 0;
+  --elevation-1: none;
+  --elevation-2: none;
+  --elevation-console: none;
+  --elevation-frame: none;
+  --frame-glow-alpha: 0;
 }
 :root[data-effects='minimal'] :is(.cursor, .brand-mark, .prompt-sigil) { animation: none; text-shadow: none; filter: none; }
 :root[data-effects='minimal'] .topology-backdrop { display: none; }
@@ -586,9 +606,13 @@ button.danger:hover:not(:disabled), .btn.danger:hover:not(:disabled) { border-co
 @container (max-width: 620px) { .split-layout { grid-template-columns: minmax(0,1fr); } }
 
 /* ---------- Cards, sections, disclosures ---------- */
-.card { border: 1px solid var(--border); border-radius: var(--radius-lg); background: linear-gradient(180deg,rgb(var(--panel-rgb) / .98),rgb(var(--panel-rgb) / .94)); box-shadow: 0 6px 24px rgb(var(--shadow-rgb) / var(--card-shadow-alpha)),inset 0 1px rgb(var(--overlay-rgb) / .025); }
-a.card { transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
-a.card:hover, a.card:focus-visible { border-color: rgb(var(--accent-rgb) / .65); box-shadow: 0 8px 28px rgb(var(--shadow-rgb) / var(--card-hover-shadow-alpha)), inset 0 1px rgb(var(--interface-accent-rgb) / .08); transform: translateY(-2px); }
+.card { border: 1px solid var(--border); border-radius: var(--radius-lg); background: linear-gradient(180deg,rgb(var(--panel-rgb) / .98),rgb(var(--panel-rgb) / .94)); box-shadow: var(--elevation-1); }
+a.card { transition: border-color .2s var(--ease-out), box-shadow .2s var(--ease-out), transform .2s var(--ease-out); }
+a.card:hover, a.card:focus-visible { border-color: rgb(var(--accent-rgb) / .65); box-shadow: var(--elevation-2); transform: translateY(-2px); }
+@media (prefers-reduced-motion: reduce) {
+  a.card { transition: border-color .2s ease, box-shadow .2s ease; }
+  a.card:hover, a.card:focus-visible { transform: none; }
+}
 summary::marker { color: var(--interface-accent); }
 .disclosure-heading { display: inline-flex; width: calc(100% - 1.5em); min-width: 0; align-items: baseline; justify-content: space-between; gap: 12px; vertical-align: top; }
 .disclosure-heading > * { min-width: 0; overflow-wrap: anywhere; }
@@ -713,7 +737,7 @@ details.evidence-card > summary.evidence-summary { font: inherit; }
 
 /* ---------- Application shell ---------- */
 .shell { --console-toolbar-height: 54px; --local-nav-anchor-offset: calc(var(--console-toolbar-height) + 12px); display: grid; grid-template: "sidebar header" var(--console-toolbar-height) "sidebar main" minmax(0,1fr) / 232px minmax(0,1fr); min-height: 100vh; overflow-x: clip; }
-.shell .card { background: var(--panel); box-shadow: none; }
+.shell .card { background: var(--panel); box-shadow: var(--elevation-console); }
 .shell a.card:hover, .shell a.card:focus-visible { transform: none; }
 .shell .heading::after { display: none; }
 .shell .heading h1 { font-family: var(--font-sans); letter-spacing: -.025em; }
