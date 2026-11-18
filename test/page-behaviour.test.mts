@@ -42,7 +42,7 @@ test('versioned manifests keep historical observations unknown and reject missin
   const old = await read(2), current = await read(3);
   assert.equal(readWebCaptureManifest(old).captures[0]!.pageBehaviour, null);
   assert.equal(readWebCaptureManifest(current).captures[0]!.pageBehaviour!.state, 'partial');
-  assert.throws(() => readWebCaptureManifest({ ...current, schemaVersion: 4 }));
+  assert.throws(() => readWebCaptureManifest({ ...current, schemaVersion: 999 }));
   assert.throws(() => readWebCaptureManifest({ ...current, schemaVersion: 2 }));
   assert.throws(() => readManifestPageBehaviour(undefined, 3));
   current.captures[0].completeness = 'complete';

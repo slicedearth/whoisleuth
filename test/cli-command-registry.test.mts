@@ -572,7 +572,7 @@ describe('canonical CLI command registry', () => {
       definition.execution.networkEffect,
     ])) as Record<CliCommand, CliNetworkEffect>;
     assert.deepEqual(Object.entries(effects).filter(([, effect]) => effect === 'conditional_network').map(([command]) => command), [
-      'doctor', 'lookup', 'bulk', 'discover-scan', 'workflow-run',
+      'doctor', 'lookup', 'bulk', 'discover-scan', 'monitor-tick', 'workflow-run',
     ]);
     assert.deepEqual(Object.entries(effects).filter(([, effect]) => effect === 'always_network').map(([command]) => command), [
       'ct-search', 'posture', 'resolver-compare', 'peeringdb-context', 'http', 'tls', 'dnssec-validate', 'mail-transport', 'monitor-once',
