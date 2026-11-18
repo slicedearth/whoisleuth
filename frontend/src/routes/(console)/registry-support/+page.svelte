@@ -54,6 +54,11 @@
   const firstVisibleRow = $derived(sortedRows.length ? (currentPage - 1) * PAGE_SIZE + 1 : 0);
   const lastVisibleRow = $derived((currentPage - 1) * PAGE_SIZE + visibleRows.length);
   const inspection = $derived(inspectRegistrySupport(inspectedValue));
+  // Announce a one-line outcome; the full inspection card stays readable on demand.
+  const inspectionOutcome = $derived(!inspectionActive ? ''
+    : inspection.state === 'empty' ? 'Enter a domain or suffix.'
+      : inspection.state === 'invalid' || !inspection.profile ? 'Unsupported input format.'
+        : `Inspected .${inspection.profile.suffixes[0]}: ${registryCoverageLabel(inspection.profile.coverageState)}.`);
   const capabilityRows = $derived(lookupCapabilityRows(capabilityTarget));
 
   onMount(() => {
@@ -212,8 +217,9 @@
     </div>
   </form>
 
+  <p class="sr-only" role="status">{inspectionOutcome}</p>
   {#if inspectionActive}
-    <div class="inspection-output" aria-live="polite">
+    <div class="inspection-output">
       {#if inspection.state === 'empty'}
         <section class="empty-state card"><h3>Enter a domain or suffix</h3><p>The inspector accepts one DNS hostname or suffix at a time.</p></section>
       {:else if inspection.state === 'invalid' || !inspection.profile}

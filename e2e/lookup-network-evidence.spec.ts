@@ -503,6 +503,8 @@ test('deep DNS evidence distinguishes observed records from partial resolver fai
   await card.getByLabel(/Proposed authorities already serve/).check();
   await card.getByRole('button', { name: 'Evaluate rehearsal' }).click();
   await expect(card.getByText('Plan has unresolved gates', { exact: true })).toBeVisible();
+  await expect(card.getByRole('status').filter({ hasText: 'Rehearsal evaluated' }))
+    .toHaveText('Rehearsal evaluated: plan has unresolved gates.');
   await expect(card.getByText('Current evidence is incomplete', { exact: true })).toBeVisible();
   await expect(card.getByText(/does not change DNS/i)).toBeVisible();
 
