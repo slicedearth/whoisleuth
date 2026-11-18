@@ -3,7 +3,7 @@ import { openCaseMetadata, openCaseSection, openConsoleView } from './console-na
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { expectNoHorizontalOverflow, failNextBrowserLocalCollectionReadAfterWrite, failNextBrowserLocalManifestWrite, holdBrowserLocalReads, holdBrowserLocalTransaction, readBrowserLocalCollection, requiredValue } from './helpers';
+import { expectNoHorizontalOverflow, failNextBrowserLocalCollectionReadAfterWrite, failNextBrowserLocalManifestWrite, holdBrowserLocalReads, holdBrowserLocalTransaction, readBrowserLocalCollection, requiredValue, useTheme } from './helpers';
 import { caseRecord, createCase, openCaseResponseWorkspace, openCasesView, openSeededTimelineCase } from './case-test-fixtures';
 import { addFixtureCasePin, caseWorkspaceActionStatus, currentActionFixture, openPacketWizardStep } from './case-response-fixtures';
 import { CASE_RESPONSE_PACKET_VERSION } from '../packages/contracts/case-portability.mts';
@@ -237,7 +237,7 @@ test('observation drafts survive presentation changes and another stage save', a
   const pin = workspace.locator('details', { hasText: 'Pin an observed fact' });
   const sighting = workspace.locator('details[id^="case-response-observation-sightings-"]');
   await pin.locator('summary').click();
-  await sighting.locator('summary').click();
+  await sighting.locator(':scope > summary').click();
   await pin.getByLabel('Label').fill('Retained draft');
   await pin.getByLabel('Fact', { exact: true }).fill('An unfinished evidence selection.');
   await pin.getByLabel('Source', { exact: true }).fill('Draft source');
@@ -299,15 +299,21 @@ test('observation validation and a failed write preserve a draft for deliberate 
   await expect(submit).toBeFocused();
 });
 
-test('a committed sighting is not offered as a failed write when refreshing Cases fails', async ({ page }) => {
+test('a committed sighting is not offered as a failed write when refreshing Cases fails', async ({ page }, testInfo) => {
   await openCasesView(page);
   await createCase(page, 'sighting-committed.invalid');
   const before = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
   const workspace = await openCaseResponseWorkspace(page);
   const sighting = workspace.locator('details[id^="case-response-observation-sightings-"]');
-  await sighting.locator('summary').click();
+  await sighting.locator(':scope > summary').click();
   await sighting.getByLabel('Source', { exact: true }).fill('Fixture observation');
   await sighting.getByLabel(/Limitations/).fill('Selected source only.');
+  await sighting.getByText('Encounter and capture context (optional)', { exact: true }).click();
+  await sighting.getByRole('combobox', { name: 'Encounter channel', exact: true }).selectOption('search_result');
+  await sighting.getByRole('combobox', { name: 'Declared device class', exact: true }).selectOption('mobile');
+  await sighting.getByLabel(/^Declared country code/u).fill('AU');
+  await sighting.getByRole('combobox', { name: 'Was a reviewed path supplied?', exact: true }).selectOption('yes');
+  expect(await sighting.getByLabel(/^Declared country code/u).evaluate(element => (element as HTMLInputElement).validity.valid)).toBe(true);
   await failNextBrowserLocalCollectionReadAfterWrite(page, 'cases');
   await sighting.getByRole('button', { name: 'Record sighting' }).click();
   await expect(caseWorkspaceActionStatus(page)).toContainText('The change was saved, but cases could not be reread');
@@ -316,12 +322,25 @@ test('a committed sighting is not offered as a failed write when refreshing Case
   const committed = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1, minimumRevision: before.manifest.revision + 1 });
   expect(committed.manifest.revision).toBe(before.manifest.revision + 1);
   expect(committed.records[0]!.value.sightings).toHaveLength(1);
+  expect(committed.records[0]!.value.sightings[0]!.context).toMatchObject({ channel: 'search_result', deviceClass: 'mobile', declaredCountryCode: 'AU', reviewedPathSupplied: 'yes' });
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) {
+        await sighting.locator('details.sighting-context').scrollIntoViewIfNeeded();
+        await page.screenshot({ path: testInfo.outputPath(`sighting-context-${width}-${theme}.png`) });
+      }
+    }
+  }
   await page.reload();
   await openConsoleView(page, 'cases');
   const restored = await openCaseResponseWorkspace(page);
   const restoredSighting = restored.locator('details[id^="case-response-observation-sightings-"]');
-  await restoredSighting.locator('summary').click();
+  await restoredSighting.locator(':scope > summary').click();
   await expect(restoredSighting.locator('ol.records > li')).toHaveCount(1);
+  await expect(restoredSighting.locator('.sighting-context-facts')).toContainText('AU');
 });
 
 test('observation writes preserve another tab edit and coordinate rapid submissions', async ({ page, context }) => {
@@ -362,7 +381,7 @@ test('Case stage forms remain usable across supported layouts and both themes', 
   const pin = workspace.locator('details', { hasText: 'Pin an observed fact' });
   const sighting = workspace.locator('details[id^="case-response-observation-sightings-"]');
   await pin.locator('summary').click();
-  await sighting.locator('summary').click();
+  await sighting.locator(':scope > summary').click();
   await pin.getByLabel('Label').fill('A source-qualified observation');
   await pin.getByLabel('Fact', { exact: true }).fill('Evidence remains separately attributed and available for review.');
   await pin.getByRole('button', { name: 'Pin evidence' }).click();

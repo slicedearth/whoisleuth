@@ -488,7 +488,7 @@ export function updateCase(
   }
   let sightings = current.sightings;
   if (patch.sighting !== undefined) {
-    sightings = appendCaseSighting(current.sightings, patch.sighting, now, pinIds);
+    sightings = appendCaseSighting(current.sightings, patch.sighting, now, pinIds, current.attachments);
   }
   let observedEffects = normalizeCaseObservedEffectHistory(
     current.observedEffects,

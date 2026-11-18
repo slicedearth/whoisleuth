@@ -3,6 +3,8 @@
 // fact selected by an analyst, a decision records analyst reasoning, and an
 // action records a reviewed external or internal follow-up.
 
+import { readCaseSightingContext, assertSightingCaptureReferences } from './case-sighting-context.mts';
+
 import {
   CASE_SCHEMA_VERSION,
   PUBLISHED_V2_3_CASE_SCHEMA_VERSION,
@@ -671,6 +673,7 @@ function normalizeCaseSighting(
     id: safeId(item.id, 'sighting', { state, source, createdAt }),
     state,
     sourceClass: sightingSourceClass(state),
+    ...(item.context === undefined ? {} : { context: readCaseSightingContext(item.context, options.sourceVersion) }),
     category: typeof item.category === 'string' && SIGHTING_CATEGORIES.has(item.category)
       ? item.category as CaseSightingCategory
       : 'other',
@@ -707,6 +710,7 @@ export function appendCaseSighting(
   raw: unknown,
   now: string,
   validPinIds?: ReadonlySet<string>,
+  attachments?: readonly { id: string }[],
 ): CaseSightingRecord[] {
   if (current.length >= MAX_CASE_SIGHTINGS) {
     throw new Error(`A Case can retain at most ${MAX_CASE_SIGHTINGS} sightings. No existing sighting was removed.`);
@@ -718,6 +722,7 @@ export function appendCaseSighting(
     createdAt: now,
   }, now, validPinIds);
   if (!created) throw new Error('A sighting requires a source and explicit source-qualified state.');
+  assertSightingCaptureReferences([created], attachments);
   return normalizeCaseSightings([...current, created], now, validPinIds);
 }
 

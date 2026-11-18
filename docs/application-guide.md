@@ -1086,6 +1086,13 @@ behind a decision, assertion, response event or sighting. Supporting and
 contradicting relationships remain explicit; a missing reference is not
 replaced with another observation.
 
+Sightings can include optional encounter and capture context: channel, device
+class, a declared country code, whether a reviewed path was supplied, and a
+selected retained capture file. These are analyst declarations, not verified
+distribution or location. They stay in private Case/workspace backups and
+internal packs; ordinary reports and shared packs omit them. A removed capture
+file remains an unavailable reference rather than being silently replaced.
+
 The selected case's **Decision overview** suggests local reviews for the open
 assessment: missing links, opposing observations, incomplete or undated evidence,
 and unclassified relationships. Suggestions use only that assessment's linked

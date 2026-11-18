@@ -1,4 +1,6 @@
 import type { CaseRecord } from './case-record-contracts.mts';
+import { withoutSightingContext } from './case-sighting-context.mts';
+import { SIGHTING_CONTEXT_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';
 import { COLLECTION_RECEIPT_CASE_SCHEMA_VERSION, PUBLIC_CASE_SCHEMA_VERSION, INCIDENT_CASE_SCHEMA_VERSION, EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION, MAX_CASE_IMPORT_BYTES } from '../contracts/case-portability.mts';
 import { caseStatusIsClosed } from './case-record-decisions.mts';
 import { caseEvidenceWithoutCollectionReceipts } from './case-evidence-model.mts';
@@ -224,7 +226,12 @@ const CASE_FIELD_RULES = Object.freeze({
       public: { label: 'Manual trail targets', order: 6 },
     },
   }),
-  sightings: fieldRule('sightings', PRESERVE, (record) => structuredClone(record.sightings)),
+  sightings: fieldRule('sightings', SHARED_REDACT, (record, profile) => structuredClone(record.sightings).map(item => (
+    profile === 'trusted' || profile === 'public' ? withoutSightingContext(item) : item
+  )), { nestedSensitiveFields: ['context'], audienceExclusions: {
+    trusted: { label: 'Private sighting encounter and capture context', order: 4, sinceVersion: SIGHTING_CONTEXT_CASE_SCHEMA_VERSION },
+    public: { label: 'Private sighting encounter and capture context', order: 4, sinceVersion: SIGHTING_CONTEXT_CASE_SCHEMA_VERSION },
+  } }),
   observedEffects: fieldRule('observedEffects', PUBLIC_REDACT, (record, profile) => (
     profile === 'public'
       ? publicObservedEffectHistory(record.observedEffects.preV13HistoryUnavailable)

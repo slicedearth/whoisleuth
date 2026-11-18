@@ -170,6 +170,7 @@ export const CASE_SIGHTING_CATEGORIES = [
 export type CaseSightingCategory = typeof CASE_SIGHTING_CATEGORIES[number];
 
 export type CaseSightingRecord = {
+  context?: import('./case-sighting-context.mts').CaseSightingContext;
   id: string;
   state: CaseSightingState;
   sourceClass: 'deployment' | 'provider' | 'analyst';

@@ -536,6 +536,12 @@ selected file, including an envelope when supplied. No provider API is contacted
 
 ### Local case files
 
+Case backups can also retain typed per-sighting encounter/capture declarations:
+channel, device class, declared country code, whether a reviewed path was
+supplied, and a local capture-file reference. Missing historical declarations
+stay unknown. These private fields survive ordinary Case and workspace backups
+and internal Case packs; reports and trusted/public packs omit them.
+
 Manual response scope is explicit and offline. `case incident-link` takes
 `{"url":"https://example.test/reported-page"}`; use its retained ID to bind
 `responseObjects` on `case action`. Each object contains `kind`, `identifier`

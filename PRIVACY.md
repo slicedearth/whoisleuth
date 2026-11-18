@@ -367,11 +367,19 @@ expiry and withdrawal records. Previewing or revising them makes no requests;
 only deliberate downloads create output files. STIX and MISP exports are not
 submitted or applied automatically. Content digests do not authenticate authors.
 
-Current Case schema 20 is written for new saves. Exact public v1 Case schema 12
-and earlier v2 schemas 13–19 remain readable and migrate directly; migrated
+Current Case schema 21 is written for new saves. Exact public v1 Case schema 12
+and earlier v2 schemas 13–20 remain readable and migrate directly; migrated
 fields can remain null, unknown or blank because WHOISleuth does not reconstruct
 them from weaker evidence.
 Case report v15 JSON and Markdown do not add the snapshot hostname.
+Optional per-sighting encounter/capture context records a fixed channel and
+device class, a declared two-letter country code, whether a reviewed path was
+supplied, and an optional local capture-file reference. These are declarations,
+not verified location or distribution; they contain no exact link or precise
+location. Missing historical context stays unknown. Full private Case exports
+and workspace backups retain it; ordinary reports and trusted/public Case packs
+exclude it. Removing a capture file leaves an explicitly unavailable reference,
+not an invented replacement or proof that its bytes remain available.
 Explicitly selected evidence pins can include their own observation hostname
 in response packets; this remains distinct from the Case's registration domain.
 
