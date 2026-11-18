@@ -1,6 +1,6 @@
 # Privacy notice
 
-Last updated: 18 November 2026.
+Last updated: 19 November 2026.
 
 This notice describes the public WHOISleuth deployment. A self-hosted operator
 must adapt it when hosting, authentication, enabled providers, retention or
@@ -321,10 +321,10 @@ saving them does not create a source observation time.
 Selected DNS pins can retain separate IPv4 and IPv6 resolver outcomes and their
 source observation times, without additional queries.
 
-The separate resolver-comparison action is off unless a deployment operator
-enables it; the public deployment does not enable it. When enabled, it sends the
-selected hostname and A/AAAA questions to two explicitly selected HTTPS
-resolvers. It makes at most four
+The separate resolver-comparison action is available only where the deployment
+operator enables it; its panel in DNS evidence states whether it is available.
+When enabled and deliberately started, it sends the selected hostname and A/AAAA
+questions to two explicitly selected HTTPS resolvers. It makes at most four
 requests, without retries, target connections or automatic retention, and does
 not replace the original Lookup. Each provider can observe the runtime's source
 address and apply its own retention policy. Google queries explicitly suppress
