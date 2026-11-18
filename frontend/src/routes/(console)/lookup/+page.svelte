@@ -4,6 +4,7 @@
   import { page } from '$app/state';
   import LocalSectionNav from '#lib/components/LocalSectionNav.svelte';
   import LookupAtAGlance from '#lib/components/LookupAtAGlance.svelte';
+  import LookupResultSkeleton from '#lib/components/LookupResultSkeleton.svelte';
   import LookupAssessment from '#lib/components/LookupAssessment.svelte';
   import LookupFamilySummary from '#lib/components/LookupFamilySummary.svelte';
   import LookupEvidenceReplay from '#lib/components/LookupEvidenceReplay.svelte';
@@ -623,6 +624,10 @@
   >{/if}
 
 <LookupEvidenceReplay />
+
+{#if session.loading && !session.observation.response}
+  <LookupResultSkeleton />
+{/if}
 
 {#if session.observation.response}
   <section class="result-root" id="result" use:evidenceLinkNavigation>

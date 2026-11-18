@@ -288,9 +288,13 @@ test('deep lookup reports pending elapsed time and final source settle timing', 
   await expect(pending).toContainText('Only the final validated response can be retained.');
   await expect(page.getByRole('region', { name: 'Lookup source progress' })).toContainText('Waiting for source updates');
   await expect(page.getByRole('button', { name: 'Cancel lookup' })).toBeVisible();
+  const skeleton = page.getByTestId('lookup-result-skeleton');
+  await expect(skeleton).toBeVisible();
+  await expect(skeleton).toHaveAttribute('aria-hidden', 'true');
   releaseLookup?.();
 
   await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
+  await expect(skeleton).toHaveCount(0);
   await page.getByRole('button', { name: 'Expand details: Source quality evidence' }).click();
   const coverage = page.getByRole('region', { name: 'Evidence coverage' });
   await expect(coverage).toBeVisible();
