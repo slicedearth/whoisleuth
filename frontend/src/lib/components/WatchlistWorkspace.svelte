@@ -205,7 +205,7 @@
             {/each}
           </div>
         {:else}
-          <div class="domain-empty"><h4>No retained material changes</h4><p>This means no comparable change for this domain is present in the bounded watchlist history. It does not establish that the domain or its unobserved evidence stayed unchanged.</p></div>
+          <div class="domain-empty"><h4>No retained material changes</h4><p>No material change for this domain appears in the retained watchlist history.</p></div>
         {/if}
       </section>
     {:else}

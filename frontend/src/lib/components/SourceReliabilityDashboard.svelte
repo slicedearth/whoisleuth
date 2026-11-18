@@ -63,7 +63,7 @@
     </label>
   </header>
 
-  <p class="reliability-boundary">Rates describe only the supplied sample. They do not rank providers, predict the next request, or turn missing evidence into a successful result.</p>
+  <p class="reliability-boundary">Rates describe only the supplied sample.</p>
   <p class="reliability-boundary">Failure, partial and rate-limit rates exclude disabled, not-applicable, skipped and unsupported states. Truncation uses observation samples.</p>
 
   {#if error}

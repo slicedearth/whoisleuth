@@ -115,7 +115,7 @@
 </script>
 
 <section class="case-practice" aria-labelledby="case-practice-title">
-  <header><div><h2 id="case-practice-title" tabindex="-1">Practise a case review</h2><p>Use real case forms with fictional evidence and simulated responses. Practice does not access saved work, collect live evidence or submit reports. Restarting, reloading or leaving the page discards these drafts.</p></div><button class="btn" type="button" onclick={onreset} disabled={mutationBusy}>Discard practice and restart</button></header>
+  <header><div><h2 id="case-practice-title" tabindex="-1">Practise a case review</h2><p>Use real case forms with fictional evidence and simulated responses. Nothing is saved, collected or submitted, and restarting, reloading or leaving the page discards these drafts.</p></div><button class="btn" type="button" onclick={onreset} disabled={mutationBusy}>Discard practice and restart</button></header>
   <CasePracticeWalkthrough evidence={suppliedEvidence} {visible} />
   <nav aria-label="Case practice steps">{#each steps as item, index}<button class="btn" type="button" aria-current={step === item.id ? 'step' : undefined} onclick={() => void select(item.id)}>{index + 1}. {item.label}</button>{/each}</nav>
   <p class="practice-status" role="status">{message}</p>

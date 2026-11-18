@@ -1934,7 +1934,7 @@ test('Brand Profile v6 change windows migrate to stable v7 identities and round-
   const existingWindow = baseline.locator('.change-window-row').first();
   await expect(existingWindow.getByLabel('Reviewed summary')).toHaveValue('Existing reviewed maintenance');
   await expect(baseline.locator('.suppression-row').first().getByLabel('Reviewed rationale')).toHaveValue('Existing reviewed exception');
-  await expect(baseline.getByText(/No expiry is retained/iu)).toBeVisible();
+  await expect(baseline.getByText(/No expiry is set/iu)).toBeVisible();
 
   await baseline.getByRole('button', { name: 'Add change window' }).click();
   const addedWindow = baseline.locator('.change-window-row').nth(1);

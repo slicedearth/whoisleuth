@@ -57,7 +57,7 @@
   <summary>Choose Brand review references</summary>
   {#if open}
     <p>Compare the context of references you have reviewed for {profile.name}. Choose up to {MAX_BRAND_REVIEW_REFERENCES} for this visit.</p>
-    <details><summary>Reference scope and lifetime</summary><p>Context labels are your choices for this review, not verified capture conditions or proof of legitimacy. PNG references come only from explicitly associated Cases; matching a domain does not associate a file. Ambiguous identities are excluded. A Case domain is not an observed image hostname. Choices and previews clear when this panel closes, its Brand or Case source refreshes, or you leave the page. Nothing is saved or exported.</p></details>
+    <details><summary>Reference scope and lifetime</summary><p>Context labels are your own notes for this review. PNG references come only from Cases associated with this Brand; files with ambiguous identities are left out. Choices and previews clear when this panel closes, its Brand or Case data refreshes, or you leave the page. Nothing is saved or exported.</p></details>
     {#if profile.pageBaseline}
       {@const baseline = profile.pageBaseline}
       <section aria-label="Saved Brand page baseline">
@@ -71,7 +71,7 @@
       <p role="status">{casesState === 'loading' ? 'Reading associated Case references…' : 'Case references are unavailable. No absence of evidence is inferred.'}</p>
     {:else}
       <label>Find an associated PNG reference<input type="search" maxlength="200" bind:value={query} oninput={() => { page = 1; chosenKey = ''; }} /></label>
-      <p>{matches.length} matching references from {files.length} PNG references in explicitly associated Cases. Showing page {currentPage} of {pageCount}. Listing references does not open their original files.</p>
+      <p>{matches.length} matching references from {files.length} PNG references in explicitly associated Cases. Showing page {currentPage} of {pageCount}.</p>
       <label>Reference on this page<select bind:this={picker} bind:value={chosenKey}><option value="">Choose a reference</option>{#each visible as file (file.key)}<option value={file.key} disabled={selected.some(item => item.key === file.key)}>{file.attachment.fileName} · {file.caseNumber}</option>{/each}</select></label>
       <Pagination {currentPage} {pageCount} setPage={value => void setPage(value)} ariaLabel="Brand reference pages" pageInputLabel="Brand reference page" />
       <button class="btn" disabled={!chosenKey || count >= MAX_BRAND_REVIEW_REFERENCES} onclick={add}>Add review reference</button>

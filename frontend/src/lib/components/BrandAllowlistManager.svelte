@@ -149,7 +149,7 @@
     <div>
       <p class="eyebrow">Brand Profile</p>
       <h2 id={`brand-allowlist-title-${profile.id}`}>Allowlist</h2>
-      <p>Manage reviewed domain and registrar entries. Exact domain entries affect Discover filtering; official and partner declarations remain separate.</p>
+      <p>Manage reviewed domain and registrar entries. Domain entries are filtered out of Discover results.</p>
     </div>
     <span>{domains.length} domain{domains.length === 1 ? '' : 's'} · {registrars.length} registrar{registrars.length === 1 ? '' : 's'}</span>
   </header>
@@ -216,7 +216,7 @@
         {/if}
       </section>
     {/if}
-    <details><summary>Preview scope</summary><p>Saved values refer to the loaded profile snapshot; concurrent edits must be resolved before saving. Only domain-list edits are evaluated, not unadded text. Exact names do not cover suffixes or subdomains. Official, partner and allowlist declarations remain distinct, not safety verdicts. Registrar entries do not affect this preview or Discover's domain filtering. Case domains are examples, not inferred Brand associations. The preview stays in page memory.</p></details>
+    <details><summary>Preview scope</summary><p>The preview checks domain-list edits against the loaded profile; resolve edits made elsewhere before saving. Entries match exact names only, not subdomains. Registrar entries do not affect Discover filtering. Nothing is saved until you save the profile.</p></details>
   </details>
 
   <footer>

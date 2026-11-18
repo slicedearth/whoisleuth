@@ -46,7 +46,7 @@
       </ol>
       {#if summary.truncated}<p>Showing the first 20 items. Open the review inbox for the remaining review items.</p>{/if}
     {:else}
-      <p>No current Review Item requires attention. Open Case and watchlist counts are shown separately because they do not imply a finding.</p>
+      <p>No current Review Item requires attention.</p>
     {/if}
   </div>
 </section>

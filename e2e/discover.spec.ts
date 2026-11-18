@@ -254,7 +254,7 @@ test('certificate search exposes and enforces the shared bounded query contract'
   const input = page.getByRole('textbox', { name: 'Certificate-log keyword' });
   await expect(input).toHaveAttribute('maxlength', '200');
   await expect(page.locator('#ct-query-guidance')).toContainText('up to 200 characters');
-  await expect(page.locator('#ct-query-guidance')).toContainText('does not submit the target for a live website scan');
+  await expect(page.locator('#ct-query-guidance')).toContainText('Search public certificate names');
 
   const sameOriginHeaders = { Origin: BASE_URL, 'Sec-Fetch-Site': 'same-origin' };
   const missingResponse = await request.get('/api/ct-search', { headers: sameOriginHeaders });

@@ -61,7 +61,7 @@
         {/each}
       </div>
     {:else}
-      <p class="callout info">No curated Organisation, Brand, WebSite, WebPage, or related identity declaration was retained. This does not mean the page publishes no structured data.</p>
+      <p class="callout info">No curated Organisation, Brand, WebSite, WebPage, or related identity declaration was retained.</p>
     {/if}
 
     {#if limitations.length}

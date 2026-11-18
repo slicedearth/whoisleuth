@@ -476,8 +476,7 @@
                 </div>
               {:else}
                 <p class="field-note"
-                  >No normalised fact is currently available to retain. This does not imply that
-                  evidence is absent.</p
+                  >No normalised fact is available to retain yet.</p
                 >
               {/if}
             </details>

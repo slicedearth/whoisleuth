@@ -683,7 +683,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   await expect(section.getByText(/Published by the sponsoring registrar's RDAP service, not the registry/)).toBeVisible();
   const comparison = section.locator('.publication-comparison');
   await expect(comparison.getByText(/1 conflicts · 0 source-only · 0 redacted · 0 unavailable\/incomplete · 7 equivalent/)).toBeVisible();
-  await expect(comparison.getByText(/difference can reflect update timing or disclosure policy/)).toBeVisible();
+  await expect(comparison.getByText(/Differences often reflect update timing or disclosure policy/)).toBeVisible();
   await expect(comparison.getByRole('row', { name: /Expires/ })).toContainText('2030-01-01T00:00:00Z');
   await expect(comparison.getByRole('row', { name: /Expires/ })).toContainText('2031-01-01');
   await expect(comparison.getByRole('row', { name: /Expires/ })).toContainText('Conflict');

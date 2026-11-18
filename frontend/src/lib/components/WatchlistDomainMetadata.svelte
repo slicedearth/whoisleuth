@@ -151,8 +151,7 @@
     evidence baseline.</p
   >
   <p
-    >Urgency, Risk, confidence, Case severity and collection cadence are separate. A due review date
-    does not schedule a scan.</p
+    >A due review date is a reminder; it does not schedule a scan.</p
   >
   {#if message}<p role="status" aria-live="polite">{message}</p>{/if}
   <div class="toolbar"

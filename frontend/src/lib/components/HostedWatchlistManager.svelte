@@ -243,7 +243,7 @@
       <div class="capacity" role="group" aria-label="Hosted monitoring capacity">
         <div><strong>{response.capacity.projectedLookupsPerWeek.toLocaleString()}</strong> of {response.capacity.admittedLookupsPerWeek.toLocaleString()} admitted lookups per week</div>
         <progress max={response.capacity.admittedLookupsPerWeek} value={Math.min(response.capacity.projectedLookupsPerWeek, response.capacity.admittedLookupsPerWeek)}></progress>
-        <small>{response.capacity.reservePercent}% capacity remains reserved for delayed and resumed work. This is a scheduler admission limit, not an upstream availability guarantee.</small>
+        <small>{response.capacity.reservePercent}% of capacity is kept free for delayed and resumed work.</small>
       </div>
     {/if}
 

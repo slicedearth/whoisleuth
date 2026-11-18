@@ -26,7 +26,7 @@
       {comparison.counts.unchanged_nonmatch} still do not match under the literal rules.</p>
   {:else}
     <p>No saved campaign revision exists. The proposal matches {comparison.afterMatches} of these
-      {comparison.rows.length} candidates; match changes cannot be determined.</p>
+      {comparison.rows.length} candidates. Save a revision to compare future changes.</p>
   {/if}
   <details>
     <summary>Corpus identity and coverage</summary>
@@ -38,11 +38,9 @@
         <CopyButton value={comparison.revision} description="Copy local corpus fingerprint" /></dd></div>
     </dl>
     <p>All {comparison.rows.length} candidates currently retained for this Brand were compared.
-      The Brand can retain up to {comparison.maximum}. This is not a full feed: unretained or deleted
-      candidates and earlier source omissions are unknown. Source coverage is shown with each candidate.</p>
-    <p>Counts compare literal matches, not findings of infringement or false-positive rates.
-      Review windows, Brand declarations and earlier analyst reviews stay separate. Nothing is saved
-      or admitted to a Watchlist by this preview.</p>
+      The Brand can retain up to {comparison.maximum}; candidates that were not retained are not
+      included. Source coverage is shown with each candidate.</p>
+    <p>Counts are literal rule matches. This preview saves nothing and adds nothing to a Watchlist.</p>
     {#if comparison.beforeHistoryOmitted}<p>{comparison.beforeHistoryOmitted} older campaign revisions
       are no longer retained. This comparison uses the current saved revision only.</p>{/if}
   </details>
@@ -76,7 +74,7 @@
               </dd></div>
             {/each}
           </dl>
-          {#if row.declaration}<p>{row.declaration.reason}: {row.declaration.matchedDomain}. This does not change the literal comparison.</p>{/if}
+          {#if row.declaration}<p>{row.declaration.reason}: {row.declaration.matchedDomain}.</p>{/if}
           <details>
             <summary>Retained source evidence ({row.sources.length})</summary>
             {#each row.sources as source}
@@ -114,8 +112,7 @@
     <Pagination currentPage={page} {pageCount} setPage={(value) => { page = value; }}
       ariaLabel="Campaign comparison pages" pageInputLabel="Go to comparison page" />
   {:else}
-    <p>No retained candidates are available for this Brand. A zero-row comparison does not establish
-      that the proposed rule has no matches in a feed.</p>
+    <p>No retained candidates are available for this Brand yet.</p>
   {/if}
 </section>
 

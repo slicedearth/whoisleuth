@@ -1134,8 +1134,8 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   await expect(pageComparison.locator('article').filter({ hasText: 'External resource hosts' }).getByText('1 host shared', { exact: true })).toBeVisible();
   await expect(pageComparison.getByText('Shared: assets.example', { exact: true })).toBeVisible();
   await expect(pageComparison.getByText(/there is no overall page-similarity score/i)).toBeVisible();
-  await expect(pageComparison.getByText(/page-identity matches remain review context and do not add Risk points/i)).toBeVisible();
-  await expect(pageComparison.getByText(/separately reviewed favicon and official-asset observations may contribute/i)).toBeVisible();
+  await expect(pageComparison.getByText(/Matches do not add Risk points/i)).toBeVisible();
+  await expect(pageComparison.getByText(/favicon and official-asset checks are scored separately/i)).toBeVisible();
 
   await expect(snapshots.getByRole('heading', { name: 'Website profile snapshots' })).toBeVisible();
   await expect(snapshots.getByText(/Differences are review cues/)).toBeVisible();
@@ -1317,7 +1317,7 @@ test('completed technology analysis distinguishes an unmatched catalogue from so
   await expect(technologyCard.locator(':scope > summary .evidence-status')).toHaveText('No recognised matches');
   await expect(technologyCard.getByText(/Analysis complete; no curated signatures matched/u)).toBeVisible();
   await technologyCard.locator(':scope > summary').click();
-  await expect(technologyCard.getByText(/does not mean that no framework, service, or delivery platform is present/i)).toBeVisible();
+  await expect(technologyCard.getByText(/No curated technology signature matched the captured response/i)).toBeVisible();
   await expect(technologyCard.locator('.library-profile .evidence-status')).toHaveText('No catalogue matches');
   await expect(technologyCard.getByText('success', { exact: true })).toHaveCount(0);
 

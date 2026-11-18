@@ -113,7 +113,7 @@
             <div class="outcome-heading"><strong>{group.label}</strong><span>{tokenLabel(group.expectation)}</span></div>
             <p class="outcome-diagnostic">{group.diagnosticState ? `Collection diagnostic: ${group.diagnosticState.replaceAll('_', ' ')}.` : 'No collection diagnostic retained.'}{group.expectation === 'optional' ? (original.collectionReceipt ? ' Selection recorded above.' : ' Original selection unknown.') : ''}</p>
             {#if !original.collectionReceipt}<p>{group.explanation}</p>{/if}
-            {#if group.id === 'domain_evidence'}<p>The domain diagnostic describes the availability branch; DNS, HTTP and TLS outcomes remain separate below.</p>{/if}
+            {#if group.id === 'domain_evidence'}<p>This diagnostic covers the availability check; DNS, HTTP and TLS results are listed below.</p>{/if}
             {#if group.records.length}
               <ul class="outcome-records">{#each group.records as entry (entry.id)}<li>
                 <div><strong>{entry.label}</strong><span>{entry.statePresentation.label}{entry.sourceState ? ` · Provider result: ${entry.sourceState.replaceAll('_', ' ')}` : ''}{entry.truncated ? ' · Truncated' : ''}</span></div>
@@ -237,7 +237,7 @@
           </div>
         {/each}
       </div>
-      <p class="note">Source branches may overlap, so their durations do not add up to total request time. Missing, failed, stale, unsupported, and not-found evidence remains distinct and is never treated as proof of absence or safety.</p>
+      <p class="note">Source branches may overlap, so their durations do not add up to the total request time. A missing or failed source is not evidence that something is absent.</p>
       <details class="freshness-policy">
         <summary>Freshness policy · {refreshPlan.freshnessPolicy.id === 'analyst-custom' ? 'analyst-defined' : `${refreshPlan.freshnessPolicy.task} task default`}</summary>
         <div class="policy-form">
@@ -250,7 +250,7 @@
             <p>Registration {refreshPlan.freshnessPolicy.thresholdsDays.registration} days · network {refreshPlan.freshnessPolicy.thresholdsDays.network} days · web {refreshPlan.freshnessPolicy.thresholdsDays.web} days.</p>
           {/if}
         </div>
-        <p class="note">Thresholds organise source-refresh suggestions for results in this open Lookup page. They are not retained in workspace storage. A deliberately downloaded investigation brief records the policy used. Thresholds do not make older evidence false or newer evidence complete.</p>
+        <p class="note">Thresholds decide when this page suggests refreshing a source. They apply to this page only; a downloaded investigation brief records the policy used.</p>
       </details>
       <LookupSourceRefresh plan={refreshPlan} {original} {depth} ledger={refreshLedger} onledgerchange={onrefreshchange} {caseTarget} />
     </details>

@@ -77,7 +77,7 @@
             {/each}
           </div>
         {:else}
-          <p class="empty">No source-qualified certificate event has been retained for this official domain. Missing events are not treated as alignment.</p>
+          <p class="empty">No source-qualified certificate event has been retained for this official domain.</p>
         {/if}
       </article>
     {/each}

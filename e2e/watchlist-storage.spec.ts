@@ -89,7 +89,7 @@ test('watchlist workload preview separates purpose and cadence without collectin
   await expect(plan.locator('dd').nth(1)).toHaveText('28');
   await plan.getByText('Targets and execution requirements', { exact: true }).click();
   await expect(plan).toContainText('example.test');
-  await expect(plan).toContainText('Deep collection is not supported');
+  await expect(plan).toContainText('Deep collection is not available in hosted monitoring');
   await plan.getByText('Per-domain collection settings', { exact: true }).click();
   await plan.getByRole('combobox', { name: 'Domain collection purpose', exact: true }).selectOption('registration');
   await plan.getByRole('combobox', { name: 'Domain check interval', exact: true }).selectOption('24');

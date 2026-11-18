@@ -44,7 +44,7 @@
     <p>Each review requests only the selected batch. Choose another batch to review the remaining domains.</p>
   {/if}
   <label class="inheritance-option"><input type="checkbox" bind:checked={includeInheritedDns} disabled={auditing} /> Include inherited DMARC and direct parent delegation</label>
-  <p class="inheritance-detail">Also checks DMARC reporting destinations. Uses up to 32 additional TXT queries within ten seconds and a direct sample of two parent DNS servers per domain. Exact-name results remain separate.</p>
+  <p class="inheritance-detail">Also checks DMARC reporting destinations. Uses up to 32 additional TXT queries within ten seconds and a direct sample of two parent DNS servers per domain.</p>
   {#if disabledReason}<p class="feature-disabled" role="note">{disabledReason}</p>{/if}
   {#if results.length}
     <div class="audit-results">
@@ -115,7 +115,7 @@
                     <PostureObservationHistory baseline={review.baseline} />
                   </details>
                 {/if}
-                <p class="limitation">Saving an observation is explicit and local. Incomplete evidence remains unknown and does not replace expected settings.</p>
+                <p class="limitation">Observations are saved only when you choose, and stay in this browser.</p>
               {:else}
                 <p>No expected settings are configured for this domain. Use the editor below to record reviewed expectations.</p>
               {/if}

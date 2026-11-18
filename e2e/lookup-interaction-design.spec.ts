@@ -388,7 +388,7 @@ test('Lookup task query context is bounded, transient, and changes only result p
   await expect(acquisitionRisk).toContainText(/Evidence coverage:/u);
   await expect(acquisitionOpportunity).toHaveCount(1);
   await expect(acquisitionOpportunity).toContainText('Acquisition task only');
-  await expect(acquisitionOpportunity).toContainText(/not availability, value, eligibility, price, or likely purchase success/u);
+  await expect(acquisitionOpportunity).toContainText(/not availability, value or price/u);
   await expect(acquisitionAssessment.locator('.exact-score')).toHaveCount(2);
   await expect(acquisitionAssessment.locator('.exact-score').first()).toBeHidden();
   await expect(acquisitionAssessment.locator('.exact-score').last()).toBeHidden();

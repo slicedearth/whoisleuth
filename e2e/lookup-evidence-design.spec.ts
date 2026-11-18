@@ -632,7 +632,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(coverage).toContainText('Registry RDAP');
   await expect(coverage).toContainText('WHOIS');
   await expect(coverage).toContainText('DNS');
-  await expect(coverage).toContainText('Missing, failed, stale, unsupported, and not-found evidence remains distinct');
+  await expect(coverage).toContainText('A missing or failed source is not evidence that something is absent');
   const sourceQualityTable = coverage.getByRole('table', { name: 'Source quality and freshness' });
   await expect(sourceQualityTable).toHaveAttribute('aria-colcount', '5');
   await expect(sourceQualityTable.getByRole('row').first().getByRole('columnheader')).toHaveCount(5);
@@ -718,7 +718,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await coverage.getByLabel('Registration days').fill('10');
   await coverage.getByLabel('Registration days').blur();
   await expect(coverage).toContainText('Freshness policy · analyst-defined');
-  await expect(coverage).toContainText('Thresholds organise source-refresh suggestions');
+  await expect(coverage).toContainText('Thresholds decide when this page suggests refreshing a source');
 
   await page.getByRole('button', { name: 'Collapse details: Source quality evidence' }).click();
   await page.getByRole('button', { name: 'Expand details: Source quality evidence' }).click();

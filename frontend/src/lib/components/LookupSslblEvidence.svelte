@@ -69,7 +69,7 @@
       {#if safeReferenceUrl}<a href={safeReferenceUrl} target="_blank" rel="noopener noreferrer">Review the matching provider record<span class="sr-only"> (opens in a new tab)</span></a>.{/if}
     </p>
     {#if limitations.length}<p class="callout warn">{limitations.join(' ')}</p>{/if}
-    <p class="card-note">This exact local comparison makes no provider request and does not change availability or Risk scoring.</p>
+    <p class="card-note">This comparison uses the local snapshot only and does not change availability or Risk.</p>
   </div>
 </details>
 

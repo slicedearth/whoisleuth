@@ -70,7 +70,7 @@
               {/if}
             {/each}
           </div>
-          <p>These parameters are current DNS policy context. They do not prove which account or validation method was used for the observed certificate.</p>
+          <p>These parameters are current DNS policy, not a record of how the observed certificate was issued.</p>
         </details>
       {/if}
       <ul>{#each review.limitations as limitation}<li>{limitation}</li>{/each}</ul>

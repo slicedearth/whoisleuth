@@ -75,7 +75,7 @@
 {#if unicodeCandidates.length}
   <details class="idn-policy card">
     <summary><span class="disclosure-heading"><span><span class="eyebrow">Optional local policy</span><strong>Registry IDN feasibility</strong></span><span>{unicodeCandidates.length} Unicode candidate{unicodeCandidates.length === 1 ? '' : 's'}</span></span></summary>
-    <p class="intro">Import a reviewed RFC 7940 LGR XML file and name its DNS-safe suffix. The file stays in this browser tab. This checks only individual code-point repertoire membership and never claims that a label is registrable.</p>
+    <p class="intro">Import a reviewed RFC 7940 LGR XML file and name its DNS-safe suffix. The file stays in this browser tab. This checks code-point repertoire membership only, not whether a label can be registered.</p>
     <div class="controls">
       <label>Registry suffix<input value={suffix} maxlength="253" placeholder="test" aria-label="Registry suffix" disabled={loading} oninput={updateSuffix}></label>
       <label class="file">LGR XML file<input type="file" accept=".xml,application/xml,text/xml" disabled={loading} onchange={selectFile}></label>

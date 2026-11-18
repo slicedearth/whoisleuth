@@ -144,7 +144,7 @@
         </ul>
       </details>
     {:else}
-      <p class="empty">This lookup did not retain settled relationships for the selected lens. That is not evidence that the relationship type is absent.</p>
+      <p class="empty">This lookup kept no settled relationships for the selected lens.</p>
     {/if}
 
     {#if inputRows.length}

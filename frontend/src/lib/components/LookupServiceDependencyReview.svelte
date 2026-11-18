@@ -114,7 +114,7 @@
     {#if unreviewed.length}
       <p role="note">Records not reviewed: {unreviewed.map(([kind, count]) => `${count} ${kind}`).join(', ')}. Their validity and dependencies are unknown. The accepted DNS records remain available in DNS evidence.</p>
     {/if}
-    <p class="intro">Review the DNS and HTTP dependencies observed in this Lookup. Nameserver and mail targets provide context; they are not evaluated for hosted-service deprovisioning. WHOISleuth does not follow targets or test whether a service can be claimed.</p>
+    <p class="intro">Review the DNS and HTTP dependencies observed in this Lookup. Nameserver and mail targets are shown for context. Targets are not contacted or tested.</p>
     <label class="scope-control">
       <span>Reviewed service scope <small>Optional, local to this Lookup view</small></span>
       <textarea
@@ -125,7 +125,7 @@
         placeholder="Expected service target or namespace, one per line"
         aria-describedby="dependency-scope-help"
       ></textarea>
-      <small id="dependency-scope-help">Enter only targets or parent namespaces you have independently confirmed as expected. A match organises review; it does not verify an account or service assignment.</small>
+      <small id="dependency-scope-help">Enter only targets or parent namespaces you have confirmed as expected.</small>
     </label>
     <label class="scope-control">
       <span>Reviewed false positives <small>Optional, local to this Lookup view</small></span>
