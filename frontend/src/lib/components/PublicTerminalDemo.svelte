@@ -5,7 +5,7 @@
   const active = $derived(PUBLIC_TERMINAL_DEMO.panels[activeIndex]!);
 </script>
 
-<div class="terminal-demo" aria-label="Offline terminal preview">
+<div class="terminal-demo" role="group" aria-label="Offline terminal preview">
   <header><span class="terminal-lights" aria-hidden="true">● ● ●</span><span>{PUBLIC_TERMINAL_DEMO.notice}</span></header>
   <div class="panel-controls" role="group" aria-label="Preview terminal panels">
     {#each PUBLIC_TERMINAL_DEMO.panels as panel, index (panel.id)}<button type="button" aria-pressed={activeIndex === index} onclick={() => { activeIndex = index; }}>{panel.label}</button>{/each}
