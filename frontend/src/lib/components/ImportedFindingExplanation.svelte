@@ -43,7 +43,7 @@
                   {:else}<p>This record spans resource boundaries. No single member or member-relative location is assigned.</p>{/if}
                 </li>
               {/each}</ul>
-              <p>Digests identify selected bytes, not source accuracy or authorship. Member paths, member digests and record locations stay in preview memory, outside Cases, reports, exports and printing. The existing package digest is retained as a source reference on import. Raw URLs, headers and bodies remain excluded.</p>
+              <p>Digests identify the selected bytes, not who wrote them or whether they are accurate. Member paths, digests and record locations stay in this preview and never reach Cases, reports, exports or printing; on import, only the package digest is kept as a source reference. Raw URLs, headers and bodies are excluded.</p>
             {:else}<p>The selected archive no longer belongs to this preview.</p>{/if}
           {/if}
         </details>

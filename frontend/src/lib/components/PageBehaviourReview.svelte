@@ -22,7 +22,7 @@
     </details>
     <ol start={(page - 1) * 12 + 1}>{#each rows.slice((page - 1) * 12, page * 12) as row}<li><strong>{row.label}</strong>{#if row.origin}<span>{row.origin}</span>{/if}{#if row.digest}<code>SHA-256 {row.digest}</code>{/if}</li>{/each}</ol>
     <Pagination currentPage={page} pageCount={Math.ceil(rows.length / 12)} setPage={next => page = next} ariaLabel="Page observations" pageInputLabel="Page observation page" />
-    <details><summary>What these observations cover</summary><p>Response order spans admitted requests; elements and wording describe the final top-level document. Default form destinations were read, not submitted; script-driven and submit-button overrides are not inferred. An integrity attribute or policy header is not a verification result. Wording matches do not establish execution or malicious intent. Paths, field values and commands are not retained here.</p></details>
+    <details><summary>What these observations cover</summary><p>Response order covers every admitted request; elements and wording come from the final top-level document. Form destinations were read, not submitted, and script-driven or submit-button overrides are not inferred. Integrity attributes and policy headers are recorded, not verified, and a wording match does not show that anything ran or was malicious. Paths, field values and commands are not kept.</p></details>
   {:else}<p>This historical capture has no page-behaviour observations.</p>{/if}
 </div></details>
 

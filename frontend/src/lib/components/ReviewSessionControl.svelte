@@ -105,7 +105,7 @@
         <div><dt>Drafts</dt><dd>{briefing.restoredDrafts} restored from the checkpoint · {briefing.keptOpenDrafts} already-open forms kept</dd></div>
         {#if briefing.uncertainDrafts}<div><dt>Unconfirmed decisions</dt><dd>{briefing.uncertainDrafts} {briefing.uncertainDrafts === 1 ? 'form still requires' : 'forms still require'} review of the saved record before another submission</dd></div>{/if}
       </dl>
-      <details><summary>What this checkpoint can compare</summary><p>The baseline keeps subject identities, material fingerprints, source identities and completeness for this saved filtered view, not earlier evidence values. Newly matching means present in the current retained view, not newly collected. Unavailable subjects may be filtered, outside the admitted results, or removed; this does not establish deletion. Inspect the current items and unfinished forms before deciding.</p></details>
+      <details><summary>What this checkpoint can compare</summary><p>The baseline keeps subject identities, material fingerprints, source identities and completeness for this filtered view, not earlier evidence values. Newly matching means newly in the retained view, not newly collected, and an unavailable subject may simply be filtered out or beyond the admitted results. Check the current items and unfinished forms before deciding.</p></details>
     </section>
   {/if}
 </details>

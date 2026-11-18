@@ -115,7 +115,7 @@
       {#if !changedCount && currentPreview.canApply}<p>No tag changes are needed; saved records and timestamps remain unchanged.</p>{/if}
     </section>
   {/if}
-  <details><summary>Tag selection limits</summary><p>At most {MAX_CASE_BATCH_MUTATIONS} exact cases and {MAX_TAGS_PER_CASE} requested tags of {MAX_TAG_LENGTH} characters each. Matching ignores case but preserves retained spelling and order. Duplicates and over-limit additions are rejected, not shortened. Every target is rechecked before one atomic write; tags do not change evidence or disposition.</p></details>
+  <details><summary>Tag selection limits</summary><p>Up to {MAX_CASE_BATCH_MUTATIONS} Cases and {MAX_TAGS_PER_CASE} tags of up to {MAX_TAG_LENGTH} characters each. Matching ignores case but keeps the saved spelling and order. Duplicates and tags over the limit are rejected rather than shortened. Every Case is rechecked before a single write, and tags never change evidence or disposition.</p></details>
 </section>
 
 <style>
