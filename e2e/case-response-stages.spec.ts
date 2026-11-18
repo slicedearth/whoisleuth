@@ -335,6 +335,8 @@ test('undated Case observations persist once and remain usable across viewport a
         await expect(observation.getByLabel('Label', { exact: true })).toBeFocused();
         await sighting.locator('..').getByRole('textbox', { name: /^Limitations/u }).focus();
         await page.keyboard.press('Tab');
+        await expect(observation.getByText('Encounter and capture context (optional)', { exact: true })).toBeFocused();
+        await page.keyboard.press('Tab');
         await expect(sighting).toBeFocused();
         await expect(sighting).toBeInViewport({ ratio: 1 });
         await expect(observation.locator('ol.records').first()).toContainText('Observation time unavailable');
