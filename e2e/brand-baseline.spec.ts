@@ -71,7 +71,7 @@ test('selected mark certificates are reviewed offline without retaining original
   await form.getByRole('button', { name: 'Review selected files offline', exact: true }).click();
   const report = panel.getByRole('region', { name: 'example.test', exact: true });
   await expect(report).toContainText('The supported checks passed.');
-  await expect(report.locator('dl > div').filter({ hasText: 'Embedded logo digest' }).locator('dd > strong')).toHaveText('matched');
+  await expect(report.locator('dl > div').filter({ hasText: 'Embedded logo digest' }).locator('dd > strong')).toHaveText(/^matched$/iu);
   for (const width of [390, 1280]) for (const theme of ['light', 'dark'] as const) {
     await page.setViewportSize({ width, height: 900 }); await useTheme(page, theme);
     await expectNoHorizontalOverflow(page);

@@ -3,6 +3,7 @@
   import { CAPABILITY_CONTEXT, disabledCapability, type CapabilityGetter } from '#lib/capabilities.ts';
   import { requestJsonCapped } from '#lib/bounded-json-response.ts';
   import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
+  import { tokenLabel } from '../../../../packages/analysis/display-label.mts';
   import { DNS_QUERY_OUTCOMES } from '../../../../packages/evidence/dns-query-outcome.mts';
   import { RESOLVER_PROVIDERS, RESOLVER_RECORD_TYPES, RESOLVER_COMPARISON_BYTES,
     readResolverComparison, type ResolverComparison as Comparison } from '../../../../packages/evidence/resolver-comparison.mts';
@@ -58,7 +59,7 @@
     {#if report}
       <div class="results" role="status" aria-label="Resolver comparison results">
         {#each RESOLVER_RECORD_TYPES as type}
-          <section><h5>{type} <span>{report.rows.find(row => row.type === type)?.state}</span></h5>
+          <section><h5>{type} <span>{tokenLabel(report.rows.find(row => row.type === type)?.state ?? 'unknown')}</span></h5>
             <dl>{#each report.queries.filter(query => query.type === type) as query}
               <div><dt>{RESOLVER_PROVIDERS.find(provider => provider.id === query.provider)?.label}</dt><dd>{DNS_QUERY_OUTCOMES[query.outcome].label}
                 {#each query.values as value}<code>{value.value} · TTL {value.ttl}s</code>{/each}

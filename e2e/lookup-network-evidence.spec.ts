@@ -71,8 +71,8 @@ test('selected resolver review uses the observed child hostname and leaves the o
   await action.click();
   const results = panel.getByRole('status', { name: 'Resolver comparison results' });
   await expect(results).toBeVisible();
-  await expect(results.getByRole('heading', { name: 'A incomplete', exact: true })).toBeVisible();
-  await expect(results.getByRole('heading', { name: 'AAAA converged', exact: true })).toBeVisible();
+  await expect(results.getByRole('heading', { name: /^A incomplete$/iu })).toBeVisible();
+  await expect(results.getByRole('heading', { name: /^AAAA converged$/iu })).toBeVisible();
   await expect(results).toContainText('2001:db8::1');
   await expect(dns).toContainText('192.0.2.10');
   expect(requests).toBe(1);

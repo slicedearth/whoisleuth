@@ -2,6 +2,7 @@
   import { onDestroy, untrack } from 'svelte';
   import { loadDeferredModule } from '#lib/deferred-module.ts';
   import { downloadLocalFile } from '#lib/download-local-file.ts';
+  import { tokenLabel } from '../../../../packages/analysis/display-label.mts';
   import { BIMI_CERTIFICATE_INPUT_SCHEMA, BIMI_CERTIFICATE_VERSION, MAX_BIMI_PEM_BYTES, MAX_BIMI_LOGO_BYTES, MAX_BIMI_INPUT_BYTES } from '../../../../packages/contracts/bimi-certificate.mts';
   import type { reviewBimiCertificate } from '../../../../packages/evidence/bimi-certificate-review.mts';
   let { contextId }: { contextId: string } = $props();
@@ -79,7 +80,7 @@
       <section aria-labelledby={headingId}>
         <header><h3 id={headingId}>{report.domain}</h3><button class="btn" type="button" onclick={download}>Download review</button></header>
         <p>{report.state === 'checks_passed' ? 'The supported checks passed.' : 'Some checks need review.'} Reviewed {new Date(report.reviewedAt).toLocaleString()}.</p>
-        <dl>{#each report.checks as check (check.id)}<div><dt>{check.label}</dt><dd><strong>{check.state.replaceAll('_', ' ')}</strong><span>{check.detail}</span></dd></div>{/each}</dl>
+        <dl>{#each report.checks as check (check.id)}<div><dt>{check.label}</dt><dd><strong>{tokenLabel(check.state)}</strong><span>{check.detail}</span></dd></div>{/each}</dl>
         <details class="compact-disclosure"><summary>Verification scope and file digests</summary><ul>{#each report.limitations as limitation}<li>{limitation}</li>{/each}</ul><p>Certificate SHA-256: <code>{report.certificate.digestSha256}</code></p>{#each report.selectedAnchorDigests as digest}<p>Selected anchor SHA-256: <code>{digest}</code></p>{/each}</details>
       </section>
     {/if}
@@ -87,6 +88,6 @@
 </details>
 
 <style>
-  .bimi-review{margin-top:18px;border-top:1px solid var(--border);padding-top:12px}summary{font-weight:700}summary>span{float:inline-end;margin-inline-start:12px;color:var(--muted);font-size:var(--text-xs)}.bimi-review>div{padding-top:10px;min-width:0}p,li{font-size:var(--text-sm);line-height:1.6;color:var(--muted)}form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}label{display:grid;align-content:start;gap:6px;font-weight:650;font-size:var(--text-sm);min-width:0}small{color:var(--muted);font-size:var(--text-xs);font-weight:400;line-height:1.5}input{width:100%;min-width:0}input[type="file"]{font-size:var(--text-xs)}.actions{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px}header{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:center}h3{margin:0;font-family:var(--mono);overflow-wrap:anywhere}section{margin-top:20px}dl{display:grid;gap:0;margin-block:12px}dl>div{padding-block:10px;border-top:1px solid var(--border);min-width:0}dt{font-weight:650;font-size:var(--text-sm)}dd{display:grid;grid-template-columns:minmax(90px,.25fr) minmax(0,1fr);gap:12px;margin:6px 0 0;font-size:var(--text-xs);line-height:1.6}dd>strong{text-transform:capitalize;color:var(--interface-accent)}dd>span{color:var(--muted)}code{overflow-wrap:anywhere;white-space:normal}
+  .bimi-review{margin-top:18px;border-top:1px solid var(--border);padding-top:12px}summary{font-weight:700}summary>span{float:inline-end;margin-inline-start:12px;color:var(--muted);font-size:var(--text-xs)}.bimi-review>div{padding-top:10px;min-width:0}p,li{font-size:var(--text-sm);line-height:1.6;color:var(--muted)}form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}label{display:grid;align-content:start;gap:6px;font-weight:650;font-size:var(--text-sm);min-width:0}small{color:var(--muted);font-size:var(--text-xs);font-weight:400;line-height:1.5}input{width:100%;min-width:0}input[type="file"]{font-size:var(--text-xs)}.actions{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px}header{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:center}h3{margin:0;font-family:var(--mono);overflow-wrap:anywhere}section{margin-top:20px}dl{display:grid;gap:0;margin-block:12px}dl>div{padding-block:10px;border-top:1px solid var(--border);min-width:0}dt{font-weight:650;font-size:var(--text-sm)}dd{display:grid;grid-template-columns:minmax(90px,.25fr) minmax(0,1fr);gap:12px;margin:6px 0 0;font-size:var(--text-xs);line-height:1.6}dd>strong{color:var(--interface-accent)}dd>span{color:var(--muted)}code{overflow-wrap:anywhere;white-space:normal}
   @media(max-width:640px){form{grid-template-columns:minmax(0,1fr)}dd{grid-template-columns:minmax(0,1fr);gap:4px}}
 </style>
