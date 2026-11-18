@@ -707,8 +707,8 @@ test('a completed Case action cannot publish beneath a replacement Lookup', asyn
 
 test('a delayed replay comparison cannot rebind to a replacement primary capture', async ({ page }, testInfo) => {
   const replay = page.locator('details.replay');
-  await replay.locator('summary').focus();
-  await replay.locator('summary').press('Enter');
+  await replay.locator(':scope > summary').focus();
+  await replay.locator(':scope > summary').press('Enter');
   if (captureVisualEvidenceEnabled()) {
     for (const theme of ['dark', 'light'] as const) {
       await useTheme(page, theme);
