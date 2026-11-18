@@ -106,7 +106,7 @@ test('native hosted adapter propagates request abort into its admitted service o
   await running; assert.equal(aborted, true);
 });
 
-test('Express feed routes reject a saturated client before authentication, parsing or service work', async t => {
+test('the shared API budget rejects a saturated client before authentication, parsing or service work', async t => {
   const previousProxy = process.env.TRUST_PROXY;
   process.env.TRUST_PROXY = '1';
   t.after(() => { if (previousProxy === undefined) delete process.env.TRUST_PROXY; else process.env.TRUST_PROXY = previousProxy; });
@@ -135,6 +135,7 @@ test('Express feed routes reject a saturated client before authentication, parsi
     await request('{"operation":"status"}'),
     await request('{', { cookie: '', origin: 'https://other.example', 'content-encoding': 'gzip' }),
     await request('', { cookie: '', origin: 'https://other.example' }, 'GET'),
+    await fetch(`${origin}/api/resolver-compare?q=fixture%20invalid`, { headers: { 'x-forwarded-for': '192.0.2.71' } }),
   ]) {
     assert.equal(response.status, 429);
     const retryAfter = Number(response.headers.get('retry-after'));
