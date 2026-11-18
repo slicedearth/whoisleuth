@@ -4,6 +4,54 @@ import { resolve } from 'node:path';
 import {
   buildLookupEvidence,
 } from '../frontend/src/lib/analysis/evidence-export';
+import { ctInclusionFixture, timestampTokenFixture } from '../fixtures/cryptographic-proofs.mts';
+import { expectNoHorizontalOverflow, useTheme } from './helpers';
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
+
+test('selected proof files are reviewed locally with separate cryptographic results and no collection', async ({ page }, testInfo) => {
+  let requests = 0;
+  await page.route('**/api/lookup**', route => { requests++; return route.abort(); });
+  await page.goto('/lookup');
+  await page.locator('details.replay > summary').click();
+  const proof = page.locator('details.proof-review');
+  await proof.locator(':scope > summary').click();
+  const ct = await ctInclusionFixture();
+  for (const [label, value] of [
+    ['Leaf input', ct.leafInputBase64], ['Inclusion proof JSON', JSON.stringify({ leaf_index: ct.leafIndex, audit_path: ct.auditPath })],
+    ['Signed tree head JSON', JSON.stringify(ct.signedTreeHead)], ['Selected log public key', ct.logKeySpkiBase64], ['Independently selected log ID', ct.logIdBase64],
+  ]) await proof.getByLabel(new RegExp(`^${label}`, 'u')).setInputFiles({ name: 'selected.txt', mimeType: 'text/plain', buffer: Buffer.from(value!) });
+  await proof.getByRole('button', { name: 'Review selected proof', exact: true }).click();
+  await expect(proof.getByRole('heading', { name: 'Supported proof checks passed', exact: true })).toBeVisible();
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) await proof.screenshot({ path: testInfo.outputPath(`proof-${width}-${theme}.png`) });
+    }
+  }
+  await expect(proof).toContainText('Tree signature');
+  await proof.getByRole('combobox', { name: 'Proof family', exact: true }).selectOption('timestamp');
+  await expect(proof.getByRole('heading')).toHaveCount(0);
+  const timestamp = await timestampTokenFixture();
+  for (const [label, bytes] of [
+    ['Original artefact', Buffer.from(timestamp.artifactBase64, 'base64')], ['CMS timestamp token DER', Buffer.from(timestamp.tokenDerBase64, 'base64')],
+    ['Selected trusted CA anchors PEM', Buffer.from(timestamp.trustAnchorsPem)], ['Revocation lists DER', Buffer.from(timestamp.crlsDerBase64[0]!, 'base64')],
+  ] as const) await proof.getByLabel(new RegExp(`^${label}`, 'u')).setInputFiles({ name: 'selected.bin', mimeType: 'application/octet-stream', buffer: bytes });
+  await proof.getByLabel('Expected policy OID', { exact: true }).fill(timestamp.expectedPolicyOid);
+  await proof.getByLabel('Expected nonce hex (optional)', { exact: true }).fill(timestamp.expectedNonceHex);
+  await proof.getByRole('button', { name: 'Review selected proof', exact: true }).click();
+  await expect(proof.getByRole('heading', { name: 'Supported proof checks passed', exact: true })).toBeVisible();
+  const download = page.waitForEvent('download');
+  await proof.getByRole('button', { name: 'Download proof review', exact: true }).click();
+  const chunks: Buffer[] = []; for await (const chunk of (await (await download).createReadStream())!) chunks.push(Buffer.from(chunk));
+  const report = Buffer.concat(chunks).toString('utf8');
+  expect(JSON.parse(report).networkRequestsMade).toBe(false);
+  expect(report).not.toContain(timestamp.artifactBase64); expect(report).not.toContain('BEGIN CERTIFICATE');
+  await proof.getByRole('button', { name: 'Clear proof files', exact: true }).click();
+  await expect(proof.getByRole('heading')).toHaveCount(0);
+  expect(requests).toBe(0);
+});
 
 function replayEvidence(target = 'legacy.example.test'): Record<string, unknown> {
   return buildLookupEvidence({
@@ -142,7 +190,7 @@ test('offline replay uses isolated graph identifiers and has no live evidence li
 
   const comparisonEvidence = structuredClone(replayEvidence('example.test'));
   (comparisonEvidence.application as Record<string, unknown>).version = '1.35.0';
-  await replay.locator('input[type="file"]').last().setInputFiles({
+  await replay.getByLabel('Choose second evidence JSON', { exact: true }).setInputFiles({
     name: 'lookup-evidence-comparison.json',
     mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify(comparisonEvidence)),

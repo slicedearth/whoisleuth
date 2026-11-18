@@ -4,6 +4,24 @@ import net from 'node:net';
 import { reviewTimestampToken } from '../packages/evidence/timestamp-token.mts';
 import { timestampTokenFixture, PROOF_REVIEW_TIME } from '../fixtures/cryptographic-proofs.mts';
 import { runCli } from '../cli/runner.mts';
+import { assembleSelectedProofInput } from '../packages/evidence/selected-proof-input.mts';
+
+test('selected timestamp files preserve exact bytes, explicit trust and absent revocation evidence', async () => {
+  const input = await timestampTokenFixture();
+  const files = { artifact: [new File([Buffer.from(input.artifactBase64, 'base64')], 'artefact.bin')],
+    token: [new File([Buffer.from(input.tokenDerBase64, 'base64')], 'token.der')],
+    anchors: [new File([input.trustAnchorsPem], 'anchors.pem')], crls: input.crlsDerBase64.map(value => new File([Buffer.from(value, 'base64')], 'issuer.crl')) };
+  const fields = { policy: input.expectedPolicyOid, nonce: input.expectedNonceHex };
+  const assembled = await assembleSelectedProofInput('timestamp', files, fields);
+  assert.deepEqual(assembled, input);
+  assert.equal((await reviewTimestampToken(assembled, PROOF_REVIEW_TIME)).state, 'checks_passed');
+  const incomplete = await reviewTimestampToken(await assembleSelectedProofInput('timestamp', { ...files, crls: [] }, fields), PROOF_REVIEW_TIME);
+  assert.equal(incomplete.checks.find(check => check.id === 'revocation')?.state, 'not_supplied');
+  assert.equal(incomplete.state, 'review_required');
+  await assert.rejects(assembleSelectedProofInput('timestamp', { ...files, crls: Array(7).fill(files.crls[0]) }, fields), TypeError);
+  const abort = new AbortController(); abort.abort();
+  await assert.rejects(assembleSelectedProofInput('timestamp', files, fields, abort.signal), { name: 'AbortError' });
+});
 
 test('offline timestamp review checks actual CMS, imprint, signer binding, selected trust and CRLs separately', async t => {
   t.mock.method(globalThis, 'fetch', () => assert.fail('Timestamp verification attempted fetch'));

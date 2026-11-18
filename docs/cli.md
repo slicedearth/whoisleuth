@@ -175,6 +175,16 @@ settings, without running the networked settings review.
 inputs. Keep the original material separately; reports contain digests and
 independent check outcomes, not the original bytes.
 
+For guided file selection, run `review-evidence --assist-proof ct` or
+`review-evidence --assist-proof timestamp` (also available in the interactive
+launcher). Prompts go to stderr; JSON output remains separate. CT review takes
+base64 leaf/key/log-ID files and the original proof/STH JSON. The declared log
+ID must be selected independently; it is not invented from the key. Timestamp
+review takes the original artefact, CMS token DER, selected anchor PEM, optional
+CRL DER files, expected policy and optional nonce. No input file is rewritten.
+The browser offers the same selected-file workflow under Lookup’s offline
+evidence section, with cancellation and a digest-only review download.
+
 - `whoisleuth.ct-inclusion-proof.input`: `protocol: "rfc6962-v1"`,
   `leafInputBase64`, `leafIndex`, `auditPath` (base64 SHA-256 nodes),
   `signedTreeHead` with `tree_size`, `timestamp`, `sha256_root_hash` and

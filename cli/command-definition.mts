@@ -340,6 +340,7 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--public-key-file': file('Read the public verification key from this local file.'),
   '--trust-store-file': file('Read the analyst-selected signer trust store.'),
   '--mmdb': file('Read one selected local MMDB (up to 512 MiB); version-2 queries require a justified freshness policy.'),
+  '--assist-proof': enumeration('Select bounded local proof files interactively; prompts use stderr and no request is made.', ['ct', 'timestamp']),
   '--audience': enumeration('Choose the export audience and its field-disclosure policy.', ['internal', 'trusted', 'public']),
   '--reviewed': flag('Confirm the required human review of the exported material.'),
   '--previous': file('Compare against this earlier retained report.'),

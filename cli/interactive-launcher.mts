@@ -56,12 +56,15 @@ async function launchInteractiveCli(options: InteractiveLauncherOptions): Promis
       '  4  List commands',
       '  5  Browse a saved Lookup (offline)',
       '  6  Compare two saved Lookups (offline)',
+      '  7  Review selected certificate-log proof files (offline)',
+      '  8  Review selected timestamp-token files (offline)',
       '  q  Exit',
       '',
     ].join('\n'));
   const selection = (await ask('Select: ')).toLowerCase();
   if (selection === 'q' || selection === 'quit' || selection === 'exit' || selection === '') return null;
   if (selection === '4') return ['commands'];
+  if (selection === '7' || selection === '8') return ['review-evidence', '--assist-proof', selection === '7' ? 'ct' : 'timestamp'];
   if (selection === '5' || selection === '6') {
     const left = await ask(selection === '5' ? 'Saved Lookup file: ' : 'Earlier or left Lookup file: ');
     if (!left || left === '-') throw new CliUsageError('Choose a named saved Lookup file.');

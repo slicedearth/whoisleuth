@@ -91,6 +91,7 @@ type ReviewEvidenceArguments = {
   action: 'review-evidence';
   source: string | null;
   mmdbSource: string | null;
+  assistProof?: 'ct' | 'timestamp';
   output: 'terminal' | 'json';
   strictExit: boolean;
 } & TerminalOptions;
@@ -236,6 +237,7 @@ export const REVIEW_ARGUMENT_PARSERS = Object.freeze({
     action: 'review-evidence',
     source: parsed.positionalValue('source'),
     mmdbSource: parsed.optionValue('--mmdb'),
+    ...(parsed.hasOption('--assist-proof') ? { assistProof: parsed.optionValue('--assist-proof') as 'ct' | 'timestamp' } : {}),
     output: jsonOutput(parsed),
     strictExit: parsed.hasOption('--strict-exit'),
     ...terminalOptions(parsed),

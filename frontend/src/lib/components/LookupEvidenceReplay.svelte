@@ -13,6 +13,7 @@
   import CasePicker from './CasePicker.svelte';
   import IntelligenceIcon from './IntelligenceIcon.svelte';
   import CopyableCommand from './CopyableCommand.svelte';
+  import SelectedProofReview from './SelectedProofReview.svelte';
   import { buildLookupEvidenceReplayDiff } from '#lib/analysis/lookup-evidence-replay-diff.ts';
 
   let replay = $state<LookupEvidenceReplay | null>(null);
@@ -218,6 +219,7 @@
 
       </section>
     {/if}
+    <SelectedProofReview />
   </div>
 </details>
 

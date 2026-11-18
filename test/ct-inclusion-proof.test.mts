@@ -3,6 +3,31 @@ import { test } from 'node:test';
 import { ctInclusionFixture, PROOF_REVIEW_TIME } from '../fixtures/cryptographic-proofs.mts';
 import { reviewCtInclusionProof } from '../packages/evidence/ct-inclusion-proof.mts';
 import { runCli } from '../cli/runner.mts';
+import { assembleSelectedProofInput } from '../packages/evidence/selected-proof-input.mts';
+import { runSelectedProofOperation } from '../frontend/src/lib/retained-review-worker-model.ts';
+
+test('selected files and assisted production CLI use the same proof without deriving the declared key identity', async () => {
+  const input = await ctInclusionFixture();
+  const material = { leaf: input.leafInputBase64, proof: JSON.stringify({ leaf_index: input.leafIndex, audit_path: input.auditPath }),
+    head: JSON.stringify(input.signedTreeHead), key: input.logKeySpkiBase64, logId: input.logIdBase64 };
+  const files = Object.fromEntries(Object.entries(material).map(([id, value]) => [id, [new File([value], `${id}.txt`)]]));
+  assert.deepEqual(await assembleSelectedProofInput('ct', files), input);
+  const worker = await runSelectedProofOperation({ kind: 'proof', proofKind: 'ct', files, fields: {}, evaluatedAt: PROOF_REVIEW_TIME });
+  assert.equal(worker.kind, 'proof');
+  if (worker.kind === 'proof') assert.equal(worker.result.state, 'checks_passed');
+  let index = 0, stdout = '';
+  const names = Object.keys(material);
+  const dependencies = { now: () => PROOF_REVIEW_TIME, proofQuestion: async () => names[index++]!,
+    readBinaryArtifactInput: (id: string) => Buffer.from(material[id as keyof typeof material]),
+    stdout: { write(value: string) { stdout += value; } }, stderr: { write() {} },
+    runUnifiedLookup: () => assert.fail('Assisted review cannot collect') };
+  assert.equal(await runCli(['review-evidence', '--assist-proof', 'ct', '--json', '--strict-exit'], dependencies), 0);
+  assert.equal(JSON.parse(stdout).result.state, 'checks_passed');
+  material.logId = Buffer.alloc(32, 1).toString('base64'); index = 0;
+  assert.equal(await runCli(['review-evidence', '--assist-proof', 'ct', '--quiet', '--strict-exit'], dependencies), 4);
+  await assert.rejects(assembleSelectedProofInput('ct', { ...files, leaf: [{ size: 1_000_000, arrayBuffer: async () => assert.fail('Oversized material must not be read') }] }), TypeError);
+  await assert.rejects(assembleSelectedProofInput('ct', { ...files, proof: [new File(['{"leaf_index":0,"leaf_index":1,"audit_path":[]}'], 'proof.json')] }), TypeError);
+});
 
 test('verifies signed independent trees, including unequal branches and the empty single-leaf path', async () => {
   for (const options of [{ index: 0 }, { index: 1 }, { index: 2 }, { size: 1, index: 0 }, { rsa: true }, { size: 7, index: 5, precertificate: true }]) {

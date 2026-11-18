@@ -176,13 +176,13 @@ export const REVIEW_COMMAND_DEFINITIONS = Object.freeze({
   }),
   "review-evidence": commandSeed({
     reference: {
-      description: 'Review supplied protocol evidence, certificate-log inclusion proofs, timestamp tokens, BIMI certificate/logo material, selected warning lists, monitoring workload plans, infrastructure snapshots/comparisons, incident sequences, domain history, platform objects, storefronts, connector configuration or an explicitly selected internal containment handoff offline.',
+      description: 'Review supplied protocol evidence, certificate-log inclusion proofs, timestamp tokens, BIMI certificate/logo material, selected warning lists, monitoring workload plans, infrastructure snapshots/comparisons, incident sequences, domain history, platform objects, storefronts, connector configuration or an explicitly selected internal containment handoff offline. Use --assist-proof ct or --assist-proof timestamp for guided selection of raw local proof files instead of preparing JSON; prompts use stderr and require a terminal.',
       example: 'whoisleuth review-evidence domain-change.json --json --strict-exit',
       boundary: 'The command reads only the supplied document and, with --mmdb, one explicitly selected local database up to 512 MiB. MMDB parsing and lookup run in one disposable worker with a ten-second processing deadline and an 8 KiB result limit. Version-2 MMDB queries require a justified age policy; unavailable or partial current reviews return 4 under --strict-exit. Historical version-1 MMDB queries preserve their output without freshness admission. Domain-history v2 accepts explicit source-linked registration boundaries; v1 retains its original semantics. Internal containment selects retained next-step assertions and supporting pins after explicit audience-disclosure review; it does not change their state or execute controls. No database is bundled, downloaded, updated or transmitted. It performs no DNS, RDAP, BGP, GeoIP-provider, TLS, HTTP, certificate-authority, or SMTP request.',
     },
     collection: { scope: 'Reads one bounded versioned evidence or request-planning document and, only with --mmdb, one selected bounded local database. Performs no collection.' },
     summary: 'Review supplied evidence offline',
-    options: ['--mmdb', '--json', '--strict-exit', '--quiet', '--no-color'],
+    options: ['--assist-proof', '--mmdb', '--json', '--strict-exit', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
     handlerOwner: 'review',

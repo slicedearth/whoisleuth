@@ -62,10 +62,12 @@ import type { IntakeCommandDependencies } from './intake-command.mts';
 import type { IndicatorSetCommandDependencies } from './indicator-set-command.mts';
 import { MAX_SAVED_LOOKUP_INPUT_BYTES } from './saved-lookup.mts';
 import { REVIEW_INLINE_COMMANDS } from './inline-command-families.mts';
+import { readAssistedProofInput } from './selected-proof-input.mts';
 
 import { runDiscriminatedCommandHandler, type DiscriminatedCommandHandlerMap } from './discriminated-command-handlers.mts';
 
 export type ReviewCommandDependencies = CaseCommandDependencies & IntakeCommandDependencies & IndicatorSetCommandDependencies & {
+  proofQuestion?: (prompt: string) => Promise<string>;
   readArtifactInput?: (source?: string | null) => string | Promise<string>;
   readBinaryArtifactInput?: (source: string) => Uint8Array | Promise<Uint8Array>;
   readSourceReliabilityInput?: (source?: string | null) => string | Promise<string>;
@@ -304,7 +306,12 @@ async function runOfflineEvidenceReviewCommand(
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Offline evidence review');
-  const input = await readReviewInput(
+  if (args.assistProof && (args.source || args.mmdbSource)) throw new CliUsageError('Assisted proof review cannot be combined with a JSON input or MMDB file.');
+  const input = args.assistProof ? JSON.stringify(await readAssistedProofInput(args.assistProof, {
+    output: context.stderr, ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+    ...(dependencies.proofQuestion ? { question: dependencies.proofQuestion } : {}),
+    ...(dependencies.readBinaryArtifactInput ? { readFile: dependencies.readBinaryArtifactInput } : {}),
+  })) : await readReviewInput(
     async () => dependencies.readArtifactInput
       ? await dependencies.readArtifactInput(args.source)
       : await context.readInput(args.source, MAX_OFFLINE_EVIDENCE_INPUT_BYTES, 'Offline evidence input'),

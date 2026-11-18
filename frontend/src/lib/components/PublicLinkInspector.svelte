@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { beforeNavigate } from '$app/navigation';
+  import AuthorisationLinkFacts from './AuthorisationLinkFacts.svelte';
   import { inspectPublicLinks, MAX_PUBLIC_LINK_TEXT_BYTES, MAX_PUBLIC_LINK_URL_BYTES, PUBLIC_LINK_EXAMPLE,
     type PublicLinkInputKind, type PublicLinkInspection } from '#lib/analysis/public-link-inspector.ts';
 
@@ -94,7 +95,7 @@
             <pre>{exactUrl}</pre>
             <button type="button" class="btn small" onclick={() => void copy(exactUrl)} aria-label={`Copy parsed URL for link ${index + 1}`}>Copy parsed URL</button>
           </details>{:else}<p>Parsed URL unavailable.</p>{/if}
-          {#if link.authorisation}<details><summary>Supplied authorisation parameters</summary><p>These parameters are supplied text, not a verified application or permission grant.</p><dl><div><dt>Type</dt><dd>{link.authorisation.kind === 'device_code_reference' ? 'Device-code reference' : 'Authorisation parameters'}</dd></div><div><dt>Scopes</dt><dd>{link.authorisation.scopes.join(', ') || 'Not recorded'}</dd></div></dl>{#if link.authorisation.duplicateParameters.length}<p>Repeated parameters: {link.authorisation.duplicateParameters.join(', ')}. Ambiguous values remain unrecorded.</p>{/if}{#if link.authorisation.omittedParameters}<p>Unsupported or ambiguous parameter values were omitted.</p>{/if}</details>{/if}
+          {#if link.authorisation}<details><summary>Supplied authorisation parameters</summary><AuthorisationLinkFacts review={link.authorisation} /></details>{/if}
         </article>
       {/each}
     </section>

@@ -652,7 +652,10 @@ Offline certificate-log and timestamp-token review reads only deliberately
 selected proof/token, artefact, key, policy, certificate and revocation material.
 No log, issuer, authority, CRL or OCSP request occurs and no ambient trust store
 is used. Reports contain file digests and separate check outcomes, not original
-material. The operator controls retention of CLI input and output files.
+material. Browser file review uses one cancellable worker and retains material
+only in the current view until cleared or closed; downloads contain the review,
+not original files. Assisted CLI prompts remain on stderr and do not rewrite
+inputs. The operator controls retention of CLI input and output files.
 
 Monitoring workload previews read existing watchlists without scheduling,
 collecting or saving new data. Selected shared-service/scanner context compares

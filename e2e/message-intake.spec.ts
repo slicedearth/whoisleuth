@@ -6,6 +6,30 @@ import { expectNoHorizontalOverflow, readBrowserLocalCollection, useTheme } from
 import { CASE_SCHEMA_VERSION } from '../packages/cases/case-record-contracts.mts';
 import AxeBuilder from '@axe-core/playwright';
 
+test('authorisation requests expose response and prompt intent without opening a destination', async ({ page }) => {
+  let collections = 0;
+  await page.route(url => isLookupEndpointUrl(url.href), route => { collections++; return route.abort(); });
+  const link = 'https://identity.example/authorize?client_id=client-1&scope=openid&response_type=none&prompt=none&redirect_uri=https%3A%2F%2Freturn.example%2Fprivate%3Ftoken%3Dprivate-value';
+  await page.goto('/link-inspector');
+  await page.getByLabel('Link to inspect', { exact: true }).fill(link);
+  await page.getByRole('button', { name: 'Review links', exact: true }).click();
+  await page.getByText('Supplied authorisation parameters', { exact: true }).click();
+  const facts = page.locator('.authorisation-facts').first();
+  await expect(facts.locator('div', { has: page.getByText('Requested response type', { exact: true }) })).toContainText('none');
+  await expect(facts.locator('div', { has: page.getByText('Requested prompt', { exact: true }) })).toContainText('none');
+  await expect(facts).toContainText('https://return.example');
+  await expect(facts).not.toContainText('private-value');
+  const displayedFacts = await facts.textContent();
+  await page.goto('/lookup');
+  await page.getByText('Review a message, link or selected file', { exact: true }).click();
+  const intake = page.locator('details.intake');
+  await intake.getByLabel('Text to review').fill(link);
+  await intake.getByRole('button', { name: 'Review locally', exact: true }).click();
+  await expect(intake.locator('.authorisation-facts').first()).toHaveText(displayedFacts!);
+  await expect(intake.locator('.authorisation-facts').first()).toContainText('No interactive sign-in prompt is requested.');
+  expect(collections).toBe(0);
+});
+
 test('authentication headers retain separate receiver choices, nested provenance and private-safe exports', async ({ page }, testInfo) => {
   let collections = 0;
   await page.route(url => isLookupEndpointUrl(url.href), route => { collections++; return route.abort(); });

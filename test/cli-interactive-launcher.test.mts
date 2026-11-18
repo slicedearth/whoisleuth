@@ -44,6 +44,8 @@ describe('interactive CLI launcher', () => {
     for (const [answers, expected] of [
       [['5', '-retained.json'], ['view', '--browse', '--', '-retained.json']],
       [['6', 'left.json', 'right.json'], ['diff', '--browse', '--', 'left.json', 'right.json']],
+      [['7'], ['review-evidence', '--assist-proof', 'ct']],
+      [['8'], ['review-evidence', '--assist-proof', 'timestamp']],
     ]) {
       assert.deepEqual(await launchInteractiveCli({ ...launcherFixture(), question: questionAnswers(answers!), environment: { TERM: 'xterm' } }), expected);
     }
