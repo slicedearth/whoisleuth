@@ -19,7 +19,7 @@ import { extractHtmlSignals } from '../lib/html-signals.mts';
 import { LEGACY_WEBSITE_SNAPSHOTS_KEY } from '../frontend/src/lib/browser-local-data-contract.ts';
 import { brandPostureObservationContext, normalizeBrandProfile } from '../packages/workspace/brand-profile-model.mts';
 import type { DomainPostureHttpResponse } from '../frontend/src/lib/analysis/client-response-contracts';
-import { bimiCertificateFixture, BIMI_REVIEW_TIME } from '../test/bimi-certificate-fixture.mts';
+import { bimiCertificateFixture, BIMI_REVIEW_TIME } from '../fixtures/bimi-certificate.mts';
 
 const PROFILES_KEY = 'whois-rdap-brand-profiles-v1';
 const ACTIVE_KEY = 'whois-rdap-active-brand-profile-v1';

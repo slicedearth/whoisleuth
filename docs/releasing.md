@@ -36,8 +36,10 @@ npm run release:prepare -- <version>
 ```
 
 Replace `<version>` with the chosen semantic version. This updates the root
-manifest and lockfile, regenerates version-derived public examples through their
-owner, then runs `release:check`. Review the complete diff before committing.
+manifest and lockfile, regenerates version-derived public examples and synthetic
+storage-byte measurements through their existing owners, then runs
+`release:check`. Review the complete generated diff before committing; the
+measurement writer does not change storage limits.
 Existing release tags are refused; no tag or publication is created. See
 [local verification](getting-started.md#verification) for the shared check path.
 

@@ -8,6 +8,7 @@ import { requireJsonRecord as record } from './maintainer-tool-helpers.mts';
 import type { RunInstalledCli } from './installed-cli-check.mts';
 import { CLI_INVESTIGATION_RUN_SCHEMA, CLI_INVESTIGATION_RUN_VERSION, MAX_INVESTIGATION_RUN_BYTES } from '../packages/contracts/investigation-run.mts';
 import { checkInstalledDomainFeed } from './cli-domain-feed-package-check.mts';
+import { bimiCertificateFixture } from '../fixtures/bimi-certificate.mts';
 
 /** Offline resumption, retained artefact reuse and independent review approval. */
 export async function checkInstalledCliWorkflows(repositoryRoot: string, temporaryRoot: string, run: RunInstalledCli): Promise<void> {
@@ -135,6 +136,28 @@ export async function checkInstalledLocalMmdb(repositoryRoot: string, temporaryR
 }
 
 async function checkInstalledIntakeAndContext(repositoryRoot: string, temporaryRoot: string, run: RunInstalledCli): Promise<void> {
+  const markInput = await bimiCertificateFixture({ reviewedAt: new Date().toISOString() });
+  const markFile = path.join(temporaryRoot, 'selected-mark-certificate.json');
+  await writeFile(markFile, JSON.stringify(markInput), { flag: 'wx', mode: 0o600 });
+  const markOutput = await run(['review-evidence', markFile, '--json', '--strict-exit'], 'offline mark-certificate and logo review');
+  const markReview = record(record(JSON.parse(markOutput), 'Installed mark review').result, 'Mark result');
+  if (markReview.state !== 'checks_passed' || markReview.domain !== 'example.test'
+    || /BEGIN CERTIFICATE|data:image|<svg|Example Mark Root/u.test(markOutput)) {
+    throw new TypeError('Installed mark-certificate review lost its cryptographic or privacy boundary.');
+  }
+  await writeFile(markFile, JSON.stringify({ ...markInput, domain: 'other.example.test' }));
+  const mismatch = record(record(JSON.parse(await run(['review-evidence', markFile, '--json', '--strict-exit'],
+    'offline mark-certificate hostname mismatch', 4)), 'Installed mark mismatch').result, 'Mark mismatch result');
+  if (mismatch.state !== 'review_required') throw new TypeError('Installed mark review admitted a different hostname.');
+
+  const reconFile = path.join(temporaryRoot, 'selected-recon.jsonl');
+  await writeFile(reconFile, JSON.stringify({ host: 'child.example.test', timestamp: '2026-10-01T00:00:00.000Z', a: ['192.0.2.10'] }) + '\n', { flag: 'wx', mode: 0o600 });
+  const recon = record(JSON.parse(await run(['map-observations', reconFile, '--input-format', 'dnsx-jsonl', '--json'],
+    'offline reconnaissance JSONL import', 0, /^Imported preview: [^\r\n]+\r?\n$/u)), 'Installed recon conversion');
+  if (!Array.isArray(recon.findings) || recon.findings.length !== 1
+    || record(recon.findings[0], 'Recon finding').domain !== 'child.example.test') {
+    throw new TypeError('Installed reconnaissance conversion lost its exact hostname.');
+  }
   const emailFile = path.join(temporaryRoot, 'selected-message.eml');
   await writeFile(emailFile, 'From: private-local-part@sender.example\r\nContent-Type: text/html\r\n\r\n<a href="https://destination.example/private?token=excluded-value">https://sender.example</a>', { flag: 'wx', mode: 0o600 });
   const intake = record(JSON.parse(await run(['intake', 'email', emailFile, '--reported-action', 'entered_password', '--json'], 'offline message and identity intake')), 'Installed intake');

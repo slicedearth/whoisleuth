@@ -85,6 +85,23 @@ select for local review. `lookup.json` is the saved CLI document from the
 example above. Bulk performs collection; the mail-header and comparison
 commands in this example are offline.
 
+Existing dnsx/httpx JSONL results can be converted without collecting again:
+
+```bash
+whoisleuth map-observations dns-results.jsonl --input-format dnsx-jsonl --json --output findings.json
+```
+
+Choose the corresponding producer in the console’s external-findings importer,
+or import the converted file after reviewing its preview. Hostname, source time,
+original-row digest and unknown collection quality remain attributed.
+
+Optional read-only MCP access serves only explicitly selected local files over
+stdio and requires disclosure acknowledgement. Offline BIMI checks use selected
+certificates, explicit CA anchors and an optional logo. Resolver comparisons and
+single-ASN directory context are separate opt-in network commands, not additions
+to normal Lookup. The [CLI guide](https://github.com/slicedearth/whoisleuth/blob/main/docs/cli.md#local-read-only-tool-adapter)
+covers their inputs, privacy and evidence limits.
+
 Use `whoisleuth commands --group respond --mode offline` to find local case,
 packet and handoff tools. The [case-file guide](https://github.com/slicedearth/whoisleuth/blob/main/docs/cli.md#local-case-files)
 covers ordinary case files, JSON inputs and conflict handling. Output written

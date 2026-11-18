@@ -480,6 +480,12 @@ Open **Optional sources** to select security.txt or external intelligence.
 Neither runs merely because Deep was chosen. The CLI's authorised DNSSEC and
 mail-transport actions are separate again and never run through browser Lookup.
 
+In **DNS evidence**, **Compare selected resolvers** asks two explicitly selected
+public HTTPS resolvers for the observed hostname’s A and AAAA records. It makes
+at most four requests and leaves the original Lookup unchanged. Review each
+question’s outcome beside the convergence state; failed or aliased evidence
+cannot establish empty agreement.
+
 ### Reading the result
 
 The result header identifies the completed target, collection depth and observation
@@ -687,6 +693,12 @@ disclosures. Closing a disclosure preserves its unsaved fields.
 Overview contains the allowlist and review summary; Assets lists the profile's
 domain relationships; Tools opens domain, mail, certificate and account-control
 reviews. The Brand profiles disclosure switches the explicitly active profile.
+
+Under the official-domain settings review, **BIMI certificate and logo
+review** checks selected certificate PEM, explicit CA-anchor PEM and an optional
+SVG locally. Path, validity, exact hostname, purpose and logo checks are reported
+separately. It makes no request and does not certify trademark rights, revocation
+or mailbox acceptance; the downloadable report excludes original material.
 
 **Choose Brand review references** optionally selects the saved compact page
 baseline and PNG files from explicitly associated cases. Up to four references
@@ -1676,6 +1688,13 @@ quota, recovery and deletion details.
 
 ## Reports, imports and exports
 
+Choose the dnsx or httpx producer when importing existing reconnaissance JSONL.
+The bounded offline preview preserves exact hostnames, supplied observation
+times and original-row digests, while leaving unknown collection quality
+explicit. Review the proposed Case facts before saving. See the
+[external-findings guide](external-findings-import.md#existing-reconnaissance-results)
+for the same CLI conversion and retained fields.
+
 In the external-findings preview, **Explain a field** compares the accepted
 hostname, observation time, evidence value or source label with the exact
 proposed case field. Copy either value without saving. This uses the existing
@@ -1774,11 +1793,12 @@ are true or current.
 - For a browser workspace, run `verify-artifact workspace.json --json` and
   `interchange-report workspace.json --json` before using the Dashboard import
   preview.
-- For a CLI Lookup, retain and verify the private `lookup.json` original, run
-  `whoisleuth export lookup.json --output evidence.json`, then verify the separate
-  `evidence.json` file. Select that evidence export in **Replay exported evidence**
-  in browser Lookup before retaining anything in a case. The private saved Lookup
-  and the privacy-minimised evidence export are different formats.
+- For a CLI Lookup, retain the private `lookup.json` original, then run
+  `whoisleuth export lookup.json --output evidence.json`. Export validates the
+  original; **Replay exported evidence** in browser Lookup validates the separate
+  evidence file before anything can be retained in a case. Use `verify-artifact`
+  separately for a structured verification report or trusted checksum comparison.
+  The private saved Lookup and privacy-minimised replay are different formats.
 - For a case handoff, choose the audience explicitly, run `sharing-review` on
   the separate package and review its redaction manifest before sharing it.
 

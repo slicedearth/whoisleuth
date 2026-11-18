@@ -96,6 +96,7 @@ Set a switch to `1`, `true`, `yes`, or `on` to disable that hosted feature:
 | `WHOISLEUTH_DISABLE_TLS_INTELLIGENCE` | Stops the one-connection TLS profile. |
 | `WHOISLEUTH_DISABLE_CERTIFICATE_TRANSPARENCY` | Blocks Certificate Transparency search. |
 | `WHOISLEUTH_DISABLE_DOMAIN_POSTURE` | Blocks official-domain posture audits. |
+| `WHOISLEUTH_DISABLE_RESOLVER_COMPARISON` | Blocks the separate selected-resolver action; disabling DNS intelligence also blocks it. |
 
 The authenticated capability report comes from the same policy enforced by
 Express and direct functions. A disabled endpoint returns HTTP 503 with
@@ -198,7 +199,7 @@ Network-heavy authenticated operations also acquire an immediate lease:
 | `registry_light` | Fast Lookup, RDAP, registry-scoped nameserver search, Fast availability | 12 | 36 |
 | `registry_deep` | Deep Lookup, WHOIS, Deep availability | 4 | 12 |
 | `certificate_search` | Certificate Transparency | 2 | 4 |
-| `posture_audit` | Official-domain settings review | 3 | 8 |
+| `posture_audit` | Official-domain settings review or explicitly selected resolver comparison | 3 | 8 |
 
 Closing an Express collection request cancels its active transports and stops
 further retries, referrals and enrichment. Its lease remains held until the

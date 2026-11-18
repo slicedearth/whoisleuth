@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import net from 'node:net';
 import { reviewBimiCertificate } from '../packages/evidence/bimi-certificate-review.mts';
 import { MAX_BIMI_LOGO_BYTES } from '../packages/contracts/bimi-certificate.mts';
-import { bimiCertificateFixture, BIMI_EXAMPLE_SVG, BIMI_REVIEW_TIME } from './bimi-certificate-fixture.mts';
+import { bimiCertificateFixture, BIMI_EXAMPLE_SVG, BIMI_REVIEW_TIME } from '../fixtures/bimi-certificate.mts';
 import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 
@@ -23,6 +23,9 @@ test('offline mark checks validate a real signed chain, exact domain and embedde
   const lineEndings = await reviewBimiCertificate({ ...input, logoSvg: input.logoSvg.replace(/\n/gu, '\r\n') }, BIMI_REVIEW_TIME);
   assert.equal(lineEndings.checks.find(check => check.id === 'selected_logo')!.state, 'matched');
   assert.notEqual(lineEndings.logo.selectedFileSha256, lineEndings.logo.embeddedSha256);
+  const laterClock = '2040-11-01T00:00:00.000Z';
+  const laterFixture = await bimiCertificateFixture({ reviewedAt: laterClock });
+  assert.equal((await reviewBimiCertificate(laterFixture, laterClock)).state, 'checks_passed');
 });
 
 test('a logo mismatch, wrong purpose, wrong hostname and untrusted path remain independent negative controls', async () => {

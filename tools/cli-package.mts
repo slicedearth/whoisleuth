@@ -192,18 +192,24 @@ const INSTALLED_INLINE_FAMILY_MODULES = Object.freeze([
   Object.freeze({ source: 'cli/history-command-runner.mjs', exportName: 'runHistoryCommand', label: 'history-family-handler' }),
 ]);
 export const CLI_RUNTIME_DEPENDENCIES = Object.freeze([
+  '@modelcontextprotocol/server',
   '@nuintun/qrcode',
+  '@peculiar/asn1-schema',
+  '@peculiar/asn1-x509-logotype',
   '@peculiar/x509',
+  'asn1js',
   'fast-png',
   'fflate',
   'maxmind',
   'parse5',
   'pdfjs-dist',
+  'pkijs',
   'postal-mime',
   'reflect-metadata',
   'saxes',
   'tldts',
   'undici',
+  'zod',
 ]);
 const CLI_PACKAGE_COMPILER_CONTEXT_FILES = Object.freeze([
   'frontend/package.json',

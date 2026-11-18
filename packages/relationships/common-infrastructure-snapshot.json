@@ -1,7 +1,7 @@
 {
   "schema": "whoisleuth.common-infrastructure",
   "version": 1,
-  "generatedAt": "2026-11-17T16:28:25.146Z",
+  "generatedAt": "2026-11-18T00:59:48.505Z",
   "source": {
     "project": "MISP warning-lists",
     "repository": "https://github.com/MISP/misp-warninglists",
@@ -20,7 +20,7 @@
       "sourcePath": "https://ip-ranges.amazonaws.com/ip-ranges.json",
       "sourceVersion": 20261117,
       "sourceDate": "2026-11-17",
-      "sourceDigestSha256": "71fe4266a5c1e8ff18a9fbc9ee9bd76e12c7f45426705322a80acf04da190f93",
+      "sourceDigestSha256": "674e7137fe5ec76736b3d296bd55f1b3fcd31f79fe8c57320ddb8cafa3390c3c",
       "values": [
         "1.178.1.0/24",
         "1.178.100.0/22",
@@ -4035,7 +4035,7 @@
         "71.136.64.0/18",
         "71.137.0.0/18",
         "71.152.0.0/17",
-        "72.150.20.0/23",
+        "72.150.20.0/24",
         "72.150.22.0/24",
         "72.21.192.0/19",
         "72.242.0.0/15",
@@ -4172,7 +4172,7 @@
         "2c0f:f248::/32"
       ],
       "verification": {
-        "observedAt": "2026-11-17T16:28:25.146Z",
+        "observedAt": "2026-11-18T00:59:48.505Z",
         "rangesSha256": "062fcd25d844185a05c1ef42b1f713e2277b5cd6882211698d7177bdf8d5a7c7",
         "sources": [
           {
@@ -4194,7 +4194,7 @@
       "sourcePath": "https://www.gstatic.com/ipranges/cloud.json",
       "sourceVersion": 20261117,
       "sourceDate": "2026-11-17",
-      "sourceDigestSha256": "f33eef7d650bda4bbc174e08f8fb977097a9733d39d9986f7bc9451186688b4a",
+      "sourceDigestSha256": "dda0c64b46e15fcc9f954235c09ac2c3e671a56246a212d534e5975abf879801",
       "values": [
         "104.154.113.0/24",
         "104.154.114.0/23",

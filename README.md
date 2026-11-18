@@ -107,6 +107,11 @@ npm exec --yes --ignore-scripts --package=@slicedearth/whoisleuth-cli -- whoisle
 [Getting started](docs/getting-started.md) for local development and browser
 tests, or the [CLI guide](docs/cli.md) for installed commands.
 
+Saved Lookups can be browsed and compared offline in the terminal. The CLI also
+offers selected-file assistant access, reconnaissance imports, certificate/logo
+checks and deliberate resolver or network-directory reviews; see the
+[offline tools and collection boundaries](docs/cli.md#first-commands).
+
 For changes to the project, see [Contributing](CONTRIBUTING.md) and the
 [Code of Conduct](CODE_OF_CONDUCT.md).
 
