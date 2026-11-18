@@ -165,7 +165,7 @@
     "dependency-cruiser": "^18.8.0",
     "fast-check": "^4.10.2",
     "prettier": "3.10.1",
-    "prettier-plugin-svelte": "4.1.1",
+    "prettier-plugin-svelte": "4.2.0",
     "retire": "^6.1.1",
     "typescript": "^6.0.3",
     "yaml": "2.9.1"
