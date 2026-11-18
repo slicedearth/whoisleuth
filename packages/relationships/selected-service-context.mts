@@ -1,10 +1,9 @@
 import { parseBoundedJsonObject } from '../analysis/bounded-json.mts';
-import { addressValue, canonicalIpAddress } from '../contracts/ip-address.mts';
+import { addressValue, canonicalIpAddress, compileCidr, inCompiledCidr } from '../contracts/ip-address.mts';
+import { FRESHNESS_DAYS } from '../contracts/common-infrastructure.mts';
 import { exact, exactOptional } from '../evidence/artifact-structure.mts';
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { createIncrementalSha256 } from '../evidence/record-identity.mts';
-import { compileCidr, inCompiledCidr } from './common-infrastructure.mts';
-import { FRESHNESS_DAYS } from './common-infrastructure-health.mts';
 import { SELECTED_SERVICE_CONTEXT_INPUT_SCHEMA, SELECTED_SERVICE_CONTEXT_SCHEMA, SELECTED_SERVICE_CONTEXT_VERSION,
   MAX_SELECTED_SERVICE_LIST_BYTES, MAX_SELECTED_SERVICE_ENTRIES, MAX_SELECTED_SERVICE_TARGETS, SERVICE_CONTEXT_ROLES, selectedServiceContextTarget } from '../contracts/selected-service-context.mts';
 
