@@ -1,6 +1,6 @@
 # Privacy notice
 
-Last updated: 16 October 2026.
+Last updated: 18 November 2026.
 
 This notice describes the public WHOISleuth deployment. A self-hosted operator
 must adapt it when hosting, authentication, enabled providers, retention or
@@ -647,6 +647,19 @@ fetches no AIA, CRL, OCSP, logo or certificate URL. Files and results stay in
 memory until changed, the Brand context changes or the page closes; a deliberate
 download retains only check results and file digests, not original material.
 The same review is available through the CLI’s offline evidence command.
+
+Offline certificate-log and timestamp-token review reads only deliberately
+selected proof/token, artefact, key, policy, certificate and revocation material.
+No log, issuer, authority, CRL or OCSP request occurs and no ambient trust store
+is used. Reports contain file digests and separate check outcomes, not original
+material. The operator controls retention of CLI input and output files.
+
+Monitoring workload previews read existing watchlists without scheduling,
+collecting or saving new data. Selected shared-service/scanner context compares
+identifiers already in the view with one local warning-list file and optional
+declared provenance. These browser inputs and results stay in page memory until
+replaced, the selected target context changes or the view closes. Nothing is
+uploaded, saved, suppressed or rescored; the CLI reads only its selected input.
 
 Selected dnsx/httpx JSONL imports are processed locally through the existing
 findings preview. They preserve exact hostnames, explicit timestamps and a

@@ -5,6 +5,7 @@
   import IntelligenceIcon from './IntelligenceIcon.svelte';
   import MonitorDomainTimeline from '#lib/components/MonitorDomainTimeline.svelte';
   import WatchlistDomainMetadata from '#lib/components/WatchlistDomainMetadata.svelte';
+  import MonitoringPlan from '#lib/components/MonitoringPlan.svelte';
   import type { WatchBrandNames } from '#lib/analysis/watchlist-context-labels.ts';
   import {
     fieldLabels,
@@ -143,6 +144,7 @@
     </section>
   {/if}
   <WatchlistDomainMetadata name={selected} {entry} {brandNames} onrefresh={refresh} />
+  <MonitoringPlan name={selected} {entry} />
   <section id="watchlist-history" class="history card" aria-labelledby="watchlist-history-title" tabindex="-1">
     <header class="section-head">
       <div>

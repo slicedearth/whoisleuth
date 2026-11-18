@@ -5,6 +5,7 @@
 import { scanBoundedJson, MAX_BOUNDED_JSON_DEPTH, MAX_BOUNDED_JSON_KEYS, MAX_BOUNDED_JSON_VALUES } from '../packages/analysis/bounded-json.mts';
 import { LOOKUP_SOURCE_IDS as SOURCE_IDS, LOOKUP_SOURCE_STATES } from '../packages/evidence/lookup-collection-receipt.mts';
 export { LOOKUP_SOURCE_STATES } from '../packages/evidence/lookup-collection-receipt.mts';
+export { plannedLookupSources } from '../packages/evidence/lookup-collection-receipt.mts';
 
 export const LOOKUP_PROGRESS_SCHEMA = 'whoisleuth.lookup-progress';
 export const LOOKUP_PROGRESS_VERSION = 1;
@@ -62,35 +63,6 @@ export function lookupDiagnosticStates(value: unknown): Readonly<Record<string, 
 const SOURCE_ID_RE = /^[a-z][a-z0-9_]{0,39}$/u;
 
 type LookupProgressSource = typeof SOURCE_IDS[number];
-type LookupSourceSelection = Readonly<{
-  externalIntelligence?: boolean;
-  malwareHostIntelligence?: boolean;
-  malwareIocIntelligence?: boolean;
-  securityTxt?: boolean;
-}>;
-
-/** The existing Lookup recipe, shared by offline plans and source progress.
- * This describes admitted families, not provider health or request counts. */
-export function plannedLookupSources(
-  targetType: 'domain' | 'ipv4' | 'ipv6' | 'asn',
-  mode: 'fast' | 'deep',
-  options: LookupSourceSelection = {},
-): readonly LookupProgressSource[] {
-  const sources: LookupProgressSource[] = ['rdap'];
-  if (mode === 'fast') {
-    if (targetType === 'domain') sources.push('domain_evidence');
-    return Object.freeze(sources);
-  }
-  sources.push('whois');
-  if (targetType === 'domain') {
-    sources.push('domain_evidence', 'registrar_rdap', 'network_context');
-    if (options.securityTxt) sources.push('security_txt');
-    if (options.externalIntelligence) sources.push('external_intelligence');
-    if (options.malwareHostIntelligence) sources.push('malware_host_intelligence');
-    if (options.malwareIocIntelligence) sources.push('malware_ioc_intelligence');
-  } else if (targetType === 'ipv4' || targetType === 'ipv6') sources.push('reverse_dns');
-  return Object.freeze(sources);
-}
 type LookupProgressState =
   | 'success'
   | 'partial'

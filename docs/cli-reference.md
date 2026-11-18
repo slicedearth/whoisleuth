@@ -15,6 +15,12 @@ For an explicitly selected local IP-location database, see the
 Current reviews retain exact-byte identity and intrinsic metadata, and require
 an analyst-justified freshness policy. No database is downloaded or updated.
 
+The [offline review guide](cli.md#offline-certificate-log-and-timestamp-proofs)
+also documents certificate-log inclusion, timestamp tokens, selected warning
+data and monitoring workload previews. Proof checks stay separate; incomplete
+verification or stale/undated selected warning data returns 4 under
+`--strict-exit`. Workload preview does not schedule collection.
+
 ## Installation
 
 Use the [installation guide](cli.md#installation) for runtime requirements,

@@ -51,6 +51,11 @@ the [application guide](docs/application-guide.md) covers tools and saved work.
 Collection and sharing are deliberate actions. WHOISleuth prepares response
 material; it does not submit reports.
 
+Watchlist workload previews, selected shared-service warning data and offline
+certificate-log/timestamp checks help review collection plans and supplied
+evidence without starting another Lookup. See the [CLI guide](docs/cli.md)
+for supported inputs and trust boundaries.
+
 The separate [local application](packages/local-application/README.md) can be
 assembled locally as an installable archive; it is not a published npm package.
 It runs the console on loopback, keeping records, drafts and original files in

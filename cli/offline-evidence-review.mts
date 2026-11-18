@@ -38,6 +38,12 @@ import { exact } from '../packages/evidence/artifact-structure.mts';
 import { INFRASTRUCTURE_COMPARISON_INPUT_SCHEMA, MAX_INFRASTRUCTURE_COMPARISON_INPUT_BYTES } from '../packages/contracts/external-observation-interchange.mts';
 import { CASE_CONTAINMENT_INPUT_SCHEMA, readCaseContainmentInput, formatCaseContainmentHandoff, type CaseContainmentHandoff } from '../packages/cases/case-containment-handoff.mts';
 import { BIMI_CERTIFICATE_INPUT_SCHEMA } from '../packages/contracts/bimi-certificate.mts';
+import { MONITORING_PLAN_INPUT_SCHEMA } from '../packages/contracts/monitoring-plan.mts';
+import { buildMonitoringPlan } from '../packages/monitoring/monitoring-plan.mts';
+import { CT_INCLUSION_INPUT_SCHEMA } from '../packages/contracts/ct-inclusion-proof.mts';
+import { TIMESTAMP_TOKEN_INPUT_SCHEMA } from '../packages/contracts/timestamp-token.mts';
+import { SELECTED_SERVICE_CONTEXT_INPUT_SCHEMA } from '../packages/contracts/selected-service-context.mts';
+import { reviewSelectedServiceContext } from '../packages/relationships/selected-service-context.mts';
 
 const OFFLINE_EVIDENCE_REVIEW_SCHEMA = 'whoisleuth.cli.offline-evidence-review';
 const OFFLINE_EVIDENCE_REVIEW_VERSION = 1;
@@ -83,9 +89,13 @@ function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toI
 
 function buildOfflineEvidenceReviewInput(value: unknown, generatedAt: string, input: UnknownRecord) {
   if (input.schema === LOCAL_MMDB_QUERY_SCHEMA) throw new CliUsageError('Local MMDB review requires --mmdb <database-file>.');
-  let kind: 'bimi_certificate' | 'internal_containment' | 'infrastructure' | 'infrastructure_comparison' | 'rdap_search' | 'dnssec' | 'tlsa' | 'rpki' | 'cryptographic_assurance' | 'geoip' | 'encrypted_dns' | 'zone_intent' | 'domain_portfolio' | 'domain_change' | 'dns_convergence' | 'nameserver_preflight' | 'trust_store' | ContextReviewKind;
+  let kind: 'selected_service_context' | 'monitoring_plan' | 'bimi_certificate' | 'internal_containment' | 'infrastructure' | 'infrastructure_comparison' | 'rdap_search' | 'dnssec' | 'tlsa' | 'rpki' | 'cryptographic_assurance' | 'geoip' | 'encrypted_dns' | 'zone_intent' | 'domain_portfolio' | 'domain_change' | 'dns_convergence' | 'nameserver_preflight' | 'trust_store' | ContextReviewKind;
   let result: unknown;
-  if (input.schema === CASE_CONTAINMENT_INPUT_SCHEMA) {
+  if (input.schema === SELECTED_SERVICE_CONTEXT_INPUT_SCHEMA) {
+    kind = 'selected_service_context'; result = reviewSelectedServiceContext(input, generatedAt);
+  } else if (input.schema === MONITORING_PLAN_INPUT_SCHEMA) {
+    kind = 'monitoring_plan'; result = buildMonitoringPlan(input, generatedAt);
+  } else if (input.schema === CASE_CONTAINMENT_INPUT_SCHEMA) {
     kind = 'internal_containment'; result = readCaseContainmentInput(input, generatedAt);
   } else if (input.schema === INFRASTRUCTURE_OBSERVATION_SCHEMA) {
     if (typeof value === 'string' && new TextEncoder().encode(value).byteLength > MAX_INFRASTRUCTURE_OBSERVATION_BYTES) throw new TypeError('Infrastructure snapshot input exceeds its byte bound.');
@@ -199,6 +209,18 @@ async function buildOfflineEvidenceReviewWithLocalResources(
   options: Readonly<{ mmdbPath?: string | null; signal?: AbortSignal }> = {},
 ) {
   const input = parseInput(value);
+  if (input.schema === TIMESTAMP_TOKEN_INPUT_SCHEMA) {
+    const { reviewTimestampToken } = await import('../packages/evidence/timestamp-token.mts');
+    return Object.freeze({ schema: OFFLINE_EVIDENCE_REVIEW_SCHEMA, version: OFFLINE_EVIDENCE_REVIEW_VERSION,
+      generatedAt, kind: 'timestamp_token' as const, result: await reviewTimestampToken(input, generatedAt, options.signal),
+      limitations: Object.freeze(['Only selected artefact, token, policy, anchors and revocation evidence is checked. No authority request occurs.']) });
+  }
+  if (input.schema === CT_INCLUSION_INPUT_SCHEMA) {
+    const { reviewCtInclusionProof } = await import('../packages/evidence/ct-inclusion-proof.mts');
+    return Object.freeze({ schema: OFFLINE_EVIDENCE_REVIEW_SCHEMA, version: OFFLINE_EVIDENCE_REVIEW_VERSION,
+      generatedAt, kind: 'ct_inclusion' as const, result: await reviewCtInclusionProof(input, generatedAt, options.signal),
+      limitations: Object.freeze(['Only supplied leaf, proof, signed tree head and deliberately selected log-key material is checked. No log request occurs.']) });
+  }
   if (input.schema === BIMI_CERTIFICATE_INPUT_SCHEMA) {
     const { reviewBimiCertificate } = await import('../packages/evidence/bimi-certificate-review.mts');
     return Object.freeze({ schema: OFFLINE_EVIDENCE_REVIEW_SCHEMA, version: OFFLINE_EVIDENCE_REVIEW_VERSION,
@@ -246,11 +268,33 @@ function formatOfflineEvidenceReview(document: Awaited<ReturnType<typeof buildOf
     `Kind   ${document.kind.replaceAll('_', ' ')}`,
     `State  ${state.replaceAll('_', ' ')}`,
   ];
-  if (document.kind === 'bimi_certificate') {
-    lines.push(`Domain ${safeTerminalValue(result.domain)}`);
+  if (document.kind === 'selected_service_context') {
+    const source = record(result.source);
+    lines.push(`Source ${safeTerminalValue(source.name)} · ${safeTerminalValue(source.sourceHealth)} · SHA-256 ${safeTerminalValue(source.digestSha256)}`);
+    for (const value of Array.isArray(result.results) ? result.results : []) {
+      const row = record(value);
+      lines.push(`${safeTerminalValue(row.target)}: ${listLength(row.matches)} selected-list matches${row.truncated ? ' (additional matches omitted)' : ''}`);
+      for (const value of Array.isArray(row.matches) ? row.matches : []) {
+        const match = record(value);
+        lines.push(`  ${safeTerminalValue(match.entry, '', 254)} · ${safeTerminalValue(match.basis).replaceAll('_', ' ')}`);
+      }
+    }
+    lines.push('Selected-list context only; no evidence or Risk changes.');
+  } else if (document.kind === 'monitoring_plan') {
+    lines.push(`Targets ${count(counts.distinctTargets)} · planned Lookups per week ${count(counts.plannedLookupsPerWeek)}`,
+      `Mode ${safeTerminalValue(result.mode)} · interval ${safeTerminalValue(result.intervalHours)} hours`,
+      'Requests, storage and cost: not estimated. No collection or schedule change.');
+  } else if (document.kind === 'bimi_certificate' || document.kind === 'ct_inclusion' || document.kind === 'timestamp_token') {
+    if (document.kind === 'bimi_certificate') lines.push(`Domain ${safeTerminalValue(result.domain)}`);
+    else if (document.kind === 'timestamp_token') lines.push(`Signed time ${safeTerminalValue(result.generatedAt)} · policy ${safeTerminalValue(result.policyOid)}`);
+    else {
+      const tree = record(result.tree);
+      lines.push(`Tree size ${safeTerminalValue(tree.size)} · leaf index ${safeTerminalValue(tree.leafIndex)}`,
+        `Signed tree time ${safeTerminalValue(tree.timestamp)}`);
+    }
     for (const value of Array.isArray(result.checks) ? result.checks : []) {
       const check = record(value);
-      lines.push(`${safeTerminalValue(check.label)}: ${safeTerminalValue(check.state).replaceAll('_', ' ')}`,
+      lines.push(`${safeTerminalValue(check.label ?? check.id)}: ${safeTerminalValue(check.state).replaceAll('_', ' ')}`,
         `  ${safeTerminalValue(check.detail, '', 600)}`);
     }
     for (const limitation of Array.isArray(result.limitations) ? result.limitations : []) lines.push(`Scope: ${safeTerminalValue(limitation, '', 600)}`);

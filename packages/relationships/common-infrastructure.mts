@@ -76,7 +76,7 @@ function record(value: unknown): JsonRecord | null {
     : null;
 }
 
-function compileCidr(value: unknown): CompiledCidr | null {
+export function compileCidr(value: unknown): CompiledCidr | null {
   if (typeof value !== 'string' || value.length > 96) return null;
   const [rangeText, prefixText, ...rest] = value.split('/');
   if (rest.length || !rangeText || !prefixText || !/^\d{1,3}$/u.test(prefixText)) return null;
@@ -92,7 +92,7 @@ function compileCidr(value: unknown): CompiledCidr | null {
   return { cidr: value, family: 6, mask, network: range.value & mask };
 }
 
-function inCompiledCidr(address: AddressValue, range: CompiledCidr): boolean {
+export function inCompiledCidr(address: AddressValue, range: CompiledCidr): boolean {
   if (address.family === 4 && range.family === 4) return ((address.value & range.mask) >>> 0) === range.network;
   return address.family === 6 && range.family === 6 && (address.value & range.mask) === range.network;
 }

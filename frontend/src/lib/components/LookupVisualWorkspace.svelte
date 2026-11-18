@@ -4,6 +4,7 @@
   import LookupActivationContext from '#lib/components/LookupActivationContext.svelte';
   import LookupAssetGraph from '#lib/components/LookupAssetGraph.svelte';
   import LookupLifecycle from '#lib/components/LookupLifecycle.svelte';
+  import SelectedServiceContext from './SelectedServiceContext.svelte';
   import type { ActivationContext } from '#lib/analysis/activation-context.ts';
   import type { AnalystEvidencePivot } from '#lib/analysis/analyst-evidence-pivots.ts';
   import {
@@ -98,6 +99,7 @@
       />
     {:else if view === 'relationships'}
       <LookupAssetGraph {graph} headingId="lookup-asset-graph-title" />
+      <SelectedServiceContext targets={graph.nodes.filter(node => ['address', 'hostname', 'target'].includes(node.kind)).map(node => node.label)} />
       <AnalystEvidencePivots {pivots} />
     {:else}
       <LookupLifecycle {events} />

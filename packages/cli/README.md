@@ -74,6 +74,12 @@ not upload either file.
 
 ## Work with selected files
 
+`review-evidence` also reviews supplied certificate-log inclusion proofs,
+timestamp tokens, shared-service warning lists and watchlist workload plans
+offline. Use the [CLI guide](docs/cli.md) for their versioned input formats;
+`--strict-exit` returns 4 for incomplete proof or source checks. Planning does
+not schedule collection.
+
 ```bash
 whoisleuth bulk domains.txt --csv-with-metadata
 whoisleuth mail-headers message.eml --json

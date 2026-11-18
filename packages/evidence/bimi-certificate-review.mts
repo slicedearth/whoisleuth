@@ -1,12 +1,12 @@
 import 'reflect-metadata';
-import { fromBER } from 'asn1js';
-import { Certificate, CertificateChainValidationEngine, CryptoEngine, AltName, ExtKeyUsage, CertificatePolicies, BasicConstraints } from 'pkijs';
+import { CertificateChainValidationEngine, CryptoEngine, AltName, ExtKeyUsage, CertificatePolicies, BasicConstraints } from 'pkijs';
 import { AsnConvert } from '@peculiar/asn1-schema';
 import { LogotypeExtn } from '@peculiar/asn1-x509-logotype';
 import { SaxesParser } from 'saxes';
 import { exactOptional } from './artifact-structure.mts';
 import { normalizeDomain } from './domain-name.mts';
 import { normalizeExplicitIsoTimestamp } from './observation.mts';
+import { SHA2_ALGORITHMS as HASHES, boundedCryptoText as boundedText, decodeCryptoBase64 as base64, parseCertificatePem, supportedCertificateSignature } from './bounded-crypto-material.mts';
 import {
   BIMI_CERTIFICATE_INPUT_SCHEMA, BIMI_CERTIFICATE_REVIEW_SCHEMA, BIMI_CERTIFICATE_VERSION,
   BIMI_PURPOSE_OID, BIMI_MARK_POLICY_OID, BIMI_LOGOTYPE_OID, BIMI_CHECK_LABELS,
@@ -16,43 +16,13 @@ import {
 
 const encoder = new TextEncoder();
 const BER_LIMITS = { maxDepth: 32, maxNodes: 4_096, maxContentLength: MAX_BIMI_CERTIFICATE_BYTES, parseEmbedded: true };
-const HASHES = Object.freeze({ '2.16.840.1.101.3.4.2.1': 'SHA-256', '2.16.840.1.101.3.4.2.2': 'SHA-384', '2.16.840.1.101.3.4.2.3': 'SHA-512' });
 const SVG_ELEMENTS = new Set(['svg', 'g', 'defs', 'title', 'desc', 'path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon', 'text', 'tspan', 'linearGradient', 'radialGradient', 'stop', 'solidColor']);
 const bytes = (value: ArrayBuffer) => new Uint8Array(value);
 const digest = async (value: Uint8Array<ArrayBuffer>, algorithm = 'SHA-256') =>
   [...new Uint8Array(await crypto.subtle.digest(algorithm, value))].map(byte => byte.toString(16).padStart(2, '0')).join('');
 const svgBytes = (value: string) => encoder.encode(value.replace(/\r\n?/gu, '\n'));
 
-function boundedText(value: unknown, maximum: number, label: string): string {
-  if (typeof value !== 'string' || encoder.encode(value).byteLength > maximum) throw new TypeError(`${label} exceeds its byte limit or is not text.`);
-  return value;
-}
-
-function base64(value: string, maximum: number): Uint8Array<ArrayBuffer> {
-  if (value.length > Math.ceil(maximum / 3) * 4 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(value)) throw new TypeError('Certificate or embedded logo encoding is invalid.');
-  const decoded = atob(value);
-  if (!decoded.length || decoded.length > maximum || btoa(decoded) !== value) throw new TypeError('Certificate or embedded logo encoding is invalid.');
-  return Uint8Array.from(decoded, character => character.charCodeAt(0));
-}
-
-function certificates(pem: string, maximum: number): Readonly<{ raw: Uint8Array<ArrayBuffer>; certificate: Certificate }>[] {
-  const result: { raw: Uint8Array<ArrayBuffer>; certificate: Certificate }[] = [];
-  let offset = 0;
-  for (const match of pem.matchAll(/-----BEGIN CERTIFICATE-----([A-Za-z0-9+/=\r\n\t ]+)-----END CERTIFICATE-----/gu)) {
-    if (pem.slice(offset, match.index).trim() || result.length >= maximum) throw new TypeError('Select a bounded certificate-only PEM chain.');
-    const raw = base64(match[1]!.replace(/\s/gu, ''), MAX_BIMI_CERTIFICATE_BYTES);
-    const asn = fromBER(raw, BER_LIMITS);
-    if (asn.offset !== raw.length || asn.result.error) throw new TypeError('Certificate DER is malformed or exceeds parsing limits.');
-    let certificate: Certificate;
-    try { certificate = new Certificate({ schema: asn.result }); }
-    catch { throw new TypeError('Certificate structure is malformed or unsupported.'); }
-    const identifiers = certificate.extensions?.map(extension => extension.extnID) ?? [];
-    if (new Set(identifiers).size !== identifiers.length) throw new TypeError('Certificate extensions are duplicated.');
-    result.push({ raw, certificate }); offset = match.index! + match[0].length;
-  }
-  if (!result.length || pem.slice(offset).trim()) throw new TypeError('Select a bounded certificate-only PEM chain.');
-  return result;
-}
+const certificates = (pem: string, maximum: number) => parseCertificatePem(pem, maximum, MAX_BIMI_CERTIFICATE_BYTES);
 
 async function inflateLogo(input: Uint8Array<ArrayBuffer>, signal?: AbortSignal): Promise<Uint8Array<ArrayBuffer>> {
   const reader = new Blob([input]).stream().pipeThrough(new DecompressionStream('gzip')).getReader();
@@ -144,11 +114,7 @@ export async function reviewBimiCertificate(value: unknown, reviewedAt = new Dat
   try {
     for (const item of chain) {
       signal?.throwIfAborted();
-      if (!['SHA-256', 'SHA-384', 'SHA-512'].includes(engine.getHashAlgorithm(item.certificate.signatureAlgorithm))) strength = false;
-      const key = await item.certificate.getPublicKey(undefined, engine);
-      const algorithm = key.algorithm as RsaKeyAlgorithm & EcKeyAlgorithm;
-      if (!(algorithm.name === 'ECDSA' && ['P-256', 'P-384', 'P-521'].includes(algorithm.namedCurve)
-        || ['RSASSA-PKCS1-v1_5', 'RSA-PSS'].includes(algorithm.name) && algorithm.modulusLength >= 2_048)) strength = false;
+      if (!await supportedCertificateSignature(item.certificate, engine)) strength = false;
     }
   } catch { strength = false; }
   add('signature_strength', strength ? 'matched' : 'unsupported', 'Checks supplied-chain SHA-256/384/512 signatures and RSA ≥2048-bit or P-256/P-384/P-521 keys.');

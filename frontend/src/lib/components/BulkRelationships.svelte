@@ -3,6 +3,7 @@
   import IntelligenceIcon, { type IntelligenceIconName } from '#lib/components/IntelligenceIcon.svelte';
   import BoundedRelationshipMap from '#lib/components/BoundedRelationshipMap.svelte';
   import RelationshipSourceEvidence from '#lib/components/RelationshipSourceEvidence.svelte';
+  import SelectedServiceContext from './SelectedServiceContext.svelte';
   import type {
     ForceGraphLinkInput,
     ForceGraphNodeInput,
@@ -152,6 +153,7 @@
       links={relationshipMap.links}
     />
     {/if}
+    <SelectedServiceContext targets={[...new Set(groups.flatMap(group => [...group.domains, ...(group.type === 'ip_address' ? [group.value] : [])]))]} />
     <div class="relationship-list">
       {#each groups as relationship, index}
         <article>

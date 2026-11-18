@@ -169,6 +169,65 @@ Exit 4 under `--strict-exit` means at least one requested check did not pass.
 The same local file review is available in Brands → Tools → Review current
 settings, without running the networked settings review.
 
+### Offline certificate-log and timestamp proofs
+
+`review-evidence proof.json --json --strict-exit` also accepts these version-1
+inputs. Keep the original material separately; reports contain digests and
+independent check outcomes, not the original bytes.
+
+- `whoisleuth.ct-inclusion-proof.input`: `protocol: "rfc6962-v1"`,
+  `leafInputBase64`, `leafIndex`, `auditPath` (base64 SHA-256 nodes),
+  `signedTreeHead` with `tree_size`, `timestamp`, `sha256_root_hash` and
+  `tree_head_signature`, plus deliberately selected `logKeySpkiBase64` and
+  `logIdBase64`. Unsigned 64-bit values may be canonical decimal strings.
+  Inclusion, key identity, the signed tree-head signature and time ordering are
+  separate checks. Input is limited to 512 KiB, a 256 KiB leaf and 64 proof nodes.
+  This supports RFC 6962 v1, not RFC 9162 v2, log qualification or consistency.
+- `whoisleuth.timestamp-token.input`: non-empty `artifactBase64`,
+  `tokenDerBase64` (the CMS token, not a timestamp-response envelope),
+  `expectedPolicyOid`, `trustAnchorsPem`, optional `expectedNonceHex` and
+  `crlsDerBase64`. The complete input is limited to 12 MiB, artefact to 8 MiB,
+  token to 256 KiB, certificate/CRL to 128 KiB, six CMS certificates, three
+  anchors and six CRLs. SHA-256/384/512 imprint, RSA PKCS#1 or supported ECDSA
+  signatures (RSA keys from 2048 to 8192 bits), critical sole timestamping
+  purpose and one ESSCertIDv2 reference are checked. The selected CA path and
+  supplied CRLs are evaluated at the
+  signed time, including declared accuracy. Missing revocation stays incomplete;
+  OCSP, delta/indirect CRLs, legacy-only ESS binding and other unsupported
+  critical profiles do not pass.
+
+No log, issuer, CRL, OCSP or timestamp-authority request is made, and no ambient
+trust store is consulted. A passed review means the supported checks matched
+the selected trust material, not evidence truth, current platform trust or a
+legal assurance. Incomplete or mismatching checks return 4 with `--strict-exit`.
+
+### Monitoring workload and selected warning data
+
+`whoisleuth.monitoring-plan.input` version 1 contains `watchlists` in the
+existing watchlist-store or export format, `purpose` (`registration` for Fast
+or `configuration` for Deep) and `intervalHours` (6, 12, 24 or 168).
+`review-evidence plan.json --json` previews distinct targets, overlapping
+memberships and planned Lookups per week. Priority remains review context,
+not cadence. Request counts, storage and cost remain unestimated. No schedule
+or collection is enabled. The browser offers the same preview in each
+watchlist’s History view.
+
+`whoisleuth.selected-service-context.input` version 1 contains `targets` (up to
+2,000 plain hostnames/IPs), `role` (`research_scanner`, `dynamic_dns` or
+`shared_service`), `warningListJson` (the original MISP-compatible JSON text)
+and `provenance` (optional `sourceUrl`, `revision`, `licence`). Only `hostname`
+and `cidr` lists are supported: at most 50,000 entries and 6 MiB. CIDR reviews
+also have a one-million-comparison processing budget. Plain hostname entries
+match the exact name and descendants; leading-dot entries match descendants
+only. Matching uses DNS boundaries, never substrings or regexes.
+
+The report retains the original-list digest, selected provenance and publisher
+version/date. Undated and over-30-day lists remain historical context and return
+4 under `--strict-exit`. A match never suppresses evidence or changes Risk.
+Source/licence declarations are not authentication. Browser relationship and
+campaign views offer the same explicitly selected local-file review; nothing
+is uploaded or saved. No additional warning lists are bundled automatically.
+
 Registration source states are independent: `unsupported` means no RDAP or
 WHOIS service is published for the target, while `skipped` means no query was
 issued in that mode or under the registry access policy. Neither is a transport

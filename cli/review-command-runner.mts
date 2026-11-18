@@ -332,8 +332,9 @@ async function runOfflineEvidenceReviewCommand(
     const mmdbIncomplete = result.schema === LOCAL_MMDB_REVIEW_SCHEMA && result.version === LOCAL_MMDB_REVIEW_VERSION && result.completeness !== 'complete';
     const infrastructureIncomplete = document.kind === 'infrastructure' ? result.state !== 'complete'
       : document.kind === 'infrastructure_comparison' && result.state !== 'compared';
-    const bimiIncomplete = document.kind === 'bimi_certificate' && result.state !== 'checks_passed';
-    if (gate?.pass === false || zoneMismatch || contextPartial || mmdbIncomplete || infrastructureIncomplete || bimiIncomplete) return EXIT_CODES.PARTIAL_FAILURE;
+    const cryptographicIncomplete = (document.kind === 'bimi_certificate' || document.kind === 'ct_inclusion' || document.kind === 'timestamp_token') && result.state !== 'checks_passed';
+    const selectedContextIncomplete = document.kind === 'selected_service_context' && result.state === 'partial';
+    if (gate?.pass === false || zoneMismatch || contextPartial || mmdbIncomplete || infrastructureIncomplete || cryptographicIncomplete || selectedContextIncomplete) return EXIT_CODES.PARTIAL_FAILURE;
   }
   return EXIT_CODES.SUCCESS;
 }
