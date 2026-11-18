@@ -1,4 +1,6 @@
 // Server-authoritative emergency switches for hosted network features.
+// Features that send targets to an additional third party are off until the
+// operator opts in; their emergency switch still takes precedence.
 //
 // Values are read for every request so a long-lived Express process can react
 // to an operator changing its environment before a restart where the hosting
@@ -21,8 +23,8 @@ const NETWORK_FEATURE_DEFINITIONS = Object.freeze({
   tls_intelligence: Object.freeze({ env: 'WHOISLEUTH_DISABLE_TLS_INTELLIGENCE', label: 'TLS evidence collection' }),
   certificate_transparency: Object.freeze({ env: 'WHOISLEUTH_DISABLE_CERTIFICATE_TRANSPARENCY', label: 'Certificate Transparency search' }),
   domain_posture: Object.freeze({ env: 'WHOISLEUTH_DISABLE_DOMAIN_POSTURE', label: 'domain-posture auditing' }),
-  resolver_comparison: Object.freeze({ env: 'WHOISLEUTH_DISABLE_RESOLVER_COMPARISON', label: 'selected resolver comparison' }),
-});
+  resolver_comparison: Object.freeze({ env: 'WHOISLEUTH_DISABLE_RESOLVER_COMPARISON', enableEnv: 'WHOISLEUTH_RESOLVER_COMPARISON_ENABLED', label: 'selected resolver comparison' }),
+} satisfies Record<string, Readonly<{ env: string; enableEnv?: string; label: string }>>);
 
 type NetworkFeatureId = keyof typeof NETWORK_FEATURE_DEFINITIONS;
 type NetworkFeaturePolicy = Record<NetworkFeatureId, boolean>;
@@ -65,7 +67,8 @@ function networkFeaturePolicy(
 ): NetworkFeaturePolicy {
   return Object.fromEntries(Object.entries(NETWORK_FEATURE_DEFINITIONS).map(([id, definition]) => [
     id,
-    !disabledValue(env && env[definition.env]),
+    !disabledValue(env && env[definition.env])
+      && (!('enableEnv' in definition) || (env && env[definition.enableEnv]) === '1'),
   ])) as NetworkFeaturePolicy;
 }
 
@@ -81,7 +84,9 @@ function featureDecision(
       enabled: false,
       feature: knownFeature,
       disabledBy: knownFeature,
-      reason: `${definition.label} is disabled by deployment policy.`,
+      reason: 'enableEnv' in definition
+        ? `${definition.label[0]!.toUpperCase()}${definition.label.slice(1)} is not enabled for this deployment.`
+        : `${definition.label} is disabled by deployment policy.`,
     };
   }
   for (const dependency of FEATURE_DEPENDENCIES[knownFeature] || []) {

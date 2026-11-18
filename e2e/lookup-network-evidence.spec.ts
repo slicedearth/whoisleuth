@@ -1,4 +1,5 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
+import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { readFile } from 'node:fs/promises';
 import { expandLookupFamilies, expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
@@ -32,11 +33,53 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/lookup');
 });
 
+async function openResolverPanel(page: Page, hostname: string) {
+  await page.locator('#query').fill(hostname);
+  await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
+  await expandLookupFamilies(page);
+  const dns = page.locator('details').filter({ has: page.locator(':scope > summary', { hasText: 'DNS evidence' }) });
+  await expect(dns).toHaveCount(1);
+  if (await dns.getAttribute('open') === null) await dns.locator(':scope > summary').click();
+  const panel = dns.locator('details').filter({ has: page.locator(':scope > summary', { hasText: 'Compare selected resolvers' }) });
+  await panel.locator(':scope > summary').click();
+  return { dns, panel };
+}
+
+test('selected resolver comparison stays unavailable until the deployment opts in', async ({ page }) => {
+  const hostname = 'portal.example.test';
+  const base = sectionedLookupFixture('example.test');
+  await page.route('**/api/lookup?*', route => route.fulfill({ json: { ...base, query: hostname, inputHostname: hostname, isSubdomain: true,
+    availability: { ...base.availability, observationHostname: hostname } } }));
+  let requests = 0;
+  await page.route('**/api/resolver-compare?*', route => { requests++; return route.abort(); });
+  const { panel } = await openResolverPanel(page, hostname);
+  await expect(panel.getByText('Selected resolver comparison is not enabled for this deployment.', { exact: true })).toBeVisible();
+  const cloudflare = panel.getByRole('checkbox', { name: 'Cloudflare', exact: true });
+  await expect(cloudflare).toHaveCount(1);
+  await expect(cloudflare).toBeDisabled();
+  await expect(panel.getByRole('button', { name: 'Compare resolvers', exact: true })).toBeDisabled();
+  expect(requests).toBe(0);
+});
+
 test('selected resolver review uses the observed child hostname and leaves the original Lookup unchanged', async ({ page }, testInfo) => {
   const hostname = 'portal.example.test';
   const base = sectionedLookupFixture('example.test');
   const lookup = { ...base, query: hostname, inputHostname: hostname, isSubdomain: true,
     availability: { ...base.availability, observationHostname: hostname } };
+  // The real server keeps this feature off by default; enable only its capability entry here.
+  await page.route('**/api/capabilities', async route => {
+    const response = await route.fetch();
+    const report = await response.json() as { features: Array<{ id: string; status: string; reason?: string }> };
+    const resolver = report.features.find(feature => feature.id === 'resolver_comparison');
+    expect(resolver?.status).toBe('disabled');
+    report.features = report.features.map(feature => {
+      if (feature.id !== 'resolver_comparison') return feature;
+      const { reason: _reason, ...enabled } = feature;
+      return { ...enabled, status: 'supported' };
+    });
+    await route.fulfill({ response, json: report });
+  });
+  await page.goto('/lookup');
   await page.route('**/api/lookup?*', route => route.fulfill({ json: lookup }));
   const report = await collectResolverComparison(hostname, 'cloudflare,google', {}, {
     now: () => '2026-10-01T00:00:00.000Z',
@@ -55,14 +98,7 @@ test('selected resolver review uses the observed child hostname and leaves the o
     expect(url.searchParams.get('resolvers')).toBe('cloudflare,google');
     await route.fulfill({ json: report });
   });
-  await page.locator('#query').fill(hostname);
-  await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
-  await expandLookupFamilies(page);
-  const dns = page.locator('details').filter({ has: page.locator(':scope > summary', { hasText: 'DNS evidence' }) });
-  await expect(dns).toHaveCount(1);
-  if (await dns.getAttribute('open') === null) await dns.locator(':scope > summary').click();
-  const panel = dns.locator('details').filter({ has: page.locator(':scope > summary', { hasText: 'Compare selected resolvers' }) });
-  await panel.locator(':scope > summary').click();
+  const { dns, panel } = await openResolverPanel(page, hostname);
   const action = panel.getByRole('button', { name: 'Compare resolvers', exact: true });
   await expect(action).toBeDisabled();
   expect(requests).toBe(0);

@@ -697,7 +697,8 @@ export const PUBLIC_COVERAGE = {
       "partialResultContract": "explicit_per_source",
       "limitations": [
         "Explicitly selected HTTPS resolvers receive the hostname and A/AAAA questions. Four requests maximum; normal Lookup, Bulk and monitoring do not invoke this action.",
-        "Resolver agreement is not authoritative truth or local DNSSEC validation. Provider retention policies apply."
+        "Resolver agreement is not authoritative truth or local DNSSEC validation. Provider retention policies apply.",
+        "Off unless the deployment operator explicitly enables it; the emergency switch still disables it."
       ]
     },
     {

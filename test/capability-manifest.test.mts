@@ -157,7 +157,10 @@ const EXPECTED_LEGACY_CAPABILITIES = [
     reason: 'Optional domain feed service is not enabled for this deployment.',
   },
   { id: 'domain_posture', status: 'supported', execution: 'hosted', scanModes: [] },
-  { id: 'resolver_comparison', status: 'supported', execution: 'hosted', scanModes: [] },
+  {
+    id: 'resolver_comparison', status: 'disabled', execution: 'hosted', scanModes: [],
+    reason: 'Selected resolver comparison is not enabled for this deployment.',
+  },
   { id: 'idn_confusables', status: 'local_only', execution: 'browser', scanModes: ['fast', 'deep'] },
   { id: 'analyst_cases', status: 'local_only', execution: 'browser', scanModes: [] },
   { id: 'watchlists', status: 'local_only', execution: 'browser', scanModes: ['fast', 'deep'] },

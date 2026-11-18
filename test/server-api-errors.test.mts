@@ -13,6 +13,8 @@ import { CtCollectionError } from '../lib/ct-search.mts';
 
 process.env.SITE_PASSWORD = process.env.SITE_PASSWORD || 'test-only-secret';
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-only-session-signing-secret';
+// Route fixtures below exercise the enabled resolver path; its default-off state is asserted separately.
+process.env.WHOISLEUTH_RESOLVER_COMPARISON_ENABLED = '1';
 
 const { app, apiErrorHandler, pageErrorHandler, registerNetworkApiRoutes } = await import('../server.mts');
 const { buildSessionCookie, createSessionToken } = await import('../lib/auth.mts');
@@ -398,6 +400,21 @@ describe('fixture-injected Express network routes', () => {
       headers: { Cookie: sessionCookie(), Origin: fixtureOrigin, 'Sec-Fetch-Site': 'same-origin' },
     });
   }
+
+  test('resolver comparison stays off until the operator opts in, before validation or collection', async () => {
+    serviceCalls.length = 0;
+    delete process.env.WHOISLEUTH_RESOLVER_COMPARISON_ENABLED;
+    try {
+      for (const route of ['/api/resolver-compare?q=child.example.test&resolvers=cloudflare,google', '/api/resolver-compare?q=child.example.test&resolvers=google,google']) {
+        const response = await request(route);
+        assert.equal(response.status, 503);
+        const payload = await response.json() as { errorCode: string; error: string };
+        assert.equal(payload.errorCode, 'FEATURE_DISABLED');
+        assert.match(payload.error, /not enabled for this deployment/u);
+      }
+      assert.equal(serviceCalls.length, 0);
+    } finally { process.env.WHOISLEUTH_RESOLVER_COMPARISON_ENABLED = '1'; }
+  });
 
   test('resolver comparison preserves exact-host selection and rejects invalid recipients before collection', async () => {
     serviceCalls.length = 0;

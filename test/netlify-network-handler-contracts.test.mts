@@ -72,18 +72,27 @@ describe('fixture-injected Netlify network handlers', () => {
       return { hostname: args[0], fixture: true } as unknown as Awaited<ReturnType<typeof import('../lib/resolver-comparison.mts').collectResolverComparison>>;
     } });
     const request = event({ q: 'child.example.test', resolvers: 'cloudflare,google' });
-    assert.equal((await handler({ ...request, headers: { ...request.headers, cookie: '' } })).statusCode, 401);
-    assert.equal((await handler({ ...request, headers: { ...request.headers, 'sec-fetch-site': 'cross-site' } })).statusCode, 403);
-    assert.equal((await handler(event({ q: 'child.example.test', resolvers: 'google,google' }))).statusCode, 400);
-    const denied = process.env.WHOISLEUTH_DISABLE_DNS_INTELLIGENCE;
-    process.env.WHOISLEUTH_DISABLE_DNS_INTELLIGENCE = '1';
-    try { assert.equal((await handler(request)).statusCode, 503); }
-    finally { if (denied === undefined) delete process.env.WHOISLEUTH_DISABLE_DNS_INTELLIGENCE; else process.env.WHOISLEUTH_DISABLE_DNS_INTELLIGENCE = denied; }
-    assert.equal(calls.length, 0);
-    const result = await handler(request);
-    assert.equal(result.statusCode, 200);
-    assert.equal(body(result).hostname, 'child.example.test');
-    assert.deepEqual(calls, [['child.example.test', ['cloudflare', 'google']]]);
+    const optIn = process.env.WHOISLEUTH_RESOLVER_COMPARISON_ENABLED;
+    delete process.env.WHOISLEUTH_RESOLVER_COMPARISON_ENABLED;
+    const off = await handler(request);
+    assert.equal(off.statusCode, 503);
+    assert.equal(body(off).errorCode, 'FEATURE_DISABLED');
+    assert.match(String(body(off).error), /not enabled for this deployment/u);
+    process.env.WHOISLEUTH_RESOLVER_COMPARISON_ENABLED = '1';
+    try {
+      assert.equal((await handler({ ...request, headers: { ...request.headers, cookie: '' } })).statusCode, 401);
+      assert.equal((await handler({ ...request, headers: { ...request.headers, 'sec-fetch-site': 'cross-site' } })).statusCode, 403);
+      assert.equal((await handler(event({ q: 'child.example.test', resolvers: 'google,google' }))).statusCode, 400);
+      const denied = process.env.WHOISLEUTH_DISABLE_DNS_INTELLIGENCE;
+      process.env.WHOISLEUTH_DISABLE_DNS_INTELLIGENCE = '1';
+      try { assert.equal((await handler(request)).statusCode, 503); }
+      finally { if (denied === undefined) delete process.env.WHOISLEUTH_DISABLE_DNS_INTELLIGENCE; else process.env.WHOISLEUTH_DISABLE_DNS_INTELLIGENCE = denied; }
+      assert.equal(calls.length, 0);
+      const result = await handler(request);
+      assert.equal(result.statusCode, 200);
+      assert.equal(body(result).hostname, 'child.example.test');
+      assert.deepEqual(calls, [['child.example.test', ['cloudflare', 'google']]]);
+    } finally { if (optIn === undefined) delete process.env.WHOISLEUTH_RESOLVER_COMPARISON_ENABLED; else process.env.WHOISLEUTH_RESOLVER_COMPARISON_ENABLED = optIn; }
   });
   test('returns the same actionable certificate-search failure vocabulary as the local host', async () => {
     for (const [code, status] of [['CT_TIMEOUT', 504], ['CT_OVERLOADED', 503], ['CT_QUERY_TOO_BROAD', 422], ['CT_INVALID_RESPONSE', 502], ['CT_UPSTREAM_ERROR', 502]] as const) {

@@ -481,7 +481,9 @@ Neither runs merely because Deep was chosen. The CLI's authorised DNSSEC and
 mail-transport actions are separate again and never run through browser Lookup.
 
 In **DNS evidence**, **Compare selected resolvers** asks two explicitly selected
-public HTTPS resolvers for the observed hostname’s A and AAAA records. It makes
+public HTTPS resolvers for the observed hostname’s A and AAAA records. It is
+available only where the deployment operator has enabled it; otherwise the panel
+says so and makes no request. It makes
 at most four requests and leaves the original Lookup unchanged. Review each
 question’s outcome beside the convergence state. A hostname answered through a
 CNAME chain stays comparable, with each resolver’s alias path shown; failed,

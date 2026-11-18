@@ -96,7 +96,14 @@ Set a switch to `1`, `true`, `yes`, or `on` to disable that hosted feature:
 | `WHOISLEUTH_DISABLE_TLS_INTELLIGENCE` | Stops the one-connection TLS profile. |
 | `WHOISLEUTH_DISABLE_CERTIFICATE_TRANSPARENCY` | Blocks Certificate Transparency search. |
 | `WHOISLEUTH_DISABLE_DOMAIN_POSTURE` | Blocks official-domain posture audits. |
-| `WHOISLEUTH_DISABLE_RESOLVER_COMPARISON` | Blocks the separate selected-resolver action; disabling DNS intelligence also blocks it. |
+| `WHOISLEUTH_DISABLE_RESOLVER_COMPARISON` | Blocks the separate selected-resolver action even when it is enabled; disabling DNS intelligence also blocks it. |
+
+Selected resolver comparison sends the observed hostname to Cloudflare and
+Google public DNS, so it is off unless the operator sets
+`WHOISLEUTH_RESOLVER_COMPARISON_ENABLED=1` (exactly `1`). Until then the browser
+shows it as not enabled for the deployment and the endpoint refuses before
+validation or collection. The local CLI `resolver-compare` command is unaffected.
+Review the privacy notice before enabling it on a public deployment.
 
 The authenticated capability report comes from the same policy enforced by
 Express and direct functions. A disabled endpoint returns HTTP 503 with

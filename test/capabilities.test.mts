@@ -125,6 +125,15 @@ test('emergency switches are reflected by the server-authoritative feature repor
   assert.equal(featureById(report, 'lookup').status, 'supported');
 });
 
+test('selected resolver comparison is reported disabled until the operator opts in', () => {
+  const off = featureById(capabilityReport('netlify', {}), 'resolver_comparison');
+  assert.equal(off.status, 'disabled');
+  assert.match(stringValue(off.reason), /not enabled for this deployment/u);
+  const on = featureById(capabilityReport('netlify', { WHOISLEUTH_RESOLVER_COMPARISON_ENABLED: '1' }), 'resolver_comparison');
+  assert.equal(on.status, 'supported');
+  assert.equal('reason' in on, false);
+});
+
 test('optional scheduled monitoring is explicit, credential-gated, and Netlify-only', () => {
   const disabled = capabilityReport('netlify', {});
   const unavailable = capabilityReport('netlify', { WHOISLEUTH_SCHEDULED_MONITORING: '1' });
