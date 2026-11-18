@@ -158,6 +158,8 @@ export function scheduledLookupResult(
       : 'unknown',
     registrarName: entityName(availability?.registrar),
     nameservers: availability?.nameservers,
+    // Keep the established hosted projection: retained baselines were built
+    // from these registry fields, so a different source would create changes.
     createdDate: availability?.createdDate,
     expiryDate: availability?.expiryDate,
     privacyProtected: availability?.privacyProtected,
