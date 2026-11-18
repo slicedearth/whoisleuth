@@ -136,6 +136,8 @@
   }
 </script>
 
+<div class="preview-frame">
+<div class="frame-bar" aria-hidden="true"><span class="frame-path">console <i>/</i> lookup</span><span class="frame-chip">Synthetic</span></div>
 <section class="product-preview" aria-label="Synthetic WHOISleuth console preview">
   <article class="preview-panel discover-panel">
     <header><span>Candidates</span></header>
@@ -246,14 +248,21 @@
     </div>
   </article>
 </section>
+</div>
 
 <p class="preview-note">Example investigation · fictional data</p>
 
 <style>
   .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap;border:0}
-  .product-preview{display:grid;grid-template-columns:.85fr 1.25fr;grid-template-rows:auto auto;gap:10px;align-items:start}
+  /* One framed surface carries the depth; panels inside stay quieter. */
+  .preview-frame{position:relative;isolation:isolate;min-width:0;padding:10px;border:1px solid color-mix(in srgb,var(--interface-accent) 26%,var(--border));border-radius:calc(var(--radius-lg) + 4px);background:linear-gradient(180deg,rgb(var(--panel-rgb) / .55),rgb(var(--bg-rgb) / .4));box-shadow:var(--elevation-frame)}
+  .preview-frame::before{content:"";position:absolute;z-index:-1;inset:10% 8%;border-radius:inherit;background:radial-gradient(closest-side,rgb(var(--interface-accent-rgb) / var(--frame-glow-alpha)),transparent);filter:blur(40px);pointer-events:none}
+  .frame-bar{display:flex;min-width:0;align-items:center;justify-content:space-between;gap:10px;padding:0 4px 9px;color:var(--muted);font:650 var(--text-2xs) var(--mono)}
+  .frame-path{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.frame-path::before{display:inline-block;width:6px;height:6px;margin-right:8px;border-radius:2px;background:var(--interface-accent);content:"";vertical-align:1px}.frame-path i{color:var(--muted-subtle);font-style:normal}
+  .frame-chip{flex:0 0 auto;padding:2px 8px;border:1px solid var(--border);border-radius:999px;font-size:.6rem;letter-spacing:.08em;text-transform:uppercase}
+  .product-preview{display:grid;grid-template-columns:.88fr 1.22fr;grid-template-rows:auto auto;gap:10px;align-items:start}
   .discover-panel{grid-column:1;grid-row:1}.monitor-panel{grid-column:1;grid-row:2}.lookup-panel{grid-column:2;grid-row:1 / 3}
-  .preview-panel{min-width:0;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel);box-shadow:0 18px 48px rgb(var(--shadow-rgb) / .12)}
+  .preview-panel{min-width:0;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel);box-shadow:var(--elevation-1)}
   .preview-panel header{display:flex;min-width:0;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);background:rgb(var(--overlay-rgb) / .025);font-family:var(--mono)}
   .preview-panel header span{color:var(--accent);font-size:var(--text-xs);font-weight:750}
   .preview-panel header small{min-width:0;overflow:hidden;color:var(--muted);font-size:var(--text-2xs);text-overflow:ellipsis;white-space:nowrap}
@@ -297,6 +306,7 @@
   }
   @media(max-width:820px){.product-preview{grid-template-columns:1fr 1fr;grid-template-rows:auto auto}.lookup-panel{grid-column:1 / -1;grid-row:1}.discover-panel{grid-column:1;grid-row:2}.monitor-panel{grid-column:2;grid-row:2}}
   @media(max-width:560px){
+    .preview-frame{padding:6px}.frame-bar{padding-bottom:6px}
     .product-preview{grid-template-columns:1fr}
     .lookup-panel{grid-column:auto;grid-row:auto}
     .discover-panel,.monitor-panel{display:none}

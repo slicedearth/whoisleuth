@@ -73,7 +73,6 @@
   .hero-actions > :global(a){min-height:44px}
   .hero-actions .primary{color:var(--primary-text);background:linear-gradient(135deg,var(--primary-start),var(--primary-end))}
   .hero-preview{min-width:0}
-  .hero-preview :global(.preview-panel){box-shadow:0 18px 48px rgb(var(--shadow-rgb) / .16)}
   .jobs,.evidence,.learn{padding:72px 0;border-top:1px solid var(--border)}
   .section-intro{max-width:780px;margin-bottom:30px}.section-intro h2,.principles h2{margin:.3rem 0 .7rem;font:700 clamp(1.65rem,3.5vw,2.55rem) var(--mono);letter-spacing:-.045em}.section-intro>p:not(.eyebrow),.principles p{color:var(--muted);line-height:1.65}
   .evidence{display:grid;grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr);gap:clamp(34px,7vw,82px);align-items:start}.evidence .section-intro{margin:0}.evidence-grid{display:grid}.evidence-grid article{display:grid;grid-template-columns:minmax(130px,.42fr) minmax(0,1fr);gap:24px;padding:18px 0;border-top:1px solid var(--border)}.evidence-grid article:last-child{border-bottom:1px solid var(--border)}.evidence-grid h3{margin:0;font:700 1rem var(--mono)}.evidence-grid p{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.65}
