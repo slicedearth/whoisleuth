@@ -94,3 +94,13 @@ test('real CLI command preserves the one-request opt-in and refuses persistence 
   }), EXIT_CODES.PARTIAL_FAILURE);
   assert.equal(quiet.value(), '');
 });
+
+test('the CLI runner neutralises unsafe text even when a collector result bypasses validation', async () => {
+  const stdout = capture();
+  const status = await runCli(['peeringdb-context', 'AS64496', '--permitted-use'], { stdout: stdout.stream, stderr: capture().stream,
+    collectPeeringDirectory: async () => ({ source: 'PeeringDB' as const, asn: 'AS64496', observedAt: AT, state: 'listed' as const, failure: null,
+      network: { id: 123, name: 'Example\u001b]0;title\u0007 \u202enetwork', scope: 'Regional\u009b2J', peeringPolicy: null, updatedAt: null } }) });
+  assert.equal(status, EXIT_CODES.SUCCESS);
+  assert.ok(stdout.value().includes('Network: Example ]0;title  network'));
+  assert.doesNotMatch(stdout.value(), /[\u0000-\u0009\u000b-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/u);
+});

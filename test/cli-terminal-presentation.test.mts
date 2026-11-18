@@ -15,6 +15,7 @@ import {
 import type { ClassifiedQuery } from '../lib/classify.mts';
 import type { LookupSourceSettlement } from '../lib/lookup.mts';
 import {
+  neutralizeTerminalText,
   presentTerminalOutput,
   terminalPresentation,
   wrapTerminalOutput,
@@ -60,6 +61,14 @@ describe('CLI terminal presentation', () => {
     const source = 'Detail         This line remains unchanged when output is redirected.\n';
     assert.deepEqual(presentation, { color: false, interactive: false, palette: 'auto', width: null });
     assert.equal(presentTerminalOutput(source, presentation), source);
+  });
+
+  test('neutralises controls and invisible formatting while keeping line structure', () => {
+    const hostile = 'Network  Example\u001b[31m red\u009b2J\r\tline\u202e reversed\u200b\u00ad\nNext  kept\n';
+    const neutral = neutralizeTerminalText(hostile);
+    assert.equal(neutral, 'Network  Example [31m red 2J  line reversed\nNext  kept\n');
+    assert.doesNotMatch(neutral, /[\u0000-\u0009\u000b-\u001f\u007f-\u009f]|\p{Default_Ignorable_Code_Point}/u);
+    assert.equal(neutralizeTerminalText('Detail         Plain output is unchanged.\n'), 'Detail         Plain output is unchanged.\n');
   });
 
   test('respects explicit and conventional colour opt-outs', () => {
