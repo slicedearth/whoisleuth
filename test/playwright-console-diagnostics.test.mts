@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { isInjectedBrowserLayoutDiagnostic, isCancelledSessionPageDiagnostic, isNativePreloadTimingDiagnostic, isPolicyFixtureDiagnostic } from '../tools/playwright-execution-contract.mts';
+import { isInjectedBrowserLayoutDiagnostic, isNativePromiseResolutionDiagnostic, isCancelledSessionPageDiagnostic, isNativePreloadTimingDiagnostic, isPolicyFixtureDiagnostic } from '../tools/playwright-execution-contract.mts';
 
 test('native policy diagnostics cannot suppress application errors or errors from another document', () => {
   const origin = 'http://127.0.0.1:4173', fixture = `${origin}/__policy-fixture`;
@@ -26,6 +26,22 @@ test('only the exact injected Firefox layout warning is a retained tool diagnost
   assert.equal(isInjectedBrowserLayoutDiagnostic('firefox', 'error', text, 'debugger eval code'), false);
   assert.equal(isInjectedBrowserLayoutDiagnostic('firefox', 'warning', 'Unrelated warning', 'debugger eval code'), false);
   assert.equal(isInjectedBrowserLayoutDiagnostic('firefox', 'warning', text + ' Additional warning', 'debugger eval code'), false);
+});
+
+test('native promise diagnostics require the exact engine, document, source line and notice', () => {
+  const origin = 'http://127.0.0.1:4180', page = `${origin}/example?view=review`;
+  const text = `[JavaScript Warning: "The execution of microtasks on this page was reordered to avoid unsafe execution." {file: "${page}" line: 0}]`;
+  assert.equal(isNativePromiseResolutionDiagnostic('firefox', 'warning', text, page, 0, page, origin), true);
+  for (const [browser, type, message, source, line, document, allowed] of [
+    ['chromium', 'warning', text, page, 0, page, origin], ['webkit', 'warning', text, page, 0, page, origin],
+    ['firefox', 'error', text, page, 0, page, origin], ['firefox', 'warning', text, page, 1, page, origin],
+    ['firefox', 'warning', text, `${origin}/_app/immutable/application.js`, 0, page, origin],
+    ['firefox', 'warning', text, page, 0, `${origin}/other`, origin],
+    ['firefox', 'warning', text, page, 0, page, 'http://127.0.0.1:4181'],
+    ['firefox', 'warning', text + ' Another failure', page, 0, page, origin],
+    ['firefox', 'warning', 'Application warning', page, 0, page, origin],
+    ['firefox', 'warning', text, 'invalid', 0, 'invalid', origin],
+  ] as const) assert.equal(isNativePromiseResolutionDiagnostic(browser, type, message, source, line, document, allowed), false);
 });
 
 test('session cancellation diagnostics require the exact browser, origin, endpoint and lifecycle evidence', () => {

@@ -4,6 +4,7 @@ import {
   PLAYWRIGHT_AUTOMATIC_GUARD_OPTIONS,
   PLAYWRIGHT_NETWORK_GUARD_ROUTE_PATTERN,
   isInjectedBrowserLayoutDiagnostic,
+  isNativePromiseResolutionDiagnostic,
   isCancelledSessionPageDiagnostic,
   isNativePreloadTimingDiagnostic,
   isPolicyFixtureDiagnostic,
@@ -184,8 +185,9 @@ export async function installBrowserGuards(browser: Browser, options: GuardOptio
         const onConsole = (message: ConsoleMessage) => {
           const type = message.type();
           if (type !== 'error' && type !== 'warning') return;
-          const text = message.text(), url = message.location().url;
+          const text = message.text(), location = message.location(), url = location.url;
           if (isInjectedBrowserLayoutDiagnostic(browserName, type, text, url)) { diagnostic(text); return; }
+          if (isNativePromiseResolutionDiagnostic(browserName, type, text, url, location.lineNumber, page.url(), networkGuardOrigin)) { diagnostic('Firefox deferred native promise resolution.'); return; }
           if (browserName === 'webkit' && type === 'warning') { pendingNativeWarnings.push({ text, url }); return; }
           if (allowExpectedPolicyFixtureDiagnostics && isPolicyFixtureDiagnostic(browserName, type, text, url, page.url(), networkGuardOrigin)) { diagnostic(text); return; }
           if (type === 'error' && ((isLookupEndpointUrl(url, networkGuardOrigin)

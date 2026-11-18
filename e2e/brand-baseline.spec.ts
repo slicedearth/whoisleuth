@@ -55,7 +55,6 @@ function profileFixture() {
 test('selected mark certificates are reviewed offline without retaining original files in a Brand', async ({ page }, testInfo) => {
   await page.clock.setFixedTime(new Date(BIMI_REVIEW_TIME));
   const input = await bimiCertificateFixture();
-  await page.goto('/brands');
   await migrateLegacyBrowserData(page, { [PROFILES_KEY]: currentBrandProfileBrowserStore([
     profileFixture(), { ...profileFixture(), id: 'profile-2', name: 'Other Brand' },
   ]), [ACTIVE_KEY]: 'profile-1' }, { destination: '/brands' });

@@ -55,6 +55,16 @@ export function isInjectedBrowserLayoutDiagnostic(browserName: string, type: str
     && /^\[JavaScript Warning: "Layout was forced before the page was fully loaded\. If stylesheets are not yet loaded this may cause a flash of unstyled content\." \{file: "debugger eval code" line: \d+\}\]$/u.test(text);
 }
 
+/** The engine can defer native promise resolution; application warnings are not this notice. */
+export function isNativePromiseResolutionDiagnostic(browserName: string, type: string, text: string, messageUrl: string, lineNumber: number, pageUrl: string, origin: string): boolean {
+  if (browserName !== 'firefox' || type !== 'warning' || lineNumber !== 0 || messageUrl !== pageUrl) return false;
+  try {
+    const page = new URL(pageUrl);
+    if (page.origin !== origin || page.protocol !== 'http:' || page.hostname !== '127.0.0.1') return false;
+  } catch { return false; }
+  return text === `[JavaScript Warning: "The execution of microtasks on this page was reordered to avoid unsafe execution." {file: "${pageUrl}" line: 0}]`;
+}
+
 /** WebKit can report a handled same-origin fetch cancelled by navigation. */
 export function isCancelledSessionPageDiagnostic(browserName: string, message: string, origin: string, cancelledSession: boolean, navigated: boolean): boolean {
   if (browserName !== 'webkit' || !cancelledSession || !navigated) return false;
