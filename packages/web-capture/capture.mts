@@ -7,6 +7,11 @@ import type { Browser, BrowserContext, Page, Route } from 'playwright';
 import { installPageObservationBoundary, collectPageElements, buildPageBehaviour } from './page-observation-boundary.mts';
 import type { PageRequestObservation } from '../investigation/page-behaviour.mts';
 import { CAPTURE_REQUEST_CHANNELS, MAX_CAPTURE_CHANNEL_OBSERVATIONS, emptyCaptureCoverage, type CaptureRequestAttempt, type CaptureRequestChannel } from '../investigation/capture-coverage.mts';
+import { CAPTURE_NAVIGATION_PLAN_SCHEMA, CAPTURE_NAVIGATION_PLAN_VERSION, MAX_CAPTURE_NAVIGATION_PLAN_BYTES, MAX_CAPTURE_NAVIGATION_STEPS,
+  type CaptureNavigationStep } from '../contracts/capture-navigation.mts';
+import { captureArtifactName, readCaptureNavigation } from '../investigation/capture-navigation.mts';
+import { parseBoundedJson } from '../analysis/bounded-json.mts';
+import { exact } from '../evidence/artifact-structure.mts';
 
 import { WHOISLEUTH_USER_AGENT } from '../../lib/outbound-identity.mts';
 import { inspectDecodedImage } from '../../lib/perceptual-hash.mts';
@@ -28,6 +33,7 @@ import {
   WEB_CAPTURE_DOM_DIGEST_VERSION,
   WEB_CAPTURE_MANIFEST_SCHEMA,
   WEB_CAPTURE_MANIFEST_VERSION,
+  MAX_CAPTURE_REQUESTS, MAX_CAPTURE_HOSTS, MAX_CAPTURE_URL_LENGTH, MAX_CAPTURE_TIMEOUT_MS, MAX_CAPTURE_RESPONSE_BYTES, MAX_CAPTURE_TRANSFER_BYTES,
 } from '../contracts/web-capture.mts';
 export {
   MAX_WEB_CAPTURE_DOM_DIGEST_BYTES,
@@ -40,13 +46,8 @@ export {
   WEB_CAPTURE_DOM_DIGEST_VERSION,
   WEB_CAPTURE_MANIFEST_SCHEMA,
   WEB_CAPTURE_MANIFEST_VERSION,
+  MAX_CAPTURE_REQUESTS, MAX_CAPTURE_HOSTS, MAX_CAPTURE_URL_LENGTH, MAX_CAPTURE_TIMEOUT_MS, MAX_CAPTURE_RESPONSE_BYTES, MAX_CAPTURE_TRANSFER_BYTES,
 } from '../contracts/web-capture.mts';
-export const MAX_CAPTURE_REQUESTS = 100;
-export const MAX_CAPTURE_HOSTS = 30;
-export const MAX_CAPTURE_URL_LENGTH = 2048;
-export const MAX_CAPTURE_TIMEOUT_MS = 30_000;
-export const MAX_CAPTURE_RESPONSE_BYTES = 4 * 1024 * 1024;
-export const MAX_CAPTURE_TRANSFER_BYTES = 24 * 1024 * 1024;
 export const VIEWPORT = Object.freeze({ width: 1024, height: 768 });
 
 type PublicAddressRecord = Readonly<{ address: string; family: number }>;
@@ -72,6 +73,8 @@ type CaptureArguments = Readonly<{
   timeoutMs: number;
   observerLabel?: string;
   vantageLabel?: string;
+  navigationPlanSource?: string;
+  navigationTargets?: readonly string[];
 }>;
 
 type CaptureDependencies = Readonly<{
@@ -300,6 +303,7 @@ export function parseCaptureArguments(argv: readonly string[]): CaptureArguments
   let destination: string | null = null;
   let authorised = false;
   let timeoutMs = 20_000;
+  let navigationPlanSource: string | undefined;
   const labels: { observerLabel?: string; vantageLabel?: string } = {};
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -307,6 +311,10 @@ export function parseCaptureArguments(argv: readonly string[]): CaptureArguments
       if (destination !== null) throw new Error('--output-dir may be supplied only once.');
       destination = argv[++index] ?? null;
       if (!destination || destination.startsWith('-')) throw new Error('--output-dir requires one new directory path.');
+    } else if (argument === '--navigation-plan') {
+      const value = argv[++index];
+      if (navigationPlanSource !== undefined || !value || value.startsWith('-')) throw new Error('--navigation-plan requires one selected local plan file.');
+      navigationPlanSource = outputDirectory(value);
     } else if (argument === '--observer' || argument === '--vantage') {
       const key = argument === '--observer' ? 'observerLabel' : 'vantageLabel';
       if (labels[key] !== undefined) throw new Error(`${argument} may be supplied only once.`);
@@ -331,9 +339,18 @@ export function parseCaptureArguments(argv: readonly string[]): CaptureArguments
     }
   }
   if (!targetUrl || !destination || !authorised) {
-    throw new Error('Usage: whoisleuth-capture <url> --output-dir <new-directory> --authorize-rendered-capture [--timeout-ms <1000-30000>]');
+    throw new Error('Usage: whoisleuth-capture <url> --output-dir <new-directory> --authorize-rendered-capture [--navigation-plan <selected-plan.json>] [--timeout-ms <1000-30000>]');
   }
-  return { targetUrl: captureTargetUrl(targetUrl).toString(), outputDirectory: outputDirectory(destination), timeoutMs, ...labels };
+  return { targetUrl: captureTargetUrl(targetUrl).toString(), outputDirectory: outputDirectory(destination), timeoutMs, ...labels,
+    ...(navigationPlanSource ? { navigationPlanSource } : {}) };
+}
+
+/** The plan chooses URLs, never executable controls, scripts or form actions. */
+export function parseCaptureNavigationPlan(raw: string): readonly string[] {
+  const value = exact(parseBoundedJson(raw, { maximumBytes: MAX_CAPTURE_NAVIGATION_PLAN_BYTES, label: 'Selected navigation plan' }), ['schema', 'version', 'urls'], 'Selected navigation plan');
+  if (value.schema !== CAPTURE_NAVIGATION_PLAN_SCHEMA || value.version !== CAPTURE_NAVIGATION_PLAN_VERSION || !Array.isArray(value.urls)
+    || !value.urls.length || value.urls.length >= MAX_CAPTURE_NAVIGATION_STEPS) throw new TypeError(`A navigation plan requires 1–${MAX_CAPTURE_NAVIGATION_STEPS - 1} explicitly selected subsequent URLs.`);
+  return value.urls.map(captureTargetUrl).map(url => url.toString());
 }
 
 async function projectDom(page: Page): Promise<NormalizedDomProjection> {
@@ -495,6 +512,7 @@ async function installRequestBoundary(
   const attempts: CaptureRequestAttempt[] = [];
   let omittedAttempts = 0, websocketRefusals = 0;
   let admittedMainFrame = false, refusedMainFrame = false;
+  let stageStart = 0, stageBlockedStart = 0, stageBytesStart = 0, stageOmittedStart = 0, stageWebsocketStart = 0;
   function requestChannel(route: Route): CaptureRequestChannel {
     const request = route.request();
     if (request.isNavigationRequest()) {
@@ -545,6 +563,11 @@ async function installRequestBoundary(
     }
     try {
       totalSignal.throwIfAborted();
+      const frame = route.request().frame();
+      if (frame !== page.mainFrame() && frame.page() !== page) {
+        observation = { ...observation, state: 'refused', reason: 'shutdown' };
+        throw new Error('request does not belong to the selected page');
+      }
       if (!['GET', 'HEAD'].includes(route.request().method())) {
         observation = { ...observation, state: 'refused', reason: 'method' };
         throw new Error('non-read request blocked');
@@ -656,8 +679,16 @@ async function installRequestBoundary(
     );
     return pending;
   });
-  page.on('download', (download) => { void download.cancel(); });
   return {
+    beginPage(next: Page) {
+      if (pendingRequests.size) throw new Error('Previous capture requests must settle before selecting another page.');
+      page = next;
+      stageStart = requestCount; stageBlockedStart = blockedRequestCount; stageBytesStart = transferredBytes;
+      stageOmittedStart = omittedAttempts; stageWebsocketStart = websocketRefusals;
+      admittedMainFrame = false; refusedMainFrame = false; acceptingRequests = true;
+      page.on('download', download => { void download.cancel(); });
+    },
+    totals() { return { requestAttempts: requestCount, responseBytesCharged: transferredBytes, publicRequestHosts: retainedPublicRequestHosts.size }; },
     canRetainRefusedNavigation() { return admittedMainFrame && refusedMainFrame; },
     hasRefusedNavigation() { return refusedMainFrame; },
     beginSeal() {
@@ -669,15 +700,16 @@ async function installRequestBoundary(
         await Promise.allSettled([...pendingRequests]);
       }
       return {
-        requestHosts: [...retainedPublicRequestHosts].sort().slice(0, MAX_CAPTURE_HOSTS),
-        pageRequests,
-        coverage: { ...emptyCaptureCoverage(), attempts: attempts.sort((a, b) => a.position - b.position), omittedAttempts, websocketRefusals },
+        requestHosts: [...new Set(attempts.filter(item => item.position > stageStart && item.origin).map(item => canonicalUrlHost(new URL(item.origin!))))].sort().slice(0, MAX_CAPTURE_HOSTS),
+        pageRequests: pageRequests.filter(item => item.position > stageStart),
+        coverage: { ...emptyCaptureCoverage(), attempts: attempts.filter(item => item.position > stageStart).sort((a, b) => a.position - b.position),
+          omittedAttempts: omittedAttempts - stageOmittedStart, websocketRefusals: websocketRefusals - stageWebsocketStart },
         stats: {
-          requestCount,
-          blockedRequestCount,
+          requestCount: requestCount - stageStart,
+          blockedRequestCount: blockedRequestCount - stageBlockedStart,
           hostLimitReached,
           responseByteLimitReached,
-          transferredBytes,
+          transferredBytes: transferredBytes - stageBytesStart,
         },
       };
     },
@@ -860,6 +892,10 @@ export async function captureRenderedPage(
     throw new Error(`Rendered capture total-run timeout must be between 1000 and ${MAX_CAPTURE_TIMEOUT_MS} ms.`);
   }
   const target = captureTargetUrl(argumentsValue.targetUrl);
+  if (argumentsValue.navigationPlanSource && argumentsValue.navigationTargets === undefined) throw new TypeError('Read and validate the selected navigation plan before capture.');
+  if (argumentsValue.navigationTargets !== undefined && (!Array.isArray(argumentsValue.navigationTargets) || argumentsValue.navigationTargets.length >= MAX_CAPTURE_NAVIGATION_STEPS)) throw new TypeError('Selected navigation exceeds its step bound.');
+  // Validate the complete selection before creating any directory or request.
+  const targets = [target, ...(argumentsValue.navigationTargets ?? []).map(captureTargetUrl)];
   const observerLabel = readObservationLabel(argumentsValue.observerLabel), vantageLabel = readObservationLabel(argumentsValue.vantageLabel);
   const targetDirectory = outputDirectory(argumentsValue.outputDirectory);
   const parentDirectory = path.dirname(targetDirectory);
@@ -948,9 +984,6 @@ export async function captureRenderedPage(
     await deadline.run(disableBrowserOnlyNetworkApis(context));
     await deadline.run(installPageObservationBoundary(context));
     page = await deadline.run(context.newPage());
-    if (!await deadline.run(page.evaluate(browserNetworkIntrinsicsAreDisabled))) {
-      throw new Error('Rendered capture could not verify that browser-managed transports were disabled.');
-    }
     const requestBoundary = await deadline.run(installRequestBoundary(
       context,
       page,
@@ -960,101 +993,108 @@ export async function captureRenderedPage(
       argumentsValue.timeoutMs,
       deadline.signal,
     ));
-    try {
-      await deadline.run(page.goto(target.toString(), { waitUntil: 'domcontentloaded', timeout: argumentsValue.timeoutMs }));
-    } catch (cause) {
-      if (!deadline.expired() && requestBoundary.hasRefusedNavigation()) {
-        throw new Error('Initial capture navigation was blocked or unavailable. No capture files were retained.');
+    async function capturePage(selected: URL, index: number) {
+      if (!page) page = await deadline.run(context!.newPage());
+      if (!await deadline.run(page.evaluate(browserNetworkIntrinsicsAreDisabled))) throw new Error('Selected capture page could not verify disabled browser transports.');
+      requestBoundary.beginPage(page);
+      try {
+        await deadline.run(page.goto(selected.toString(), { waitUntil: 'domcontentloaded', timeout: remainingTimeoutMs() }));
+      } catch (cause) {
+        if (deadline.expired() || !requestBoundary.hasRefusedNavigation()) throw cause;
+        if (index === 0) throw new Error('Initial capture navigation was blocked or unavailable. No capture files were retained.');
+        requestBoundary.beginSeal();
+        await deadline.run(page.close({ runBeforeUnload: false })); page = null;
+        await deadline.run(requestBoundary.seal());
+        return null;
       }
-      throw cause;
+      await deadline.run(page.waitForTimeout(Math.min(750, Math.max(100, Math.round(argumentsValue.timeoutMs / 20)))));
+      const browserUrl = page.url();
+      const unavailableMainFrame = browserUrl === 'chrome-error://chromewebdata/' && requestBoundary.canRetainRefusedNavigation();
+      const finalUrl = unavailableMainFrame ? null : captureUrl(browserUrl);
+      const title = unavailableMainFrame ? null : sanitizeCaptureText(await deadline.run(page.title()), 300);
+      const dom = unavailableMainFrame ? null : await deadline.run(projectDom(page));
+      const pageElements = unavailableMainFrame ? { elements: [], partial: true, clipboardWriteAttempts: 0 } : await deadline.run(collectPageElements(page));
+      const screenshotBuffer = Buffer.from(await deadline.run(page.screenshot({ type: 'png', fullPage: false, animations: 'disabled' })));
+      if (!screenshotBuffer.length || screenshotBuffer.length > MAX_WEB_CAPTURE_SCREENSHOT_BYTES) throw new Error('Rendered screenshot is empty or exceeds the aggregate 10 MiB artefact bound.');
+      const screenshotInspection = inspectDecodedImage(screenshotBuffer);
+      if (!screenshotInspection.decodable || screenshotInspection.width !== VIEWPORT.width || screenshotInspection.height !== VIEWPORT.height) throw new Error('Rendered screenshot must be a decodable PNG matching the fixed capture viewport.');
+      const capturedAt = dependencies.now?.() ?? new Date().toISOString();
+      // No old page or pending response may enter the next selected stage.
+      requestBoundary.beginSeal();
+      await deadline.run(page.close({ runBeforeUnload: false })); page = null;
+      const sealedBoundary = await deadline.run(requestBoundary.seal());
+      return { target: selected, unavailableMainFrame, finalUrl, title, dom, pageElements, screenshotBuffer, screenshotInspection, capturedAt, sealedBoundary };
     }
-    await deadline.run(page.waitForTimeout(Math.min(750, Math.max(100, Math.round(argumentsValue.timeoutMs / 20)))));
-    const browserUrl = page.url();
-    // Only a recorded main-frame failure after an admitted initial navigation
-    // can produce a partial capture. Do not relabel an arbitrary URL-policy or
-    // initial navigation failure as a successful observation.
-    const unavailableMainFrame = browserUrl === 'chrome-error://chromewebdata/'
-      && requestBoundary.canRetainRefusedNavigation();
-    const finalUrl = unavailableMainFrame ? null : captureUrl(browserUrl);
-    const title = unavailableMainFrame ? null : sanitizeCaptureText(await deadline.run(page.title()), 300);
-    const dom = unavailableMainFrame ? null : await deadline.run(projectDom(page));
-    const pageElements = unavailableMainFrame
-      ? { elements: [], partial: true, clipboardWriteAttempts: 0 }
-      : await deadline.run(collectPageElements(page));
-    const screenshot = await deadline.run(page.screenshot({ type: 'png', fullPage: false, animations: 'disabled' }));
-    const screenshotBuffer = Buffer.from(screenshot);
-    if (!screenshotBuffer.length || screenshotBuffer.length > MAX_WEB_CAPTURE_SCREENSHOT_BYTES) {
-      throw new Error('Rendered screenshot is empty or exceeds the 10 MiB artefact bound.');
+    const staged: Array<NonNullable<Awaited<ReturnType<typeof capturePage>>>> = [];
+    const steps: CaptureNavigationStep[] = [];
+    let stopped = false, screenshotBytes = 0;
+    for (const [index, selected] of targets.entries()) {
+      const beforeCapture = staged.length ? staged.length - 1 : null;
+      if (stopped) { steps.push({ selectedOrigin: selected.origin, beforeCapture, afterCapture: null, state: 'not_attempted' }); continue; }
+      const captured = await capturePage(selected, index);
+      if (!captured) { steps.push({ selectedOrigin: selected.origin, beforeCapture, afterCapture: null, state: 'blocked' }); stopped = true; continue; }
+      screenshotBytes += captured.screenshotBuffer.length;
+      if (screenshotBytes > MAX_WEB_CAPTURE_SCREENSHOT_BYTES) throw new Error('Selected navigation exceeds the aggregate 10 MiB screenshot bound.');
+      staged.push(captured);
+      steps.push({ selectedOrigin: selected.origin, beforeCapture, afterCapture: staged.length - 1, state: 'captured' });
     }
-    const screenshotInspection = inspectDecodedImage(screenshotBuffer);
-    if (!screenshotInspection.decodable
-      || screenshotInspection.width !== VIEWPORT.width
-      || screenshotInspection.height !== VIEWPORT.height) {
-      throw new Error('Rendered screenshot must be a decodable PNG matching the fixed capture viewport.');
-    }
-    const capturedAt = dependencies.now?.() ?? new Date().toISOString();
-    // Stop the page and its disposable context before sealing request
-    // accounting. This prevents late browser activity from appearing after
-    // the completeness snapshot while admitted routes are still settled.
-    requestBoundary.beginSeal();
-    await deadline.run(page.close({ runBeforeUnload: false }).catch(() => {}));
-    page = null;
     // A failed context close invalidates the claim that no further browser
     // request can alter the final completeness state, so fail the capture.
     await deadline.run(context.close());
     context = null;
-    const sealedBoundary = await deadline.run(requestBoundary.seal());
-    const requestStats = sealedBoundary.stats;
+    const finalBoundary = await deadline.run(requestBoundary.seal());
+    if (!stopped) staged[staged.length - 1]!.sealedBoundary = finalBoundary;
     const browserVersion = browser.version();
     // Seal the browser-lifetime barrier too: page/context teardown may create
     // connections after their route handlers have gone away.
     await deadline.run(browser.close());
     const blockedDirectConnections = browser.blockedDirectConnections();
     browser = null;
-    const pageBehaviour = buildPageBehaviour(pageElements, sealedBoundary.pageRequests, dom?.visibleText ?? '',
-      Boolean(unavailableMainFrame || requestStats.blockedRequestCount || blockedDirectConnections || dom?.structureTruncated || dom?.textTruncated),
-      { ...sealedBoundary.coverage, directConnectionRefusals: Math.min(1_000_000, blockedDirectConnections) });
-    const domDigest = dom ? {
-      schema: WEB_CAPTURE_DOM_DIGEST_SCHEMA,
-      version: WEB_CAPTURE_DOM_DIGEST_VERSION,
-      capturedAt,
-      domain: canonicalUrlHost(target),
-      counts: {
-        elements: dom.elementCount,
-        forms: dom.formCount,
-        controls: dom.inputCount,
-        scripts: dom.scriptCount,
-        images: dom.imageCount,
-      },
-      structure: { algorithm: 'sha256', value: sha256(dom.structure), truncated: dom.structureTruncated },
-      visibleText: { algorithm: 'sha256', value: sha256(dom.visibleText), bytes: dom.visibleTextBytes, truncated: dom.textTruncated },
-      limitations: [
-        'No DOM markup, body text, form values, request paths, query strings, headers, bodies, cookies, or credentials are retained.',
-      'Structure digest covers bounded preorder tag sequences, not nesting, attributes, or exact DOM equality. The legacy visibleText field hashes bounded body text nodes, including CSS-hidden or non-rendered text; it is not a visibility claim.',
-      ],
-    } : null;
-    const domBytes = domDigest ? Buffer.from(`${JSON.stringify(domDigest, null, 2)}\n`) : null;
-    if (domBytes && domBytes.length > MAX_WEB_CAPTURE_DOM_DIGEST_BYTES) throw new Error('DOM digest exceeds the 1 MiB artefact bound.');
-    const screenshotName = 'screenshot.png';
-    const domName = 'dom-digest.json';
-    await writeArtifact(screenshotName, screenshotBuffer);
-    if (domBytes) await writeArtifact(domName, domBytes);
-    const limitations = [
-      ...(unavailableMainFrame ? ['The final main frame became unavailable after a blocked or failed navigation. The screenshot shows the resulting browser state, not the admitted target page; no final origin, title, DOM digest or page-element observations are claimed.'] : []),
-      'Each admitted exact resource URL, including path and query, is disclosed to its operator. No dedicated path or query field is retained; the page title and screenshot can reproduce page-controlled content including them.',
-      'Downloads, service workers, dedicated/shared workers, WebSockets, WebRTC, WebTransport, non-read methods, non-HTTP(S), credentials, non-default ports, private addresses, and traffic over declared bounds were blocked.',
-      'Each request was resolved and connection-pinned by the shared safe-fetch transport before its bounded response was supplied to the disposable browser; cookies, authorisation headers, and request bodies were not forwarded.',
-      'Direct browser connections were refused by a deny-only loopback proxy through browser shutdown; speculative DNS and direct QUIC were disabled. This does not replace operating-system isolation of untrusted browser code.',
-      ...(blockedDirectConnections ? ['Additional direct browser connection attempts were refused; their destinations and content were not retained.'] : []),
-      `Each response body was read up to ${MAX_CAPTURE_RESPONSE_BYTES} bytes and the collector processed at most ${MAX_CAPTURE_TRANSFER_BYTES} response-body bytes across the capture; lower-level transport buffering is outside this application-level bound.`,
-      `Rendered DOM counts are capped at ${MAX_WEB_CAPTURE_DOM_ELEMENTS} and the body text-node sequence is hashed only through a valid UTF-8 boundary within ${MAX_WEB_CAPTURE_VISIBLE_TEXT_BYTES} bytes; reaching either bound leaves the capture partial.`,
-      'The screenshot perceptual hash is an investigative similarity signal and does not establish copying, ownership, intent, safety, or maliciousness.',
-    ];
-    const manifest = {
-      schema: WEB_CAPTURE_MANIFEST_SCHEMA,
-      schemaVersion: WEB_CAPTURE_MANIFEST_VERSION,
-      source: { name: 'WHOISleuth local rendered capture', reference: null, collectedAt: capturedAt },
-      captures: [{
+    const files: Array<{ name: string; bytes: Buffer }> = [];
+    let domArtifactBytes = 0;
+    const captures = staged.map(({ target, unavailableMainFrame, finalUrl, title, dom, pageElements, screenshotBuffer, screenshotInspection, capturedAt, sealedBoundary }, index) => {
+      const requestStats = sealedBoundary.stats;
+      const pageBehaviour = buildPageBehaviour(pageElements, sealedBoundary.pageRequests, dom?.visibleText ?? '',
+        Boolean(unavailableMainFrame || requestStats.blockedRequestCount || blockedDirectConnections || dom?.structureTruncated || dom?.textTruncated),
+        { ...sealedBoundary.coverage, directConnectionRefusals: targets.length === 1 ? Math.min(1_000_000, blockedDirectConnections) : 0 });
+      const domDigest = dom ? {
+        schema: WEB_CAPTURE_DOM_DIGEST_SCHEMA,
+        version: WEB_CAPTURE_DOM_DIGEST_VERSION,
+        capturedAt,
+        domain: canonicalUrlHost(target),
+        counts: {
+          elements: dom.elementCount,
+          forms: dom.formCount,
+          controls: dom.inputCount,
+          scripts: dom.scriptCount,
+          images: dom.imageCount,
+        },
+        structure: { algorithm: 'sha256', value: sha256(dom.structure), truncated: dom.structureTruncated },
+        visibleText: { algorithm: 'sha256', value: sha256(dom.visibleText), bytes: dom.visibleTextBytes, truncated: dom.textTruncated },
+        limitations: [
+          'No DOM markup, body text, form values, request paths, query strings, headers, bodies, cookies, or credentials are retained.',
+          'Structure digest covers bounded preorder tag sequences, not nesting, attributes, or exact DOM equality. The legacy visibleText field hashes bounded body text nodes, including CSS-hidden or non-rendered text; it is not a visibility claim.',
+        ],
+      } : null;
+      const domBytes = domDigest ? Buffer.from(`${JSON.stringify(domDigest, null, 2)}\n`) : null;
+      domArtifactBytes += domBytes?.length ?? 0;
+      if (domArtifactBytes > MAX_WEB_CAPTURE_DOM_DIGEST_BYTES) throw new Error('Selected DOM digests exceed the aggregate 1 MiB artefact bound.');
+      const screenshotName = captureArtifactName(index, 'screenshot');
+      const domName = captureArtifactName(index, 'dom_digest');
+      files.push({ name: screenshotName, bytes: screenshotBuffer });
+      if (domBytes) files.push({ name: domName, bytes: domBytes });
+      const limitations = [
+        ...(unavailableMainFrame ? ['The final main frame became unavailable after a blocked or failed navigation. The screenshot shows the resulting browser state, not the admitted target page; no final origin, title, DOM digest or page-element observations are claimed.'] : []),
+        'Each admitted exact resource URL, including path and query, is disclosed to its operator. No dedicated path or query field is retained; the page title and screenshot can reproduce page-controlled content including them.',
+        'Downloads, service workers, dedicated/shared workers, WebSockets, WebRTC, WebTransport, non-read methods, non-HTTP(S), credentials, non-default ports, private addresses, and traffic over declared bounds were blocked.',
+        'Each request was resolved and connection-pinned by the shared safe-fetch transport before its bounded response was supplied to the disposable browser; cookies, authorisation headers, and request bodies were not forwarded.',
+        'Direct browser connections were refused by a deny-only loopback proxy through browser shutdown; speculative DNS and direct QUIC were disabled. This does not replace operating-system isolation of untrusted browser code.',
+        ...(blockedDirectConnections ? ['Additional direct browser connection attempts were refused; their destinations and content were not retained.'] : []),
+        `Each response body was read up to ${MAX_CAPTURE_RESPONSE_BYTES} bytes and the collector processed at most ${MAX_CAPTURE_TRANSFER_BYTES} response-body bytes across the capture; lower-level transport buffering is outside this application-level bound.`,
+        `Rendered DOM counts are capped at ${MAX_WEB_CAPTURE_DOM_ELEMENTS} and the body text-node sequence is hashed only through a valid UTF-8 boundary within ${MAX_WEB_CAPTURE_VISIBLE_TEXT_BYTES} bytes; reaching either bound leaves the capture partial.`,
+        'The screenshot perceptual hash is an investigative similarity signal and does not establish copying, ownership, intent, safety, or maliciousness.',
+      ];
+    return {
         domain: canonicalUrlHost(target),
         capturedAt,
         conditions: readCaptureConditions({ browser: 'chromium', browserVersion, viewport: VIEWPORT,
@@ -1074,7 +1114,15 @@ export async function captureRenderedPage(
           kind: 'dom_digest', fileName: domName, mimeType: 'application/json',
           sha256: sha256(domBytes), bytes: domBytes.length,
         }] : [])],
-      }],
+      };
+    });
+    const navigation = targets.length > 1 ? { version: 1 as const, profile: 'selected_url_navigation' as const,
+      steps, directConnectionRefusals: Math.min(1_000_000, blockedDirectConnections), totals: requestBoundary.totals() } : undefined;
+    if (navigation) readCaptureNavigation(navigation, WEB_CAPTURE_MANIFEST_VERSION, captures);
+    const manifest = {
+      schema: WEB_CAPTURE_MANIFEST_SCHEMA, schemaVersion: WEB_CAPTURE_MANIFEST_VERSION,
+      source: { name: 'WHOISleuth local rendered capture', reference: null, collectedAt: captures.at(-1)!.capturedAt },
+      captures, ...(navigation ? { navigation } : {}),
     };
     const manifestBytes = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`);
     if (manifestBytes.length > MAX_WEB_CAPTURE_MANIFEST_BYTES) {
@@ -1082,6 +1130,7 @@ export async function captureRenderedPage(
     }
     // The manifest is the final commit marker. A reserved directory without it
     // is never a completed capture, and the destination is never replaced.
+    for (const file of files) await writeArtifact(file.name, file.bytes);
     await writeArtifact('manifest.json', manifestBytes);
     await deadline.run(assertPublishedDirectoryIdentity(targetDirectory, reservation));
     if (anchoredWriter) {

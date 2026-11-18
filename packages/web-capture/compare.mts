@@ -26,6 +26,8 @@ import {
   WEB_CAPTURE_MANIFEST_SUPPORTED_VERSIONS,
 } from '../contracts/web-capture.mts';
 import { MAX_CAPTURE_HOSTS, hasTerminalUnsafeCharacters } from './capture.mts';
+import { MAX_CAPTURE_NAVIGATION_STEPS } from '../contracts/capture-navigation.mts';
+import { readCaptureNavigation } from '../investigation/capture-navigation.mts';
 
 export { WEB_CAPTURE_COMPARISON_SCHEMA, WEB_CAPTURE_COMPARISON_VERSION } from '../contracts/web-capture.mts';
 export const MAX_MANIFEST_BYTES = MAX_WEB_CAPTURE_MANIFEST_BYTES;
@@ -34,7 +36,7 @@ export const MAX_SCREENSHOT_BYTES = MAX_WEB_CAPTURE_SCREENSHOT_BYTES;
 
 const SHA256_RE = /^[a-f0-9]{64}$/iu;
 const PERCEPTUAL_HASH_RE = /^[a-f0-9]{16}$/iu;
-const ROOT_KEYS = new Set(['schema', 'schemaVersion', 'source', 'captures']);
+const ROOT_KEYS = new Set(['schema', 'schemaVersion', 'source', 'captures', 'navigation']);
 const SOURCE_KEYS = new Set(['name', 'reference', 'collectedAt']);
 const CAPTURE_KEYS = new Set(['domain', 'capturedAt', 'completeness', 'limitations', 'page', 'requestDomains', 'technologies', 'artifacts', 'conditions', 'observerLabel', 'vantageLabel', 'pageBehaviour']);
 const PAGE_KEYS = new Set(['title', 'finalOrigin']);
@@ -46,7 +48,8 @@ const TEXT_KEYS = new Set(['algorithm', 'value', 'bytes', 'truncated']);
 
 type UnknownRecord = Record<string, unknown>;
 type CompareOutput = 'json' | 'terminal';
-type CompareArguments = Readonly<{ leftManifest: string; rightManifest: string; output: CompareOutput; masks?: readonly ImageRegion[] }>;
+type CompareArguments = Readonly<{ leftManifest: string; rightManifest: string; output: CompareOutput; masks?: readonly ImageRegion[];
+  leftCaptureIndex?: number; rightCaptureIndex?: number }>;
 type Artifact = Readonly<{
   kind: 'screenshot' | 'dom_digest';
   fileName: string;
@@ -58,6 +61,8 @@ type Artifact = Readonly<{
   height: number | null;
 }>;
 type CaptureManifest = Readonly<{
+  captureIndex: number;
+  sequenceState: 'complete' | 'partial' | null;
   domain: string;
   capturedAt: string;
   conditions: CaptureConditions | null;
@@ -231,18 +236,23 @@ function parseArtifact(value: unknown, label: string): Artifact {
   };
 }
 
-function parseManifest(value: unknown): CaptureManifest {
+function parseManifest(value: unknown, selectedIndex?: number): CaptureManifest {
   const root = record(value);
   if (!root || !onlyKeys(root, ROOT_KEYS) || root.schema !== WEB_CAPTURE_MANIFEST_SCHEMA
-    || !WEB_CAPTURE_MANIFEST_SUPPORTED_VERSIONS.includes(root.schemaVersion as number) || !Array.isArray(root.captures) || root.captures.length !== 1) {
+    || !WEB_CAPTURE_MANIFEST_SUPPORTED_VERSIONS.includes(root.schemaVersion as number) || !Array.isArray(root.captures)
+    || !root.captures.length || root.captures.length > MAX_CAPTURE_NAVIGATION_STEPS) {
     throw new Error(`Rendered comparison requires one ${WEB_CAPTURE_MANIFEST_SCHEMA} version ${WEB_CAPTURE_MANIFEST_VERSION} capture.`);
   }
+  if (root.captures.length > 1 && selectedIndex === undefined) throw new Error('A multi-capture manifest requires an explicit --left-capture or --right-capture selection for that side.');
+  const index = selectedIndex ?? 0;
+  if (!Number.isSafeInteger(index) || index < 0 || index >= root.captures.length) throw new Error('Selected capture index does not exist in this manifest.');
+  const navigation = readCaptureNavigation(root.navigation, root.schemaVersion, root.captures);
   const source = record(root.source);
   if (!source || !onlyKeys(source, SOURCE_KEYS)) throw new Error('Rendered capture source metadata is invalid.');
   boundedText(source.name, 80, 'Rendered capture source name');
   boundedText(source.reference, 500, 'Rendered capture source reference', true);
   const sourceCollectedAt = timestamp(source.collectedAt, 'Rendered capture source time');
-  const capture = record(root.captures[0]);
+  const capture = record(root.captures[index]);
   if (!capture || !onlyKeys(capture, CAPTURE_KEYS)) throw new Error('Rendered capture contains unsupported fields.');
   const completeness = capture.completeness === 'complete' || capture.completeness === 'partial'
     ? capture.completeness
@@ -262,10 +272,12 @@ function parseManifest(value: unknown): CaptureManifest {
   const domDigest = artifacts.find((artifact) => artifact.kind === 'dom_digest');
   if (!screenshot || !domDigest) throw new Error('Rendered capture must contain distinct screenshot and DOM digest artefacts.');
   const capturedAt = timestamp(capture.capturedAt, 'Rendered capture time');
-  if (sourceCollectedAt !== capturedAt) throw new Error('Rendered capture source time does not match its capture time.');
+  if (root.schemaVersion === 4 ? Date.parse(sourceCollectedAt) < Date.parse(capturedAt) : sourceCollectedAt !== capturedAt) throw new Error('Rendered capture source time does not match its capture time.');
   const pageBehaviour = readManifestPageBehaviour(capture.pageBehaviour, root.schemaVersion);
   if (pageBehaviour?.state === 'partial' && completeness === 'complete') throw new Error('Partial page observations cannot declare a complete capture.');
   return {
+    captureIndex: index,
+    sequenceState: navigation ? navigation.steps.every(step => step.state === 'captured') ? 'complete' : 'partial' : null,
     domain: captureDomain(capture.domain, 'Rendered capture domain'),
     capturedAt,
     conditions: readCaptureConditions(capture.conditions),
@@ -342,7 +354,7 @@ function sha256(value: Buffer): string {
   return createHash('sha256').update(value).digest('hex');
 }
 
-async function loadCapture(manifestPath: string): Promise<LoadedCapture> {
+async function loadCapture(manifestPath: string, selectedIndex?: number): Promise<LoadedCapture> {
   const bytes = await boundedFile(manifestPath, MAX_MANIFEST_BYTES, null, 'Rendered capture manifest');
   let parsed: unknown;
   try {
@@ -353,7 +365,7 @@ async function loadCapture(manifestPath: string): Promise<LoadedCapture> {
   } catch {
     throw new Error('Rendered capture manifest is not valid JSON.');
   }
-  const manifest = parseManifest(parsed);
+  const manifest = parseManifest(parsed, selectedIndex);
   const directory = path.dirname(manifestPath);
   const screenshotBytes = await boundedFile(path.join(directory, manifest.screenshot.fileName), MAX_SCREENSHOT_BYTES, manifest.screenshot.bytes, 'Rendered screenshot');
   const domBytes = await boundedFile(path.join(directory, manifest.domDigest.fileName), MAX_DOM_DIGEST_BYTES, manifest.domDigest.bytes, 'Rendered DOM digest');
@@ -407,16 +419,18 @@ export async function compareRenderedCaptures(
   rightPath: string,
   generatedAt = new Date().toISOString(),
   masks: readonly ImageRegion[] = [],
+  selection: Readonly<{ left?: number; right?: number }> = {},
 ) {
   const leftManifest = boundedPath(leftPath, 'Left capture manifest');
   const rightManifest = boundedPath(rightPath, 'Right capture manifest');
-  if (leftManifest === rightManifest) throw new Error('Rendered comparison requires two different manifest files.');
-  const [left, right] = await Promise.all([loadCapture(leftManifest), loadCapture(rightManifest)]);
+  if (leftManifest === rightManifest && (selection.left ?? 0) === (selection.right ?? 0)) throw new Error('Rendered comparison requires two different manifest files or explicitly selected distinct captures.');
+  const [left, right] = await Promise.all([loadCapture(leftManifest, selection.left), loadCapture(rightManifest, selection.right)]);
   const exactScreenshot = left.manifest.screenshot.sha256 === right.manifest.screenshot.sha256;
   const screenshotDistance = hammingDistanceHex(left.manifest.screenshot.perceptualHash, right.manifest.screenshot.perceptualHash);
   const screenshotNear = screenshotDistance !== null && screenshotDistance <= 6;
   const capturePartial = left.manifest.completeness !== 'complete' || right.manifest.completeness !== 'complete';
   const partial = capturePartial
+    || left.manifest.sequenceState === 'partial' || right.manifest.sequenceState === 'partial'
     || left.dom.structure.truncated || right.dom.structure.truncated || left.dom.visibleText.truncated || right.dom.visibleText.truncated;
   const compareCapturedSet = (leftValues: readonly string[], rightValues: readonly string[]) => {
     const comparison = setComparison(leftValues, rightValues);
@@ -431,8 +445,8 @@ export async function compareRenderedCaptures(
     schema: WEB_CAPTURE_COMPARISON_SCHEMA,
     version: WEB_CAPTURE_COMPARISON_VERSION,
     generatedAt: timestamp(generatedAt, 'Rendered comparison generation time'),
-    left: { domain: left.manifest.domain, capturedAt: left.manifest.capturedAt, completeness: left.manifest.completeness },
-    right: { domain: right.manifest.domain, capturedAt: right.manifest.capturedAt, completeness: right.manifest.completeness },
+    left: { domain: left.manifest.domain, capturedAt: left.manifest.capturedAt, completeness: left.manifest.completeness, captureIndex: left.manifest.captureIndex, sequenceState: left.manifest.sequenceState },
+    right: { domain: right.manifest.domain, capturedAt: right.manifest.capturedAt, completeness: right.manifest.completeness, captureIndex: right.manifest.captureIndex, sequenceState: right.manifest.sequenceState },
     partial,
     sourceLimitations: {
       left: { capture: left.manifest.limitations, domDigest: left.dom.limitations },
@@ -496,10 +510,17 @@ export async function compareRenderedCaptures(
 export function parseCaptureCompareArguments(argv: readonly string[]): CompareArguments {
   const inputs: string[] = [];
   const masks: ImageRegion[] = [];
+  const selected: { leftCaptureIndex?: number; rightCaptureIndex?: number } = {};
   let output: CompareOutput = 'terminal';
   for (let index = 0; index < argv.length; index++) {
     const argument = argv[index]!;
     if (argument === '--json') output = 'json';
+    else if (argument === '--left-capture' || argument === '--right-capture') {
+      const key = argument === '--left-capture' ? 'leftCaptureIndex' : 'rightCaptureIndex';
+      const raw = argv[++index], value = Number(raw);
+      if (selected[key] !== undefined || !raw || !/^[1-9]\d*$/u.test(raw) || !Number.isSafeInteger(value) || value > MAX_CAPTURE_NAVIGATION_STEPS) throw new Error(`Capture selection must be 1–${MAX_CAPTURE_NAVIGATION_STEPS} and supplied once per side.`);
+      selected[key] = value - 1;
+    }
     else if (argument === '--mask') {
       const coordinates = argv[++index];
       if (!coordinates || !/^[0-9]{1,5},[0-9]{1,5},[0-9]{1,5},[0-9]{1,5}$/u.test(coordinates) || masks.length >= MAX_EVIDENCE_IMAGE_REGIONS) throw new Error('--mask requires left,top,width,height; at most 64 masks are supported.');
@@ -511,15 +532,15 @@ export function parseCaptureCompareArguments(argv: readonly string[]): CompareAr
     else inputs.push(argument);
   }
   if (inputs.length !== 2) throw new Error('Usage: whoisleuth-capture compare <left-manifest.json> <right-manifest.json> [--json] [--mask left,top,width,height]');
-  return { leftManifest: boundedPath(inputs[0], 'Left capture manifest'), rightManifest: boundedPath(inputs[1], 'Right capture manifest'), output, ...(masks.length ? { masks } : {}) };
+  return { leftManifest: boundedPath(inputs[0], 'Left capture manifest'), rightManifest: boundedPath(inputs[1], 'Right capture manifest'), output, ...selected, ...(masks.length ? { masks } : {}) };
 }
 
 export function formatRenderedCaptureComparison(document: Awaited<ReturnType<typeof compareRenderedCaptures>>): string {
   const requestDomains = document.page.requestDomains;
   const lines = [
     'Rendered capture comparison',
-    `Left              ${document.left.domain} · ${document.left.completeness}`,
-    `Right             ${document.right.domain} · ${document.right.completeness}`,
+    `Left              ${document.left.domain} · capture ${document.left.captureIndex + 1} · ${document.left.completeness}${document.left.sequenceState ? ` · sequence ${document.left.sequenceState}` : ''}`,
+    `Right             ${document.right.domain} · capture ${document.right.captureIndex + 1} · ${document.right.completeness}${document.right.sequenceState ? ` · sequence ${document.right.sequenceState}` : ''}`,
     `Evidence          ${document.partial ? 'Partial' : 'Complete'}`,
     `Capture times     ${document.left.capturedAt} → ${document.right.capturedAt}`,
     `Declared labels   ${document.observationContext.labels}; collection independence not verified`,

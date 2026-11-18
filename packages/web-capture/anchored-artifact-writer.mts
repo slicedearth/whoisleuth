@@ -8,6 +8,8 @@ import {
   MAX_WEB_CAPTURE_MANIFEST_BYTES,
   MAX_WEB_CAPTURE_SCREENSHOT_BYTES,
 } from '../contracts/web-capture.mts';
+import { MAX_CAPTURE_NAVIGATION_STEPS } from '../contracts/capture-navigation.mts';
+import { captureArtifactName } from '../investigation/capture-navigation.mts';
 
 export type AnchoredArtifactIdentity = Readonly<{ dev: number; ino: number }>;
 
@@ -38,6 +40,10 @@ const FILE_LIMITS = new Map<string, number>([
   ['dom-digest.json', MAX_WEB_CAPTURE_DOM_DIGEST_BYTES],
   ['manifest.json', MAX_WEB_CAPTURE_MANIFEST_BYTES],
 ]);
+for (let index = 1; index < MAX_CAPTURE_NAVIGATION_STEPS; index++) {
+  FILE_LIMITS.set(captureArtifactName(index, 'screenshot'), MAX_WEB_CAPTURE_SCREENSHOT_BYTES);
+  FILE_LIMITS.set(captureArtifactName(index, 'dom_digest'), MAX_WEB_CAPTURE_DOM_DIGEST_BYTES);
+}
 const WRITER_OPERATION_TIMEOUT_MS = 5_000;
 
 function sameIdentity(left: AnchoredArtifactIdentity, right: AnchoredArtifactIdentity): boolean {

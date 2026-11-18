@@ -21,6 +21,8 @@ import {
 import { normalizeExplicitIsoTimestamp } from '../evidence/observation.mts';
 import { readManifestPageBehaviour, type PageBehaviour } from '../investigation/page-behaviour.mts';
 import { readCaptureConditions, readObservationLabel, type ObservationContext } from '../comparison/capture-context.mts';
+import type { CaptureNavigation } from '../contracts/capture-navigation.mts';
+import { readCaptureNavigation } from '../investigation/capture-navigation.mts';
 export {
   WEB_CAPTURE_MANIFEST_SCHEMA,
   WEB_CAPTURE_MANIFEST_VERSION,
@@ -35,6 +37,7 @@ const SHA256_RE = /^[a-f0-9]{64}$/i;
 const PERCEPTUAL_HASH_RE = /^[a-f0-9]{16}$/i;
 const CONTROL_RE = /[\u0000-\u001f\u007f]/u;
 const ROOT_KEYS = new Set(['schema', 'schemaVersion', 'source', 'captures']);
+const MANIFEST_ROOT_KEYS = new Set([...ROOT_KEYS, 'navigation']);
 const SOURCE_KEYS = new Set(['name', 'reference', 'collectedAt']);
 const CAPTURE_KEYS = new Set([
   'domain',
@@ -260,11 +263,12 @@ export function readWebCaptureManifest(value: unknown): Readonly<{
   document: ExternalFindingsDocument;
   artifacts: readonly CaptureArtifactDeclaration[];
   captures: readonly CaptureManifestContext[];
+  navigation: CaptureNavigation | null;
 }> {
   const root = record(value);
   if (
     !root
-    || !onlyKeys(root, ROOT_KEYS)
+    || !onlyKeys(root, MANIFEST_ROOT_KEYS)
     || root.schema !== WEB_CAPTURE_MANIFEST_SCHEMA
     || !WEB_CAPTURE_MANIFEST_SUPPORTED_VERSIONS.includes(root.schemaVersion as number)
   ) {
@@ -278,6 +282,7 @@ export function readWebCaptureManifest(value: unknown): Readonly<{
   if (!Array.isArray(root.captures) || !root.captures.length || root.captures.length > MAX_WEB_CAPTURE_SUMMARIES) {
     throw new Error(`Web capture manifests must contain between 1 and ${MAX_WEB_CAPTURE_SUMMARIES} captures.`);
   }
+  const navigation = readCaptureNavigation(root.navigation, root.schemaVersion, root.captures);
   const findings: Array<Record<string, unknown>> = [];
   const artifacts: CaptureArtifactDeclaration[] = [];
   const contexts: CaptureManifestContext[] = [];
@@ -359,6 +364,7 @@ export function readWebCaptureManifest(value: unknown): Readonly<{
       artifacts.push({ capture: index + 1, observedAt, kind, fileName, mimeType: mimeType!, sha256, bytes });
     }
     const summaryFragments = [
+      ...(navigation ? [`Selected URL navigation: capture ${index + 1} of ${navigation.steps.length} selected steps. ${navigation.steps.filter(step => step.state === 'blocked').length} blocked; ${navigation.steps.filter(step => step.state === 'not_attempted').length} not attempted. This records supplied URL order, not clicks or submitted forms.`] : []),
       ...(conditions ? [`Declared capture conditions: ${conditions.browser} ${conditions.browserVersion}; viewport ${conditions.viewport.width}x${conditions.viewport.height}; scale ${conditions.deviceScaleFactor}; locale ${conditions.locale}; timezone ${conditions.timezone}; ${conditions.colourScheme}.`] : []),
       ...(observerLabel || vantageLabel ? [`Declared observer: ${observerLabel ?? 'unknown'}; vantage: ${vantageLabel ?? 'unknown'}. These labels do not verify collection independence.`] : []),
       pageTitle || finalOrigin
@@ -386,7 +392,7 @@ export function readWebCaptureManifest(value: unknown): Readonly<{
         evidenceClass: 'deployment_observation',
         summary,
         observedAt,
-        completeness: limitations.every((item) => retainedLimitations.includes(item)) ? completeness : 'partial',
+        completeness: limitations.every((item) => retainedLimitations.includes(item)) && !navigation?.steps.some(step => step.state !== 'captured') ? completeness : 'partial',
         limitations: retainedLimitations,
         reference: sourceReference,
       });
@@ -398,7 +404,7 @@ export function readWebCaptureManifest(value: unknown): Readonly<{
     source: { name: sourceName, reference: sourceReference, collectedAt: sourceCollectedAt },
     findings,
   });
-  return { document, artifacts, captures: contexts };
+  return { document, artifacts, captures: contexts, navigation };
 }
 
 export function parseWebCaptureManifest(value: unknown): ExternalFindingsDocument {

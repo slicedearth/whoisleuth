@@ -3,7 +3,9 @@
 import manifest from '../package.json' with { type: 'json' };
 import { launchCaptureBrowser } from '../browser.mts';
 
-import { captureRenderedPage, createCaptureInterruption, parseCaptureArguments, sanitizeCaptureText, formatCaptureSuccess } from '../capture.mts';
+import { captureRenderedPage, createCaptureInterruption, parseCaptureArguments, parseCaptureNavigationPlan, sanitizeCaptureText, formatCaptureSuccess } from '../capture.mts';
+import { readBoundedRegularTextFile } from '../../../lib/bounded-file.mts';
+import { MAX_CAPTURE_NAVIGATION_PLAN_BYTES } from '../../contracts/capture-navigation.mts';
 import {
   compareRenderedCaptures,
   formatRenderedCaptureComparison,
@@ -13,12 +15,14 @@ import {
 const HELP = `WHOISleuth rendered capture companion
 
 Usage:
-  whoisleuth-capture <url> --output-dir <new-directory> --authorize-rendered-capture [--timeout-ms <1000-30000>]
-  whoisleuth-capture compare <left-manifest.json> <right-manifest.json> [--mask <left,top,width,height>] [--json]
+  whoisleuth-capture <url> --output-dir <new-directory> --authorize-rendered-capture [--navigation-plan <selected-plan.json>] [--timeout-ms <1000-30000>]
+  whoisleuth-capture compare <left-manifest.json> <right-manifest.json> [--left-capture <1-5>] [--right-capture <1-5>] [--mask <left,top,width,height>] [--json]
   whoisleuth-capture --version
 
-Capture executes page JavaScript for one explicitly authorised public hostname.
-It writes a screenshot, bounded DOM digest and manifest into a new directory.
+Capture executes page JavaScript for explicitly authorised public, domain-hosted URLs.
+An optional local plan selects up to four subsequent URLs. It never clicks controls or submits forms.
+The whole sequence shares request, host, transfer, deadline and aggregate artefact bounds.
+It writes each selected page's screenshot/DOM digest and one manifest into a new directory.
 The manifest separates supplied/refused/unavailable request channels, disabled transports and unexercised interactions.
 Each admitted resource receives its exact URL; no cookies or credentials are forwarded.
 Compare verifies selected local artefacts and makes no network requests.
@@ -40,16 +44,19 @@ try {
     process.stdout.write(`${manifest.version}\n`);
   } else if (argv[0] === 'compare') {
     const options = parseCaptureCompareArguments(argv.slice(1));
-    const comparison = await compareRenderedCaptures(options.leftManifest, options.rightManifest, undefined, options.masks);
+    const comparison = await compareRenderedCaptures(options.leftManifest, options.rightManifest, undefined, options.masks,
+      { ...(options.leftCaptureIndex !== undefined ? { left: options.leftCaptureIndex } : {}), ...(options.rightCaptureIndex !== undefined ? { right: options.rightCaptureIndex } : {}) });
     process.stdout.write(options.output === 'json'
       ? `${JSON.stringify(comparison, null, 2)}\n`
       : formatRenderedCaptureComparison(comparison));
   } else {
     const options = parseCaptureArguments(argv);
+    const navigationTargets = options.navigationPlanSource ? parseCaptureNavigationPlan(await readBoundedRegularTextFile(options.navigationPlanSource,
+      { maximumBytes: MAX_CAPTURE_NAVIGATION_PLAN_BYTES, label: 'Selected navigation plan' })) : undefined;
     const interruption = createCaptureInterruption();
     const manifest = await (async () => {
       try {
-        return await captureRenderedPage(options, { launchBrowser: launchCaptureBrowser, signal: interruption.signal });
+        return await captureRenderedPage({ ...options, ...(navigationTargets ? { navigationTargets } : {}) }, { launchBrowser: launchCaptureBrowser, signal: interruption.signal });
       } catch (error) {
         if (interruption.signal.aborted) process.exitCode = 130;
         throw error;

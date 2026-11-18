@@ -1003,6 +1003,14 @@ the hosted application and main CLI. It executes remote page JavaScript in a
 disposable network-bounded browser. Each admitted resource operator receives the
 exact requested URL, including its path and query.
 
+An optional private local plan can select up to four subsequent exact URLs.
+All selected pages share the existing collection limits and disposable browser
+context, with a fresh page per step and no clicks or form submission. The
+manifest retains selected origins, capture references, step outcomes and shared
+request accounting, not the plan's paths or queries. Earlier captures survive a
+later blocked step; cancellation publishes no sequence. Import previews expose
+these declarations separately from observed requests and redirects.
+
 Only the pinned collector may contact resource operators. A browser-lifetime
 deny-only proxy refuses direct connections, including teardown attempts, without
 retaining their destinations or content. Refused attempts leave the capture

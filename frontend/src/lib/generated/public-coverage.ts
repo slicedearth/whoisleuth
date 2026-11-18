@@ -784,7 +784,8 @@ export const PUBLIC_COVERAGE = {
       "limitations": [
         "Each admitted resource request discloses its exact URL, including path and query, its GET or HEAD method, and ordinary allowlisted request headers to that public resource endpoint; DNS questions are disclosed to the configured resolver.",
         "Structured outputs exclude request paths, queries, headers and bodies, but the control-sanitised page title and screenshot retain page-controlled content that may reproduce a path or query.",
-        "Rendered capture executes page JavaScript and remains separate from hosted Lookup and the distributable CLI."
+        "Rendered capture executes page JavaScript and remains separate from hosted Lookup and the distributable CLI.",
+        "An optional local plan selects up to four subsequent URLs in fresh pages within the same total collection bounds; declared selection steps do not establish clicks, form submission or a redirect chain."
       ]
     },
     {

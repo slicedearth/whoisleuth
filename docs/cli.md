@@ -48,6 +48,9 @@ with `npm run cli:package:check`.
 Rendered-page collection uses the separate [optional capture companion](https://github.com/slicedearth/whoisleuth/tree/main/packages/web-capture#install-a-local-candidate),
 not the main CLI. It can be installed from a verified local archive; browser
 installation and each authorised capture remain explicit actions.
+An optional local navigation plan selects up to four subsequent URLs within the
+same total collection limits. The companion records each step separately and
+supports explicit capture selection for offline comparison.
 
 ## First commands
 

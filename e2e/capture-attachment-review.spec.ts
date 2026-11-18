@@ -379,12 +379,32 @@ test('capture comparison exposes declared conditions, handles unmatched and diff
   expect(await readBrowserLocalCollection(page, 'cases')).toEqual(before); expect(await storedFiles(page)).toEqual([]);
 });
 
-test('explicit capture retention commits matching original files with the imported evidence, excluding unmatched selections', async ({ page }) => {
+test('explicit capture retention commits matching original files with the imported evidence, excluding unmatched selections', async ({ page }, testInfo) => {
   await openCasesView(page); await createCase(page, 'capture.example'); await openCaseSection(page, 'Evidence');
   const capture = page.locator('.capture-workspace'); await capture.locator(':scope > summary').click();
-  const { manifestBytes, screenshot, dom } = captureReviewFixture();
+  const { manifest, screenshot, dom } = captureReviewFixture();
+  const manifestBytes = Buffer.from(JSON.stringify({ ...manifest, navigation: { version: 1, profile: 'selected_url_navigation',
+    steps: [
+      { selectedOrigin: 'https://capture.example', beforeCapture: null, afterCapture: 0, state: 'captured' },
+      { selectedOrigin: 'https://unavailable.example', beforeCapture: 0, afterCapture: null, state: 'blocked' },
+      { selectedOrigin: 'https://later.example', beforeCapture: 0, afterCapture: null, state: 'not_attempted' },
+    ], directConnectionRefusals: 0, totals: { requestAttempts: 3, responseBytesCharged: 1024, publicRequestHosts: 1 },
+  } }));
   const before = await readBrowserLocalCollection(page, 'cases');
   await capture.getByLabel('Select capture manifest', { exact: true }).setInputFiles({ name: 'manifest.json', mimeType: 'application/json', buffer: manifestBytes });
+  const navigation = capture.locator('.capture-navigation'); await expand(navigation);
+  const steps = navigation.getByRole('list', { name: 'Selected navigation sequence', exact: true }).getByRole('listitem');
+  await expect(steps).toHaveCount(3);
+  await expect(steps.nth(0)).toContainText('Capture 1'); await expect(steps.nth(1)).toContainText('Blocked or unavailable');
+  await expect(steps.nth(2)).toContainText('Not attempted');
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 1280]) {
+      await page.setViewportSize({ width, height: 900 }); await navigation.scrollIntoViewIfNeeded(); await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`capture-navigation-${theme}-${width}.png`) });
+    }
+    expect((await new AxeBuilder({ page }).include('.capture-navigation').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
+  }
   await capture.getByLabel('Select capture attachments to check', { exact: true }).setInputFiles([
     { name: 'renamed.png', mimeType: 'image/png', buffer: Buffer.from(screenshot) },
     { name: 'renamed.json', mimeType: 'application/json', buffer: dom },

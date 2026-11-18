@@ -1,6 +1,7 @@
 import { array, boolean, enumeration, exact, integer, text, HEX_DIGEST_RE } from '../evidence/artifact-structure.mts';
 import { MESSAGE_ACTION_HINTS } from '../contracts/message-intake.mts';
 import { readCaptureCoverage, captureCoverageIsPartial, captureAttemptDescription, type CaptureCoverage } from './capture-coverage.mts';
+import { WEB_CAPTURE_MANIFEST_SUPPORTED_VERSIONS } from '../contracts/web-capture.mts';
 
 export const PAGE_BEHAVIOUR_VERSION = 1;
 // Separate from the capture's request, DOM traversal and aggregate byte bounds.
@@ -77,7 +78,7 @@ export function readPageBehaviour(raw: unknown): PageBehaviour {
 
 export function readManifestPageBehaviour(value: unknown, manifestVersion: unknown): PageBehaviour | null {
   if (manifestVersion === 2 && value === undefined) return null;
-  if (manifestVersion !== 3) throw new TypeError('Page behaviour requires capture manifest version 3.');
+  if (typeof manifestVersion !== 'number' || manifestVersion < 3 || !WEB_CAPTURE_MANIFEST_SUPPORTED_VERSIONS.includes(manifestVersion)) throw new TypeError('Page behaviour requires a supported capture manifest version.');
   return readPageBehaviour(value);
 }
 

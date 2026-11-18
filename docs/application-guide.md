@@ -1393,6 +1393,10 @@ digests, then view matched JSON or PNG files locally. Metadata import does not
 save originals by default. Select **Retain this manifest and verified matching
 files** to save them together; unmatched selections remain excluded. Existing
 capture manifests can be reviewed without a retained Incident URL.
+For a companion capture with an explicit URL sequence, **Selected navigation
+steps** shows the declared origins, retained capture numbers and any blocked or
+unattempted steps. Each selected URL opens in a fresh page; the sequence does
+not exercise clicks or forms and shares one collection budget.
 
 Open **Page behaviour and dependencies** to inspect navigation, script and frame
 responses, default form destinations, script hashes and requested-action wording.

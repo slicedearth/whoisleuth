@@ -12,5 +12,5 @@ test('capture denies direct and teardown connections for the complete sandboxed 
   });
   expect(JSON.parse(result.stdout)).toEqual({ directConnections: 0, rows: [
     { teardown: false, completeness: 'complete' }, { teardown: true, completeness: 'partial' },
-  ], navigationRefusals: ['form', 'redirect'] });
+  ], navigationRefusals: ['form', 'redirect'], navigationSteps: ['captured', 'captured', 'blocked', 'not_attempted'] });
 });
