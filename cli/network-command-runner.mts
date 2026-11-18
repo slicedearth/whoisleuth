@@ -43,8 +43,11 @@ import type { DomainPostureOptions } from '../lib/domain-posture.mts';
 import type { UnknownRecord } from './saved-lookup.mts';
 import EXIT_CODES from './exit-codes.mts';
 import { buildPostureSarif } from './ci-report.mts';
+import { collectResolverComparison, formatResolverComparison } from '../lib/resolver-comparison.mts';
+import { normaliseResolverComparisonRequest } from '../packages/evidence/resolver-comparison.mts';
 
 export type NetworkCommandDependencies = {
+  collectResolverComparison?: typeof collectResolverComparison;
   signal?: AbortSignal;
   searchCertificateTransparency?: (keyword: unknown) => unknown | Promise<unknown>;
   normalizeAuditDomain?: (raw: unknown) => string | null;
@@ -65,6 +68,18 @@ export type NetworkCommandDependencies = {
 type NetworkCommandArguments = Extract<CliArguments, { action: CliCommandFor<'network'> }>;
 
 const networkCommandHandlers = {
+  'resolver-compare': async (args, dependencies, context) => {
+    context.setFailureLabel('Resolver comparison');
+    let request;
+    try { request = normaliseResolverComparisonRequest(args.hostname, args.resolvers); }
+    catch (error) { throw new CliUsageError(error instanceof Error ? error.message : 'Invalid resolver selection.'); }
+    const report = await context.withProgress('Comparing selected DNS resolvers', () =>
+      (dependencies.collectResolverComparison ?? collectResolverComparison)(request.hostname, request.resolvers,
+        dependencies.signal ? { signal: dependencies.signal } : {}));
+    if (!args.quiet) context.writeStdout(args.output === 'json' ? formatJsonDocument(report)
+      : context.terminal(formatResolverComparison(report), args.color));
+    return report.queries.every(query => query.comparisonState === 'observed') ? EXIT_CODES.SUCCESS : EXIT_CODES.PARTIAL_FAILURE;
+  },
   'ct-search': async (args, dependencies, context) => {
     context.setFailureLabel('Certificate Transparency search');
     const keyword = args.keyword || (await context.readSingleInput());

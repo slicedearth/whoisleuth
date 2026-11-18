@@ -1,6 +1,6 @@
 // Generated from canonical runtime-neutral metadata. Do not edit by hand.
 export const PUBLIC_CLI_INDEX = {
-  "commandCount": 55,
+  "commandCount": 56,
   "groups": [
     "investigate",
     "respond",
@@ -106,6 +106,13 @@ export const PUBLIC_CLI_INDEX = {
     {
       "id": "posture",
       "summary": "Review DNS and mail posture",
+      "group": "investigate",
+      "common": false,
+      "mode": "network"
+    },
+    {
+      "id": "resolver-compare",
+      "summary": "Compare selected DNS resolvers",
       "group": "investigate",
       "common": false,
       "mode": "network"

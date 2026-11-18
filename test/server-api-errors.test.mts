@@ -22,7 +22,7 @@ let server: Server | null = null;
 let origin = '';
 let fixtureServer: Server | null = null;
 let fixtureOrigin = '';
-const serviceCalls: Array<readonly [string, unknown, unknown?]> = [];
+const serviceCalls: Array<readonly [string, unknown, unknown?, unknown?]> = [];
 
 function serviceFailure(value: unknown): void {
   if (value === 'throw.test') throw new Error('/private/path fixture upstream failure');
@@ -69,6 +69,11 @@ const fixtureServices = {
     serviceFailure(domain);
     serviceCalls.push(['domain-posture', domain, options]);
     return { fixturePosture: true };
+  },
+  collectResolverComparison: async (hostname: string, resolvers: unknown, options: unknown) => {
+    serviceFailure(hostname);
+    serviceCalls.push(['resolver-compare', hostname, resolvers, options]);
+    return { hostname, fixtureComparison: true };
   },
 } as unknown as NetworkRouteServices;
 
@@ -394,6 +399,19 @@ describe('fixture-injected Express network routes', () => {
     });
   }
 
+  test('resolver comparison preserves exact-host selection and rejects invalid recipients before collection', async () => {
+    serviceCalls.length = 0;
+    const invalid = await request('/api/resolver-compare?q=child.example.test&resolvers=google,google');
+    assert.equal(invalid.status, 400);
+    assert.equal(serviceCalls.length, 0);
+    const response = await request('/api/resolver-compare?q=child.example.test&resolvers=cloudflare,google');
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { hostname: 'child.example.test', fixtureComparison: true });
+    assert.equal(serviceCalls.length, 1);
+    assert.deepEqual(serviceCalls[0]?.slice(0, 3), ['resolver-compare', 'child.example.test', ['cloudflare', 'google']]);
+    assert.ok((serviceCalls[0]?.[3] as { signal?: AbortSignal }).signal instanceof AbortSignal);
+  });
+
   test('disconnected individual routes cancel collectors, retain their lease until settlement and send no late response', async () => {
     const routes = [
       { route: 'rdap?q=example.test', feature: 'rdap', service: 'fetchRdapRecord', optionsIndex: 2 },
@@ -402,6 +420,7 @@ describe('fixture-injected Express network routes', () => {
       { route: 'availability?q=example.test', feature: 'availability', service: 'checkDomainAvailability', optionsIndex: 1 },
       { route: 'ct-search?q=example', feature: 'certificate_transparency', service: 'searchCertificateTransparency', optionsIndex: 1 },
       { route: 'domain-posture?q=example.test', feature: 'domain_posture', service: 'checkDomainPosture', optionsIndex: 1 },
+      { route: 'resolver-compare?q=child.example.test&resolvers=cloudflare,google', feature: 'resolver_comparison', service: 'collectResolverComparison', optionsIndex: 2 },
     ];
     for (const { route, feature, service, optionsIndex } of routes) {
       const started = deferred<AbortSignal>(), cancelled = deferred<void>();
@@ -549,7 +568,7 @@ describe('fixture-injected Express network routes', () => {
   });
 
   test('preserves missing-query and non-domain responses without calling services', async () => {
-    for (const route of ['lookup', 'rdap', 'whois', 'availability', 'ct-search', 'domain-posture']) {
+    for (const route of ['lookup', 'rdap', 'whois', 'availability', 'ct-search', 'domain-posture', 'resolver-compare']) {
       const beforeCalls = serviceCalls.length;
       const response = await request(`/api/${route}`);
       assert.equal(response.status, 400, route);
@@ -589,6 +608,7 @@ describe('fixture-injected Express network routes', () => {
       '/api/availability?q=throw.test',
       '/api/ct-search?q=throw.test',
       '/api/domain-posture?q=throw.test',
+      '/api/resolver-compare?q=throw.test&resolvers=cloudflare,google',
     ];
     for (const route of routes) {
       const response = await request(route);

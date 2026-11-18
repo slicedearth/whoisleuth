@@ -2,6 +2,21 @@
 import { positional, OPTIONAL_FILE_POSITIONAL, constraint, EMPTY_CONSTRAINTS, commandSeed } from './command-definition.mts';
 
 export const NETWORK_COMMAND_DEFINITIONS = Object.freeze({
+  'resolver-compare': commandSeed({
+    reference: {
+      description: 'Compare explicitly selected public resolvers for one hostname, keeping A and AAAA outcomes separate.',
+      example: 'whoisleuth resolver-compare host.example.test --resolvers cloudflare,google --json',
+      boundary: 'The two selected HTTPS resolvers receive the hostname and A/AAAA questions. Four requests maximum, no retries or target connections; agreement is not authoritative truth, local DNSSEC validation or a safety verdict.',
+    },
+    collection: { scope: 'Two fixed HTTPS resolver APIs; at most four A/AAAA requests, two concurrent providers, 64 KiB per response and ten seconds total.' },
+    summary: 'Compare selected DNS resolvers',
+    options: ['--resolvers', '--json', '--quiet', '--no-color'],
+    positionals: Object.freeze([positional('hostname', 'text', 1, 1)]),
+    constraints: Object.freeze([constraint({ kind: 'required', options: ['--resolvers'] })]),
+    handlerOwner: 'network', networkEffect: 'always_network', common: false,
+    schemaIdentifiers: Object.freeze(['whoisleuth.resolver-comparison']), primaryArtefacts: Object.freeze([]),
+    planSupport: false, additionalOutputFormats: Object.freeze([]), bootstrapProfile: 'allowed',
+  }),
   "ct-search": commandSeed({
     reference: {
       description: 'Search certificate-transparency observations for one bounded keyword.',

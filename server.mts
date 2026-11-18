@@ -28,6 +28,8 @@ import { ctCollectionErrorResponse, searchCertificateTransparency } from './lib/
 import { isCtQueryError, normalizeCtQuery } from './packages/analysis/ct-query.mts';
 import { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors, normalizeMailProtectionProfile } from './lib/domain-posture.mts';
 import { parseInheritedDnsSelection } from './lib/dns-inheritance-review.mts';
+import { collectResolverComparison } from './lib/resolver-comparison.mts';
+import { normaliseResolverComparisonRequest } from './packages/evidence/resolver-comparison.mts';
 import { capabilityReport } from './lib/capabilities.mts';
 import { DOMAIN_FEED_BODY_BYTES } from './lib/server/domain-feed-config.mts';
 import { parseDomainFeedOperation, executeDomainFeedOperation } from './lib/server/domain-feed-client.mts';
@@ -113,6 +115,7 @@ type NetworkRouteServices = Readonly<{
   checkDomainAvailability: typeof checkDomainAvailability;
   searchCertificateTransparency: typeof searchCertificateTransparency;
   checkDomainPosture: typeof checkDomainPosture;
+  collectResolverComparison?: typeof collectResolverComparison;
   executeDomainFeedOperation?: typeof executeDomainFeedOperation;
 }>;
 
@@ -367,12 +370,24 @@ const DEFAULT_NETWORK_ROUTE_SERVICES: NetworkRouteServices = Object.freeze({
   checkDomainAvailability,
   searchCertificateTransparency,
   checkDomainPosture,
+  collectResolverComparison,
 });
 
 function registerNetworkApiRoutes(
   target: ExpressApplication,
   services: NetworkRouteServices = DEFAULT_NETWORK_ROUTE_SERVICES,
 ): void {
+  target.get('/api/resolver-compare', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('resolver_comparison'), async (req: RequestLike, res: Response) => {
+    let request;
+    try { request = normaliseResolverComparisonRequest(req.query.q, req.query.resolvers); }
+    catch { return res.status(400).json({ error: 'Select one hostname and two supported resolvers.' }); }
+    return withExpressOperationBudget(req, res, operationBudgetTargetFor('resolver_comparison'), async signal => {
+      try {
+        const report = await (services.collectResolverComparison ?? collectResolverComparison)(request.hostname, request.resolvers, { signal });
+        if (!signal.aborted) res.json(report);
+      } catch { if (!signal.aborted) sendUnexpectedApiError(res); }
+    });
+  });
   target.post('/api/domain-feed', apiRateLimit, requireAuth, requireNetworkRequestAdmission,
     (req, res, next) => {
       if ((req.headers['content-encoding'] && req.headers['content-encoding'] !== 'identity')

@@ -39,6 +39,7 @@ const OPERATION_FEATURES = Object.freeze({
   CERTIFICATE_TRANSPARENCY: 'certificate_transparency',
   DOMAIN_FEED_SEARCH: 'domain_feed_search',
   DOMAIN_POSTURE: 'domain_posture',
+  RESOLVER_COMPARISON: 'resolver_comparison',
 });
 
 const OPERATION_FEATURE_CLASSES = Object.freeze({
@@ -54,6 +55,7 @@ const OPERATION_FEATURE_CLASSES = Object.freeze({
   [OPERATION_FEATURES.CERTIFICATE_TRANSPARENCY]: OPERATION_CLASSES.CERTIFICATE_SEARCH,
   [OPERATION_FEATURES.DOMAIN_FEED_SEARCH]: OPERATION_CLASSES.CERTIFICATE_SEARCH,
   [OPERATION_FEATURES.DOMAIN_POSTURE]: OPERATION_CLASSES.POSTURE_AUDIT,
+  [OPERATION_FEATURES.RESOLVER_COMPARISON]: OPERATION_CLASSES.POSTURE_AUDIT,
 });
 
 // The browser currently runs at most 12 fast Bulk workers, 4 deep Bulk
@@ -142,6 +144,7 @@ function operationFeatureFor(feature: unknown, { fast = false, compact = false }
   if (feature === 'certificate_transparency') return OPERATION_FEATURES.CERTIFICATE_TRANSPARENCY;
   if (feature === 'domain_feed_search') return OPERATION_FEATURES.DOMAIN_FEED_SEARCH;
   if (feature === 'domain_posture') return OPERATION_FEATURES.DOMAIN_POSTURE;
+  if (feature === 'resolver_comparison') return OPERATION_FEATURES.RESOLVER_COMPARISON;
   return null;
 }
 

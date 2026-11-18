@@ -16,6 +16,7 @@ import { buildHttpObservation, failedHttpObservation } from '../lib/http-intelli
 import { createLookupViewModel, parseLookupHttpResponse } from '../lib/lookup-response-contract.mts';
 import { buildTlsObservation } from '../lib/tls-intelligence.mts';
 import { MAX_WHOIS_QUERY_HOPS } from '../lib/whois-contracts.mts';
+import { collectResolverComparison } from '../lib/resolver-comparison.mts';
 
 // Lookup fixtures use injected protocol responses or locally rejected inputs. The shared
 // browser and server guards prevent live collection.
@@ -29,6 +30,76 @@ test.beforeEach(async ({ page }) => {
     }));
   });
   await page.goto('/lookup');
+});
+
+test('selected resolver review uses the observed child hostname and leaves the original Lookup unchanged', async ({ page }, testInfo) => {
+  const hostname = 'portal.example.test';
+  const base = sectionedLookupFixture('example.test');
+  const lookup = { ...base, query: hostname, inputHostname: hostname, isSubdomain: true,
+    availability: { ...base.availability, observationHostname: hostname } };
+  await page.route('**/api/lookup?*', route => route.fulfill({ json: lookup }));
+  const report = await collectResolverComparison(hostname, 'cloudflare,google', {}, {
+    now: () => '2026-10-01T00:00:00.000Z',
+    fetch: async url => {
+      const type = new URL(url).searchParams.get('type') === 'A' ? 1 : 28;
+      return Response.json({ Status: type === 1 ? 2 : 0, RA: true, TC: false, AD: false,
+        Question: [{ name: `${hostname}.`, type }],
+        Answer: type === 1 ? [] : [{ name: `${hostname}.`, type, TTL: 300, data: '2001:db8::1' }] });
+    },
+  });
+  let requests = 0;
+  await page.route('**/api/resolver-compare?*', async route => {
+    requests++;
+    const url = new URL(route.request().url());
+    expect(url.searchParams.get('q')).toBe(hostname);
+    expect(url.searchParams.get('resolvers')).toBe('cloudflare,google');
+    await route.fulfill({ json: report });
+  });
+  await page.locator('#query').fill(hostname);
+  await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
+  await expandLookupFamilies(page);
+  const dns = page.locator('details').filter({ has: page.locator(':scope > summary', { hasText: 'DNS evidence' }) });
+  await expect(dns).toHaveCount(1);
+  if (await dns.getAttribute('open') === null) await dns.locator(':scope > summary').click();
+  const panel = dns.locator('details').filter({ has: page.locator(':scope > summary', { hasText: 'Compare selected resolvers' }) });
+  await panel.locator(':scope > summary').click();
+  const action = panel.getByRole('button', { name: 'Compare resolvers', exact: true });
+  await expect(action).toBeDisabled();
+  expect(requests).toBe(0);
+  await panel.getByRole('checkbox', { name: 'Cloudflare', exact: true }).check();
+  await panel.getByRole('checkbox', { name: 'Google Public DNS', exact: true }).check();
+  await action.click();
+  const results = panel.getByRole('status', { name: 'Resolver comparison results' });
+  await expect(results).toBeVisible();
+  await expect(results.getByRole('heading', { name: 'A incomplete', exact: true })).toBeVisible();
+  await expect(results.getByRole('heading', { name: 'AAAA converged', exact: true })).toBeVisible();
+  await expect(results).toContainText('2001:db8::1');
+  await expect(dns).toContainText('192.0.2.10');
+  expect(requests).toBe(1);
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) {
+        await page.evaluate(() => window.scrollTo(0, 0));
+        const clip = await panel.boundingBox(); expect(clip).not.toBeNull();
+        await page.screenshot({ path: testInfo.outputPath(`resolver-${width}-${theme}.png`), fullPage: true, clip: clip! });
+      }
+    }
+  }
+  const replacement = { ...base, query: 'sibling.example.test', inputHostname: 'sibling.example.test', isSubdomain: true,
+    availability: { ...base.availability, observationHostname: 'sibling.example.test' } };
+  await page.route('**/api/lookup?*', route => route.fulfill({ json: replacement }));
+  await page.locator('#query').fill('sibling.example.test');
+  await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
+  await expandLookupFamilies(page);
+  if (await dns.getAttribute('open') === null) await dns.locator(':scope > summary').click();
+  if (await panel.getAttribute('open') === null) await panel.locator(':scope > summary').click();
+  await expect(panel).toContainText('sibling.example.test');
+  await expect(panel.getByRole('status', { name: 'Resolver comparison results' })).toHaveCount(0);
+  await expect(panel.getByRole('checkbox', { name: 'Cloudflare', exact: true })).not.toBeChecked();
+  expect(requests).toBe(1);
 });
 
 test('source scope keeps completed identities separate from query drafts and replacement results', async ({ page }, testInfo) => {

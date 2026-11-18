@@ -1,5 +1,6 @@
 <script lang="ts">
   import DnsChangeRehearsal from '#lib/components/DnsChangeRehearsal.svelte';
+  import ResolverComparison from '#lib/components/ResolverComparison.svelte';
   import { evidenceStatusTone } from '#lib/analysis/evidence-status-tone.ts';
   let {
     status,
@@ -10,6 +11,7 @@
     delegation = null,
     rehearsalEvidence = {},
     domain = '',
+    observationHostname = '',
     allowRehearsal = false,
     initiallyExpanded = false,
     headingId = 'dns-title',
@@ -79,6 +81,7 @@
       currentTlsSpkiSha256?: unknown;
     };
     domain?: string;
+    observationHostname?: string;
     allowRehearsal?: boolean;
     initiallyExpanded?: boolean;
     headingId?: string;
@@ -193,6 +196,7 @@
       </section>
     {/if}
     <p class="card-note">{note}{truncated ? ' Some record inventories were capped.' : ''}</p>
+    {#if allowRehearsal && observationHostname}<ResolverComparison hostname={observationHostname} />{/if}
   </div>
 </details>
 

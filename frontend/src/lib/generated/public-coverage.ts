@@ -33,8 +33,8 @@ export const PUBLIC_COVERAGE = {
     }
   ],
   "summary": {
-    "capabilityFamilies": 33,
-    "cliOperations": 55,
+    "capabilityFamilies": 34,
+    "cliOperations": 56,
     "registrySnapshot": {
       "schema": "whoisleuth\u002eregistry-standards-coverage",
       "version": 1,
@@ -642,6 +642,35 @@ export const PUBLIC_COVERAGE = {
       "limitations": [
         "Posture findings describe bounded public registry, DNS and MTA-STS publication evidence and never change configuration.",
         "Inherited DMARC and direct parent delegation require a separate opt-in: up to 32 additional TXT questions within ten seconds cover ancestor policies, reporting-destination boundaries and authorisation. One parent NS discovery and A/AAAA discovery for at most two parent servers precede one pinned public-address DNS/TCP question per server. No messages are sent; recursive policy and direct referral observations remain separate."
+      ]
+    },
+    {
+      "id": "resolver_comparison",
+      "title": "Selected resolver comparison",
+      "job": "assure",
+      "implemented": true,
+      "reviewBasis": "Versioned capability contract and deterministic repository verification",
+      "optionalOrConfigurationDependent": false,
+      "executionPlanes": [
+        "hosted_bounded_passive"
+      ],
+      "scanModes": [
+        "deep"
+      ],
+      "networkMode": "bounded_passive",
+      "runtimeAvailability": "not_evaluated_by_public_catalogue",
+      "outcomes": [
+        "complete",
+        "partial",
+        "blocked",
+        "unsupported",
+        "unavailable",
+        "budget_exhausted"
+      ],
+      "partialResultContract": "explicit_per_source",
+      "limitations": [
+        "Explicitly selected HTTPS resolvers receive the hostname and A/AAAA questions. Four requests maximum; normal Lookup, Bulk and monitoring do not invoke this action.",
+        "Resolver agreement is not authoritative truth or local DNSSEC validation. Provider retention policies apply."
       ]
     },
     {

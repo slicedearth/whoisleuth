@@ -310,6 +310,7 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   ]), (_command, deep) => Math.min(deep ? 50 : 100, bulkQueryLimit(deep ? 'deep' : 'fast'))),
   '--chunk-size': integer('Set the number of candidates processed per checkpoint chunk.', () => Object.freeze([BASE_INTEGER_RANGE(1, 100)]), () => 25),
   '--resolver': text('Choose the supported DNS resolver for collection.'),
+  '--resolvers': text('Explicitly select two HTTPS DNS resolvers: cloudflare,google.', true),
   '--allowlist': file('Read reviewed domains whose priority should be suppressed, without changing their evidence.'),
   '--observation-snapshot': file('Compare with this retained observation snapshot.'),
   '--acquisition-only': flag('Present only acquisition candidates.'),

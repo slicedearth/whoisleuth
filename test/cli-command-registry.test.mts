@@ -536,7 +536,7 @@ describe('canonical CLI command registry', () => {
     assert.deepEqual(Object.entries(owners).filter(([, owner]) => owner === 'discovery').map(([command]) => command), ['discover']);
     assert.deepEqual(Object.entries(owners).filter(([, owner]) => owner === 'discovery_scan').map(([command]) => command), ['discover-scan']);
     assert.deepEqual(Object.entries(owners).filter(([, owner]) => owner === 'evidence').map(([command]) => command), ['inspect-archive', 'sign-artifact', 'verify-signature']);
-    assert.deepEqual(Object.entries(owners).filter(([, owner]) => owner === 'network').map(([command]) => command), ['ct-search', 'posture', 'http', 'tls', 'dnssec-validate', 'mail-transport']);
+    assert.deepEqual(Object.entries(owners).filter(([, owner]) => owner === 'network').map(([command]) => command), ['ct-search', 'posture', 'resolver-compare', 'http', 'tls', 'dnssec-validate', 'mail-transport']);
     assert.deepEqual(
       INLINE_CLI_COMMANDS,
       CLI_COMMAND_REGISTRY.filter((definition) => definition.execution.handlerOwner === 'inline')
@@ -575,7 +575,7 @@ describe('canonical CLI command registry', () => {
       'doctor', 'lookup', 'bulk', 'discover-scan', 'workflow-run',
     ]);
     assert.deepEqual(Object.entries(effects).filter(([, effect]) => effect === 'always_network').map(([command]) => command), [
-      'ct-search', 'posture', 'http', 'tls', 'dnssec-validate', 'mail-transport', 'monitor-once',
+      'ct-search', 'posture', 'resolver-compare', 'http', 'tls', 'dnssec-validate', 'mail-transport', 'monitor-once',
     ]);
 
     const catalogue = buildCliCommandCatalogue({

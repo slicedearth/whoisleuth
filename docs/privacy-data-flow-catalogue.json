@@ -5,8 +5,8 @@
     "capabilityManifest": {
       "schema": "whoisleuth.capability-manifest",
       "version": 1,
-      "capabilityCount": 33,
-      "cliOperationCount": 53,
+      "capabilityCount": 34,
+      "cliOperationCount": 56,
       "cliVariantCount": 16
     },
     "cliCommandCatalogue": {
@@ -1664,6 +1664,82 @@
         "Each admitted resource request discloses its exact URL, including path and query, its GET or HEAD method, and ordinary allowlisted request headers to that public resource endpoint; DNS questions are disclosed to the configured resolver.",
         "Structured outputs exclude request paths, queries, headers and bodies, but the control-sanitised page title and screenshot retain page-controlled content that may reproduce a path or query.",
         "Rendered capture executes page JavaScript and remains separate from hosted Lookup and the distributable CLI."
+      ]
+    },
+    {
+      "id": "resolver_comparison",
+      "title": "Selected resolver comparison",
+      "requestPurpose": "Compare A and AAAA answers from two explicitly selected HTTPS resolvers.",
+      "job": "assure",
+      "executionPlanes": [
+        "hosted_bounded_passive"
+      ],
+      "trigger": "explicit_browser_action",
+      "networkMode": "bounded_passive",
+      "authorisation": "authenticated_explicit_action",
+      "dataSent": [
+        "normalised_target",
+        "dns_question"
+      ],
+      "dataDeliberatelyNotSent": [
+        "browser_local_records",
+        "unselected_local_files",
+        "cookies_and_session_data",
+        "unrelated_evidence_values",
+        "complete_query_bearing_urls",
+        "credentials"
+      ],
+      "recipientClasses": [
+        "selected_public_resolver"
+      ],
+      "returnedDataCategories": [
+        "exact_hostname_dns_answers",
+        "per_question_outcomes",
+        "resolver_convergence"
+      ],
+      "processingClasses": [
+        "transient_processing",
+        "hosted_bounded_processing",
+        "third_party_disclosure"
+      ],
+      "requestBudget": "posture_audit",
+      "responseBudget": "collector_specific",
+      "concurrency": "posture_audit",
+      "retention": {
+        "mode": "transient",
+        "storageClass": "transient_process_memory",
+        "durationControl": "bounded_operation_or_cache_lifetime"
+      },
+      "exports": {
+        "mode": "none",
+        "classes": [
+          "none"
+        ]
+      },
+      "credentialModel": "none",
+      "credentialUse": "No operation credential is required.",
+      "cancellation": "client_stops_waiting",
+      "partialResults": "explicit_per_source",
+      "outcomes": [
+        "complete",
+        "partial",
+        "blocked",
+        "unsupported",
+        "unavailable",
+        "budget_exhausted"
+      ],
+      "normalisedOutcomes": {
+        "unavailable": "explicit_outcome",
+        "blocked": "explicit_outcome",
+        "partial": "explicit_outcome",
+        "unsupported": "explicit_outcome"
+      },
+      "documentStates": [],
+      "scoringEffect": "none",
+      "nonInferences": [
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Explicitly selected HTTPS resolvers receive the hostname and A/AAAA questions. Four requests maximum; normal Lookup, Bulk and monitoring do not invoke this action.",
+        "Resolver agreement is not authoritative truth or local DNSSEC validation. Provider retention policies apply."
       ]
     },
     {
@@ -3746,7 +3822,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Comparison is offline: the left input is earlier and the right input is later. Inputs must belong to the same supported family. Saved Lookups can describe the same or different domains; same-domain comparisons preserve observation times and collection uncertainty. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.",
+        "Comparison is offline: the left input is earlier and the right input is later. Inputs must belong to the same supported family. Saved Lookups can describe the same or different domains; --browse opens their searchable comparison panels. Same-domain comparisons preserve observation times and collection uncertainty. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
@@ -5892,7 +5968,7 @@
       "command": "map-observations",
       "capabilityFamilyId": "offline_review",
       "title": "Apply a declarative observation map offline",
-      "requestPurpose": "Reads one mapping document capped at 4 MiB and executes no scripts or requests.",
+      "requestPurpose": "Reads one mapping document capped at 4 MiB, or selected producer JSONL capped at 384 KiB. Executes no scripts or requests.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -5953,7 +6029,78 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Profiles select allowlisted dotted fields only. They execute no scripts, make no requests, and emit the browser-compatible external-findings contract.",
+        "Profiles select allowlisted dotted fields only. --input-format dnsx-jsonl or httpx-jsonl reads 384 KiB and 500 rows at most, preserving exact hostnames and supplied timestamps without inferring complete collection. Raw bodies, headers, query-bearing URLs and file paths are excluded. No scripts or requests run. Output uses the existing browser-compatible external-findings contract; malformed rows or retained-limit omissions produce exit 4 with a notice on stderr.",
+        "The command reads only selected bounded local input and makes no network request.",
+        "Output remains under the operator's local retention and deletion control."
+      ],
+      "variants": []
+    },
+    {
+      "id": "command.cli.mcp",
+      "command": "mcp",
+      "capabilityFamilyId": "offline_review",
+      "title": "Serve selected evidence read-only over local MCP",
+      "requestPurpose": "Reads 1 to 8 explicit files, at most 8 MiB each and 16 MiB combined. Protocol input is limited to 32 KiB per message and tool output to 64 KiB.",
+      "collectionMode": "offline",
+      "executionPlanes": [
+        "local_cli_offline"
+      ],
+      "trigger": "explicit_cli_command",
+      "networkMode": "none",
+      "authorisation": "explicit_action",
+      "dataSent": [
+        "none"
+      ],
+      "dataDeliberatelyNotSent": [
+        "no_network_request",
+        "no_third_party_disclosure",
+        "credentials",
+        "cookies_and_session_data",
+        "local_paths"
+      ],
+      "recipientClasses": [
+        "none"
+      ],
+      "returnedDataCategories": [
+        "bounded_local_derivation"
+      ],
+      "processingClasses": [
+        "transient_processing",
+        "deliberate_local_file_export",
+        "offline_processing_no_request"
+      ],
+      "requestBudget": "none",
+      "responseBudget": "bounded_local_input",
+      "concurrency": "none",
+      "retention": {
+        "mode": "local_output_deliberate",
+        "storageClass": "operator_controlled_local_output",
+        "durationControl": "no_automatic_retention_beyond_process_unless_operator_saves_output"
+      },
+      "exports": {
+        "mode": "local_output",
+        "classes": [
+          "operator_selected_local_output"
+        ]
+      },
+      "credentialModel": "none",
+      "credentialUse": "No operation credential is required.",
+      "cancellation": "bounded_atomic",
+      "partialResults": "all_or_nothing",
+      "outcomes": [
+        "complete"
+      ],
+      "normalisedOutcomes": {
+        "unavailable": "not_declared_for_boundary",
+        "blocked": "not_declared_for_boundary",
+        "partial": "not_declared_for_boundary",
+        "unsupported": "not_declared_for_boundary"
+      },
+      "documentStates": [],
+      "scoringEffect": "none",
+      "nonInferences": [
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Offline and read-only: inspect selected immutable evidence, verify artefacts, compare saved Lookups and prepare no-request collection plans. No arbitrary paths, shell commands, writes, live collection, public port or default file discovery. The connected client may send returned evidence to its model provider; acknowledge this at startup. Raw publications, contacts, page text and Case notes are not exposed. Stdout is reserved for protocol messages.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
@@ -6624,6 +6771,81 @@
       "variants": []
     },
     {
+      "id": "command.cli.resolver-compare",
+      "command": "resolver-compare",
+      "capabilityFamilyId": "resolver_comparison",
+      "title": "Compare selected DNS resolvers",
+      "requestPurpose": "Two fixed HTTPS resolver APIs; at most four A/AAAA requests, two concurrent providers, 64 KiB per response and ten seconds total.",
+      "collectionMode": "network",
+      "executionPlanes": [
+        "local_cli_network"
+      ],
+      "trigger": "explicit_cli_command",
+      "networkMode": "bounded_passive",
+      "authorisation": "explicit_action",
+      "dataSent": [
+        "normalised_target",
+        "dns_question"
+      ],
+      "dataDeliberatelyNotSent": [
+        "browser_local_records",
+        "unselected_local_files",
+        "cookies_and_session_data",
+        "unrelated_evidence_values",
+        "complete_query_bearing_urls",
+        "credentials"
+      ],
+      "recipientClasses": [
+        "selected_public_resolver"
+      ],
+      "returnedDataCategories": [
+        "exact_hostname_dns_answers",
+        "per_question_outcomes",
+        "resolver_convergence"
+      ],
+      "processingClasses": [
+        "transient_processing",
+        "deliberate_local_file_export",
+        "third_party_disclosure"
+      ],
+      "requestBudget": "collector_specific",
+      "responseBudget": "collector_specific",
+      "concurrency": "command_bounded",
+      "retention": {
+        "mode": "local_output_deliberate",
+        "storageClass": "operator_controlled_local_output",
+        "durationControl": "no_automatic_retention_beyond_process_unless_operator_saves_output"
+      },
+      "exports": {
+        "mode": "local_output",
+        "classes": [
+          "operator_selected_local_output"
+        ]
+      },
+      "credentialModel": "none",
+      "credentialUse": "No operation credential is required.",
+      "cancellation": "client_stops_waiting",
+      "partialResults": "explicit_per_source",
+      "outcomes": [
+        "complete",
+        "partial"
+      ],
+      "normalisedOutcomes": {
+        "unavailable": "not_declared_for_boundary",
+        "blocked": "not_declared_for_boundary",
+        "partial": "explicit_outcome",
+        "unsupported": "not_declared_for_boundary"
+      },
+      "documentStates": [],
+      "scoringEffect": "none",
+      "nonInferences": [
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "The two selected HTTPS resolvers receive the hostname and A/AAAA questions. Four requests maximum, no retries or target connections; agreement is not authoritative truth, local DNSSEC validation or a safety verdict.",
+        "The explicitly selected resolvers receive four bounded A/AAAA questions over HTTPS. No target connection, retry or automatic invocation by other commands."
+      ],
+      "variants": []
+    },
+    {
       "id": "command.cli.review-evidence",
       "command": "review-evidence",
       "capabilityFamilyId": "portable_evidence",
@@ -7276,6 +7498,77 @@
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "A valid signature proves package consistency for the embedded key, not identity, authority or evidence accuracy. With --trust-store-file, unknown, retired, revoked or future-reviewed entries exit 4 even if --public-key-file matches. Replacement fingerprints need their own trusted entry; no signing date overrides current revocation.",
+        "The command reads only selected bounded local input and makes no network request.",
+        "Output remains under the operator's local retention and deletion control."
+      ],
+      "variants": []
+    },
+    {
+      "id": "command.cli.view",
+      "command": "view",
+      "capabilityFamilyId": "offline_review",
+      "title": "Read or browse a saved Lookup offline",
+      "requestPurpose": "Reads one saved Lookup capped at 8 MiB.",
+      "collectionMode": "offline",
+      "executionPlanes": [
+        "local_cli_offline"
+      ],
+      "trigger": "explicit_cli_command",
+      "networkMode": "none",
+      "authorisation": "explicit_action",
+      "dataSent": [
+        "none"
+      ],
+      "dataDeliberatelyNotSent": [
+        "no_network_request",
+        "no_third_party_disclosure",
+        "credentials",
+        "cookies_and_session_data",
+        "local_paths"
+      ],
+      "recipientClasses": [
+        "none"
+      ],
+      "returnedDataCategories": [
+        "bounded_local_derivation"
+      ],
+      "processingClasses": [
+        "transient_processing",
+        "deliberate_local_file_export",
+        "offline_processing_no_request"
+      ],
+      "requestBudget": "none",
+      "responseBudget": "bounded_local_input",
+      "concurrency": "none",
+      "retention": {
+        "mode": "local_output_deliberate",
+        "storageClass": "operator_controlled_local_output",
+        "durationControl": "no_automatic_retention_beyond_process_unless_operator_saves_output"
+      },
+      "exports": {
+        "mode": "local_output",
+        "classes": [
+          "operator_selected_local_output"
+        ]
+      },
+      "credentialModel": "none",
+      "credentialUse": "No operation credential is required.",
+      "cancellation": "bounded_atomic",
+      "partialResults": "all_or_nothing",
+      "outcomes": [
+        "complete"
+      ],
+      "normalisedOutcomes": {
+        "unavailable": "not_declared_for_boundary",
+        "blocked": "not_declared_for_boundary",
+        "partial": "not_declared_for_boundary",
+        "unsupported": "not_declared_for_boundary"
+      },
+      "documentStates": [],
+      "scoringEffect": "none",
+      "nonInferences": [
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "The command validates one saved Lookup offline. --browse opens the existing searchable terminal panels and reserves interactive stdin for navigation; it cannot be combined with redirected output. No file is modified and no source is contacted.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],

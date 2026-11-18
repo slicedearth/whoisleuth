@@ -125,6 +125,7 @@ const CAPABILITY_PRIVACY_DETAILS = Object.freeze({
   availability: capabilityPrivacyDetail('Produce an authority-aware registration-availability decision.', ['authority_aware_availability', 'source_health']),
   domain_evidence: capabilityPrivacyDetail('Collect the source-qualified domain evidence eligible for the selected mode.', ['normalised_domain_evidence', 'source_health']),
   dns_intelligence: capabilityPrivacyDetail('Collect bounded public DNS publication evidence.', ['normalised_dns_evidence', 'source_health']),
+  resolver_comparison: capabilityPrivacyDetail('Compare A and AAAA answers from two explicitly selected HTTPS resolvers.', ['exact_hostname_dns_answers', 'per_question_outcomes', 'resolver_convergence']),
   website_probe: capabilityPrivacyDetail('Observe one bounded homepage or explicitly selected URL through the static response workflow.', ['bounded_http_and_page_evidence', 'source_health']),
   tls_intelligence: capabilityPrivacyDetail('Observe one bounded TLS connection and certificate presentation.', ['bounded_tls_evidence', 'source_health']),
   certificate_transparency: capabilityPrivacyDetail('Search retained public certificate observations for a bounded term.', ['certificate_observation_leads', 'source_health']),

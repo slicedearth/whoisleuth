@@ -21,6 +21,7 @@ const [
   { createAvailabilityHandler },
   { createCtSearchHandler },
   { createDomainPostureHandler },
+  { createResolverComparisonHandler },
   { createLookupHandler: createNativeLookupHandler },
   { createRdapNameserverSearchHandler },
   { createRdapHandler },
@@ -31,6 +32,7 @@ const [
   import('../netlify/functions/availability.mts'),
   import('../netlify/functions/ct-search.mts'),
   import('../netlify/functions/domain-posture.mts'),
+  import('../netlify/functions/resolver-compare.mts'),
   import('../netlify/functions/lookup.mts'),
   import('../netlify/functions/rdap-nameserver-search.mts'),
   import('../netlify/functions/rdap.mts'),
@@ -63,6 +65,26 @@ function fixtureService<T extends (...args: never[]) => unknown>(
 }
 
 describe('fixture-injected Netlify network handlers', () => {
+  test('resolver comparison admits only explicit same-origin authenticated selections and retains the child hostname', async () => {
+    const calls: unknown[][] = [];
+    const handler = createResolverComparisonHandler({ collectResolverComparison: async (...args) => {
+      calls.push(args);
+      return { hostname: args[0], fixture: true } as unknown as Awaited<ReturnType<typeof import('../lib/resolver-comparison.mts').collectResolverComparison>>;
+    } });
+    const request = event({ q: 'child.example.test', resolvers: 'cloudflare,google' });
+    assert.equal((await handler({ ...request, headers: { ...request.headers, cookie: '' } })).statusCode, 401);
+    assert.equal((await handler({ ...request, headers: { ...request.headers, 'sec-fetch-site': 'cross-site' } })).statusCode, 403);
+    assert.equal((await handler(event({ q: 'child.example.test', resolvers: 'google,google' }))).statusCode, 400);
+    const denied = process.env.WHOISLEUTH_DISABLE_DNS_INTELLIGENCE;
+    process.env.WHOISLEUTH_DISABLE_DNS_INTELLIGENCE = '1';
+    try { assert.equal((await handler(request)).statusCode, 503); }
+    finally { if (denied === undefined) delete process.env.WHOISLEUTH_DISABLE_DNS_INTELLIGENCE; else process.env.WHOISLEUTH_DISABLE_DNS_INTELLIGENCE = denied; }
+    assert.equal(calls.length, 0);
+    const result = await handler(request);
+    assert.equal(result.statusCode, 200);
+    assert.equal(body(result).hostname, 'child.example.test');
+    assert.deepEqual(calls, [['child.example.test', ['cloudflare', 'google']]]);
+  });
   test('returns the same actionable certificate-search failure vocabulary as the local host', async () => {
     for (const [code, status] of [['CT_TIMEOUT', 504], ['CT_OVERLOADED', 503], ['CT_QUERY_TOO_BROAD', 422], ['CT_INVALID_RESPONSE', 502], ['CT_UPSTREAM_ERROR', 502]] as const) {
       const response = await createCtSearchHandler({ searchCertificateTransparency: async () => { throw new CtCollectionError(code); } })(event({ q: 'privatekeyword' }));

@@ -217,6 +217,7 @@
             delegation: networkDisplay.dnsDelegation,
             rehearsalEvidence: dnsRehearsalEvidence,
             domain: caseDomain,
+            observationHostname: lookupObservationHostname(availability) ?? '',
             allowRehearsal: result?.type === 'domain',
             note: `Point-in-time resolver evidence for ${observationHostname}. Registration-delegation checks retain their separately named domain. Service-binding targets and address hints are displayed but not followed. Verify shared infrastructure independently.`,
           }}

@@ -320,6 +320,15 @@ review times. Pins and sightings with unknown observation times retain null;
 saving them does not create a source observation time.
 Selected DNS pins can retain separate IPv4 and IPv6 resolver outcomes and their
 source observation times, without additional queries.
+
+The separate resolver-comparison action sends the selected hostname and A/AAAA
+questions to two explicitly selected HTTPS resolvers. It makes at most four
+requests, without retries, target connections or automatic retention, and does
+not replace the original Lookup. Each provider can observe the runtime's source
+address and apply its own retention policy. Google queries explicitly suppress
+EDNS Client Subnet forwarding. Provider-reported DNSSEC flags are not local
+cryptographic validation; negative answers and failed queries remain distinct.
+
 Saved recheck questions retain an analyst-entered hostname, comparison conditions
 and optional baseline reference. Answers retain the question context as reviewed.
 These remain browser-local until exported and are excluded from public Case

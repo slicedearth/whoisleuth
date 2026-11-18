@@ -326,6 +326,7 @@ type CliOperationPolicy =
   | Readonly<{ kind: 'monitor' }>
   | Readonly<{ kind: 'ct_search' }>
   | Readonly<{ kind: 'posture' }>
+  | Readonly<{ kind: 'resolver_comparison' }>
   | Readonly<{ kind: 'http' }>
   | Readonly<{ kind: 'tls' }>
   | Readonly<{ kind: 'dnssec_validate' }>
@@ -363,6 +364,7 @@ const CLI_OPERATION_POLICY = Object.freeze({
   discover: OFFLINE_PER_ITEM,
   'discover-scan': Object.freeze({ kind: 'lookup', command: 'discover-scan' }),
   posture: Object.freeze({ kind: 'posture' }),
+  'resolver-compare': Object.freeze({ kind: 'resolver_comparison' }),
   http: Object.freeze({ kind: 'http' }),
   tls: Object.freeze({ kind: 'tls' }),
   'dnssec-validate': Object.freeze({ kind: 'dnssec_validate' }),
@@ -958,6 +960,20 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
     featurePolicyId: 'domain_posture',
     featurePolicyDependencies: ['dns_intelligence'],
     operationBudgetVariants: [{ featureId: 'domain_posture', classId: 'posture_audit' }],
+    legacyCapability: { status: 'supported', execution: 'hosted', scanModes: [] },
+  }),
+  freezeCapability({
+    id: CAPABILITY_IDS.RESOLVER_COMPARISON,
+    title: 'Selected resolver comparison', job: 'assure',
+    planes: ['hosted_bounded_passive'], trigger: 'explicit_browser_action', networkMode: 'bounded_passive', scanModes: ['deep'],
+    disclosedData: ['normalised_target', 'dns_question'], recipients: ['selected_public_resolver'],
+    requestBudget: 'posture_audit', responseBudget: 'collector_specific', concurrency: 'posture_audit',
+    credentialModel: 'none', retention: 'transient', export: 'none', scoringEffect: 'none',
+    authorisation: 'authenticated_explicit_action', cancellation: 'client_stops_waiting', partialResults: 'explicit_per_source', outcomes: COMPLETE_OR_LIMITED,
+    privacyLimitations: ['Explicitly selected HTTPS resolvers receive the hostname and A/AAAA questions. Four requests maximum; normal Lookup, Bulk and monitoring do not invoke this action.',
+      'Resolver agreement is not authoritative truth or local DNSSEC validation. Provider retention policies apply.'],
+    featurePolicyId: 'resolver_comparison', featurePolicyDependencies: ['dns_intelligence'],
+    operationBudgetVariants: [{ featureId: 'resolver_comparison', classId: 'posture_audit' }],
     legacyCapability: { status: 'supported', execution: 'hosted', scanModes: [] },
   }),
   freezeCapability({
@@ -1659,6 +1675,13 @@ function cliOperation(command: CliCommand, capabilityId: CapabilityId): CliOpera
       privacyLimitations: [
         'The posture review performs bounded RDAP, DNS and MTA-STS publication checks without changing configuration.',
       ],
+    });
+  }
+  if (policy.kind === 'resolver_comparison') {
+    return passiveCliOperation(command, capabilityId, {
+      disclosedData: ['normalised_target', 'dns_question'], recipients: ['selected_public_resolver'],
+      requestBudget: 'collector_specific', partialResults: 'explicit_per_source',
+      privacyLimitations: ['The explicitly selected resolvers receive four bounded A/AAAA questions over HTTPS. No target connection, retry or automatic invocation by other commands.'],
     });
   }
   if (policy.kind === 'http') {

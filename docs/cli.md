@@ -260,6 +260,20 @@ Deep Lookup reports IPv4 and IPv6 results separately, including empty answers,
 NODATA, resolver-reported missing names and query failures. These outcomes remain
 distinct in evidence exports; none alone establishes domain removal.
 
+For a separate resolver comparison, explicitly select both supported providers:
+
+```sh
+whoisleuth resolver-compare host.example.test --resolvers cloudflare,google --json
+```
+
+This sends A and AAAA questions over HTTPS to the selected resolvers, with four
+requests maximum, no retries and a ten-second deadline. It does not contact the
+target or run automatically in Lookup, Bulk or monitoring. Each question retains
+its outcome; aliases, truncation, missing negative proof and failed queries do
+not become empty agreement. Exit `4` means some comparison evidence is incomplete;
+different complete answers still exit `0`. Agreement is not authoritative truth,
+local DNSSEC validation or a safety verdict. Provider privacy policies apply.
+
 Plans are target-specific: Fast IP and ASN plans contain RDAP only; Deep IP
 adds WHOIS and eligible reverse DNS, while Deep ASN adds WHOIS. Domain-only web,
 TLS and selected intelligence do not apply to address or ASN targets.

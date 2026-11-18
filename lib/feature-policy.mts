@@ -21,6 +21,7 @@ const NETWORK_FEATURE_DEFINITIONS = Object.freeze({
   tls_intelligence: Object.freeze({ env: 'WHOISLEUTH_DISABLE_TLS_INTELLIGENCE', label: 'TLS evidence collection' }),
   certificate_transparency: Object.freeze({ env: 'WHOISLEUTH_DISABLE_CERTIFICATE_TRANSPARENCY', label: 'Certificate Transparency search' }),
   domain_posture: Object.freeze({ env: 'WHOISLEUTH_DISABLE_DOMAIN_POSTURE', label: 'domain-posture auditing' }),
+  resolver_comparison: Object.freeze({ env: 'WHOISLEUTH_DISABLE_RESOLVER_COMPARISON', label: 'selected resolver comparison' }),
 });
 
 type NetworkFeatureId = keyof typeof NETWORK_FEATURE_DEFINITIONS;
@@ -52,6 +53,7 @@ type FeatureDisabledError = {
 const FEATURE_DEPENDENCIES: Readonly<Partial<Record<NetworkFeatureId, readonly NetworkFeatureId[]>>> = Object.freeze({
   rdap_nameserver_search: Object.freeze(['rdap'] as NetworkFeatureId[]),
   domain_posture: Object.freeze(['dns_intelligence'] as NetworkFeatureId[]),
+  resolver_comparison: Object.freeze(['dns_intelligence'] as NetworkFeatureId[]),
 });
 
 function disabledValue(value: unknown): boolean {
