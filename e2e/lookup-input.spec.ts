@@ -740,13 +740,14 @@ test('a delayed replay comparison cannot rebind to a replacement primary capture
       });
     };
   });
-  await replay.locator('input[type="file"]').last().setInputFiles({
+  const comparisonInput = replay.getByRole('region', { name: 'Compare another capture', exact: true }).locator('input[type="file"]');
+  await comparisonInput.setInputFiles({
     name: 'comparison-b.json',
     mimeType: 'application/json',
     buffer: Buffer.from(replayEvidence('primary-a.example.test', 'Registrar B')),
   });
   await expect(replay.getByText('Reading second evidence…', { exact: true })).toBeVisible();
-  await replay.locator('input[type="file"]').last().evaluate((control) => {
+  await comparisonInput.evaluate((control) => {
     if (!(control instanceof HTMLInputElement) || !control.value) throw new Error('The held comparison input must retain its selection.');
     Reflect.set(window, '__heldComparisonControl', control);
   });
