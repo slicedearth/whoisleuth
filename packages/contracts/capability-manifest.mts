@@ -325,6 +325,7 @@ type CliOperationPolicy =
   | Readonly<{ kind: 'doctor' }>
   | Readonly<{ kind: 'lookup'; command: 'lookup' | 'bulk' | 'discover-scan' }>
   | Readonly<{ kind: 'monitor' }>
+  | Readonly<{ kind: 'local_monitor' }>
   | Readonly<{ kind: 'ct_search' }>
   | Readonly<{ kind: 'posture' }>
   | Readonly<{ kind: 'resolver_comparison' }>
@@ -400,6 +401,7 @@ const CLI_OPERATION_POLICY = Object.freeze({
   'case-pack': OFFLINE_ALL_OR_NOTHING,
   'domain-control': OFFLINE_PER_SOURCE,
   'monitor-once': Object.freeze({ kind: 'monitor' }),
+  'monitor-tick': Object.freeze({ kind: 'local_monitor' }),
   assurance: OFFLINE_PER_SOURCE,
   'change-packet': offlinePolicy('explicit_document', ['complete', 'partial', 'blocked']),
   'sharing-review': offlinePolicy('explicit_document', ['complete', 'partial', 'blocked']),
@@ -1653,6 +1655,25 @@ function cliOperation(command: CliCommand, capabilityId: CapabilityId): CliOpera
         'Only the source families eligible for the selected command and mode receive the bounded target representation.',
         'The plan variant is request-free; collection retains the selected command and mode\'s evidence and persistence contract.',
       ],
+    });
+  }
+  if (policy.kind === 'local_monitor') {
+    return passiveCliOperation(command, capabilityId, {
+      planes: ['local_cli_offline', 'local_cli_network'], networkMode: 'conditional_bounded_passive',
+      recipients: ['registry_service', 'dns_resolver', 'target_public_service'],
+      authorisation: 'explicit_network_approval', cancellation: 'queue_stops_admission', partialResults: 'explicit_per_item',
+      variants: [
+        { id: 'preview', planes: ['local_cli_offline'], trigger: 'explicit_cli_command', networkMode: 'none', disclosedData: ['none'], recipients: ['none'],
+          requestBudget: 'none', responseBudget: 'bounded_local_input', concurrency: 'none', credentialModel: 'none', retention: 'local_output_deliberate',
+          export: 'local_output', scoringEffect: 'none', authorisation: 'explicit_action', cancellation: 'bounded_atomic', partialResults: 'explicit_document', outcomes: COMPLETE_OR_PARTIAL },
+        { id: 'approved_cycle', planes: ['local_cli_network'], trigger: 'explicit_cli_command', networkMode: 'bounded_passive',
+          disclosedData: ['normalised_target', 'registry_query', 'whois_query', 'dns_question', 'homepage_request', 'tls_handshake'],
+          recipients: ['registry_service', 'dns_resolver', 'target_public_service'], requestBudget: 'collector_specific', responseBudget: 'collector_specific',
+          concurrency: 'command_bounded', credentialModel: 'none', retention: 'local_output_deliberate', export: 'local_output', scoringEffect: 'none',
+          authorisation: 'explicit_network_approval', cancellation: 'queue_stops_admission', partialResults: 'explicit_per_item', outcomes: COMPLETE_OR_PARTIAL },
+      ],
+      privacyLimitations: ['A selected private local file retains compact evidence, quota counters and the existing dispatcher cursor; no hosted schedule is enabled.',
+        'The plan selects collection purpose and cadence independently from review priority. No Brand-based risk score is calculated.'],
     });
   }
   if (policy.kind === 'monitor') {

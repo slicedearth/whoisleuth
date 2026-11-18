@@ -18,6 +18,10 @@ type ScheduledMonitorCycleOptions = {
   lookup: (domain: string, options: ScheduledMonitorLookupOptions) => Promise<unknown>;
   now?: () => number;
   randomUUID: () => string;
+  signal?: AbortSignal;
+  lookupLimit?: number;
+  watchlistModes?: ReadonlyMap<string, 'fast' | 'deep'>;
+  staleRunMs?: number;
 };
 
 type QueuedDelivery = {
@@ -64,6 +68,11 @@ async function runScheduledMonitorCycle(options: ScheduledMonitorCycleOptions) {
   const now = options.now || Date.now;
   const startedAt = finiteTime(now);
   const controller = new AbortController();
+  const lookupLimit = options.lookupLimit ?? MAX_CYCLE_LOOKUPS;
+  if (!Number.isSafeInteger(lookupLimit) || lookupLimit < 1 || lookupLimit > MAX_CYCLE_LOOKUPS) throw new TypeError('The monitoring cycle lookup limit is invalid.');
+  options.signal?.throwIfAborted();
+  const cancel = () => controller.abort(options.signal?.reason);
+  options.signal?.addEventListener('abort', cancel, { once: true });
   const expire = () => controller.abort(new DOMException('Scheduled monitoring cycle deadline reached.', 'TimeoutError'));
   const checkDeadline = () => {
     if (finiteTime(now) - startedAt >= MAX_CYCLE_MS) expire();
@@ -93,7 +102,7 @@ async function runScheduledMonitorCycle(options: ScheduledMonitorCycleOptions) {
   let processedDeliveries = 0;
   let lookupDeliveries = 0;
   let cycleStatus = 'idle';
-  let stopReason: 'complete' | 'lookup_limit' | 'deadline' | 'delivery_limit' = 'complete';
+  let stopReason: 'complete' | 'lookup_limit' | 'deadline' | 'delivery_limit' | 'cancelled' = 'complete';
   try {
     const dispatcher = new ScheduledMonitorDispatcher({
       // A runtime factory binds the provider client to this invocation's signal.
@@ -112,6 +121,8 @@ async function runScheduledMonitorCycle(options: ScheduledMonitorCycleOptions) {
       now,
       randomUUID: options.randomUUID,
       signal: controller.signal,
+      ...(options.watchlistModes ? { watchlistModes: options.watchlistModes } : {}),
+      ...(options.staleRunMs ? { staleRunMs: options.staleRunMs } : {}),
     });
     await enqueue(scheduledMonitorTickDelivery(), {
       deduplicationKey: `scheduled-monitor-cycle-${Math.floor(startedAt / 60_000)}`,
@@ -122,7 +133,7 @@ async function runScheduledMonitorCycle(options: ScheduledMonitorCycleOptions) {
       const next = pending[0];
       if (!next) break;
       const isLookup = next.delivery.kind === 'continue';
-      if (isLookup && lookupDeliveries >= MAX_CYCLE_LOOKUPS) {
+      if (isLookup && lookupDeliveries >= lookupLimit) {
         stopReason = 'lookup_limit';
         break;
       }
@@ -143,13 +154,14 @@ async function runScheduledMonitorCycle(options: ScheduledMonitorCycleOptions) {
     if (!controller.signal.aborted) throw error;
     // A dispatched storage write may have committed before cancellation. Do
     // not retry it or infer rollback: the next tick rereads the durable state.
-    stopReason = 'deadline';
+    stopReason = options.signal?.aborted ? 'cancelled' : 'deadline';
   } finally {
     clearTimeout(timer);
+    options.signal?.removeEventListener('abort', cancel);
   }
 
   return {
-    status: stopReason === 'deadline' || pending.length > 0 ? 'deferred' : cycleStatus,
+    status: stopReason === 'deadline' || stopReason === 'cancelled' || pending.length > 0 ? 'deferred' : cycleStatus,
     stopReason,
     processedDeliveries,
     lookupDeliveries,

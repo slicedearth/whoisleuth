@@ -51,10 +51,11 @@ the [application guide](docs/application-guide.md) covers tools and saved work.
 Collection and sharing are deliberate actions. WHOISleuth prepares response
 material; it does not submit reports.
 
-Watchlist workload previews, selected shared-service warning data and offline
-certificate-log/timestamp checks help review collection plans and supplied
-evidence without starting another Lookup. See the [CLI guide](docs/cli.md)
-for supported inputs and trust boundaries.
+Watchlist workload plans, selected shared-service warning data and offline
+certificate-log/timestamp checks help review plans and supplied evidence. An
+explicitly approved local monitoring cycle can apply per-domain purposes and
+cadences with bounded requests and resumable private state. See the
+[CLI guide](docs/cli.md) for supported inputs and execution boundaries.
 
 The separate [local application](packages/local-application/README.md) can be
 assembled locally as an installable archive; it is not a published npm package.

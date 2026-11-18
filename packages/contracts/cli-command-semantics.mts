@@ -101,6 +101,7 @@ export const CLI_COMMAND_SEMANTICS = Object.freeze({
   'case-pack': semantic('respond', CAPABILITY_IDS.PORTABLE_EVIDENCE),
   'domain-control': semantic('assure', CAPABILITY_IDS.PORTABLE_EVIDENCE),
   'monitor-once': semantic('assure', CAPABILITY_IDS.LOOKUP),
+  'monitor-tick': semantic('assure', CAPABILITY_IDS.LOOKUP),
   assurance: semantic('assure', CAPABILITY_IDS.PORTABLE_EVIDENCE),
   'change-packet': semantic('respond', CAPABILITY_IDS.PORTABLE_EVIDENCE),
   'sharing-review': semantic('respond', CAPABILITY_IDS.PORTABLE_EVIDENCE),

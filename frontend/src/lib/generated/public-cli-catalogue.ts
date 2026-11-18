@@ -1336,6 +1336,26 @@ const SHARED_COMMAND_OPTIONS = [
     "defaultDescription": null
   },
   {
+    "option": "--state",
+    "scope": "command",
+    "usage": "--state \u003cfile>",
+    "description": "Retain bounded local monitoring progress and attempt accounting in this private file.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--approve-network",
+    "scope": "command",
+    "usage": "--approve-network",
+    "description": "Approve the workflow’s declared network steps for this invocation.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
     "option": "--marking",
     "scope": "command",
     "usage": "--marking \u003cclear|green|amber|amber-strict|red>",
@@ -1478,16 +1498,6 @@ const SHARED_COMMAND_OPTIONS = [
     "defaultDescription": null
   },
   {
-    "option": "--approve-network",
-    "scope": "command",
-    "usage": "--approve-network",
-    "description": "Approve the workflow’s declared network steps for this invocation.",
-    "values": [],
-    "repeatable": false,
-    "ranges": [],
-    "defaultDescription": null
-  },
-  {
     "option": "--resume",
     "scope": "command",
     "usage": "--resume \u003cfile>",
@@ -1569,7 +1579,7 @@ const SHARED_COMMAND_OPTIONS = [
   }
 ] as const;
 export const PUBLIC_CLI_CATALOGUE = {
-  "commandCount": 57,
+  "commandCount": 58,
   "groups": [
     "investigate",
     "respond",
@@ -5267,6 +5277,98 @@ export const PUBLIC_CLI_CATALOGUE = {
       }
     },
     {
+      "id": "monitor-tick",
+      "summary": "Run a resumable local monitoring cycle",
+      "description": "Preview a per-domain monitoring plan, or explicitly execute one bounded local cycle.",
+      "group": "assure",
+      "common": false,
+      "usage": "whoisleuth monitor-tick \u003csource> [--state \u003cfile>] [--approve-network] [--json] [--quiet] [--no-color]",
+      "example": "whoisleuth monitor-tick plan.json --state monitor-state.json --approve-network --json --output observations.json",
+      "boundary": "Without --approve-network this is an offline preview. Execution requires --state and admits at most 100 distinct registrable domains. Purpose (Fast registration or Deep website/mail), cadence and review priority are independent. The existing dispatcher starts at most two serial Lookups within its 24-second cycle; a daily attempt quota, durable cursor, leases, oldest-due fairness and failure backoff survive resume. Attempts are saved before collection, including cancelled attempts. The private state is locked and atomically replaced; configuration changes require a deliberately new file. Do not run copied state files concurrently. Output is an ordinary Watchlist export; the first actual local cycle establishes its own baseline, rather than arbitrarily choosing among overlapping saved observations. No daemon, operating-system schedule, hosted setting, paid provider or automatic retry is enabled.",
+      "collection": {
+        "mode": "network",
+        "scope": "Offline preview unless --approve-network; then at most two serial, explicitly configured Fast/Deep compact Lookups per cycle, with a bounded daily attempt quota."
+      },
+      "inputs": [
+        {
+          "name": "source",
+          "valueKind": "file",
+          "minimum": 1,
+          "maximum": 1,
+          "values": [],
+          "inputSource": "argv",
+          "requiredWhenOptions": []
+        }
+      ],
+      "importantOptions": [
+        "--state",
+        "--approve-network",
+        "--json",
+        "--quiet",
+        "--no-color"
+      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[111], SHARED_COMMAND_OPTIONS[112], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "networkEffect": "conditional_network",
+      "disclosureClass": "bounded_authorised_active",
+      "explicitAuthorisationRequired": true,
+      "planSupport": true,
+      "failurePolicySupport": false,
+      "supportedSchemaIdentifiers": [
+        "whoisleuth\u002emonitoring-plan.input",
+        "whoisleuth\u002emonitoring-plan",
+        "whoisleuth\u002elocal-monitor-state",
+        "whoisleuth\u002ewatchlists"
+      ],
+      "inputLimits": [
+        "Offline preview unless --approve-network; then at most two serial, explicitly configured Fast/Deep compact Lookups per cycle, with a bounded daily attempt quota.",
+        "source: 1-1 file value"
+      ],
+      "outputLimits": [
+        "Output is bounded by the command-owned formatter and document contract.",
+        "Selected file output is atomic and replacement requires --force."
+      ],
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
+      ],
+      "fileOutput": true,
+      "primaryEvidenceArtefacts": [
+        "Private resumable monitor state",
+        "Ordinary Watchlist export"
+      ],
+      "capability": {
+        "familyId": "lookup",
+        "networkMode": "conditional_bounded_passive",
+        "dataSent": [
+          "normalised_target",
+          "registry_query",
+          "whois_query",
+          "dns_question",
+          "homepage_request",
+          "tls_handshake"
+        ],
+        "recipients": [
+          "registry_service",
+          "dns_resolver",
+          "target_public_service"
+        ],
+        "authorisation": "explicit_network_approval",
+        "retention": "local_output_deliberate",
+        "export": "local_output",
+        "outcomes": [
+          "complete",
+          "partial"
+        ],
+        "documentStates": [],
+        "privacyLimitations": [
+          "A selected private local file retains compact evidence, quota counters and the existing dispatcher cursor; no hosted schedule is enabled.",
+          "The plan selects collection purpose and cadence independently from review priority. No Brand-based risk score is calculated."
+        ]
+      }
+    },
+    {
       "id": "assurance",
       "summary": "Review domain change, recovery, or retirement plans",
       "description": "Review a versioned domain change, recovery-dependency, or retirement plan.",
@@ -5458,7 +5560,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[111], SHARED_COMMAND_OPTIONS[112], SHARED_COMMAND_OPTIONS[113], SHARED_COMMAND_OPTIONS[114], SHARED_COMMAND_OPTIONS[115], SHARED_COMMAND_OPTIONS[116], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[113], SHARED_COMMAND_OPTIONS[114], SHARED_COMMAND_OPTIONS[115], SHARED_COMMAND_OPTIONS[116], SHARED_COMMAND_OPTIONS[117], SHARED_COMMAND_OPTIONS[118], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -5558,7 +5660,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[117], SHARED_COMMAND_OPTIONS[118], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[119], SHARED_COMMAND_OPTIONS[120], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -5775,7 +5877,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[119], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[121], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -5885,7 +5987,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[120], SHARED_COMMAND_OPTIONS[121], SHARED_COMMAND_OPTIONS[122], SHARED_COMMAND_OPTIONS[123], SHARED_COMMAND_OPTIONS[124], SHARED_COMMAND_OPTIONS[125], SHARED_COMMAND_OPTIONS[126], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[122], SHARED_COMMAND_OPTIONS[123], SHARED_COMMAND_OPTIONS[124], SHARED_COMMAND_OPTIONS[112], SHARED_COMMAND_OPTIONS[125], SHARED_COMMAND_OPTIONS[126], SHARED_COMMAND_OPTIONS[127], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "conditional_network",
       "disclosureClass": "bounded_authorised_active",
       "explicitAuthorisationRequired": true,
@@ -5988,7 +6090,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[127], SHARED_COMMAND_OPTIONS[128], SHARED_COMMAND_OPTIONS[33], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[128], SHARED_COMMAND_OPTIONS[129], SHARED_COMMAND_OPTIONS[33], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -6145,7 +6247,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--stdio",
         "--allow-model-disclosure"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[129], SHARED_COMMAND_OPTIONS[130]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[130], SHARED_COMMAND_OPTIONS[131]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -6372,7 +6474,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--compact",
         "--no-attribution"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[22], SHARED_COMMAND_OPTIONS[23], SHARED_COMMAND_OPTIONS[131], SHARED_COMMAND_OPTIONS[24]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[22], SHARED_COMMAND_OPTIONS[23], SHARED_COMMAND_OPTIONS[132], SHARED_COMMAND_OPTIONS[24]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,

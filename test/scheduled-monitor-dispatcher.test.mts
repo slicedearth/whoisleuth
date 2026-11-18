@@ -119,7 +119,7 @@ async function harness({
   const deliveries: DeliveryRecord[] = [];
   const lookupCalls: Array<{
     domain: string;
-    options: { fast: true; compact: true };
+    options: Parameters<ScheduledMonitorDispatcherOptions['lookup']>[1];
   }> = [];
   const dispatcher = new ScheduledMonitorDispatcher({
     repository,

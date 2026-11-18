@@ -59,6 +59,37 @@ export type WorkflowCommandDependencies = {
 type WorkflowInlineCommand = typeof WORKFLOW_INLINE_COMMANDS[number];
 type WorkflowCommandArguments = Extract<CliArguments, { action: WorkflowInlineCommand }>;
 
+async function runMonitorTickCommand(args: Extract<WorkflowCommandArguments, { action: 'monitor-tick' }>, dependencies: WorkflowCommandDependencies, context: CliWorkflowContext): Promise<number> {
+  context.setFailureLabel('Local monitoring');
+  const { readLocalMonitoringPlan, prepareLocalMonitorState, runLocalMonitorTick } = await import('./local-monitor.mts');
+  const { MAX_LOCAL_MONITOR_STATE_BYTES } = await import('../packages/contracts/monitoring-plan.mts');
+  if (!args.approveNetwork) {
+    const raw = dependencies.readArtifactInput ? await dependencies.readArtifactInput(args.source) : await context.readInput(args.source, MAX_WATCHLIST_IMPORT_BYTES, 'Monitoring plan');
+    const plan = readLocalMonitoringPlan(raw, context.now());
+    if (!args.quiet) context.writeStdout(formatJsonDocument(plan));
+    return EXIT_CODES.SUCCESS;
+  }
+  if (!args.stateSource) throw new CliUsageError('Explicit monitoring execution requires one private --state file.');
+  const { prepareLocalDocumentWrite, localDocumentPathsCoincide } = await import('./local-document-checkpoint.mts');
+  if (args.destination && await localDocumentPathsCoincide(args.destination, [args.source, args.stateSource])) throw new CliUsageError('Monitoring export must use a different file from its plan and private state.');
+  const checkpoint = await prepareLocalDocumentWrite({ destination: args.stateSource, source: args.source, force: true,
+    allowSourceReplacement: false, maximumInputBytes: MAX_WATCHLIST_IMPORT_BYTES,
+    maximumOutputBytes: MAX_LOCAL_MONITOR_STATE_BYTES, label: 'Monitor state', ...(dependencies.signal ? { signal: dependencies.signal } : {}) });
+  try {
+    const plan = readLocalMonitoringPlan(checkpoint.sourceInput!, context.now());
+    const state = await prepareLocalMonitorState(plan, checkpoint.destinationInput, context.now());
+    const lookup = dependencies.runUnifiedLookup ?? (await import('../lib/lookup.mts')).runUnifiedLookup;
+    const result = await runLocalMonitorTick({ plan, state, lookup, persist: checkpoint.checkpoint, now: context.now,
+      ...(dependencies.signal ? { signal: dependencies.signal } : {}) });
+    if (!args.quiet) context.writeStderr(`Local monitoring: ${result.status}; ${result.lookupDeliveries} lookup attempt(s); ${result.stopReason}. Daily attempts: ${result.state.quota.attempts}/${plan.localLimits.maxLookupsPerDay}.\n`);
+    if (result.stopReason === 'cancelled') return EXIT_CODES.CANCELLED;
+    if (!args.quiet) context.writeStdout(formatJsonDocument(result.watchlists));
+    return result.status === 'partial' ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;
+  } finally {
+    if (await checkpoint.release()) throw new CliUsageError('Local monitoring completed, but file lease cleanup could not be confirmed. Inspect its state directory.');
+  }
+}
+
 async function runWatchlistReviewCommand(args: Extract<WorkflowCommandArguments, { action: 'watchlist-review' }>, dependencies: WorkflowCommandDependencies, context: CliWorkflowContext): Promise<number> {
   const raw = dependencies.readArtifactInput ? await dependencies.readArtifactInput(args.source) : await context.readInput(args.source, MAX_WATCHLIST_IMPORT_BYTES, 'Candidate watch selection');
   const document = reviewCandidateWatchInput(raw, args.operation, context.now());
@@ -269,6 +300,7 @@ async function runWorkflowRecipeCommand(
 }
 
 const WORKFLOW_COMMAND_HANDLERS = Object.freeze({
+  'monitor-tick': runMonitorTickCommand,
   'domain-feed': runDomainFeedCommand,
   'watchlist-review': runWatchlistReviewCommand,
   'monitor-once': runMonitorOnceCommand,

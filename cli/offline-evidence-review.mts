@@ -38,7 +38,7 @@ import { exact } from '../packages/evidence/artifact-structure.mts';
 import { INFRASTRUCTURE_COMPARISON_INPUT_SCHEMA, MAX_INFRASTRUCTURE_COMPARISON_INPUT_BYTES } from '../packages/contracts/external-observation-interchange.mts';
 import { CASE_CONTAINMENT_INPUT_SCHEMA, readCaseContainmentInput, formatCaseContainmentHandoff, type CaseContainmentHandoff } from '../packages/cases/case-containment-handoff.mts';
 import { BIMI_CERTIFICATE_INPUT_SCHEMA } from '../packages/contracts/bimi-certificate.mts';
-import { MONITORING_PLAN_INPUT_SCHEMA } from '../packages/contracts/monitoring-plan.mts';
+import { MONITORING_PLAN_INPUT_SCHEMA, MONITORING_PLAN_SUPPORTED_VERSIONS } from '../packages/contracts/monitoring-plan.mts';
 import { buildMonitoringPlan } from '../packages/monitoring/monitoring-plan.mts';
 import { CT_INCLUSION_INPUT_SCHEMA } from '../packages/contracts/ct-inclusion-proof.mts';
 import { TIMESTAMP_TOKEN_INPUT_SCHEMA } from '../packages/contracts/timestamp-token.mts';
@@ -77,6 +77,7 @@ function parseInput(value: unknown): UnknownRecord {
   const document = record(parsed);
   if (typeof document.schema !== 'string' || document.version !== 1
     && !(document.schema === LOCAL_MMDB_QUERY_SCHEMA && document.version === LOCAL_MMDB_QUERY_VERSION)
+    && !(document.schema === MONITORING_PLAN_INPUT_SCHEMA && MONITORING_PLAN_SUPPORTED_VERSIONS.includes(document.version as number))
     && !(document.schema === DOMAIN_HISTORY_INPUT_SCHEMA && document.version === DOMAIN_HISTORY_INPUT_VERSION)) {
     throw new CliUsageError('Offline evidence review requires a supported versioned input schema.');
   }

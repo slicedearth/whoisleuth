@@ -6,8 +6,8 @@
       "schema": "whoisleuth.capability-manifest",
       "version": 1,
       "capabilityCount": 35,
-      "cliOperationCount": 57,
-      "cliVariantCount": 16
+      "cliOperationCount": 58,
+      "cliVariantCount": 18
     },
     "cliCommandCatalogue": {
       "schema": "whoisleuth.cli.command-catalogue",
@@ -6261,6 +6261,239 @@
         "Its checkpoint and review evidence do not calculate Risk or Opportunity scores."
       ],
       "variants": []
+    },
+    {
+      "id": "command.cli.monitor-tick",
+      "command": "monitor-tick",
+      "capabilityFamilyId": "lookup",
+      "title": "Run a resumable local monitoring cycle",
+      "requestPurpose": "Offline preview unless --approve-network; then at most two serial, explicitly configured Fast/Deep compact Lookups per cycle, with a bounded daily attempt quota.",
+      "collectionMode": "network",
+      "executionPlanes": [
+        "local_cli_offline",
+        "local_cli_network"
+      ],
+      "trigger": "explicit_cli_command",
+      "networkMode": "conditional_bounded_passive",
+      "authorisation": "explicit_network_approval",
+      "dataSent": [
+        "normalised_target",
+        "registry_query",
+        "whois_query",
+        "dns_question",
+        "homepage_request",
+        "tls_handshake"
+      ],
+      "dataDeliberatelyNotSent": [
+        "browser_local_records",
+        "unselected_local_files",
+        "cookies_and_session_data",
+        "unrelated_evidence_values",
+        "complete_query_bearing_urls",
+        "credentials"
+      ],
+      "recipientClasses": [
+        "registry_service",
+        "dns_resolver",
+        "target_public_service"
+      ],
+      "returnedDataCategories": [
+        "source_attributed_lookup_evidence",
+        "source_health",
+        "bounded_assessments"
+      ],
+      "processingClasses": [
+        "transient_processing",
+        "deliberate_local_file_export",
+        "third_party_disclosure",
+        "offline_processing_no_request"
+      ],
+      "requestBudget": "collector_specific",
+      "responseBudget": "collector_specific",
+      "concurrency": "command_bounded",
+      "retention": {
+        "mode": "local_output_deliberate",
+        "storageClass": "operator_controlled_local_output",
+        "durationControl": "no_automatic_retention_beyond_process_unless_operator_saves_output"
+      },
+      "exports": {
+        "mode": "local_output",
+        "classes": [
+          "operator_selected_local_output"
+        ]
+      },
+      "credentialModel": "none",
+      "credentialUse": "No operation credential is required.",
+      "cancellation": "queue_stops_admission",
+      "partialResults": "explicit_per_item",
+      "outcomes": [
+        "complete",
+        "partial"
+      ],
+      "normalisedOutcomes": {
+        "unavailable": "not_declared_for_boundary",
+        "blocked": "not_declared_for_boundary",
+        "partial": "explicit_outcome",
+        "unsupported": "not_declared_for_boundary"
+      },
+      "documentStates": [],
+      "scoringEffect": "none",
+      "nonInferences": [
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "Without --approve-network this is an offline preview. Execution requires --state and admits at most 100 distinct registrable domains. Purpose (Fast registration or Deep website/mail), cadence and review priority are independent. The existing dispatcher starts at most two serial Lookups within its 24-second cycle; a daily attempt quota, durable cursor, leases, oldest-due fairness and failure backoff survive resume. Attempts are saved before collection, including cancelled attempts. The private state is locked and atomically replaced; configuration changes require a deliberately new file. Do not run copied state files concurrently. Output is an ordinary Watchlist export; the first actual local cycle establishes its own baseline, rather than arbitrarily choosing among overlapping saved observations. No daemon, operating-system schedule, hosted setting, paid provider or automatic retry is enabled.",
+        "A selected private local file retains compact evidence, quota counters and the existing dispatcher cursor; no hosted schedule is enabled.",
+        "The plan selects collection purpose and cadence independently from review priority. No Brand-based risk score is calculated."
+      ],
+      "variants": [
+        {
+          "id": "command.cli.monitor-tick.approved_cycle",
+          "operationId": "command.cli.monitor-tick",
+          "variantId": "approved_cycle",
+          "title": "Run a resumable local monitoring cycle — approved cycle",
+          "requestPurpose": "Offline preview unless --approve-network; then at most two serial, explicitly configured Fast/Deep compact Lookups per cycle, with a bounded daily attempt quota. Variant: approved cycle.",
+          "executionPlanes": [
+            "local_cli_network"
+          ],
+          "trigger": "explicit_cli_command",
+          "networkMode": "bounded_passive",
+          "authorisation": "explicit_network_approval",
+          "dataSent": [
+            "normalised_target",
+            "registry_query",
+            "whois_query",
+            "dns_question",
+            "homepage_request",
+            "tls_handshake"
+          ],
+          "dataDeliberatelyNotSent": [
+            "browser_local_records",
+            "unselected_local_files",
+            "cookies_and_session_data",
+            "unrelated_evidence_values",
+            "complete_query_bearing_urls",
+            "credentials"
+          ],
+          "recipientClasses": [
+            "registry_service",
+            "dns_resolver",
+            "target_public_service"
+          ],
+          "returnedDataCategories": [
+            "source_attributed_lookup_evidence",
+            "source_health",
+            "bounded_assessments"
+          ],
+          "processingClasses": [
+            "transient_processing",
+            "deliberate_local_file_export",
+            "third_party_disclosure"
+          ],
+          "requestBudget": "collector_specific",
+          "responseBudget": "collector_specific",
+          "concurrency": "command_bounded",
+          "retention": {
+            "mode": "local_output_deliberate",
+            "storageClass": "operator_controlled_local_output",
+            "durationControl": "no_automatic_retention_beyond_process_unless_operator_saves_output"
+          },
+          "exports": {
+            "mode": "local_output",
+            "classes": [
+              "operator_selected_local_output"
+            ]
+          },
+          "credentialModel": "none",
+          "credentialUse": "No operation credential is required.",
+          "cancellation": "queue_stops_admission",
+          "partialResults": "explicit_per_item",
+          "outcomes": [
+            "complete",
+            "partial"
+          ],
+          "normalisedOutcomes": {
+            "unavailable": "not_declared_for_boundary",
+            "blocked": "not_declared_for_boundary",
+            "partial": "explicit_outcome",
+            "unsupported": "not_declared_for_boundary"
+          },
+          "documentStates": [],
+          "scoringEffect": "none",
+          "nonInferences": [
+            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+            "A selected private local file retains compact evidence, quota counters and the existing dispatcher cursor; no hosted schedule is enabled.",
+            "The plan selects collection purpose and cadence independently from review priority. No Brand-based risk score is calculated."
+          ]
+        },
+        {
+          "id": "command.cli.monitor-tick.preview",
+          "operationId": "command.cli.monitor-tick",
+          "variantId": "preview",
+          "title": "Run a resumable local monitoring cycle — preview",
+          "requestPurpose": "Offline preview unless --approve-network; then at most two serial, explicitly configured Fast/Deep compact Lookups per cycle, with a bounded daily attempt quota. Variant: preview.",
+          "executionPlanes": [
+            "local_cli_offline"
+          ],
+          "trigger": "explicit_cli_command",
+          "networkMode": "none",
+          "authorisation": "explicit_action",
+          "dataSent": [
+            "none"
+          ],
+          "dataDeliberatelyNotSent": [
+            "no_network_request",
+            "no_third_party_disclosure",
+            "credentials",
+            "cookies_and_session_data",
+            "local_paths"
+          ],
+          "recipientClasses": [
+            "none"
+          ],
+          "returnedDataCategories": [
+            "bounded_local_derivation"
+          ],
+          "processingClasses": [
+            "transient_processing",
+            "deliberate_local_file_export",
+            "offline_processing_no_request"
+          ],
+          "requestBudget": "none",
+          "responseBudget": "bounded_local_input",
+          "concurrency": "none",
+          "retention": {
+            "mode": "local_output_deliberate",
+            "storageClass": "operator_controlled_local_output",
+            "durationControl": "no_automatic_retention_beyond_process_unless_operator_saves_output"
+          },
+          "exports": {
+            "mode": "local_output",
+            "classes": [
+              "operator_selected_local_output"
+            ]
+          },
+          "credentialModel": "none",
+          "credentialUse": "No operation credential is required.",
+          "cancellation": "bounded_atomic",
+          "partialResults": "explicit_document",
+          "outcomes": [
+            "complete",
+            "partial"
+          ],
+          "normalisedOutcomes": {
+            "unavailable": "not_declared_for_boundary",
+            "blocked": "not_declared_for_boundary",
+            "partial": "explicit_outcome",
+            "unsupported": "not_declared_for_boundary"
+          },
+          "documentStates": [],
+          "scoringEffect": "none",
+          "nonInferences": [
+            "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+            "A selected private local file retains compact evidence, quota counters and the existing dispatcher cursor; no hosted schedule is enabled.",
+            "The plan selects collection purpose and cadence independently from review priority. No Brand-based risk score is calculated."
+          ]
+        }
+      ]
     },
     {
       "id": "command.cli.oam-export",

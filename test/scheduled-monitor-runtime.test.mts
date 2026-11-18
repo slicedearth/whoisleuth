@@ -19,6 +19,7 @@ import {
 import type { EnvironmentInput } from '../lib/scheduled-monitor-configuration.mts';
 import type { NetlifyBlobStore } from '../lib/scheduled-monitor-netlify-store.mts';
 import type { ScheduledMonitorState } from '../frontend/src/lib/analysis/scheduled-monitor-model.ts';
+import type { ScheduledMonitorLookupOptions } from '../packages/monitoring/scheduled-monitor-dispatcher.mts';
 
 const START = Date.parse('2026-07-16T12:00:00.000Z');
 const key = randomBytes(32).toString('base64');
@@ -192,7 +193,7 @@ test('a ready runtime composes encrypted storage and the fast compact cycle with
   }));
   const calls: Array<{
     domain: string;
-    options: { fast: true; compact: true };
+    options: ScheduledMonitorLookupOptions;
   }> = [];
   let id = 0;
   const runtime = createScheduledMonitorRuntime({

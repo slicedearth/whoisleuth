@@ -344,6 +344,7 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--audience': enumeration('Choose the export audience and its field-disclosure policy.', ['internal', 'trusted', 'public']),
   '--reviewed': flag('Confirm the required human review of the exported material.'),
   '--previous': file('Compare against this earlier retained report.'),
+  '--state': file('Retain bounded local monitoring progress and attempt accounting in this private file.'),
   '--limit': integer('Limit the number of watchlist targets checked in this run.', () => Object.freeze([BASE_INTEGER_RANGE(1, 20)]), () => 20),
   '--marking': enumeration('Declare the information-sharing marking.', ['clear', 'green', 'amber', 'amber-strict', 'red']),
   '--recipient-scope': enumeration('Declare the intended recipient scope.', ['public', 'community', 'organization', 'named-recipients']),

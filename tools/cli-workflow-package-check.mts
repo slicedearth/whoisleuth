@@ -172,6 +172,8 @@ async function checkInstalledIntakeAndContext(repositoryRoot: string, temporaryR
     purpose: 'configuration', intervalHours: 24 }), { flag: 'wx', mode: 0o600 });
   const plan = record(record(JSON.parse(await run(['review-evidence', planFile, '--json'], 'offline monitoring workload preview')), 'Installed plan').result, 'Plan result');
   if (plan.mode !== 'deep' || record(plan.counts, 'Plan counts').plannedLookupsPerWeek !== 7 || plan.changesSchedules !== false) throw new TypeError('Installed monitoring plan changed workload or execution boundaries.');
+  const localPlan = record(JSON.parse(await run(['monitor-tick', planFile, '--json'], 'offline local monitoring preview')), 'Installed local monitoring preview');
+  if (localPlan.mode !== 'deep' || localPlan.networkRequestsMade !== false || localPlan.changesSchedules !== false) throw new TypeError('Installed local monitoring preview changed its no-request boundary.');
   const contextFile = path.join(temporaryRoot, 'selected-service-context.json');
   await writeFile(contextFile, JSON.stringify({ schema: SELECTED_SERVICE_CONTEXT_INPUT_SCHEMA, version: SELECTED_SERVICE_CONTEXT_VERSION,
     role: 'research_scanner', targets: ['192.0.2.1'], provenance: {}, warningListJson: JSON.stringify({ name: 'Synthetic scanner range',

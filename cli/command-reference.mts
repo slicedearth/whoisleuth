@@ -347,7 +347,7 @@ function cliInvocationNetworkEffect(
   if (command === 'lookup' || command === 'bulk' || command === 'discover-scan') {
     return invocationHasFlag(command, args, '--plan') ? 'offline' : 'network';
   }
-  if (command === 'workflow-run') {
+  if (command === 'workflow-run' || command === 'monitor-tick') {
     return invocationHasFlag(command, args, '--approve-network') ? 'network' : 'offline';
   }
   throw new Error(`Conditional network effect is not implemented for ${command}.`);

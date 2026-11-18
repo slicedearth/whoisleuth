@@ -13,6 +13,7 @@ import {
   nextScheduledMonitorRevision,
   pruneScheduledMonitorHistoryToStaticBudget,
   projectHostedCompactRecord,
+  MAX_SCHEDULED_WATCHLISTS,
   type ScheduledMonitorState,
   type ScheduledRunSource,
   type ScheduledWatchlist,
@@ -21,6 +22,10 @@ import {
   SCHEDULED_MONITOR_DELIVERY_SCHEMA,
   SCHEDULED_MONITOR_DELIVERY_VERSION,
 } from '../contracts/monitoring-portability.mts';
+import { compactHttpObservation } from '../cases/http-summary.mts';
+import { webCollectionQualityForCapture } from '../evidence/collection-quality.mts';
+import { LOCAL_MONITOR_STALE_RUN_MS } from '../contracts/monitoring-plan.mts';
+import { lookupStrictExitFindings } from '../evidence/lookup-source-failures.mts';
 
 export {
   SCHEDULED_MONITOR_DELIVERY_SCHEMA,
@@ -85,7 +90,7 @@ export interface ScheduledMonitorRepositoryContract {
   ) => Promise<{ state: ScheduledMonitorState; result: Result }>;
 }
 
-export type ScheduledMonitorLookupOptions = { fast: true; compact: true; signal?: AbortSignal };
+export type ScheduledMonitorLookupOptions = { fast: boolean; compact: true; signal?: AbortSignal };
 
 export interface ScheduledMonitorDispatcherOptions {
   repository: unknown;
@@ -97,6 +102,9 @@ export interface ScheduledMonitorDispatcherOptions {
   now?: () => number;
   randomUUID: () => string;
   signal?: AbortSignal;
+  /** Explicit local configuration only. Hosted callers omit this and stay Fast. */
+  watchlistModes?: ReadonlyMap<string, 'fast' | 'deep'>;
+  staleRunMs?: number;
 }
 
 function plainRecord(value: unknown): Record<string, unknown> | null {
@@ -123,10 +131,11 @@ function entityName(value: unknown): string | null {
   return null;
 }
 
-function failedLookupResult(source: ScheduledRunSource): CompactWatchlistRecord {
+function failedLookupResult(source: ScheduledRunSource, mode: 'fast' | 'deep' = 'fast'): CompactWatchlistRecord {
   const result = compactWatchlistResults([{
     domain: source.domain,
-    scanDepth: 'fast',
+    scanDepth: mode,
+    ...(mode === 'deep' ? { webCollectionQuality: webCollectionQualityForCapture(undefined, mode) } : {}),
     availability: 'error',
     mutationTypes: [],
   }])[0];
@@ -137,12 +146,13 @@ function failedLookupResult(source: ScheduledRunSource): CompactWatchlistRecord 
 export function scheduledLookupResult(
   source: ScheduledRunSource,
   response: unknown,
+  mode: 'fast' | 'deep' = 'fast',
 ): CompactWatchlistRecord {
   const availability = plainRecord(plainRecord(response)?.availability);
   const availabilityState = availability?.state;
   const result = compactWatchlistResults([{
     domain: source.domain,
-    scanDepth: 'fast',
+    scanDepth: mode,
     availability: typeof availabilityState === 'string' && AVAILABILITY_STATES.has(availabilityState)
       ? availabilityState
       : 'unknown',
@@ -151,9 +161,19 @@ export function scheduledLookupResult(
     createdDate: availability?.createdDate,
     expiryDate: availability?.expiryDate,
     privacyProtected: availability?.privacyProtected,
+    ...(mode === 'deep' ? {
+      webCollectionQuality: webCollectionQualityForCapture(availability?.webCollectionQuality, mode),
+      hasMx: availability?.hasMx, hasSpf: availability?.hasSpf, hasDmarc: availability?.hasDmarc,
+      activityStatus: availability?.activityStatus, pageTitle: availability?.pageTitle,
+      ...compactHttpObservation(availability?.http), faviconHash: availability?.faviconHash,
+      hasPasswordField: availability?.hasPasswordField,
+      phishingLanguageMatch: availability?.phishingLanguageMatch,
+      // No Brand reference is supplied to monitoring; do not fabricate a score.
+      riskScore: null, riskModelVersion: null,
+    } : {}),
     mutationTypes: [],
-  }])[0] || failedLookupResult(source);
-  return byteLength(result) <= MAX_SCHEDULED_RESULT_BYTES ? projectHostedCompactRecord(result) : failedLookupResult(source);
+  }])[0] || failedLookupResult(source, mode);
+  return byteLength(result) <= MAX_SCHEDULED_RESULT_BYTES ? projectHostedCompactRecord(result) : failedLookupResult(source, mode);
 }
 
 export function normalizeScheduledMonitorDelivery(value: unknown): ScheduledMonitorDelivery | null {
@@ -226,6 +246,8 @@ export class ScheduledMonitorDispatcher {
   now: () => number;
   randomUUID: () => string;
   signal: AbortSignal | undefined;
+  watchlistModes: ReadonlyMap<string, 'fast' | 'deep'>;
+  staleRunMs: number;
 
   constructor({
     repository,
@@ -234,6 +256,8 @@ export class ScheduledMonitorDispatcher {
     now = () => Date.now(),
     randomUUID,
     signal,
+    watchlistModes = new Map(),
+    staleRunMs = SCHEDULED_MONITOR_STALE_RUN_MS,
   }: ScheduledMonitorDispatcherOptions) {
     if (!repositoryContract(repository)) throw new Error('A scheduled monitoring repository is required.');
     if (typeof lookup !== 'function') throw new Error('A scheduled monitoring lookup function is required.');
@@ -247,6 +271,10 @@ export class ScheduledMonitorDispatcher {
     this.now = now;
     this.randomUUID = randomUUID;
     this.signal = signal;
+    if (watchlistModes.size > MAX_SCHEDULED_WATCHLISTS || [...watchlistModes].some(([id, mode]) => !isScheduledMonitorId(id) || !['fast', 'deep'].includes(mode))) throw new TypeError('Explicit monitoring collection modes are invalid.');
+    this.watchlistModes = new Map(watchlistModes);
+    if (!Number.isSafeInteger(staleRunMs) || staleRunMs < SCHEDULED_MONITOR_STALE_RUN_MS || staleRunMs > LOCAL_MONITOR_STALE_RUN_MS) throw new TypeError('Monitoring stale-run lifetime is invalid.');
+    this.staleRunMs = staleRunMs;
   }
 
   nowMs(): number {
@@ -280,7 +308,7 @@ export class ScheduledMonitorDispatcher {
       const active = state.activeRun;
       if (active) {
         const updatedAt = Date.parse(active.updatedAt);
-        if (!Number.isFinite(updatedAt) || nowMs - updatedAt >= SCHEDULED_MONITOR_STALE_RUN_MS) {
+        if (!Number.isFinite(updatedAt) || nowMs - updatedAt >= this.staleRunMs) {
           const watchlist = state.watchlists.find((item) => item.id === active.watchlistId);
           if (watchlist) {
             watchlist.status = active.cursor > 0 ? 'partial' : 'failed';
@@ -388,20 +416,26 @@ export class ScheduledMonitorDispatcher {
     }
     if (claim.result.status !== 'claimed') return claim.result.status;
 
+    const run = claim.state.activeRun;
+    const mode = run ? this.watchlistModes.get(run.watchlistId) ?? 'fast' : 'fast';
     let result;
+    let sourceIncomplete = false;
     try {
       this.signal?.throwIfAborted();
       const response = await this.lookup(claim.result.source.domain, {
-        fast: true, compact: true, ...(this.signal ? { signal: this.signal } : {}),
+        fast: mode === 'fast', compact: true, ...(this.signal ? { signal: this.signal } : {}),
       });
       this.signal?.throwIfAborted();
-      result = scheduledLookupResult(claim.result.source, response);
+      result = scheduledLookupResult(claim.result.source, response, mode);
+      sourceIncomplete = mode === 'deep' && lookupStrictExitFindings(response).length > 0;
     } catch {
       this.signal?.throwIfAborted();
-      result = failedLookupResult(claim.result.source);
+      result = failedLookupResult(claim.result.source, mode);
     }
     const inconclusive = typeof result.availability !== 'string'
-      || !CONCLUSIVE_AVAILABILITY.has(result.availability);
+      || !CONCLUSIVE_AVAILABILITY.has(result.availability)
+      || sourceIncomplete
+      || mode === 'deep' && result.webCollectionQuality?.page !== 'complete';
     const completedMs = this.nowMs();
     const completedAt = new Date(completedMs).toISOString();
     const completion = await this.repository.update<ScheduledMonitorCompletionResult>((state) => {
@@ -433,7 +467,7 @@ export class ScheduledMonitorDispatcher {
       }));
       const appended = appendWatchlistScan(watchlist.entry, completedResults, {
         checkedAt: completedAt,
-        mode: 'fast',
+        mode,
       });
       const status = run.errorCount > 0 ? 'partial' : 'complete';
       watchlist.entry = appended.entry;

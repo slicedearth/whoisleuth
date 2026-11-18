@@ -828,6 +828,14 @@ The Dashboard links its attention count and recent cases to the corresponding
 saved work. Use **Search** (Ctrl/⌘ K) anywhere in the console to find a page or
 search browser-local records. Opening a destination does not collect evidence.
 
+Watchlist History includes a monitoring workload plan. Choose default collection
+purpose and cadence, then override individual domains without changing their
+saved watchlist. Review priority remains independent. Download the plan for the
+CLI’s `monitor-tick`: it previews offline unless network execution is explicitly
+approved, then runs one bounded cycle with private resumable state. No background
+schedule is installed. The returned ordinary Watchlist export can be imported
+here. Existing hosted monitoring remains Fast-only and separately configured.
+
 **Relationships** searches exact website-profile groups and weighted pairs
 across saved snapshots. Results are paginated, with a page-number control and
 all admitted domains retained in each group. Similarity uses complete,

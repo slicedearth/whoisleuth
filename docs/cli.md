@@ -213,14 +213,35 @@ legal assurance. Incomplete or mismatching checks return 4 with `--strict-exit`.
 
 ### Monitoring workload and selected warning data
 
-`whoisleuth.monitoring-plan.input` version 1 contains `watchlists` in the
+`whoisleuth.monitoring-plan.input` version 2 contains `watchlists` in the
 existing watchlist-store or export format, `purpose` (`registration` for Fast
 or `configuration` for Deep) and `intervalHours` (6, 12, 24 or 168).
 `review-evidence plan.json --json` previews distinct targets, overlapping
-memberships and planned Lookups per week. Priority remains review context,
-not cadence. Request counts, storage and cost remain unestimated. No schedule
-or collection is enabled. The browser offers the same preview in each
-watchlist’s History view.
+memberships and planned Lookups per week. Optional `targetPolicies` entries
+contain an exact active `domain`, `purpose`, `intervalHours` and `priority`
+(`p1`–`p4` or `unassigned`); `maxLookupsPerDay` bounds local attempts. Version 1 remains readable
+with its global settings. Request counts, storage and cost remain unestimated.
+The browser’s Watchlist History view offers the same settings and a plan download.
+
+`whoisleuth monitor-tick plan.json` is an offline preview. To execute one local
+cycle, use `monitor-tick plan.json --state monitor-state.json --approve-network
+--json --output observations.json`. Each invocation starts at most two serial
+Lookups within the existing 24-second deadline. Invoke it again with the same
+plan/state to resume; it does not install a daemon or operating-system schedule.
+At most 100 distinct registrable domains are admitted. The daily attempt quota
+must cover at least one attempt per selected target and counts attempts before
+collection, including cancellation. Priority orders equal-due groups and targets
+within a group; older due work remains first. It never chooses a deeper mode or
+shorter cadence. Collection uses no optional paid provider or Brand-based score.
+
+The private state file contains compact evidence, cursor/lease ownership, quota
+counts and a configuration digest. Changes to purpose, cadence, priority or
+membership require a deliberately new file; keep the original evidence. Do not
+run copied state files concurrently. An interrupted lease expires after 75
+seconds; a local run idle for 48 hours expires with the existing failure backoff.
+Completion times describe the monitoring group, not independent source clocks.
+The first actual cycle establishes its own baseline. Output is an ordinary
+Watchlist export that can be imported in the browser; no hosted setting changes.
 
 `whoisleuth.selected-service-context.input` version 1 contains `targets` (up to
 2,000 plain hostnames/IPs), `role` (`research_scanner`, `dynamic_dns` or

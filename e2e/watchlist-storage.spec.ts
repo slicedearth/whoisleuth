@@ -84,17 +84,30 @@ test('watchlist workload preview separates purpose and cadence without collectin
   await plan.locator(':scope > summary').click();
   await expect(plan.locator('dd').nth(0)).toHaveText('1');
   await expect(plan.locator('dd').nth(1)).toHaveText('7');
-  await plan.getByLabel('Collection purpose').selectOption('configuration');
-  await plan.getByLabel('Check interval').selectOption('6');
+  await plan.getByRole('combobox', { name: 'Collection purpose', exact: true }).selectOption('configuration');
+  await plan.getByRole('combobox', { name: 'Check interval', exact: true }).selectOption('6');
   await expect(plan.locator('dd').nth(1)).toHaveText('28');
   await plan.getByText('Targets and execution requirements', { exact: true }).click();
   await expect(plan).toContainText('example.test');
   await expect(plan).toContainText('Deep collection is not supported');
+  await plan.getByText('Per-domain collection settings', { exact: true }).click();
+  await plan.getByRole('combobox', { name: 'Domain collection purpose', exact: true }).selectOption('registration');
+  await plan.getByRole('combobox', { name: 'Domain check interval', exact: true }).selectOption('24');
+  await plan.getByRole('combobox', { name: 'Domain review priority', exact: true }).selectOption('p1');
+  await expect(plan.locator('dd').nth(1)).toHaveText('7');
+  await expect(plan.getByRole('combobox', { name: 'Collection purpose', exact: true })).toHaveValue('configuration');
+  const downloaded = page.waitForEvent('download');
+  await plan.getByRole('button', { name: 'Download local monitoring plan', exact: true }).click();
+  const stream = await (await downloaded).createReadStream();
+  if (!stream) throw new Error('The selected local plan download was unavailable.');
+  const chunks: Buffer[] = []; for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+  const selection = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  expect(selection.targetPolicies).toEqual([{ domain: 'example.test', purpose: 'registration', intervalHours: 24, priority: 'p1' }]);
   for (const theme of ['light', 'dark'] as const) {
     await useTheme(page, theme);
     for (const width of [320, 390, 1280]) {
       await page.setViewportSize({ width, height: 900 });
-      await expect(plan.getByLabel('Collection purpose')).toBeVisible();
+      await expect(plan.getByRole('combobox', { name: 'Collection purpose', exact: true })).toBeVisible();
       await expectNoHorizontalOverflow(page);
       if (captureVisualEvidenceEnabled()) {
         await plan.evaluate(element => window.scrollTo({ top: window.scrollY + element.getBoundingClientRect().top - 140, behavior: 'instant' }));

@@ -665,8 +665,19 @@ only in the current view until cleared or closed; downloads contain the review,
 not original files. Assisted CLI prompts remain on stderr and do not rewrite
 inputs. The operator controls retention of CLI input and output files.
 
-Monitoring workload previews read existing watchlists without scheduling,
-collecting or saving new data. Selected shared-service/scanner context compares
+Monitoring workload previews read existing watchlists without scheduling or
+collecting. A deliberate plan download retains the selected watchlist and
+per-domain purpose/cadence/priority configuration. The optional local
+`monitor-tick --approve-network` invocation sends normal Fast/Deep requests for
+explicitly selected registrable domains. It retains only the existing compact
+monitor projection, daily attempt counts, configuration digest and dispatcher
+cursor/lease in a selected private plaintext file. File locks and atomic writes
+protect local progress; no hosted store, paid provider, daemon or operating-system
+schedule is enabled. Raw responses, exact page URLs, private watchlist context
+and Brand-based scoring are excluded from monitor state. Input/output and state
+file retention remain under the operator’s control.
+
+Selected shared-service/scanner context compares
 identifiers already in the view with one local warning-list file and optional
 declared provenance. Warning data and provenance stay in page memory until
 replaced or the view closes; reports clear when the selected target context
