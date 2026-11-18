@@ -15,6 +15,9 @@
   let busy = $state(false);
   let message = $state('');
   let report = $state<Comparison | null>(null);
+  const rowState = (type: string) => tokenLabel(report?.rows.find(row => row.type === type)?.state ?? 'unknown');
+  // One short announcement; the full results stay a navigable region rather than a live one.
+  const summary = $derived(report ? `Resolver comparison finished: ${RESOLVER_RECORD_TYPES.map(type => `${type} ${rowState(type)}`).join(', ')}.` : '');
   let generation = 0;
   let controller: AbortController | null = null;
   function cancel() { generation++; controller?.abort(); controller = null; busy = false; }
@@ -56,10 +59,11 @@
       {#if busy}<button type="button" class="btn" onclick={() => { cancel(); message = 'Comparison cancelled.'; }}>Cancel comparison</button>{/if}</div>
     {#if disabled}<p class="note">{disabled.reason}</p>{/if}
     {#if message}<p role="status">{message}</p>{/if}
+    <p class="sr-only" role="status">{summary}</p>
     {#if report}
-      <div class="results" role="status" aria-label="Resolver comparison results">
+      <div class="results" role="region" aria-label="Resolver comparison results">
         {#each RESOLVER_RECORD_TYPES as type}
-          <section><h5>{type} <span>{tokenLabel(report.rows.find(row => row.type === type)?.state ?? 'unknown')}</span></h5>
+          <section><h5>{type} <span>{rowState(type)}</span></h5>
             <dl>{#each report.queries.filter(query => query.type === type) as query}
               <div><dt>{RESOLVER_PROVIDERS.find(provider => provider.id === query.provider)?.label}</dt><dd>{DNS_QUERY_OUTCOMES[query.outcome].label}
                 {#each query.values as value}<code>{value.value} · TTL {value.ttl}s</code>{/each}

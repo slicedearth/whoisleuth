@@ -105,8 +105,10 @@ test('selected resolver review uses the observed child hostname and leaves the o
   await panel.getByRole('checkbox', { name: 'Cloudflare', exact: true }).check();
   await panel.getByRole('checkbox', { name: 'Google Public DNS', exact: true }).check();
   await action.click();
-  const results = panel.getByRole('status', { name: 'Resolver comparison results' });
+  const results = panel.getByRole('region', { name: 'Resolver comparison results' });
   await expect(results).toBeVisible();
+  await expect(panel.getByRole('status').filter({ hasText: 'Resolver comparison finished' }))
+    .toHaveText('Resolver comparison finished: A Incomplete, AAAA Converged.');
   await expect(results.getByRole('heading', { name: /^A incomplete$/iu })).toBeVisible();
   await expect(results.getByRole('heading', { name: /^AAAA converged$/iu })).toBeVisible();
   await expect(results).toContainText('2001:db8::1');
@@ -133,7 +135,8 @@ test('selected resolver review uses the observed child hostname and leaves the o
   if (await dns.getAttribute('open') === null) await dns.locator(':scope > summary').click();
   if (await panel.getAttribute('open') === null) await panel.locator(':scope > summary').click();
   await expect(panel).toContainText('sibling.example.test');
-  await expect(panel.getByRole('status', { name: 'Resolver comparison results' })).toHaveCount(0);
+  await expect(panel.getByRole('region', { name: 'Resolver comparison results' })).toHaveCount(0);
+  await expect(panel.getByRole('status').filter({ hasText: 'Resolver comparison finished' })).toHaveCount(0);
   await expect(panel.getByRole('checkbox', { name: 'Cloudflare', exact: true })).not.toBeChecked();
   expect(requests).toBe(1);
 });
