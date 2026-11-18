@@ -88,8 +88,8 @@ const REGISTRY_STANDARDS_COVERAGE_SNAPSHOT = Object.freeze({
   version: 1,
   verifiedAt: '2026-10-30',
   sources: Object.freeze({
-    rootZoneVersion: '2026111700',
-    rootZoneLastUpdatedAt: '2026-11-17T07:07:01.000Z',
+    rootZoneVersion: '2026111800',
+    rootZoneLastUpdatedAt: '2026-11-18T07:07:01.000Z',
     rootZoneTldSetSha256: 'e1b16e306440e2f9313e02736b5a8669fcd54a341a25aaf24c8a153d2bb0b036',
     rdapBootstrapPublication: '2026-10-28T22:00:04.000Z',
     rdapBootstrapVersion: '1.0',

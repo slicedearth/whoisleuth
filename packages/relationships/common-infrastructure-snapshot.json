@@ -1,7 +1,7 @@
 {
   "schema": "whoisleuth.common-infrastructure",
   "version": 1,
-  "generatedAt": "2026-11-18T06:28:25.979Z",
+  "generatedAt": "2026-11-18T10:56:00.681Z",
   "source": {
     "project": "MISP warning-lists",
     "repository": "https://github.com/MISP/misp-warninglists",
@@ -10,7 +10,7 @@
   },
   "freshnessDays": 30,
   "maximumEntries": 20000,
-  "entryCount": 4639,
+  "entryCount": 4637,
   "sources": [
     {
       "id": "amazon-aws",
@@ -20,7 +20,7 @@
       "sourcePath": "https://ip-ranges.amazonaws.com/ip-ranges.json",
       "sourceVersion": 20261118,
       "sourceDate": "2026-11-18",
-      "sourceDigestSha256": "6c4f0d7dfe402f45c5d91cf25e0906855dae12ebc768f82f5ca5db9cc6bb64db",
+      "sourceDigestSha256": "2ffa61c6670b44414f247df0ae06181c3ade86c8fc3367193c49f6e0e9f23c81",
       "values": [
         "1.178.1.0/24",
         "1.178.100.0/22",
@@ -31,7 +31,6 @@
         "1.178.64.0/23",
         "1.178.72.0/21",
         "1.178.8.0/22",
-        "1.178.86.0/24",
         "1.178.88.0/21",
         "1.179.101.0/24",
         "1.179.102.0/23",
@@ -2341,8 +2340,7 @@
         "2600:f0fb:c000::/47",
         "2600:f0fb:c002::/56",
         "2600:f0fb:c003::/48",
-        "2600:f0fb:c004::/47",
-        "2600:f0fb:c006::/48",
+        "2600:f0fb:c004::/46",
         "2600:f0fb:c0ff::/56",
         "2600:f0fb:c800::/46",
         "2600:f0fb:c804::/48",
@@ -4174,7 +4172,7 @@
         "2c0f:f248::/32"
       ],
       "verification": {
-        "observedAt": "2026-11-18T06:28:25.979Z",
+        "observedAt": "2026-11-18T10:56:00.681Z",
         "rangesSha256": "062fcd25d844185a05c1ef42b1f713e2277b5cd6882211698d7177bdf8d5a7c7",
         "sources": [
           {
@@ -4194,9 +4192,9 @@
       "category": "cloud_platform",
       "type": "cidr",
       "sourcePath": "https://www.gstatic.com/ipranges/cloud.json",
-      "sourceVersion": 20261117,
-      "sourceDate": "2026-11-17",
-      "sourceDigestSha256": "cb6b52a63107c093538312dec1ecee52b52570b8e24a35dbdac9f4c87678d78d",
+      "sourceVersion": 20261118,
+      "sourceDate": "2026-11-18",
+      "sourceDigestSha256": "94c66f1c8261159416bcb594726a88d2982c6931f67abb41e2cdb80d8d7f9547",
       "values": [
         "104.154.113.0/24",
         "104.154.114.0/23",
