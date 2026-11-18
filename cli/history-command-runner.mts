@@ -31,6 +31,7 @@ import type { BoundedTextStream } from './bulk.mts';
 import type { TerminalEnvironment } from './terminal-presentation.mts';
 import { HISTORY_INLINE_COMMANDS } from './inline-command-families.mts';
 import { MAX_MCP_TOTAL_BYTES } from '../packages/contracts/local-tool-adapter.mts';
+import { LOOKUP_EVIDENCE_SCHEMA } from '../packages/contracts/lookup-evidence.mts';
 
 import { runDiscriminatedCommandHandler, type DiscriminatedCommandHandlerMap } from './discriminated-command-handlers.mts';
 
@@ -98,6 +99,18 @@ async function runViewCommand(
   return EXIT_CODES.SUCCESS;
 }
 
+// Routes diff inputs before full validation; malformed JSON falls through to
+// the retained-artefact parser, which reports it precisely.
+function isLookupEvidenceText(raw: string): boolean {
+  try {
+    const value: unknown = JSON.parse(raw);
+    return Boolean(value && typeof value === 'object' && !Array.isArray(value)
+      && (value as Record<string, unknown>).schema === LOOKUP_EVIDENCE_SCHEMA);
+  } catch {
+    return false;
+  }
+}
+
 async function runRetainedDiffCommand(
   args: Extract<HistoryCommandArguments, { action: 'diff' }>,
   dependencies: HistoryCommandDependencies,
@@ -117,6 +130,22 @@ async function runRetainedDiffCommand(
   } catch (error) {
     if (error instanceof CliUsageError) throw error;
     throw new CliUsageError(`Could not read retained diff input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
+  }
+  const leftEvidence = isLookupEvidenceText(leftInput), rightEvidence = isLookupEvidenceText(rightInput);
+  if (leftEvidence || rightEvidence) {
+    if (!leftEvidence || !rightEvidence) {
+      throw new CliUsageError('diff compares two evidence exports or two saved Lookups. Run whoisleuth export on the saved Lookup first.');
+    }
+    if (args.leftSessionId || args.rightSessionId) throw new CliUsageError('Saved-session selectors apply only to Bulk session exports.');
+    if (browser) throw new CliUsageError('--browse currently supports two saved Lookup files. Omit it for other retained artefacts.');
+    const { buildCliLookupEvidenceDiff, formatCliLookupEvidenceDiff } = await import('./lookup-evidence-diff.mts');
+    const evidenceDiff = await buildCliLookupEvidenceDiff(leftInput, rightInput, context.now());
+    if (!args.quiet) {
+      context.writeStdout(args.output === 'json'
+        ? formatJsonDocument(evidenceDiff)
+        : context.terminal(formatCliLookupEvidenceDiff(evidenceDiff), args.color));
+    }
+    return EXIT_CODES.SUCCESS;
   }
   const document = buildCliRetainedArtifactDiff(
     leftInput,

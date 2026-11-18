@@ -189,6 +189,19 @@ async function checkInstalledIntakeAndContext(repositoryRoot: string, temporaryR
     || record(recon.findings[0], 'Recon finding').domain !== 'child.example.test') {
     throw new TypeError('Installed reconnaissance conversion lost its exact hostname.');
   }
+  const savedLookup = path.join(temporaryRoot, 'diff-lookup.json');
+  await writeFile(savedLookup, await readBoundedRegularFileWithin(repositoryRoot, 'test/fixtures/cli-lookup-v1.json', {
+    maximumBytes: MAX_INVESTIGATION_RUN_BYTES, minimumBytes: 1, label: 'Public saved Lookup fixture',
+  }), { mode: 0o600, flag: 'wx' });
+  // Two sequential exports of one observation: the later export is never earlier.
+  const earlierEvidence = path.join(temporaryRoot, 'earlier-evidence.json'), laterEvidence = path.join(temporaryRoot, 'later-evidence.json');
+  await writeFile(earlierEvidence, await run(['export', savedLookup], 'offline evidence export for diff'), { flag: 'wx', mode: 0o600 });
+  await writeFile(laterEvidence, await run(['export', savedLookup], 'offline later evidence export for diff'), { flag: 'wx', mode: 0o600 });
+  const evidenceDiff = record(JSON.parse(await run(['diff', earlierEvidence, laterEvidence, '--json'], 'offline evidence export diff')), 'Installed evidence diff');
+  const evidenceCounts = record(record(evidenceDiff.comparison, 'Evidence diff comparison').counts, 'Evidence diff counts');
+  if (evidenceDiff.schema !== 'whoisleuth.cli.lookup-evidence-diff' || evidenceCounts.observedChanges !== 0 || evidenceCounts.interpretationDifferences !== 0) {
+    throw new TypeError('Installed evidence diff did not compare two exports of one observation as unchanged.');
+  }
   const emailFile = path.join(temporaryRoot, 'selected-message.eml');
   await writeFile(emailFile, 'From: private-local-part@sender.example\r\nContent-Type: text/html\r\n\r\n<a href="https://destination.example/private?token=excluded-value">https://sender.example</a>', { flag: 'wx', mode: 0o600 });
   const intake = record(JSON.parse(await run(['intake', 'email', emailFile, '--reported-action', 'entered_password', '--json'], 'offline message and identity intake')), 'Installed intake');

@@ -116,6 +116,18 @@ browser replay format; the separate evidence export excludes raw registration
 payloads and expanded contacts. Neither file is uploaded. Case classification, exact incident links and response
 actions remain deliberate analyst steps. Ordinary case files also support the
 offline CLI workflow below.
+
+The reverse also works: `diff` compares two Lookup evidence exports for the same
+target, whether they came from `export` or from **Export evidence JSON** in
+browser Lookup. It uses the same validation and difference classes as browser replay,
+keeping observed changes separate from collection and interpretation differences:
+
+```bash
+whoisleuth diff earlier-evidence.json later-evidence.json
+```
+
+To compare a saved Lookup with an evidence export, run `export` on the saved
+Lookup first.
 When several incident cases share a domain, select the intended case before
 retaining replay evidence. Case packs preserve each current case ID separately;
 trusted and public packs exclude analyst-entered incident titles.

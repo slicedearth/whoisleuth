@@ -217,7 +217,7 @@ describe('interchange fidelity report', () => {
     assert.equal(current.compatibility.fidelity, 'lossy_by_design');
     assert.equal(current.compatibility.browser?.import, 'supported');
     assert.equal(current.compatibility.cli?.verify, 'supported');
-    assert.match(current.limitations.join(' '), /CLI read support means offline verification and packaging/u);
+    assert.match(current.limitations.join(' '), /CLI read support means offline verification, packaging and diff against another evidence export/u);
     assert.match(current.limitations.join(' '), /require a saved CLI Lookup/u);
     assert.ok(current.compatibility.excludedFieldGroups.includes('raw_payload_rendering_during_replay'));
     assert.doesNotMatch(JSON.stringify(current), /private-target/iu);

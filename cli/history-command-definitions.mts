@@ -45,9 +45,9 @@ export const HISTORY_COMMAND_DEFINITIONS = Object.freeze({
   }),
   diff: commandSeed({
     reference: {
-      description: 'Compare an earlier and later artefact from the same retained Lookup, Bulk-session, or domain-portfolio family.',
+      description: 'Compare an earlier and later artefact from the same saved Lookup, Lookup evidence export, Bulk-session, or domain-portfolio family.',
       example: 'whoisleuth diff earlier.json later.json --json',
-      boundary: 'Comparison is offline: the left input is earlier and the right input is later. Inputs must belong to the same supported family. Saved Lookups can describe the same or different domains; --browse opens their searchable comparison panels. Same-domain comparisons preserve observation times and collection uncertainty. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.',
+      boundary: 'Comparison is offline: the left input is earlier and the right input is later. Inputs must belong to the same supported family. Saved Lookups can describe the same or different domains; --browse opens their searchable comparison panels. Same-domain comparisons preserve observation times and collection uncertainty. Two Lookup evidence exports for one target, including browser downloads, use the same validation and difference classes as browser evidence replay. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.',
     },
     collection: { scope: 'Reads two compatible retained artefacts capped at 8 MiB each and retains no source paths.' },
     summary: 'Compare two compatible retained artefacts',
@@ -59,7 +59,7 @@ export const HISTORY_COMMAND_DEFINITIONS = Object.freeze({
     handlerOwner: 'history',
     networkEffect: 'offline',
     common: true,
-    schemaIdentifiers: Object.freeze(['whoisleuth.cli.lookup-diff']),
+    schemaIdentifiers: Object.freeze(['whoisleuth.cli.lookup-diff', 'whoisleuth.cli.lookup-evidence-diff']),
     primaryArtefacts: Object.freeze(['Retained-evidence comparison']),
     planSupport: false,
     additionalOutputFormats: Object.freeze([]),

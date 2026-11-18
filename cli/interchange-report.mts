@@ -248,7 +248,7 @@ export async function buildInterchangeFidelityReport(
       blockedSectionCount, prunedRecordCount,
     }),
     limitations: Object.freeze([
-      ...(contract.id === 'lookup_evidence' ? ['CLI read support means offline verification and packaging. brief, export, compare, registry-doctor and source-report require a saved CLI Lookup, not this browser evidence export.'] : []),
+      ...(contract.id === 'lookup_evidence' ? ['CLI read support means offline verification, packaging and diff against another evidence export. brief, export, compare, registry-doctor and source-report require a saved CLI Lookup, not this browser evidence export.'] : []),
       'Compatibility describes declared field groups and supported operations, not byte-for-byte equality or evidence truth.',
       'The report emits only registered metadata, counts, and fixed field-group identifiers. Targets, notes, contacts, passphrases, and evidence values are not included.',
       'A verified integrity envelope detects file changes but does not establish author identity, source accuracy, currency, completeness, or sharing authority.',
