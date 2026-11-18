@@ -93,15 +93,18 @@ Pass `--source-edition FILE --source-digest sha256:…` with the independently
 recorded digest. An invalid or stale edition stops before collection. This
 does not add requests or automatically download a newer catalogue.
 
-To continue a reviewed terminal Lookup in the browser, save the completed
-private document from the interactive view:
+To continue a CLI Lookup in the browser, save the private original and create
+its separate replay file:
 
 ```bash
-whoisleuth lookup example.test --deep --browse --save-lookup lookup.json
-whoisleuth verify-artifact lookup.json --json
+whoisleuth lookup example.test --deep --json --output lookup.json
 whoisleuth export lookup.json --output evidence.json
-whoisleuth verify-artifact evidence.json --json
 ```
+
+Export validates the original; browser replay validates the exported file.
+Use `verify-artifact` separately when you need its structured verification
+report or a trusted checksum comparison. Interactive collection can instead
+save the same private format with `--browse --save-lookup lookup.json`.
 
 Keep `lookup.json` as the private CLI original. In Lookup in the console, open **Replay
 exported evidence**, select `evidence.json`, check its digest and source states,

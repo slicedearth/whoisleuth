@@ -52,15 +52,18 @@ inputs, request boundaries, output formats and exit policy.
 
 ## Save, verify and continue in the browser
 
-Save a private Lookup by closing the interactive evidence browser normally,
-verify it offline, then create the separate browser-compatible export:
+Save the private Lookup, then create its separate browser replay:
 
 ```bash
-whoisleuth lookup example.test --deep --browse --save-lookup lookup.json
-whoisleuth verify-artifact lookup.json --json
+whoisleuth lookup example.test --deep --json --output lookup.json
 whoisleuth export lookup.json --output evidence.json
-whoisleuth verify-artifact evidence.json --json
 ```
+
+Export validates the original; browser replay validates the exported file.
+Use `verify-artifact` separately for its structured verification report or a
+trusted checksum comparison. Reopen the private file with
+`whoisleuth view lookup.json --browse`, or compare two retained observations
+with `whoisleuth diff earlier.json later.json --browse`.
 
 In the console's Lookup page, open **Replay exported evidence** and select
 `evidence.json`. Review its digest and source states before retaining evidence

@@ -6,6 +6,41 @@ import { PUBLIC_RESOURCES } from '../frontend/src/lib/public-resources';
 import { PUBLIC_REFERENCE_DESTINATIONS } from '../frontend/src/lib/public-reference-navigation';
 import { glossaryTerms, guideFaqs, publicGuideGoals, resultStates, toolGuides, referenceGuides } from '../frontend/src/lib/public-guide';
 
+test('CLI guide previews actual terminal panels and generated command output without collection', async ({ page }, testInfo) => {
+  const collectionRequests: string[] = [];
+  page.on('request', request => {
+    const pathname = new URL(request.url()).pathname;
+    if (pathname.startsWith('/api/') && !['/api/session', '/api/capabilities'].includes(pathname)) collectionRequests.push(pathname);
+  });
+  await page.goto('/cli#terminal');
+  const demo = page.getByLabel('Offline terminal preview', { exact: true });
+  await demo.getByRole('button', { name: 'DNS', exact: true }).click();
+  const frame = demo.locator('textarea:visible');
+  await expect(frame).toHaveValue(/192\.0\.2\.10/u);
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) await testInfo.attach(`terminal-preview-${width}-${theme}`, { body: await demo.screenshot(), contentType: 'image/png' });
+    }
+  }
+  await page.goto('/cli#command-lookup');
+  const command = page.locator('[data-command-detail="lookup"]');
+  const preview = command.getByTestId('public-example-gallery');
+  await preview.getByRole('button', { name: 'Open synthetic output', exact: true }).click();
+  await expect(preview.getByRole('textbox')).toHaveValue(/lookup preflight/iu);
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) await testInfo.attach(`inline-output-${width}-${theme}`, { body: await preview.screenshot(), contentType: 'image/png' });
+    }
+  }
+  expect(collectionRequests).toEqual([]);
+});
+
 test('application version checks omit the current document URL and investigation payloads', async ({ page }) => {
   const collections: string[] = [];
   page.on('request', request => {

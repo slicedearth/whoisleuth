@@ -9,6 +9,8 @@ import {
   formatInvestigationPlan,
 } from '../cli/investigation-plan.mts';
 import { buildCliLookupPlan, formatCliLookupPlan } from '../cli/lookup-plan.mts';
+import { buildCliLookupDocument } from '../cli/saved-lookup.mts';
+import { buildLookupBrowserPanels, buildLookupBrowserFrame } from '../cli/lookup-browser-view.mts';
 import {
   RPKI_ROUTE_INPUT_SCHEMA,
   buildOfflineEvidenceReview,
@@ -401,6 +403,26 @@ function renderPublicExamplesModule(): string {
     + 'export type PublicExampleOutput = Awaited<ReturnType<typeof PUBLIC_EXAMPLE_LOADERS[PublicExampleId]>>;\n';
 }
 
+function renderPublicTerminalDemoModule(): string {
+  const target = 'example.test';
+  const document = buildCliLookupDocument(target, classifyQuery(target), {
+    rdap: { parsed: { domain: target, registrar: { name: 'Example Registrar' }, nameservers: ['ns1.example.test'], statuses: ['active'] } },
+    availability: { domain: target, observationHostname: target, state: 'registered', confidence: 'high',
+      dns: { status: 'success', complete: true, observedAt: EXAMPLE_TIME, records: { a: ['192.0.2.10'], aaaa: ['2001:db8::10'], mx: [{ priority: 10, exchange: 'mail.example.test' }] } } },
+    diagnostics: { rdap: { status: 'success', complete: true }, whois: { status: 'skipped' } },
+  }, EXAMPLE_TIME, 'deep');
+  const panels = buildLookupBrowserPanels(document);
+  return moduleSource('PUBLIC_TERMINAL_DEMO', {
+    notice: 'Example investigation · fictional data',
+    command: 'whoisleuth view lookup.json --browse',
+    comparisonCommand: 'whoisleuth diff earlier.json later.json --browse',
+    panels: panels.slice(0, 6).map((panel, activeIndex) => ({ id: panel.id, label: panel.label,
+      wide: buildLookupBrowserFrame(document, { activeIndex, width: 80, height: 19 }).value,
+      narrow: buildLookupBrowserFrame(document, { activeIndex, width: 40, height: 20 }).value,
+    })),
+  });
+}
+
 function renderPublicExampleOutputModules(examples = publicExamples().examples) {
   const ids = new Set<string>();
   return examples.map(example => {
@@ -446,6 +468,7 @@ export {
   renderPublicCoverageSummaryModule,
   renderPublicExamplesIndexModule,
   renderPublicExamplesModule,
+  renderPublicTerminalDemoModule,
   renderPublicExampleOutputModules,
   renderPublicMethodologyModule,
 };

@@ -138,6 +138,8 @@ const CLI_PUBLIC_GUIDANCE = Object.freeze({
   commonWorkflows: Object.freeze([
     Object.freeze({ label: 'Plan before collection', command: 'whoisleuth lookup example.test --deep --plan --json' }),
     Object.freeze({ label: 'Review supplied evidence offline', command: 'whoisleuth review-evidence evidence.json --json' }),
+    Object.freeze({ label: 'Browse a saved Lookup offline', command: 'whoisleuth view lookup.json --browse' }),
+    Object.freeze({ label: 'Explore a retained comparison', command: 'whoisleuth diff earlier.json later.json --browse' }),
     Object.freeze({ label: 'Compare retained observations', command: 'whoisleuth diff earlier.json later.json --json' }),
     Object.freeze({ label: 'Discover fixed workflow recipes', command: 'whoisleuth workflow-plan --list --json' }),
     Object.freeze({ label: 'Create an offline case file', command: 'whoisleuth case open --domain example.test --output cases.json' }),
@@ -176,12 +178,10 @@ const CLI_PUBLIC_GUIDANCE = Object.freeze({
       id: 'lookup-replay',
       label: 'Continue a CLI Lookup in the browser',
       commands: Object.freeze([
-        'whoisleuth lookup example.test --deep --browse --save-lookup lookup.json',
-        'whoisleuth verify-artifact lookup.json --json',
+        'whoisleuth lookup example.test --deep --json --output lookup.json',
         'whoisleuth export lookup.json --output evidence.json',
-        'whoisleuth verify-artifact evidence.json --json',
       ]),
-      result: 'Keep lookup.json as the private CLI original. Replay evidence.json from Lookup in the console, inspect its source states and then choose whether to retain it in a case.',
+      result: 'Keep lookup.json as the private CLI original for offline browsing and comparisons. The export command validates it and creates privacy-minimised evidence.json for Replay exported evidence in the console. Replay validates that separate file before showing it; saving to a Case remains your choice.',
     }),
     Object.freeze({
       id: 'case-handoff',

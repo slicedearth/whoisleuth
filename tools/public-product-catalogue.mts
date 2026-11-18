@@ -24,6 +24,7 @@ import {
   renderPublicCoverageSummaryModule,
   renderPublicExamplesIndexModule,
   renderPublicExamplesModule,
+  renderPublicTerminalDemoModule,
   renderPublicExampleOutputModules,
   renderPublicMethodologyModule,
 } from './public-product-catalogue-renderer.mts';
@@ -38,6 +39,7 @@ const OUTPUTS = Object.freeze([
   Object.freeze({ name: 'public-cli-catalogue.ts', directory: OUTPUT_DIRECTORY, render: renderPublicCliCatalogueModule }),
   Object.freeze({ name: 'public-cli-grammar.ts', directory: OUTPUT_DIRECTORY, render: renderPublicCliGrammarModule }),
   Object.freeze({ name: 'public-cli-guidance.ts', directory: OUTPUT_DIRECTORY, render: renderPublicCliGuidanceModule }),
+  Object.freeze({ name: 'public-terminal-demo.ts', directory: OUTPUT_DIRECTORY, render: renderPublicTerminalDemoModule }),
   Object.freeze({ name: 'public-cli-index.ts', directory: OUTPUT_DIRECTORY, render: renderPublicCliIndexModule }),
   Object.freeze({ name: 'public-coverage.ts', directory: OUTPUT_DIRECTORY, render: renderPublicCoverageModule }),
   Object.freeze({ name: 'public-coverage-summary.ts', directory: OUTPUT_DIRECTORY, render: renderPublicCoverageSummaryModule }),

@@ -4,6 +4,7 @@
   import PublicReferenceDocument from '#lib/components/PublicReferenceDocument.svelte';
   import PublicSeo from '#lib/components/PublicSeo.svelte';
   import IntelligenceIcon from '#lib/components/IntelligenceIcon.svelte';
+  import PublicTerminalDemo from '#lib/components/PublicTerminalDemo.svelte';
   import { PUBLIC_CLI_GUIDANCE } from '#lib/generated/public-cli-guidance.ts';
   import { PUBLIC_CLI_INDEX } from '#lib/generated/public-cli-index.ts';
   import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../../../../../packages/analysis/project-metadata.mts';
@@ -12,6 +13,7 @@
   const pageSections = [
     { href: '#start', label: 'Get started' },
     { href: '#tasks', label: 'Common tasks' },
+    { href: '#terminal', label: 'Terminal browser' },
     { href: '#commands', label: 'Command reference' },
     { href: '#browser-handoff', label: 'Browser and CLI handoffs' },
     { href: '#choose-mode', label: 'Choose how to run' },
@@ -100,6 +102,11 @@
       </section>
     {/each}
   </div>
+</section>
+
+<section class="cli-section" id="terminal" aria-labelledby="terminal-title">
+  <div class="section-intro"><h2 id="terminal-title">Explore evidence in your terminal</h2><p>Open saved Lookups and compare observations offline. Run <code>whoisleuth</code> without arguments for the interactive launcher, or use the commands below.</p></div>
+  <PublicTerminalDemo />
 </section>
 
 <section class="cli-section" id="commands" aria-label="Command reference">

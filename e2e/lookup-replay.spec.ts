@@ -80,6 +80,12 @@ test('offline replay uses isolated graph identifiers and has no live evidence li
   const replay = page.locator('details.replay');
   await replay.locator(':scope > summary').click();
   await replay.locator('input[type="file"]').first().setInputFiles({
+    name: 'lookup.json', mimeType: 'application/json',
+    buffer: readFileSync(resolve(process.cwd(), 'test/fixtures/cli-lookup-v1.json')),
+  });
+  await expect(replay.getByRole('alert')).toContainText('whoisleuth export');
+  await expect(replay.locator('.lookup-evidence-reading')).toHaveCount(0);
+  await replay.locator('input[type="file"]').first().setInputFiles({
     name: 'lookup-evidence-current.json',
     mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify(replayEvidence())),

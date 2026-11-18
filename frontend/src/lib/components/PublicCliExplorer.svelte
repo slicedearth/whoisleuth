@@ -4,6 +4,7 @@
   import { page } from '$app/state';
   import CopyableCommand from '#lib/components/CopyableCommand.svelte';
   import DeferredSurface from './DeferredSurface.svelte';
+  import PublicExampleGallery from './PublicExampleGallery.svelte';
   import { PUBLIC_CLI_INDEX } from '#lib/generated/public-cli-index.ts';
   import { PUBLIC_EXAMPLES_INDEX } from '#lib/generated/public-examples-index.ts';
   import { commandReferenceSections, resolveCommandReferenceHash } from '#lib/public-cli-sections.ts';
@@ -368,7 +369,7 @@
             <div><dt>Destination</dt><dd>{#if detail.fileOutput}<code>--output &lt;file&gt;</code> writes a local file atomically. Replacing a file requires <code>--force</code>. Required file outputs are identified in the command syntax.{:else}See the syntax for command-specific files.{/if}</dd></div>
             <div><dt>Exit status</dt><dd>{exitBehaviour(detail)}</dd></div>
           </dl>
-          {#each PUBLIC_EXAMPLES_INDEX.examples.filter(example => example.direction === 'output' && example.command.split(' ')[1] === command.id) as example}<a class="output-example" href={`/examples#example-${example.id}`}><strong>See example output: {example.title}</strong><span>{example.summary} Fictional data.</span></a>{/each}
+          {#if PUBLIC_EXAMPLES_INDEX.examples.some(example => example.direction === 'output' && example.command.split(' ')[1] === command.id)}<PublicExampleGallery command={command.id} />{/if}
         </section>
         {#if related.length}
           <nav class="related-commands" aria-label={`Commands related to ${command.id}`}><strong>Related commands</strong><div>{#each related as item}<a href={`#command-${item.id}`} onclick={(event) => navigateToCommand(event, item.id)}><code>{item.id}</code><span>{item.summary}</span></a>{/each}</div></nav>

@@ -12,6 +12,7 @@
   import LookupEvidenceCheckpoint from '#lib/components/LookupEvidenceCheckpoint.svelte';
   import CasePicker from './CasePicker.svelte';
   import IntelligenceIcon from './IntelligenceIcon.svelte';
+  import CopyableCommand from './CopyableCommand.svelte';
   import { buildLookupEvidenceReplayDiff } from '#lib/analysis/lookup-evidence-replay-diff.ts';
 
   let replay = $state<LookupEvidenceReplay | null>(null);
@@ -155,10 +156,14 @@
   <summary>
     <span>
       <strong>Replay exported evidence</strong>
-      <small>Review a supported WHOISleuth Lookup evidence JSON file without contacting a source.</small>
+      <small>Open a browser replay file from the console or CLI export. No source is contacted.</small>
     </span>
   </summary>
   <div class="body">
+    <details class="compact-disclosure"><summary>Have a private CLI Lookup file?</summary>
+      <p>Keep <code>lookup.json</code> as your private original. Create the separate privacy-minimised browser replay below, then choose <code>evidence.json</code> here.</p>
+      <CopyableCommand command="whoisleuth export lookup.json --output evidence.json" label="create a browser replay file command" compact />
+    </details>
     <label class="picker">
       <span>{loading ? 'Reading evidence…' : 'Choose evidence JSON'}</span>
       <input type="file" accept="application/json,.json" disabled={loading} onchange={load} />

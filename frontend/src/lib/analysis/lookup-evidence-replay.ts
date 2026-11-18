@@ -40,6 +40,7 @@ import {
 } from '../../../../lib/homepage-metadata-contract.mts';
 import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 import { dnsAddressFamilyEvidence } from '../../../../packages/evidence/dns-query-outcome.mts';
+import { CLI_LOOKUP_SCHEMA } from '../../../../packages/contracts/cli-lookup.mts';
 
 export const LOOKUP_EVIDENCE_REPLAY_MAX_BYTES = LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES;
 export const LOOKUP_EVIDENCE_REPLAY_MAX_ENTRIES = LOOKUP_EVIDENCE_PORTABLE_MAX_ENTRIES;
@@ -378,6 +379,9 @@ export async function parseLookupEvidenceReplay(
     throw new Error('The evidence file does not match the expected SHA-256 checksum.');
   }
   const document = record(parsed);
+  if (document.schema === CLI_LOOKUP_SCHEMA) {
+    throw new Error('This is a private CLI Lookup, not a browser replay. Keep the original and create evidence.json with: whoisleuth export lookup.json --output evidence.json');
+  }
   if (document.schema !== LOOKUP_EVIDENCE_SCHEMA) {
     throw new Error('The selected file is not a WHOISleuth Lookup evidence export.');
   }
