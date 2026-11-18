@@ -4448,7 +4448,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "review-evidence",
       "summary": "Review supplied evidence offline",
-      "description": "Review versioned protocol evidence, source-qualified infrastructure snapshots/comparisons, incident sequences, domain history, platform objects, storefronts, connector configuration or an explicitly selected internal containment handoff offline.",
+      "description": "Review versioned protocol evidence, BIMI certificate/logo material, source-qualified infrastructure snapshots/comparisons, incident sequences, domain history, platform objects, storefronts, connector configuration or an explicitly selected internal containment handoff offline.",
       "group": "investigate",
       "common": true,
       "usage": "whoisleuth review-evidence [\u003csource>] [--mmdb \u003cfile>] [--json] [--strict-exit] [--quiet] [--no-color]",
@@ -4492,6 +4492,8 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002econnector-review.input",
         "whoisleuth\u002eincident-sequence.input",
         "whoisleuth\u002ecli.offline-evidence-review",
+        "whoisleuth\u002ebimi-certificate.input",
+        "whoisleuth\u002ebimi-certificate.review",
         "whoisleuth\u002erdap-search-input",
         "whoisleuth\u002ednssec-evidence-input",
         "whoisleuth\u002etlsa-evidence-input",

@@ -26,7 +26,6 @@ import { LOCAL_MMDB_REVIEW_SCHEMA, LOCAL_MMDB_REVIEW_VERSION } from './local-mmd
 import EXIT_CODES from './exit-codes.mts';
 import {
   MAX_OFFLINE_EVIDENCE_INPUT_BYTES,
-  buildOfflineEvidenceReview,
   buildOfflineEvidenceReviewWithLocalResources,
   formatOfflineEvidenceReview,
 } from './offline-evidence-review.mts';
@@ -312,9 +311,9 @@ async function runOfflineEvidenceReviewCommand(
     'offline evidence input',
     'review-evidence requires one JSON file or a document on stdin.',
   );
-  const document = args.mmdbSource
-    ? await buildOfflineEvidenceReviewWithLocalResources(input, context.now(), { mmdbPath: args.mmdbSource, ...(dependencies.signal ? { signal: dependencies.signal } : {}) })
-    : buildOfflineEvidenceReview(input, context.now());
+  const document = await buildOfflineEvidenceReviewWithLocalResources(input, context.now(), {
+    ...(args.mmdbSource ? { mmdbPath: args.mmdbSource } : {}), ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+  });
   dependencies.signal?.throwIfAborted();
   writeReviewReport(context, args, document, formatOfflineEvidenceReview);
   if (args.strictExit) {
@@ -333,7 +332,8 @@ async function runOfflineEvidenceReviewCommand(
     const mmdbIncomplete = result.schema === LOCAL_MMDB_REVIEW_SCHEMA && result.version === LOCAL_MMDB_REVIEW_VERSION && result.completeness !== 'complete';
     const infrastructureIncomplete = document.kind === 'infrastructure' ? result.state !== 'complete'
       : document.kind === 'infrastructure_comparison' && result.state !== 'compared';
-    if (gate?.pass === false || zoneMismatch || contextPartial || mmdbIncomplete || infrastructureIncomplete) return EXIT_CODES.PARTIAL_FAILURE;
+    const bimiIncomplete = document.kind === 'bimi_certificate' && result.state !== 'checks_passed';
+    if (gate?.pass === false || zoneMismatch || contextPartial || mmdbIncomplete || infrastructureIncomplete || bimiIncomplete) return EXIT_CODES.PARTIAL_FAILURE;
   }
   return EXIT_CODES.SUCCESS;
 }

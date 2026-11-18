@@ -6,6 +6,7 @@
   import { desiredPostureObservations } from '#lib/analysis/brand-profile-model.ts';
   import { POSTURE_SOURCE_LABELS } from '../../../../packages/evidence/domain-posture-context.mts';
   import PostureObservationHistory from './PostureObservationHistory.svelte';
+  import BimiCertificateReview from './BimiCertificateReview.svelte';
   let { active, disabledReason, auditing, results, audit, retainObservation }: {
     active: BrandProfile;
     disabledReason: string;
@@ -211,6 +212,7 @@
       {/each}
     </div>
   {/if}
+  <BimiCertificateReview contextId={active.id} />
 </section>
 
 <style>

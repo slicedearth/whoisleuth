@@ -624,6 +624,14 @@ model provider. Local transport and read-only annotations do not prevent that
 disclosure or sandbox the client; startup acknowledgement and deliberate file
 selection are required.
 
+The offline BIMI certificate review reads only deliberately selected certificate
+PEM, CA-anchor PEM and optional SVG material. Parsing, decompression, path and
+logo checks are bounded and run locally. It uses no ambient trust store and
+fetches no AIA, CRL, OCSP, logo or certificate URL. Files and results stay in
+memory until changed, the Brand context changes or the page closes; a deliberate
+download retains only check results and file digests, not original material.
+The same review is available through the CLI’s offline evidence command.
+
 Selected dnsx/httpx JSONL imports are processed locally through the existing
 findings preview. They preserve exact hostnames, explicit timestamps and a
 digest of each complete source row, with unknown collection completeness.

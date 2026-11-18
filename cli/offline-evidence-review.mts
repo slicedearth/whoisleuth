@@ -37,6 +37,7 @@ import { INFRASTRUCTURE_OBSERVATION_SCHEMA, MAX_INFRASTRUCTURE_OBSERVATION_BYTES
 import { exact } from '../packages/evidence/artifact-structure.mts';
 import { INFRASTRUCTURE_COMPARISON_INPUT_SCHEMA, MAX_INFRASTRUCTURE_COMPARISON_INPUT_BYTES } from '../packages/contracts/external-observation-interchange.mts';
 import { CASE_CONTAINMENT_INPUT_SCHEMA, readCaseContainmentInput, formatCaseContainmentHandoff, type CaseContainmentHandoff } from '../packages/cases/case-containment-handoff.mts';
+import { BIMI_CERTIFICATE_INPUT_SCHEMA } from '../packages/contracts/bimi-certificate.mts';
 
 const OFFLINE_EVIDENCE_REVIEW_SCHEMA = 'whoisleuth.cli.offline-evidence-review';
 const OFFLINE_EVIDENCE_REVIEW_VERSION = 1;
@@ -77,9 +78,12 @@ function parseInput(value: unknown): UnknownRecord {
 }
 
 function buildOfflineEvidenceReview(value: unknown, generatedAt = new Date().toISOString()) {
-  const input = parseInput(value);
+  return buildOfflineEvidenceReviewInput(value, generatedAt, parseInput(value));
+}
+
+function buildOfflineEvidenceReviewInput(value: unknown, generatedAt: string, input: UnknownRecord) {
   if (input.schema === LOCAL_MMDB_QUERY_SCHEMA) throw new CliUsageError('Local MMDB review requires --mmdb <database-file>.');
-  let kind: 'internal_containment' | 'infrastructure' | 'infrastructure_comparison' | 'rdap_search' | 'dnssec' | 'tlsa' | 'rpki' | 'cryptographic_assurance' | 'geoip' | 'encrypted_dns' | 'zone_intent' | 'domain_portfolio' | 'domain_change' | 'dns_convergence' | 'nameserver_preflight' | 'trust_store' | ContextReviewKind;
+  let kind: 'bimi_certificate' | 'internal_containment' | 'infrastructure' | 'infrastructure_comparison' | 'rdap_search' | 'dnssec' | 'tlsa' | 'rpki' | 'cryptographic_assurance' | 'geoip' | 'encrypted_dns' | 'zone_intent' | 'domain_portfolio' | 'domain_change' | 'dns_convergence' | 'nameserver_preflight' | 'trust_store' | ContextReviewKind;
   let result: unknown;
   if (input.schema === CASE_CONTAINMENT_INPUT_SCHEMA) {
     kind = 'internal_containment'; result = readCaseContainmentInput(input, generatedAt);
@@ -195,7 +199,14 @@ async function buildOfflineEvidenceReviewWithLocalResources(
   options: Readonly<{ mmdbPath?: string | null; signal?: AbortSignal }> = {},
 ) {
   const input = parseInput(value);
-  if (input.schema !== LOCAL_MMDB_QUERY_SCHEMA) return buildOfflineEvidenceReview(value, generatedAt);
+  if (input.schema === BIMI_CERTIFICATE_INPUT_SCHEMA) {
+    const { reviewBimiCertificate } = await import('../packages/evidence/bimi-certificate-review.mts');
+    return Object.freeze({ schema: OFFLINE_EVIDENCE_REVIEW_SCHEMA, version: OFFLINE_EVIDENCE_REVIEW_VERSION,
+      generatedAt, kind: 'bimi_certificate' as const,
+      result: await reviewBimiCertificate(input, generatedAt, options.signal),
+      limitations: Object.freeze(['Only selected certificate, anchor and logo material is checked; no network request or ambient trust-store access occurs.']) });
+  }
+  if (input.schema !== LOCAL_MMDB_QUERY_SCHEMA) return buildOfflineEvidenceReviewInput(value, generatedAt, input);
   if (!options.mmdbPath) throw new CliUsageError('Local MMDB review requires --mmdb <database-file>.');
   return Object.freeze({
     schema: OFFLINE_EVIDENCE_REVIEW_SCHEMA,
@@ -209,7 +220,7 @@ async function buildOfflineEvidenceReviewWithLocalResources(
   });
 }
 
-function formatOfflineEvidenceReview(document: ReturnType<typeof buildOfflineEvidenceReview>): string {
+function formatOfflineEvidenceReview(document: Awaited<ReturnType<typeof buildOfflineEvidenceReviewWithLocalResources>>): string {
   if (document.kind === 'internal_containment') return formatCaseContainmentHandoff(document.result as CaseContainmentHandoff);
   const result = record(document.result);
   if (document.kind === 'geoip' && result.schema === LOCAL_MMDB_REVIEW_SCHEMA && result.version !== LOCAL_MMDB_REVIEW_VERSION) {
@@ -235,7 +246,15 @@ function formatOfflineEvidenceReview(document: ReturnType<typeof buildOfflineEvi
     `Kind   ${document.kind.replaceAll('_', ' ')}`,
     `State  ${state.replaceAll('_', ' ')}`,
   ];
-  if (document.kind === 'infrastructure') {
+  if (document.kind === 'bimi_certificate') {
+    lines.push(`Domain ${safeTerminalValue(result.domain)}`);
+    for (const value of Array.isArray(result.checks) ? result.checks : []) {
+      const check = record(value);
+      lines.push(`${safeTerminalValue(check.label)}: ${safeTerminalValue(check.state).replaceAll('_', ' ')}`,
+        `  ${safeTerminalValue(check.detail, '', 600)}`);
+    }
+    for (const limitation of Array.isArray(result.limitations) ? result.limitations : []) lines.push(`Scope: ${safeTerminalValue(limitation, '', 600)}`);
+  } else if (document.kind === 'infrastructure') {
     const snapshot = record(result.snapshot), scope = record(snapshot.scope), coverage = record(snapshot.coverage);
     lines.push(`Snapshot ${safeTerminalValue(snapshot.id, '')} · ${safeTerminalValue(snapshot.target, '')} · ${safeTerminalValue(snapshot.observedAt, '')}`,
       `Coverage ${safeTerminalValue(coverage.state, 'unknown')} · ${safeTerminalValue(coverage.detail, '')}`, `Selected hosts ${listLength(scope.hostnames)}`);

@@ -147,6 +147,28 @@ sensitive. Tool read-only annotations describe behaviour; the restricted
 handlers and fixed file selection enforce it. Local stdio support depends on
 the client; this is not a hosted connector or a sandbox for the client itself.
 
+### Offline BIMI certificate and logo checks
+
+```bash
+whoisleuth review-evidence bimi-input.json --json --strict-exit
+```
+
+The version-1 `whoisleuth.bimi-certificate.input` document contains `domain`,
+`certificatePem` (leaf first, then intermediates), `trustAnchorsPem` (your
+explicit CA trust basis) and optional `logoSvg`. Keep the selected originals.
+PEM inputs are limited to 256 KiB each, SVG to 32 KiB and the complete input to
+512 KiB. The chain contains at most six certificates and three trust anchors.
+
+The review separately checks path validation, validity time, exact DNS name,
+BIMI purpose, general mark-policy declaration, signature/key strength, embedded
+logo digests and an optional selected-logo match. Compressed embedded logos are
+bounded before accumulation. Core passive SVG Tiny PS checks do not claim full
+Relax NG conformance. No AIA, CRL, OCSP, logo or certificate URL is fetched and
+no ambient trust store is used; mailbox display and revocation remain unchecked.
+Exit 4 under `--strict-exit` means at least one requested check did not pass.
+The same local file review is available in Brands → Tools → Review current
+settings, without running the networked settings review.
+
 Registration source states are independent: `unsupported` means no RDAP or
 WHOIS service is published for the target, while `skipped` means no query was
 issued in that mode or under the registry access policy. Neither is a transport
