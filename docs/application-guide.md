@@ -427,6 +427,11 @@ suffixes such as `co.uk`; it does not quietly shorten a subdomain or URL to a
 different seed. Each candidate records how it was generated. A custom dictionary
 stays in the current tab, and only the candidates you select continue to Bulk.
 
+**Popularity list** marks candidates that appear in a ranked domain list you have
+downloaded, such as a Tranco CSV, so established, widely visited sites stand out
+from new lookalikes. The list stays in the tab and is never uploaded. A rank is
+context only: it does not make a candidate safe or connect it to the brand.
+
 **Excluded by exact profile match** lists candidates hidden by the active
 profile's official, partner or allowlist entries, with the matching declaration
 for each. Exclusions match exact names only, and an excluded domain is not marked

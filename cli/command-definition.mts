@@ -304,6 +304,7 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--keyboard': enumeration('Choose keyboard layouts for adjacent-key candidates.', ['qwerty', 'azerty', 'qwertz', 'all'], 'qwerty'),
   '--dictionary': file('Read candidate words from this local dictionary.'),
   '--snapshot': file('Use this retained observation snapshot.'),
+  '--popularity-list': file('Mark candidates found in this ranked domain list, such as a downloaded Tranco CSV.'),
   '--scan-limit': integer('Limit the number of generated candidates to collect.', () => Object.freeze([
     BASE_INTEGER_RANGE(1, bulkQueryLimit('fast')),
     DEEP_INTEGER_RANGE(1, bulkQueryLimit('deep')),

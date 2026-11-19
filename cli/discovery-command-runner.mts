@@ -10,6 +10,26 @@ import {
 import { updateDiscoverySnapshot } from './discovery-snapshot.mts';
 import { formatTerminalDiscover } from './formatters/terminal.mts';
 import type { CliCommandContext } from './runner-types.mts';
+import { createHash } from 'node:crypto';
+import { MAX_POPULARITY_LIST_BYTES, POPULARITY_LIMITATION, parsePopularityList } from '../packages/analysis/popularity-list.mts';
+import { CliUsageError } from './errors.mts';
+
+/** Ranks from a selected local list; nothing is fetched and the list itself is not copied into output. */
+async function popularityContext(source: string, domains: readonly string[], context: CliCommandContext) {
+  const text = await context.readInput(source, MAX_POPULARITY_LIST_BYTES, 'Popularity list');
+  let list;
+  try { list = parsePopularityList(text); }
+  catch (error) { throw new CliUsageError(error instanceof Error ? error.message : 'The popularity list is invalid.'); }
+  const ranked = domains.flatMap((domain) => {
+    const rank = list.rank(domain);
+    return rank === null ? [] : [{ domain, rank }];
+  }).sort((left, right) => left.rank - right.rank || left.domain.localeCompare(right.domain));
+  return Object.freeze({
+    listSha256: createHash('sha256').update(text).digest('hex'),
+    entries: list.entries, rejectedLines: list.rejectedLines, truncated: list.truncated,
+    ranked, limitation: POPULARITY_LIMITATION,
+  });
+}
 
 type DiscoveryCommandArguments = Extract<CliArguments, { action: 'discover' }>;
 
@@ -39,8 +59,12 @@ async function runDiscoveryCommand(
         metadata.generatedAt,
       )
     : null;
+  const popularity = args.popularityListSource
+    ? await popularityContext(args.popularityListSource,
+      result.candidates.flatMap((candidate) => typeof candidate.domain === 'string' ? [candidate.domain] : []), context)
+    : null;
   const baseDocument = buildCliDiscoverDocument(seed, result, metadata);
-  const document = snapshot ? { ...baseDocument, snapshot } : baseDocument;
+  const document = { ...baseDocument, ...(snapshot ? { snapshot } : {}), ...(popularity ? { popularity } : {}) };
   if (!args.quiet) {
     if (args.output === 'json') context.writeStdout(formatJsonDocument(document));
     else if (args.output === 'jsonl') context.writeStdout(formatDiscoverJsonLines(result.candidates, metadata));
@@ -51,6 +75,9 @@ async function runDiscoveryCommand(
     context.writeStderr(
       `Discovery snapshot: ${snapshot.baselineCreated ? 'baseline created' : `${snapshot.added.length} added, ${snapshot.removed.length} removed`} (${snapshot.currentCandidateCount} current).\n`,
     );
+  }
+  if (popularity && ['domains', 'jsonl'].includes(args.output)) {
+    context.writeStderr(`Popularity list: ${popularity.ranked.length} of ${result.candidates.length} candidates ranked.\n`);
   }
   return EXIT_CODES.SUCCESS;
 }

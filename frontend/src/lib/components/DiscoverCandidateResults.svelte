@@ -1,6 +1,7 @@
 <script lang="ts">
   import Pagination from '#lib/components/Pagination.svelte';
   import type { CtHistoryObservationState } from '#lib/analysis/ct-history.ts';
+  import { MAX_POPULARITY_LIST_BYTES, POPULARITY_LIMITATION, parsePopularityList, type PopularityList } from '../../../../packages/analysis/popularity-list.mts';
 
   type CertificateEvidence = {
     certificateCount: number;
@@ -100,6 +101,27 @@
     return '';
   }
 
+  // The selected list stays in page memory; it is never uploaded or saved.
+  let popularity = $state<PopularityList | null>(null);
+  let popularityStatus = $state('');
+  async function choosePopularityList(input: HTMLInputElement) {
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    if (file.size > MAX_POPULARITY_LIST_BYTES) {
+      popularity = null;
+      popularityStatus = `Popularity lists are limited to ${MAX_POPULARITY_LIST_BYTES / 1024 / 1024} MiB.`;
+      return;
+    }
+    try {
+      popularity = parsePopularityList(await file.text());
+      popularityStatus = `Using ${popularity.entries.toLocaleString()} ranked domains${popularity.rejectedLines ? `; ${popularity.rejectedLines.toLocaleString()} unreadable lines skipped` : ''}${popularity.truncated ? '; later entries were beyond the limit' : ''}.`;
+    } catch (error) {
+      popularity = null;
+      popularityStatus = error instanceof Error ? error.message : 'The popularity list could not be read.';
+    }
+  }
+
   function ctObservationLabel(state: CtHistoryObservationState): string {
     if (state === 'first_observed') return 'First local observation';
     if (state === 'reappeared') return 'Reappeared after complete-baseline absence';
@@ -145,6 +167,16 @@
     <button class="btn" onclick={() => selectMatching(false)} disabled={!selectedVisibleCount}>Clear filtered ({selectedVisibleCount})</button>
     {#if reviewControlsActive}<button class="btn" onclick={resetReviewControls}>Reset view</button>{/if}
   </div>
+  <details class="popularity-list">
+    <summary>Popularity list{popularity ? ` · ${popularity.entries.toLocaleString()} domains` : ''}</summary>
+    <p>Choose a ranked domain list you have downloaded, such as a Tranco CSV, to mark candidates that are established, widely visited sites. The list stays in this tab and is never uploaded.</p>
+    <div class="popularity-actions">
+      <label class="btn">Choose list<input type="file" accept=".csv,.txt,text/csv,text/plain" onchange={(event) => void choosePopularityList(event.currentTarget)}></label>
+      {#if popularity}<button type="button" class="btn" onclick={() => { popularity = null; popularityStatus = 'Popularity list cleared.'; }}>Clear list</button>{/if}
+    </div>
+    <p class="candidate-note" role="status">{popularityStatus}</p>
+    {#if popularity}<p class="candidate-note">{POPULARITY_LIMITATION}</p>{/if}
+  </details>
   <p class="candidate-note sort-guidance" role="status" aria-live="polite" aria-atomic="true">
     {candidateSortGuidance(candidateSort, structured)}
   </p>
@@ -163,6 +195,7 @@
               {#if candidate.mixedScript}<span class="candidate-badge warning">Mixed writing scripts</span>{/if}
               {#if candidate.referenceDomains.length}<span class="candidate-badge warning">Source or profile visual match</span>{/if}
               {#if candidate.ctObservationState}<span class={`ct-history-state ${candidate.ctObservationState}`}>{ctObservationLabel(candidate.ctObservationState)}</span>{/if}
+              {#if popularity?.rank(candidate.domain)}<span class="candidate-badge popularity">Ranked #{popularity.rank(candidate.domain)?.toLocaleString()} in selected list</span>{/if}
             </span>
           </label>
           {#if candidate.reviewCues.length}
@@ -227,6 +260,10 @@
   .candidate-badges{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
   .candidate-badge{display:inline-block;padding:3px 8px;border:1px solid rgb(var(--accent-rgb) / .35);border-radius:99px;color:var(--accent);font:600 var(--text-2xs) var(--mono)}
   .candidate-badge.warning{border-color:rgb(var(--amber-rgb) / .45);color:var(--amber)}
+  .candidate-badge.popularity{border-color:var(--border-strong);color:var(--muted)}
+  .popularity-list{margin:10px 0 0;font-size:var(--text-xs)}.popularity-list>summary{min-height:36px;padding-block:6px;cursor:pointer;font-weight:600}
+  .popularity-list>p{max-width:72ch;margin:6px 0;color:var(--muted);line-height:1.5}
+  .popularity-actions{display:flex;flex-wrap:wrap;gap:8px}.popularity-actions label input{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.popularity-actions label:focus-within{outline:2px solid var(--focus);outline-offset:3px}
   .candidate-context{margin-top:4px;color:var(--muted);font-size:var(--text-xs);line-height:1.5;overflow-wrap:anywhere}
   .candidate-context summary{min-height:44px;align-content:center;cursor:pointer;color:var(--accent);font:600 var(--text-xs) var(--mono)}
   .candidate-context ul{display:grid;gap:5px;margin:4px 0 8px;padding-left:18px}

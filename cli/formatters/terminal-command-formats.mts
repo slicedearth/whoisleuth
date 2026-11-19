@@ -131,6 +131,11 @@ function formatTerminalDiscover(document: TerminalRecord, mutationLabels: Mutati
   const visible = candidates.slice(0, MAX_DISCOVER_TERMINAL_CANDIDATES);
   const advanced = terminalRecord(document.advancedConfusable);
   const snapshot = terminalRecord(document.snapshot);
+  const popularity = terminalRecord(document.popularity);
+  const ranks = new Map((Array.isArray(popularity.ranked) ? popularity.ranked : []).map((value: unknown) => {
+    const item = terminalRecord(value);
+    return [String(item.domain), Number(item.rank)] as const;
+  }));
   const lines = [
     `Seed           ${safeTerminalValue(document.seed)}`,
     `Preset         ${safeTerminalValue(document.preset)}`,
@@ -149,6 +154,9 @@ function formatTerminalDiscover(document: TerminalRecord, mutationLabels: Mutati
       `Snapshot       ${snapshot.baselineCreated ? 'Baseline created' : `${safeTerminalValue(Array.isArray(snapshot.added) ? snapshot.added.length : 0, '0')} added · ${safeTerminalValue(Array.isArray(snapshot.removed) ? snapshot.removed.length : 0, '0')} removed`}`,
     );
   }
+  if (Object.keys(popularity).length) {
+    lines.push(`Popularity     ${ranks.size} of ${safeTerminalValue(candidates.length, '0')} candidates ranked in the selected list (${safeTerminalValue(popularity.entries, '0')} entries)`);
+  }
   lines.push('');
   for (const value of visible) {
     const candidate = terminalRecord(value);
@@ -162,8 +170,10 @@ function formatTerminalDiscover(document: TerminalRecord, mutationLabels: Mutati
     const unicodeDetail = unicodeDomain && unicodeDomain !== candidateDomain
       ? ` [Unicode: ${safeTerminalValue(unicodeDomain)}]`
       : '';
-    lines.push(`${safeTerminalValue(candidateDomain)}${unicodeDetail}: ${labels.join(', ') || 'Generated variant'}`);
+    const rank = ranks.get(candidateDomain);
+    lines.push(`${safeTerminalValue(candidateDomain)}${unicodeDetail}: ${labels.join(', ') || 'Generated variant'}${rank ? ` · ranked #${rank}` : ''}`);
   }
+  if (Object.keys(popularity).length) lines.push('', safeTerminalValue(popularity.limitation));
   if (!visible.length) lines.push('No candidates were generated.');
   if (candidates.length > visible.length) {
     lines.push('', `Showing ${visible.length} of ${candidates.length} candidates in terminal output; use --json or --jsonl for the complete bounded result.`);

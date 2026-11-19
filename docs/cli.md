@@ -295,6 +295,11 @@ whoisleuth mail-headers message.eml --json
 whoisleuth brief lookup.json
 ```
 
+`discover --popularity-list tranco.csv` marks candidates found in a ranked list
+you have downloaded, adding a `popularity` section with each rank and the list's
+SHA-256 to `--json` output. The list is read locally, never fetched, and not
+copied into output; a rank is context, not a safety verdict.
+
 One strict domain, IP address or ASN can occupy command position as Lookup
 shorthand. URL-like or ambiguous input requires the explicit `lookup` command.
 Only `bulk` accepts multiple targets.

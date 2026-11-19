@@ -312,6 +312,29 @@ test('registry-scoped nameserver results disclose their lower-bound scope and co
   await expect(page.locator('.handoff')).toContainText('Loaded 1 candidate from Nameservers');
 });
 
+test('a selected popularity list marks ranked candidates without uploading the list', async ({ page }) => {
+  await page.getByRole('textbox', { name: 'Brand or domain' }).fill('acme');
+  await page.getByRole('textbox', { name: 'TLDs' }).fill('com');
+  await page.getByRole('button', { name: 'Generate candidates' }).click();
+  const first = page.locator('.candidate').first();
+  const domain = (await first.locator('label strong').textContent())?.trim() ?? '';
+  expect(domain).toMatch(/\.com$/u);
+  const uploads: string[] = [];
+  page.on('request', (request) => { if (request.method() !== 'GET') uploads.push(request.url()); });
+
+  const picker = page.locator('details.popularity-list');
+  await picker.locator(':scope > summary').click();
+  await picker.locator('input[type="file"]').setInputFiles({ name: 'tranco.csv', mimeType: 'text/csv',
+    buffer: Buffer.from(`rank,domain\n1,unrelated.example\n42,${domain}\nnot-a-row,,\n`) });
+  await expect(picker.getByRole('status')).toHaveText('Using 2 ranked domains; 1 unreadable lines skipped.');
+  await expect(picker).toContainText('lookalikes can also be popular');
+  await expect(first.getByText('Ranked #42 in selected list', { exact: true })).toBeVisible();
+  await expect(page.getByText(/Ranked #\d+ in selected list/u)).toHaveCount(1);
+  expect(uploads).toEqual([]);
+  await picker.getByRole('button', { name: 'Clear list', exact: true }).click();
+  await expect(page.getByText(/Ranked #\d+ in selected list/u)).toHaveCount(0);
+});
+
 test('lookalike generation discloses its limits and paginates every retained candidate', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const tlds = Array.from({ length: 25 }, (_, index) =>

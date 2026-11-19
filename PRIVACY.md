@@ -774,6 +774,10 @@ IP addresses, tokens, session identifiers and provider error text are excluded.
 Optional comparisons retain the analyst-selected field and time scope; matching
 does not establish account compromise. No provider API is contacted.
 
+A popularity list selected in Discover, or passed to `discover --popularity-list`,
+is read locally to mark ranked candidates. The browser keeps it in page memory
+only; neither surface uploads, saves or copies the list.
+
 Message intake processes selected text, email, calendar, still PNG, PDF, DOCX and HAR files
 locally, without opening links or executing attachments. Exact URLs remain in
 the temporary review; downloaded summaries omit paths, queries, fragments,

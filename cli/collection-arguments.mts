@@ -58,6 +58,7 @@ type DiscoverArguments = {
   dictionarySource: string | null;
   familyText: string | null;
   snapshotSource: string | null;
+  popularityListSource: string | null;
 } & TerminalOptions;
 
 type DiscoverScanArguments = {
@@ -157,6 +158,7 @@ function parseDiscoverArguments(parsed: ParsedCommandArguments<DiscoverArguments
     output: parseOutput(parsed, COLLECTION_COMMAND_DEFINITIONS.discover),
     ...discoveryValues(parsed),
     snapshotSource: parsed.optionValue('--snapshot'),
+    popularityListSource: parsed.optionValue('--popularity-list'),
     ...terminalOptions(parsed),
   };
 }

@@ -4058,7 +4058,7 @@
       "command": "discover",
       "capabilityFamilyId": "offline_review",
       "title": "Generate lookalike candidates offline",
-      "requestPurpose": "Generates a bounded candidate set from local rules, dictionaries, and optional saved snapshots.",
+      "requestPurpose": "Generates a bounded candidate set from local rules, dictionaries, optional saved snapshots and an optional ranked domain list of up to 32 MiB.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -4119,7 +4119,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "Generation and optional local snapshot comparison are offline. Candidates are leads only and are not resolved, registered, or classified as malicious.",
+        "Generation, optional local snapshot comparison and an optional selected popularity list are offline. Candidates are leads only and are not resolved, registered, or classified as malicious; a popularity rank does not make a candidate safe or connected to the brand.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],
