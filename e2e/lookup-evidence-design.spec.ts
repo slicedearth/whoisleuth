@@ -100,6 +100,16 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(activeNavigation).toHaveAttribute('aria-current', 'location');
 
   await expect(page.getByRole('heading', { name: 'Overview', level: 3 })).toBeVisible();
+  // Key facts open the Overview with each value's source and state, using the
+  // same projection as the CLI terminal view.
+  const keyFacts = page.getByRole('region', { name: 'Key facts' });
+  await expect(keyFacts.locator('[data-fact-id="registration.registrar"] dd')).toContainText('Fixture Registrar LLC');
+  await expect(keyFacts.locator('[data-fact-id="registration.registrar"] dd')).toContainText('Registry RDAP · success');
+  await expect(keyFacts.locator('[data-fact-id="dns.addresses"] dd')).toContainText('192.0.2.10');
+  await expect(keyFacts.locator('[data-fact-id="dns.addresses"] dd')).toContainText('DNS · partial');
+  await expect(keyFacts.locator('[data-fact-id="tls.issuer"] dd')).toContainText('Not collected');
+  await expect(keyFacts.locator('[data-fact-id="http.response_status"] small')).toHaveText(/^HTTP · success · \d{2} \w+ 2026, /u);
+  await expect(keyFacts.getByRole('link', { name: 'Registration sources' })).toHaveAttribute('href', '#registry');
   await expect(page.getByRole('heading', { name: 'Web and DNS evidence' })).toBeVisible();
   await expect(page.getByRole('heading', { name: /Registration$/ })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Validated lookup response' })).toBeVisible();

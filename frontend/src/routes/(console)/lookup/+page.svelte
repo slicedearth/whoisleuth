@@ -4,6 +4,9 @@
   import { page } from '$app/state';
   import LocalSectionNav from '#lib/components/LocalSectionNav.svelte';
   import LookupAtAGlance from '#lib/components/LookupAtAGlance.svelte';
+  import LookupKeyFacts from '#lib/components/LookupKeyFacts.svelte';
+  import { availabilityStatusDisplay } from '#lib/analysis/availability-status-display.ts';
+  import { buildLookupKeyFacts } from '../../../../../lib/lookup-key-facts.mts';
   import LookupResultSkeleton from '#lib/components/LookupResultSkeleton.svelte';
   import LookupAssessment from '#lib/components/LookupAssessment.svelte';
   import LookupFamilySummary from '#lib/components/LookupFamilySummary.svelte';
@@ -306,6 +309,7 @@
   const lookupEvidenceDocument = $derived(lookupEvidenceProjection.document);
   const caseEvidence = $derived(lookupAnalysis.caseEvidence);
   const checkpointFacts = $derived(lookupAnalysis.checkpointFacts);
+  const keyFacts = $derived(session.observation.response ? buildLookupKeyFacts(session.observation.response) : []);
   const profileContextLimitation = $derived(lookupAnalysis.profileContextLimitation);
 
   async function refreshProfileContext() {
@@ -683,6 +687,8 @@
 
     {#snippet overviewSection()}
       <LookupEvidenceSection id="overview" title="Overview" family="overview">
+        <LookupKeyFacts facts={keyFacts} />
+
         <LookupAtAGlance
           reviewActions={lookupReviewActionModel}
           {lookupDecisionFacts}
@@ -693,7 +699,7 @@
 
         {#if availability.applicable !== false}
           <LookupAssessment
-            detail={show(availability.detail || availability.state)}
+            detail={show(availability.detail || availabilityStatusDisplay(availability.state).label)}
             confidence={show(availability.confidence)}
             {risk}
             {riskSensitivity}

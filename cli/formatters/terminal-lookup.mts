@@ -5,6 +5,7 @@ import { lookupCollectionReceiptReview } from '../../packages/evidence/lookup-co
 import { appendTechnologyLines } from './terminal-technology.mts';
 import { appendDeliveryMetadataLines, appendPublicationMetadataLines } from './terminal-metadata.mts';
 import { securityPostureReview, summarizeSecurityPostureReview } from '../../lib/website-security-posture.mts';
+import { buildLookupKeyFacts, lookupKeyFactProvenance, lookupKeyFactValueText } from '../../lib/lookup-key-facts.mts';
 import {
   appendSection,
   boundedTerminalComponent,
@@ -712,8 +713,13 @@ function formatTerminalLookup(
     }
   }
 
+  // The same key facts open browser Lookup's Overview.
+  const keyFactLines = detail === 'summary' ? [] : buildLookupKeyFacts(document).map((item) =>
+    `${item.label.padEnd(15)}${safeTerminalValue(lookupKeyFactValueText(item))} (${safeTerminalValue(lookupKeyFactProvenance(item))})`);
+
   const lines: string[] = [];
   appendSection(lines, 'Target', targetLines);
+  appendSection(lines, 'Key facts', keyFactLines);
   appendSection(lines, 'Registration', registrationLines);
   appendSection(lines, 'DNS', dnsLines);
   appendSection(lines, 'Mail', mailLines);

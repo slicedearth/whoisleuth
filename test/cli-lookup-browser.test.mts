@@ -208,6 +208,7 @@ describe('lookup terminal evidence browser', () => {
     const panels = buildLookupBrowserPanels(document);
     assert.deepEqual(panels.map((panel) => panel.label), [
       'Target',
+      'Key facts',
       'Registration',
       'DNS',
       'Mail',
@@ -240,7 +241,7 @@ describe('lookup terminal evidence browser', () => {
       .filter((line) => line.endsWith(':'))
       .map((line) => line.slice(0, -1));
     const panels = buildLookupBrowserPanels(document);
-    assert.equal(terminalHeadings.length, 10);
+    assert.equal(terminalHeadings.length, 11);
     assert.deepEqual(panels.map((panel) => panel.label), terminalHeadings);
     assert.equal(panels.at(-1)?.label, 'Collection');
     const matches = findLookupBrowserMatches(panels, document.generatedAt);
@@ -279,9 +280,9 @@ describe('lookup terminal evidence browser', () => {
   test('renders a height-bounded, width-bounded view without untrusted controls', () => {
     const document = lookupDocument();
     document.query = `example.test\n${'界'.repeat(400)}`;
-    const rendered = renderLookupBrowser(document, { activeIndex: 2, width: 54, height: 12, color: false });
+    const rendered = renderLookupBrowser(document, { activeIndex: 3, width: 54, height: 12, color: false });
     assert.match(rendered, /WHOISleuth evidence browser/u);
-    assert.match(rendered, /View 3\/9/u);
+    assert.match(rendered, /View 4\/10/u);
     assert.match(rendered, /DNS:/u);
     assert.match(rendered, /Target\s+example\.test.*…/u);
     assert.match(rendered, /Mode\s+deep/u);
@@ -339,7 +340,7 @@ describe('lookup terminal evidence browser', () => {
     });
     input.emit('data', '\u001b');
     input.emit('data', '[C');
-    input.emit('data', '3');
+    input.emit('data', '4');
     output.rows = 12;
     output.emit('resize');
     input.emit('data', '\u001b');
@@ -349,7 +350,7 @@ describe('lookup terminal evidence browser', () => {
     input.emit('data', 'q');
     await browsing;
     assert.match(output.value, /\u001b\[\?1049h/u);
-    assert.match(output.value, /Registration:/u);
+    assert.match(output.value, /Key facts:/u);
     assert.match(output.value, /DNS:/u);
     assert.match(output.value, /lines 2-/u);
     assert.match(output.value, /\u001b\[\?1049l/u);
@@ -467,7 +468,7 @@ describe('lookup terminal evidence browser', () => {
     assert.match(output.value, /rdap\s+success · complete · Fixture source settled\./u);
     releaseCollection();
     await new Promise<void>((resolve) => setImmediate(resolve));
-    assert.match(output.value, /View 1\/9/u);
+    assert.match(output.value, /View 1\/10/u);
     input.emit('data', 'q');
     assert.equal((await browsing).schema, 'whoisleuth.cli.lookup');
     assert.equal(collectionCalls, 1);
@@ -614,8 +615,11 @@ describe('lookup terminal evidence browser', () => {
     input.emit('data', '?');
     input.emit('data', '/DNS\r');
     assert.match(output.value, /Match 1\//u);
+    // The first match is the DNS source label in Key facts; the next is in the DNS panel.
+    assert.match(output.value, /Key facts:/u);
+    input.emit('data', 'n');
     assert.match(output.value, /DNS:/u);
-    input.emit('data', 'nNq');
+    input.emit('data', 'Nq');
     await browsing;
   });
 

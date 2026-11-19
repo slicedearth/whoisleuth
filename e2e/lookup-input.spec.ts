@@ -71,7 +71,7 @@ test('ordinary URL lookup sends only its full hostname and rejects credentials b
   await page.locator('.task-guidance').getByLabel('Analyst question').selectOption('general');
   await query.fill('https://portal.example.test:8443/private-path?private-query=present#private-fragment');
   await submit.click();
-  await expect(page.getByRole('heading', { name: 'registered', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Registered', exact: true })).toBeVisible();
   await expect(submit).toBeEnabled();
   expect(requests).toHaveLength(1);
   expect(new URL(requests[0]!).searchParams.get('q')).toBe('portal.example.test');

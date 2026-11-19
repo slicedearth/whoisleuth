@@ -326,6 +326,13 @@ time, even after you edit the form. **Open saved Case** opens the matching Case,
 and its **Return to Lookup** link brings back this result without collecting again
 (within the current browser session).
 
+**Key facts** opens the Overview with the registrar, registration dates, statuses
+and nameservers, then the IP addresses, final website origin, HTTP status and TLS
+certificate. Each value names its source and state; registration values come from
+registry RDAP before WHOIS, and a value that was not collected or not reported
+says so. The CLI shows the same list under **Key facts** in terminal Lookup and
+`view` output.
+
 **Questions needing evidence** links your chosen question to incomplete sources
 and local reviews; following a link does not collect anything new.
 
