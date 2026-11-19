@@ -14,7 +14,11 @@
   import IntelligenceIcon from './IntelligenceIcon.svelte';
   import CopyableCommand from './CopyableCommand.svelte';
   import SelectedProofReview from './SelectedProofReview.svelte';
-  import { buildLookupEvidenceReplayDiff } from '#lib/analysis/lookup-evidence-replay-diff.ts';
+  import {
+    buildLookupEvidenceReplayDiff,
+    LOOKUP_EVIDENCE_REPLAY_DIFF_KIND_LABELS,
+    LOOKUP_EVIDENCE_REPLAY_DIFF_NO_CHANGES,
+  } from '#lib/analysis/lookup-evidence-replay-diff.ts';
 
   let replay = $state<LookupEvidenceReplay | null>(null);
   let status = $state('');
@@ -211,8 +215,8 @@
           <p class="comparison-status" class:status-success={comparisonState === 'success'} class:status-error={comparisonState === 'error'} role={comparisonState === 'error' ? 'alert' : 'status'} aria-live="polite" aria-atomic="true">{comparisonStatus}</p>
           {#if comparison}
             <div class="comparison-counts"><span><strong>{comparison.counts.observedChanges}</strong> observed</span><span><strong>{comparison.counts.collectionDifferences}</strong> collection</span><span><strong>{comparison.counts.interpretationDifferences}</strong> interpretation</span></div>
-            <ol>{#each comparison.rows.filter((item) => item.kind !== 'unchanged') as row}<li data-comparison-kind={row.kind}><div><strong>{row.label}</strong><span>{row.kind.replaceAll('_', ' ')}</span></div><p>{row.left} → {row.right}</p><small>{row.explanation}</small></li>{/each}</ol>
-            {#if !comparison.rows.some((item) => item.kind !== 'unchanged')}<p>No bounded difference was observed in the comparable replay fields.</p>{/if}
+            <ol>{#each comparison.rows.filter((item) => item.kind !== 'unchanged') as row}<li data-comparison-kind={row.kind}><div><strong>{row.label}</strong><span>{LOOKUP_EVIDENCE_REPLAY_DIFF_KIND_LABELS[row.kind]}</span></div><p>{row.left} → {row.right}</p><small>{row.explanation}</small></li>{/each}</ol>
+            {#if !comparison.rows.some((item) => item.kind !== 'unchanged')}<p>{LOOKUP_EVIDENCE_REPLAY_DIFF_NO_CHANGES}</p>{/if}
           {/if}
         </section>
 

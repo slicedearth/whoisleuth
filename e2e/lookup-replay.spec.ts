@@ -198,6 +198,8 @@ test('offline replay uses isolated graph identifiers and has no live evidence li
   await expect(replay.getByText(/Compared lookup-evidence-comparison\.json locally/u)).toBeVisible();
   const interpretationDifferences = replay.locator('[data-comparison-kind="interpretation_difference"]');
   await expect(interpretationDifferences).toHaveCount(3);
+  // Difference classes use the same labels as CLI evidence diff.
+  await expect(interpretationDifferences.first().locator('span')).toHaveText('interpretation difference');
   await expect(interpretationDifferences.filter({ hasText: 'Homepage publication metadata' })).toBeVisible();
   await expect(interpretationDifferences.filter({ hasText: 'HTTP delivery metadata' })).toBeVisible();
   await expect(interpretationDifferences.first()).toHaveCSS('border-style', 'solid');

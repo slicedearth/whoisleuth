@@ -1,5 +1,9 @@
 import type { LookupEvidenceReplay } from '../lib/lookup-evidence-replay.mts';
-import { buildLookupEvidenceReplayDiff } from '../lib/lookup-evidence-replay-diff.mts';
+import {
+  buildLookupEvidenceReplayDiff,
+  LOOKUP_EVIDENCE_REPLAY_DIFF_KIND_LABELS,
+  LOOKUP_EVIDENCE_REPLAY_DIFF_NO_CHANGES,
+} from '../lib/lookup-evidence-replay-diff.mts';
 import { CliUsageError } from './errors.mts';
 import { readCliLookupEvidenceReplay } from './lookup-evidence-replay.mts';
 import { safeTerminalValue } from './formatters/terminal-shared.mts';
@@ -69,13 +73,6 @@ export async function buildCliLookupEvidenceDiff(
   });
 }
 
-const KIND_LABELS = Object.freeze({
-  observed_change: 'observed change',
-  collection_quality_difference: 'collection difference',
-  interpretation_difference: 'interpretation difference',
-  unchanged: 'unchanged',
-});
-
 export function formatCliLookupEvidenceDiff(document: CliLookupEvidenceDiffDocument): string {
   const { counts } = document.comparison;
   const rows = document.comparison.rows.filter((row) => row.kind !== 'unchanged');
@@ -90,9 +87,9 @@ export function formatCliLookupEvidenceDiff(document: CliLookupEvidenceDiffDocum
     `Unchanged        ${counts.unchanged}`,
     '',
   ];
-  if (!rows.length) output.push('No differences were found in the compared facts and sources.');
+  if (!rows.length) output.push(LOOKUP_EVIDENCE_REPLAY_DIFF_NO_CHANGES);
   for (const row of rows) {
-    output.push(`${safeTerminalValue(row.label)} [${KIND_LABELS[row.kind]}]`);
+    output.push(`${safeTerminalValue(row.label)} [${LOOKUP_EVIDENCE_REPLAY_DIFF_KIND_LABELS[row.kind]}]`);
     output.push(`  Earlier: ${safeTerminalValue(row.left)}`);
     output.push(`  Later:   ${safeTerminalValue(row.right)}`);
     output.push(`  ${safeTerminalValue(row.explanation)}`);

@@ -23,6 +23,15 @@ export type LookupEvidenceReplayDiffRow = Readonly<{
   explanation: string;
 }>;
 
+// Browser replay and the CLI name each difference class with these labels.
+export const LOOKUP_EVIDENCE_REPLAY_DIFF_KIND_LABELS: Readonly<Record<LookupEvidenceReplayDiffRow['kind'], string>> = Object.freeze({
+  observed_change: 'observed change',
+  collection_quality_difference: 'collection difference',
+  interpretation_difference: 'interpretation difference',
+  unchanged: 'unchanged',
+});
+export const LOOKUP_EVIDENCE_REPLAY_DIFF_NO_CHANGES = 'No differences were found in the compared facts and sources.';
+
 function sameCanonicalText(left: unknown, right: unknown): boolean {
   return String(left ?? '').trim().toLowerCase() === String(right ?? '').trim().toLowerCase();
 }
