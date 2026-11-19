@@ -142,6 +142,13 @@ test('overflowing review tabs expose scroll controls without changing the select
     await expect(tabs.getByRole('tab').first()).toHaveAttribute('aria-selected', 'true');
     const towardsStart = controls.getByRole('button', { name: `Scroll Monitor views ${direction === 'ltr' ? 'left' : 'right'}`, exact: true });
     await expect(towardsStart).toBeEnabled();
+    // A later content resize, such as a font or label change, keeps the
+    // analyst's manual scroll position instead of snapping back to the selection.
+    const scrolled = await page.locator('.horizontal-navigation .viewport').evaluate(element => element.scrollLeft);
+    await tabs.getByRole('tab').nth(1).evaluate(element => { element.append(' (updated)'); });
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await expect(towardsStart).toBeEnabled();
+    expect(await page.locator('.horizontal-navigation .viewport').evaluate(element => element.scrollLeft)).toBe(scrolled);
     await tabs.getByRole('tab').first().focus();
     await page.keyboard.press('End');
     const last = tabs.getByRole('tab').last();
