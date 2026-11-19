@@ -5,7 +5,8 @@ import {
   type PriorRegistrationReview, type PriorRegistrationSource,
 } from '../packages/evidence/prior-registration.mts';
 import { readWebArchiveHistory } from '../packages/evidence/web-archive-history.mts';
-import { ctChronologyContradicted, normalizeCtResponse } from '../packages/investigation/ct-results.mts';
+import { normalizeCtResponse } from '../packages/investigation/ct-results.mts';
+import { certificateChronologyEligibility } from '../packages/evidence/evidence-eligibility.mts';
 import { lookupRegistrationCreatedObservations } from '../lib/lookup-key-facts.mts';
 import { parseLookupEvidenceReplay } from '../lib/lookup-evidence-replay.mts';
 import { CliUsageError } from './errors.mts';
@@ -65,12 +66,11 @@ function certificateObservation(raw: string, domain: string): Readonly<{ observe
   let result;
   try { result = normalizeCtResponse(document, document.keyword); }
   catch (error) { throw new CliUsageError(`--ct-results: ${error instanceof Error ? error.message : 'the certificate search result is invalid.'}`); }
-  // Display normalisation orders a contradictory first/last pair; the earliest
-  // date is then not established, so the certificate observation is not used.
-  if (ctChronologyContradicted(document.matches, domain)) {
+  const provenance = result.candidates.find((candidate) => candidate.domain === domain)?.certificateTransparency ?? null;
+  if (certificateChronologyEligibility(provenance).reason === 'chronology_contradictory') {
     return { observedAt: null, excluded: `The certificate search result reports a first observation later than the last for ${domain}, so it was not used.` };
   }
-  return { observedAt: result.candidates.find((candidate) => candidate.domain === domain)?.certificateTransparency?.firstObservedAt ?? null };
+  return { observedAt: provenance?.firstObservedAt ?? null };
 }
 
 function archiveObservation(raw: string, domain: string): string | null {

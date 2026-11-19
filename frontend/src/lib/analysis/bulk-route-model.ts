@@ -5,6 +5,7 @@ import { RISK_MODEL_VERSION } from './scoring.ts';
 import { outreachAction } from '../drafts.ts';
 import { webCollectionScoreLimitation } from '../../../../packages/evidence/collection-quality.mts';
 import { reviewPriorRegistration, type PriorRegistrationReview } from '../../../../packages/evidence/prior-registration.mts';
+import { certificateChronologyEligibility } from '../../../../packages/evidence/evidence-eligibility.mts';
 
 export type BulkPrimaryFilter =
   | 'all'
@@ -69,6 +70,8 @@ export type BulkResultDisplayRow = Readonly<{
     lastObservedAt: string | null;
     hostnameCount: number;
     certificateCount: number;
+    /** The source reported a first observation later than its last, so the dates are not compared. */
+    chronologyContradicted: boolean;
     /** Earliest logged certificate compared with the current registration's creation date. */
     priorRegistration: PriorRegistrationReview;
   }> | null;
@@ -379,9 +382,11 @@ export function buildBulkResultDisplayRows(input: {
             lastObservedAt: row.ct.lastObservedAt,
             hostnameCount: row.ct.hostnames.length,
             certificateCount: row.ct.certificateCount,
+            chronologyContradicted: row.ct.chronologyContradicted === true,
             priorRegistration: reviewPriorRegistration({
               registrationCreatedAt: row.saved.createdDate ?? null,
-              observations: row.ct.firstObservedAt ? [{ source: 'certificate_log', observedAt: row.ct.firstObservedAt }] : [],
+              observations: certificateChronologyEligibility(row.ct).eligible
+                ? [{ source: 'certificate_log', observedAt: row.ct.firstObservedAt }] : [],
             }),
           }
         : null,

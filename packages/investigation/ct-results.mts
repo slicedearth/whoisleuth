@@ -54,6 +54,11 @@ export type CtProvenance = {
   firstObservedAt: string | null;
   lastObservedAt: string | null;
   certificateCount: number;
+  /**
+   * Set when a source reported a first observation later than its last. The
+   * pair is ordered for display, but its earliest date is not established.
+   */
+  chronologyContradicted?: true;
 };
 
 export type CtCandidate = {
@@ -181,13 +186,15 @@ export function normalizeCtProvenance(raw: unknown): CtProvenance | null {
   if (!record) return null;
   const certificateCount = normalizePositiveCount(record.certificateCount);
   if (certificateCount === null) return null;
-  const provenance = {
+  const provenance: CtProvenance = {
     hostnames: normalizeHostnames(record.hostnames),
     firstObservedAt: normalizeTimestamp(record.firstObservedAt),
     lastObservedAt: normalizeTimestamp(record.lastObservedAt),
     certificateCount,
   };
-  // A first observation later than the last one is contradictory; order them.
+  // A first observation later than the last one is contradictory; order them
+  // for display and keep the contradiction so no inference relies on the pair.
+  // A flag carried from an earlier normalisation survives a handoff round trip.
   if (
     provenance.firstObservedAt !== null &&
     provenance.lastObservedAt !== null &&
@@ -196,6 +203,9 @@ export function normalizeCtProvenance(raw: unknown): CtProvenance | null {
     const swap = provenance.firstObservedAt;
     provenance.firstObservedAt = provenance.lastObservedAt;
     provenance.lastObservedAt = swap;
+    provenance.chronologyContradicted = true;
+  } else if (record.chronologyContradicted === true) {
+    provenance.chronologyContradicted = true;
   }
   if (
     provenance.hostnames.length === 0 &&
@@ -225,6 +235,7 @@ export function mergeCtProvenance(
     firstObservedAt: earlier(a.firstObservedAt, b.firstObservedAt),
     lastObservedAt: later(a.lastObservedAt, b.lastObservedAt),
     certificateCount: Math.max(a.certificateCount, b.certificateCount),
+    ...(a.chronologyContradicted || b.chronologyContradicted ? { chronologyContradicted: true as const } : {}),
   };
 }
 
@@ -376,21 +387,6 @@ function buildStructuredCandidates(
     return a.domain.localeCompare(b.domain);
   });
   return { candidates: candidates.slice(0, MAX_CT_CANDIDATES), truncated };
-}
-
-/**
- * Whether any retained match for this registrable domain reports a first
- * observation later than its last. Display normalisation orders such a pair,
- * but an inference that depends on the earliest date must not rely on it.
- */
-export function ctChronologyContradicted(matches: unknown, domain: string): boolean {
-  if (!Array.isArray(matches)) return false;
-  return matches.slice(0, MAX_CT_INPUT_MATCHES).some((match) => {
-    const record = plainRecord(match);
-    if (!record || normalizeEvidenceDomain(record.domain) !== domain) return false;
-    const first = normalizeTimestamp(record.firstObservedAt), last = normalizeTimestamp(record.lastObservedAt);
-    return first !== null && last !== null && first > last;
-  });
 }
 
 /**

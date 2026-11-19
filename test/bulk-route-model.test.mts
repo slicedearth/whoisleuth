@@ -13,6 +13,8 @@ import {
 } from '../frontend/src/lib/analysis/bulk-route-model.ts';
 import type { ScanResult } from '../frontend/src/lib/analysis/bulk-result-model.ts';
 import { RISK_MODEL_VERSION } from '../packages/analysis/risk-scoring.mts';
+import { normalizeCtProvenance } from '../packages/investigation/ct-results.mts';
+import { requiredValue } from './value-assertions.mts';
 
 function result(overrides: Partial<ScanResult> = {}): ScanResult {
   const domain = overrides.domain ?? 'candidate.example';
@@ -207,4 +209,18 @@ test('Bulk rows compare the earliest logged certificate with the current registr
   assert.equal(earlier.priorRegistration.observations[0]?.daysBeforeRegistration, 1725);
   assert.equal(display('2019-06-09T00:00:00.000Z').priorRegistration.state, 'no_earlier_observation');
   assert.equal(display(null).priorRegistration.state, 'not_comparable');
+  assert.equal(earlier.chronologyContradicted, false);
+});
+
+test('Bulk rows do not compare a contradictory certificate chronology with the registration date', () => {
+  // A Discover candidate whose source reported first after last, carried through the handoff.
+  const ct = requiredValue(normalizeCtProvenance({ firstObservedAt: '2025-01-01T00:00:00Z', lastObservedAt: '2019-01-01T00:00:00Z', certificateCount: 1 }));
+  const display = buildBulkResultDisplayRows({
+    visibleResults: [result({ ct, saved: { createdDate: '2024-03-01T00:00:00.000Z' } as Partial<ScanResult['saved']> as ScanResult['saved'] })],
+    allResults: [], shortlistedDomains: new Set(), caseByDomain: new Map(), reviewStateByDomain: new Map(), mutationLabels: {},
+  })[0]!.ct!;
+  assert.equal(display.chronologyContradicted, true);
+  assert.equal(display.firstObservedAt, '2019-01-01T00:00:00.000Z', 'the ordered pair is still shown');
+  assert.equal(display.priorRegistration.state, 'not_comparable');
+  assert.deepEqual(display.priorRegistration.observations, []);
 });

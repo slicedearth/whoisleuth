@@ -500,6 +500,13 @@ describe('normalizeCtProvenance (handoff revalidation)', () => {
     const ct = requiredValue(normalizeCtProvenance({ firstObservedAt: '2026-06-01T00:00:00Z', lastObservedAt: '2026-01-01T00:00:00Z', certificateCount: 1 }));
     assert.equal(ct.firstObservedAt, '2026-01-01T00:00:00.000Z');
     assert.equal(ct.lastObservedAt, '2026-06-01T00:00:00.000Z');
+    // The contradiction survives ordering, a later normalisation (a handoff round trip) and merging.
+    assert.equal(ct.chronologyContradicted, true);
+    assert.equal(requiredValue(normalizeCtProvenance(JSON.parse(JSON.stringify(ct)))).chronologyContradicted, true);
+    const consistent = requiredValue(normalizeCtProvenance({ firstObservedAt: '2020-01-01T00:00:00Z', lastObservedAt: '2021-01-01T00:00:00Z', certificateCount: 1 }));
+    assert.equal(consistent.chronologyContradicted, undefined);
+    assert.equal(mergeCtProvenance(consistent, ct)?.chronologyContradicted, true);
+    assert.equal(normalizeCtProvenance({ ...consistent, chronologyContradicted: 'yes' })?.chronologyContradicted, undefined);
   });
 });
 
