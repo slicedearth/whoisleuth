@@ -4,6 +4,7 @@
 // before; it never identifies an owner, a transfer or intent, and the absence
 // of an earlier observation never establishes a first registration.
 
+import { sourceEligibility } from './evidence-eligibility.mts';
 import { normalizeExplicitIsoTimestamp } from './observation.mts';
 import { registryDateIso } from './registry-dates.mts';
 
@@ -45,8 +46,6 @@ export type RegistrationCreationCandidate = Readonly<{
   complete: boolean | null;
 }>;
 
-const ELIGIBLE_REGISTRATION_STATES = new Set(['success', 'complete']);
-
 /**
  * The first creation date reported by a successful, complete registration
  * source. A value retained from a failed, partial or incomplete source is shown
@@ -54,7 +53,7 @@ const ELIGIBLE_REGISTRATION_STATES = new Set(['success', 'complete']);
  */
 export function selectRegistrationCreation(candidates: readonly RegistrationCreationCandidate[]): Readonly<{ createdAt: string; source: string }> | null {
   for (const candidate of candidates) {
-    if (!ELIGIBLE_REGISTRATION_STATES.has(candidate.sourceState) || candidate.complete === false) continue;
+    if (!sourceEligibility({ state: candidate.sourceState, complete: candidate.complete }).eligible) continue;
     const createdAt = registryDateIso(candidate.value);
     if (createdAt) return Object.freeze({ createdAt, source: candidate.source });
   }

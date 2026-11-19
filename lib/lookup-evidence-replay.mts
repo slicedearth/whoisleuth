@@ -42,11 +42,8 @@ import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.
 import { dnsAddressFamilyEvidence } from '../packages/evidence/dns-query-outcome.mts';
 import { CLI_LOOKUP_SCHEMA } from '../packages/contracts/cli-lookup.mts';
 import { selectRegistrationCreation } from '../packages/evidence/prior-registration.mts';
-import {
-  normalizeWebCollectionQuality,
-  webCollectionAllowsComparison,
-  type WebCollectionQuality,
-} from '../packages/evidence/collection-quality.mts';
+import { normalizeWebCollectionQuality, type WebCollectionQuality } from '../packages/evidence/collection-quality.mts';
+import { pageFieldEligibility } from '../packages/evidence/evidence-eligibility.mts';
 
 export const LOOKUP_EVIDENCE_REPLAY_MAX_BYTES = LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES;
 export const LOOKUP_EVIDENCE_REPLAY_MAX_ENTRIES = LOOKUP_EVIDENCE_PORTABLE_MAX_ENTRIES;
@@ -60,13 +57,9 @@ export const LOOKUP_EVIDENCE_REPLAY_PAGE_FACT_FIELDS: Readonly<Record<string, st
   'page.phishing-language': 'phishingLanguageMatch',
 });
 
-const COMPLETE_SOURCE_STATES = new Set(['success', 'complete']);
-
 /**
- * Whether a page-derived fact in this replay can be compared as an observation.
- * Retained web collection quality decides when present. An export without it
- * qualifies only when the page identity source itself is explicitly complete;
- * otherwise the collection state stays unknown.
+ * Whether a page-derived fact in this replay can be compared as an observation,
+ * using the shared page-field eligibility rules.
  */
 export function lookupEvidenceReplayPageFactComparable(
   replay: Pick<LookupEvidenceReplay, 'webCollection' | 'sources'>,
@@ -74,9 +67,7 @@ export function lookupEvidenceReplayPageFactComparable(
 ): boolean {
   const field = LOOKUP_EVIDENCE_REPLAY_PAGE_FACT_FIELDS[factId];
   if (!field) return true;
-  if (replay.webCollection) return webCollectionAllowsComparison(field, replay.webCollection, 'deep');
-  const page = replay.sources.find((item) => item.id === 'page-identity');
-  return Boolean(page && COMPLETE_SOURCE_STATES.has(page.state) && page.complete === true);
+  return pageFieldEligibility(field, replay.webCollection, replay.sources.find((item) => item.id === 'page-identity')).eligible;
 }
 
 export type LookupEvidenceReplaySource = Readonly<{

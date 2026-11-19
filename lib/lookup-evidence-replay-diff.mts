@@ -1,4 +1,5 @@
 import { lookupEvidenceReplayPageFactComparable, type LookupEvidenceReplay } from './lookup-evidence-replay.mts';
+import { sourceEligibility } from '../packages/evidence/evidence-eligibility.mts';
 
 export const LOOKUP_EVIDENCE_REPLAY_DIFF_VERSION = 1;
 const MAX_DIFF_ROWS = 64;
@@ -75,8 +76,7 @@ function sameFactValue(id: string, left: unknown, right: unknown): boolean {
 }
 
 function explicitlyCompleteSourceState(state: string, complete: boolean | null): boolean {
-  const canonical = state.trim().toLowerCase().replace(/[\s-]+/gu, '_');
-  return complete === true && ['complete', 'success', 'provided'].includes(canonical);
+  return sourceEligibility({ state, complete }, { requireExplicitComplete: true }).eligible;
 }
 
 function factSourceExplicitlyComplete(
