@@ -92,6 +92,15 @@ async function runViewCommand(
   const input = dependencies.readDiffInput
     ? await dependencies.readDiffInput(args.source || '-')
     : await context.readInput(args.source, MAX_SAVED_LOOKUP_INPUT_BYTES, 'Saved Lookup');
+  if (isLookupEvidenceText(input)) {
+    context.setFailureLabel('Lookup evidence export');
+    if (browser) throw new CliUsageError('--browse opens saved Lookups. Omit it to read an evidence export.');
+    const { buildCliLookupEvidenceView, formatCliLookupEvidenceView } = await import('./lookup-evidence-replay.mts');
+    const evidence = await buildCliLookupEvidenceView(input, context.now());
+    if (!args.quiet) context.writeStdout(args.output === 'json'
+      ? formatJsonDocument(evidence) : context.terminal(formatCliLookupEvidenceView(evidence), args.color));
+    return EXIT_CODES.SUCCESS;
+  }
   const document = parseCliLookupDocument(input);
   if (browser) await browseLookupDocument(document, browser);
   else if (!args.quiet) context.writeStdout(args.output === 'json'
@@ -99,8 +108,8 @@ async function runViewCommand(
   return EXIT_CODES.SUCCESS;
 }
 
-// Routes diff inputs before full validation; malformed JSON falls through to
-// the retained-artefact parser, which reports it precisely.
+// Routes view and diff inputs before full validation; malformed JSON falls
+// through to the saved-Lookup or retained-artefact parser, which reports it precisely.
 function isLookupEvidenceText(raw: string): boolean {
   try {
     const value: unknown = JSON.parse(raw);

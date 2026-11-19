@@ -117,12 +117,14 @@ payloads and expanded contacts. Neither file is uploaded. Case classification, e
 actions remain deliberate analyst steps. Ordinary case files also support the
 offline CLI workflow below.
 
-The reverse also works: `diff` compares two Lookup evidence exports for the same
-target, whether they came from `export` or from **Export evidence JSON** in
-browser Lookup. It uses the same validation and difference classes as browser replay,
-keeping observed changes separate from collection and interpretation differences:
+The reverse also works. `view` reads one Lookup evidence export and `diff`
+compares two for the same target, whether they came from `export` or from
+**Export evidence JSON** in browser Lookup. Both use the same validation as
+browser replay; `diff` keeps observed changes separate from collection and
+interpretation differences:
 
 ```bash
+whoisleuth view evidence.json
 whoisleuth diff earlier-evidence.json later-evidence.json
 ```
 

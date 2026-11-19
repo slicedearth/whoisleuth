@@ -7,6 +7,7 @@ import { test, type TestContext } from 'node:test';
 import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { CLI_LOOKUP_EVIDENCE_DIFF_SCHEMA } from '../cli/lookup-evidence-diff.mts';
+import { CLI_LOOKUP_EVIDENCE_VIEW_SCHEMA } from '../cli/lookup-evidence-replay.mts';
 import { buildLookupEvidence } from '../frontend/src/lib/analysis/evidence-export.ts';
 import { parseLookupEvidenceReplay } from '../frontend/src/lib/analysis/lookup-evidence-replay.ts';
 import { buildLookupEvidenceReplayDiff } from '../frontend/src/lib/analysis/lookup-evidence-replay-diff.ts';
@@ -93,4 +94,39 @@ test('evidence diff refuses reversed, mixed, cross-target and browse requests be
     assert.equal(result.stdout, '');
     assert.match(result.stderr, message);
   }
+});
+
+test('view reads a browser evidence download exactly as browser replay does', async t => {
+  const file = await files(t);
+  const browserDownload = `${JSON.stringify(buildLookupEvidence(saved, { generatedAt: EARLIER, idnAnalysis: null }), null, 2)}\n`;
+  const path = await file('evidence.json', browserDownload);
+  const result = await cli(['view', path, '--json']);
+  assert.equal(result.code, EXIT_CODES.SUCCESS, result.stderr);
+  const document = JSON.parse(result.stdout);
+  assert.equal(document.schema, CLI_LOOKUP_EVIDENCE_VIEW_SCHEMA);
+  assert.equal(document.generatedAt, LATER);
+  assert.deepEqual(document.replay, JSON.parse(JSON.stringify(await parseLookupEvidenceReplay(browserDownload))));
+
+  const terminal = await cli(['view', path]);
+  assert.equal(terminal.code, EXIT_CODES.SUCCESS, terminal.stderr);
+  assert.match(terminal.stdout, /^Lookup evidence replay\nTarget {11}example\.test\n/u);
+  for (const heading of ['Sources:', 'Normalised facts:', 'Next manual steps:', 'Limitations:']) {
+    assert.match(terminal.stdout, new RegExp(`^${heading}$`, 'mu'));
+  }
+  assert.match(terminal.stdout, new RegExp(`File SHA-256 {5}${document.replay.digestSha256}`, 'u'));
+
+  // A saved Lookup still uses the saved-Lookup reader.
+  const lookup = await cli(['view', await file('lookup.json', JSON.stringify(saved)), '--json']);
+  assert.equal(lookup.code, EXIT_CODES.SUCCESS, lookup.stderr);
+  assert.notEqual(JSON.parse(lookup.stdout).schema, CLI_LOOKUP_EVIDENCE_VIEW_SCHEMA);
+});
+
+test('view reports invalid evidence exports as usage errors without output', async t => {
+  const file = await files(t);
+  const evidence = JSON.parse(await cliExport(file, 'saved', saved, EARLIER));
+  evidence.schemaVersion = 9999;
+  const result = await cli(['view', await file('future.json', JSON.stringify(evidence))]);
+  assert.equal(result.code, EXIT_CODES.USAGE);
+  assert.equal(result.stdout, '');
+  assert.match(result.stderr, /Evidence export:/u);
 });

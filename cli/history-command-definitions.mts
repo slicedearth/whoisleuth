@@ -23,12 +23,12 @@ export const HISTORY_COMMAND_DEFINITIONS = Object.freeze({
   }),
   view: commandSeed({
     reference: {
-      description: 'Read one saved Lookup without collecting again.',
+      description: 'Read one saved Lookup or Lookup evidence export without collecting again.',
       example: 'whoisleuth view lookup.json --browse',
-      boundary: 'The command validates one saved Lookup offline. --browse opens the existing searchable terminal panels and reserves interactive stdin for navigation; it cannot be combined with redirected output. No file is modified and no source is contacted.',
+      boundary: 'The command validates one saved Lookup or Lookup evidence export offline. Evidence exports, including browser downloads, use the same validation and summary as browser evidence replay. --browse opens the existing searchable terminal panels for a saved Lookup and reserves interactive stdin for navigation; it cannot be combined with redirected output. No file is modified and no source is contacted.',
     },
-    collection: { scope: 'Reads one saved Lookup capped at 8 MiB.' },
-    summary: 'Read or browse a saved Lookup offline',
+    collection: { scope: 'Reads one saved Lookup or evidence export capped at 8 MiB.' },
+    summary: 'Read or browse a saved Lookup or evidence export offline',
     options: ['--browse', '--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: Object.freeze([
@@ -37,8 +37,8 @@ export const HISTORY_COMMAND_DEFINITIONS = Object.freeze({
     handlerOwner: 'history',
     networkEffect: 'offline',
     common: true,
-    schemaIdentifiers: Object.freeze(['whoisleuth.cli.lookup']),
-    primaryArtefacts: Object.freeze(['Saved Lookup']),
+    schemaIdentifiers: Object.freeze(['whoisleuth.cli.lookup', 'whoisleuth.cli.lookup-evidence-view']),
+    primaryArtefacts: Object.freeze(['Saved Lookup', 'Lookup evidence replay']),
     planSupport: false,
     additionalOutputFormats: Object.freeze([]),
     bootstrapProfile: 'allowed',

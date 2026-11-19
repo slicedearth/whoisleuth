@@ -385,7 +385,7 @@ export const PUBLIC_CLI_INDEX = {
     },
     {
       "id": "view",
-      "summary": "Read or browse a saved Lookup offline",
+      "summary": "Read or browse a saved Lookup or evidence export offline",
       "group": "investigate",
       "common": true,
       "mode": "offline"

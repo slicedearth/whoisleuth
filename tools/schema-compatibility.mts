@@ -140,6 +140,7 @@ import {
   CLI_LOOKUP_DIFF_VERSION,
 } from '../cli/lookup-diff.mts';
 import { CLI_LOOKUP_EVIDENCE_DIFF_SCHEMA, CLI_LOOKUP_EVIDENCE_DIFF_VERSION } from '../cli/lookup-evidence-diff.mts';
+import { CLI_LOOKUP_EVIDENCE_VIEW_SCHEMA, CLI_LOOKUP_EVIDENCE_VIEW_VERSION } from '../cli/lookup-evidence-replay.mts';
 import {
   CLI_LOOKUP_RECONCILIATION_SCHEMA,
   CLI_LOOKUP_RECONCILIATION_VERSION,
@@ -614,6 +615,7 @@ const ENTRIES: SchemaCompatibilityEntry[] = [
   outputEntry({ id: 'cli.progress-event', schema: CLI_PROGRESS_EVENT_SCHEMA, currentVersion: CLI_PROGRESS_EVENT_VERSION, byteBudget: null, owner: 'cli/progress-events.mts', note: 'Target-free JSONL lifecycle event emitted on standard error only when explicitly requested.' }),
   outputEntry({ id: 'cli.lookup-diff', schema: CLI_LOOKUP_DIFF_SCHEMA, currentVersion: CLI_LOOKUP_DIFF_VERSION, byteBudget: MAX_SAVED_LOOKUP_INPUT_BYTES, owner: 'cli/lookup-diff.mts', note: 'Offline comparison of two supported bounded saved Lookup documents.' }),
   outputEntry({ id: 'cli.lookup-evidence-diff', schema: CLI_LOOKUP_EVIDENCE_DIFF_SCHEMA, currentVersion: CLI_LOOKUP_EVIDENCE_DIFF_VERSION, byteBudget: null, owner: 'cli/lookup-evidence-diff.mts', note: 'Offline comparison of two Lookup evidence exports for one target, using the browser replay validation and difference classes.' }),
+  outputEntry({ id: 'cli.lookup-evidence-view', schema: CLI_LOOKUP_EVIDENCE_VIEW_SCHEMA, currentVersion: CLI_LOOKUP_EVIDENCE_VIEW_VERSION, byteBudget: null, owner: 'cli/lookup-evidence-replay.mts', note: 'Offline reading of one Lookup evidence export, using the browser replay validation and summary.' }),
   outputEntry({ id: 'cli.lookup-reconciliation', schema: CLI_LOOKUP_RECONCILIATION_SCHEMA, currentVersion: CLI_LOOKUP_RECONCILIATION_VERSION, byteBudget: MAX_LOOKUP_RECONCILIATION_INPUT_BYTES, owner: 'cli/lookup-reconcile.mts', note: 'Offline reconciliation of two to five same-domain saved observations; labels remain analyst context rather than proof of independent collection.' }),
   outputEntry({ id: 'cli.registry-doctor', schema: REGISTRY_DOCTOR_SCHEMA, currentVersion: REGISTRY_DOCTOR_VERSION, byteBudget: MAX_SAVED_LOOKUP_INPUT_BYTES, owner: 'cli/registry-doctor.mts', note: 'Current output propagates bounded RDAP publication-family truncation and withholds absence or consistency conclusions that omitted values could change.' }),
   outputEntry({ id: 'cli.sharing-review', schema: SHARING_REVIEW_SCHEMA, currentVersion: SHARING_REVIEW_VERSION, byteBudget: MAX_SHARING_REVIEW_BYTES, owner: 'cli/sharing-review.mts', note: 'Version 2 withholds ready status for projection-only or structure-only assurance; output remains redacted and does not grant recipient authorisation.' }),

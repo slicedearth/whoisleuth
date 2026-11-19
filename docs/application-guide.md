@@ -1141,9 +1141,10 @@ and then preview the import:
   `whoisleuth export lookup.json --output evidence.json` and open it with
   **Replay exported evidence** in browser Lookup. The saved Lookup and the evidence
   export are different formats.
-- To compare evidence in the CLI, run `whoisleuth diff earlier.json later.json` on
-  two evidence exports for one target, whether from the CLI or **Export evidence JSON**
-  in the browser. It classifies differences exactly as browser replay does.
+- To read evidence in the CLI, run `whoisleuth view evidence.json`, or
+  `whoisleuth diff earlier.json later.json` for two exports of one target, whether
+  they came from the CLI or **Export evidence JSON** in the browser. Both read the
+  file exactly as browser replay does.
 - For a Case handoff, choose the audience, run `sharing-review` on the separate
   package and review its redaction manifest before sharing.
 

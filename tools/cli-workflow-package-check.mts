@@ -202,6 +202,10 @@ async function checkInstalledIntakeAndContext(repositoryRoot: string, temporaryR
   if (evidenceDiff.schema !== 'whoisleuth.cli.lookup-evidence-diff' || evidenceCounts.observedChanges !== 0 || evidenceCounts.interpretationDifferences !== 0) {
     throw new TypeError('Installed evidence diff did not compare two exports of one observation as unchanged.');
   }
+  const evidenceView = record(JSON.parse(await run(['view', earlierEvidence, '--json'], 'offline evidence export view')), 'Installed evidence view');
+  if (evidenceView.schema !== 'whoisleuth.cli.lookup-evidence-view' || record(evidenceView.replay, 'Evidence view replay').target !== 'example.test') {
+    throw new TypeError('Installed evidence view did not read the exported target.');
+  }
   const emailFile = path.join(temporaryRoot, 'selected-message.eml');
   await writeFile(emailFile, 'From: private-local-part@sender.example\r\nContent-Type: text/html\r\n\r\n<a href="https://destination.example/private?token=excluded-value">https://sender.example</a>', { flag: 'wx', mode: 0o600 });
   const intake = record(JSON.parse(await run(['intake', 'email', emailFile, '--reported-action', 'entered_password', '--json'], 'offline message and identity intake')), 'Installed intake');

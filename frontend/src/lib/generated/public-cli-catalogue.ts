@@ -6143,16 +6143,16 @@ export const PUBLIC_CLI_CATALOGUE = {
     },
     {
       "id": "view",
-      "summary": "Read or browse a saved Lookup offline",
-      "description": "Read one saved Lookup without collecting again.",
+      "summary": "Read or browse a saved Lookup or evidence export offline",
+      "description": "Read one saved Lookup or Lookup evidence export without collecting again.",
       "group": "investigate",
       "common": true,
       "usage": "whoisleuth view [\u003csource>] [--browse] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth view lookup.json --browse",
-      "boundary": "The command validates one saved Lookup offline. --browse opens the existing searchable terminal panels and reserves interactive stdin for navigation; it cannot be combined with redirected output. No file is modified and no source is contacted.",
+      "boundary": "The command validates one saved Lookup or Lookup evidence export offline. Evidence exports, including browser downloads, use the same validation and summary as browser evidence replay. --browse opens the existing searchable terminal panels for a saved Lookup and reserves interactive stdin for navigation; it cannot be combined with redirected output. No file is modified and no source is contacted.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads one saved Lookup capped at 8 MiB."
+        "scope": "Reads one saved Lookup or evidence export capped at 8 MiB."
       },
       "inputs": [
         {
@@ -6178,10 +6178,11 @@ export const PUBLIC_CLI_CATALOGUE = {
       "planSupport": false,
       "failurePolicySupport": false,
       "supportedSchemaIdentifiers": [
-        "whoisleuth\u002ecli.lookup"
+        "whoisleuth\u002ecli.lookup",
+        "whoisleuth\u002ecli.lookup-evidence-view"
       ],
       "inputLimits": [
-        "Reads one saved Lookup capped at 8 MiB.",
+        "Reads one saved Lookup or evidence export capped at 8 MiB.",
         "source: 0-1 file value"
       ],
       "outputLimits": [
@@ -6196,7 +6197,8 @@ export const PUBLIC_CLI_CATALOGUE = {
       ],
       "fileOutput": true,
       "primaryEvidenceArtefacts": [
-        "Saved Lookup"
+        "Saved Lookup",
+        "Lookup evidence replay"
       ],
       "capability": {
         "familyId": "offline_review",

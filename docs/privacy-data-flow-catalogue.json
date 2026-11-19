@@ -7888,8 +7888,8 @@
       "id": "command.cli.view",
       "command": "view",
       "capabilityFamilyId": "offline_review",
-      "title": "Read or browse a saved Lookup offline",
-      "requestPurpose": "Reads one saved Lookup capped at 8 MiB.",
+      "title": "Read or browse a saved Lookup or evidence export offline",
+      "requestPurpose": "Reads one saved Lookup or evidence export capped at 8 MiB.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -7949,7 +7949,7 @@
       "scoringEffect": "none",
       "nonInferences": [
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
-        "The command validates one saved Lookup offline. --browse opens the existing searchable terminal panels and reserves interactive stdin for navigation; it cannot be combined with redirected output. No file is modified and no source is contacted.",
+        "The command validates one saved Lookup or Lookup evidence export offline. Evidence exports, including browser downloads, use the same validation and summary as browser evidence replay. --browse opens the existing searchable terminal panels for a saved Lookup and reserves interactive stdin for navigation; it cannot be combined with redirected output. No file is modified and no source is contacted.",
         "The command reads only selected bounded local input and makes no network request.",
         "Output remains under the operator's local retention and deletion control."
       ],

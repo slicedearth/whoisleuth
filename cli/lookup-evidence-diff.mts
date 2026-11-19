@@ -1,6 +1,7 @@
-import { parseLookupEvidenceReplay, type LookupEvidenceReplay } from '../lib/lookup-evidence-replay.mts';
+import type { LookupEvidenceReplay } from '../lib/lookup-evidence-replay.mts';
 import { buildLookupEvidenceReplayDiff } from '../lib/lookup-evidence-replay-diff.mts';
 import { CliUsageError } from './errors.mts';
+import { readCliLookupEvidenceReplay } from './lookup-evidence-replay.mts';
 import { safeTerminalValue } from './formatters/terminal-shared.mts';
 
 // Compares two exported evidence files with the same replay validation and
@@ -28,14 +29,6 @@ export type CliLookupEvidenceDiffDocument = Readonly<{
   limitations: readonly string[];
 }>;
 
-async function replay(raw: string, label: string): Promise<LookupEvidenceReplay> {
-  try {
-    return await parseLookupEvidenceReplay(raw);
-  } catch (error) {
-    throw new CliUsageError(`${label}: ${error instanceof Error ? error.message : 'the evidence export is invalid.'}`);
-  }
-}
-
 function side(value: LookupEvidenceReplay): ReplaySide {
   return Object.freeze({
     exportedAt: value.exportedAt,
@@ -51,8 +44,8 @@ export async function buildCliLookupEvidenceDiff(
   generatedAt = new Date().toISOString(),
 ): Promise<CliLookupEvidenceDiffDocument> {
   const [left, right] = await Promise.all([
-    replay(leftRaw, 'Left evidence export'),
-    replay(rightRaw, 'Right evidence export'),
+    readCliLookupEvidenceReplay(leftRaw, 'Left evidence export'),
+    readCliLookupEvidenceReplay(rightRaw, 'Right evidence export'),
   ]);
   if (Date.parse(left.exportedAt) > Date.parse(right.exportedAt)) {
     throw new CliUsageError('diff expects the earlier evidence export on the left and the later one on the right.');
