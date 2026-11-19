@@ -1,7 +1,9 @@
 <script lang="ts">
   import Pagination from '#lib/components/Pagination.svelte';
   import type { CtHistoryObservationState } from '#lib/analysis/ct-history.ts';
-  import { MAX_POPULARITY_LIST_BYTES, POPULARITY_LIMITATION, parsePopularityList, type PopularityList } from '../../../../packages/analysis/popularity-list.mts';
+  import { onDestroy, untrack } from 'svelte';
+  import { MAX_POPULARITY_LIST_BYTES, POPULARITY_LIMITATION } from '../../../../packages/analysis/popularity-list.mts';
+  import { runPopularityListWorker } from '#lib/popularity-list-worker.ts';
 
   type CertificateEvidence = {
     certificateCount: number;
@@ -46,6 +48,7 @@
     reviewControlsActive,
     resetReviewControls,
     rows,
+    candidateDomains,
     visibleCount,
     currentPage,
     pageCount,
@@ -76,6 +79,8 @@
     reviewControlsActive: boolean;
     resetReviewControls: () => void;
     rows: CandidateRow[];
+    /** Every current candidate, not only the visible page, so ranks survive paging. */
+    candidateDomains: readonly string[];
     visibleCount: number;
     currentPage: number;
     pageCount: number;
@@ -101,26 +106,78 @@
     return '';
   }
 
-  // The selected list stays in page memory; it is never uploaded or saved.
-  let popularity = $state<PopularityList | null>(null);
+  // The selected file stays in page memory and is never uploaded or saved. A
+  // local worker parses it and returns only the current candidates' ranks, so a
+  // large list neither blocks the page nor stays in its memory. Each choice,
+  // clear or new candidate set starts a new generation, so a slower earlier
+  // read cannot replace a later selection or bring back a cleared list.
+  let popularityFile = $state<File | null>(null);
+  let popularity = $state<{ entries: number; ranks: ReadonlyMap<string, number> } | null>(null);
   let popularityStatus = $state('');
-  async function choosePopularityList(input: HTMLInputElement) {
+  let popularityGeneration = 0;
+  let popularityController: AbortController | null = null;
+  // Regenerating the same candidates does not reread the file.
+  let rankedFile: File | null = null, rankedDomains = '';
+
+  function choosePopularityList(input: HTMLInputElement) {
     const file = input.files?.[0];
     input.value = '';
     if (!file) return;
     if (file.size > MAX_POPULARITY_LIST_BYTES) {
+      stopPopularityRead();
+      rankedFile = null;
+      popularityFile = null;
       popularity = null;
       popularityStatus = `Popularity lists are limited to ${MAX_POPULARITY_LIST_BYTES / 1024 / 1024} MiB.`;
       return;
     }
+    popularity = null;
+    popularityFile = file;
+  }
+  function clearPopularityList() {
+    stopPopularityRead();
+    rankedFile = null;
+    popularityFile = null;
+    popularity = null;
+    popularityStatus = 'Popularity list cleared.';
+  }
+  function stopPopularityRead() {
+    popularityGeneration += 1;
+    popularityController?.abort();
+    popularityController = null;
+  }
+  async function rankCandidates(file: File, domains: readonly string[]) {
+    stopPopularityRead();
+    const generation = popularityGeneration;
+    const controller = new AbortController();
+    popularityController = controller;
+    if (!popularity) popularityStatus = `Reading ${file.name}…`;
     try {
-      popularity = parsePopularityList(await file.text());
-      popularityStatus = `Using ${popularity.entries.toLocaleString()} ranked domains${popularity.rejectedLines ? `; ${popularity.rejectedLines.toLocaleString()} unreadable lines skipped` : ''}${popularity.truncated ? '; later entries were beyond the limit' : ''}.`;
+      const result = await runPopularityListWorker({ kind: 'rank', file, domains }, { signal: controller.signal });
+      if (generation !== popularityGeneration) return;
+      const count = (value: number, noun: string) => `${value.toLocaleString()} ${noun}${value === 1 ? '' : 's'}`;
+      popularity = { entries: result.entries, ranks: new Map(result.ranks) };
+      popularityStatus = `Using ${count(result.entries, 'ranked domain')}${result.rejectedLines ? `; ${count(result.rejectedLines, 'unreadable line')} skipped` : ''}${result.truncated ? '; later entries were beyond the limit' : ''}.`;
     } catch (error) {
+      if (generation !== popularityGeneration) return;
+      rankedFile = null;
+      popularityFile = null;
       popularity = null;
       popularityStatus = error instanceof Error ? error.message : 'The popularity list could not be read.';
+    } finally {
+      if (popularityController === controller) popularityController = null;
     }
   }
+  $effect(() => {
+    const file = popularityFile, domains = candidateDomains;
+    untrack(() => {
+      const key = domains.join('\n');
+      if (!file || file === rankedFile && key === rankedDomains) return;
+      rankedFile = file; rankedDomains = key;
+      void rankCandidates(file, domains);
+    });
+  });
+  onDestroy(stopPopularityRead);
 
   function ctObservationLabel(state: CtHistoryObservationState): string {
     if (state === 'first_observed') return 'First local observation';
@@ -169,10 +226,10 @@
   </div>
   <details class="popularity-list">
     <summary>Popularity list{popularity ? ` · ${popularity.entries.toLocaleString()} domains` : ''}</summary>
-    <p>Choose a ranked domain list you have downloaded, such as a Tranco CSV, to mark candidates that are established, widely visited sites. The list stays in this tab and is never uploaded.</p>
+    <p>Choose a ranked domain list you have downloaded, such as a Tranco CSV, to mark candidates that appear in it and the rank it gives them. The list stays in this tab and is never uploaded.</p>
     <div class="popularity-actions">
       <label class="btn">Choose list<input type="file" accept=".csv,.txt,text/csv,text/plain" onchange={(event) => void choosePopularityList(event.currentTarget)}></label>
-      {#if popularity}<button type="button" class="btn" onclick={() => { popularity = null; popularityStatus = 'Popularity list cleared.'; }}>Clear list</button>{/if}
+      {#if popularityFile}<button type="button" class="btn" onclick={clearPopularityList}>Clear list</button>{/if}
     </div>
     <p class="candidate-note" role="status">{popularityStatus}</p>
     {#if popularity}<p class="candidate-note">{POPULARITY_LIMITATION}</p>{/if}
@@ -195,7 +252,7 @@
               {#if candidate.mixedScript}<span class="candidate-badge warning">Mixed writing scripts</span>{/if}
               {#if candidate.referenceDomains.length}<span class="candidate-badge warning">Source or profile visual match</span>{/if}
               {#if candidate.ctObservationState}<span class={`ct-history-state ${candidate.ctObservationState}`}>{ctObservationLabel(candidate.ctObservationState)}</span>{/if}
-              {#if popularity?.rank(candidate.domain)}<span class="candidate-badge popularity">Ranked #{popularity.rank(candidate.domain)?.toLocaleString()} in selected list</span>{/if}
+              {#if popularity?.ranks.get(candidate.domain)}<span class="candidate-badge popularity">Ranked #{popularity.ranks.get(candidate.domain)?.toLocaleString()} in selected list</span>{/if}
             </span>
           </label>
           {#if candidate.reviewCues.length}

@@ -326,12 +326,41 @@ test('a selected popularity list marks ranked candidates without uploading the l
   await picker.locator(':scope > summary').click();
   await picker.locator('input[type="file"]').setInputFiles({ name: 'tranco.csv', mimeType: 'text/csv',
     buffer: Buffer.from(`rank,domain\n1,unrelated.example\n42,${domain}\nnot-a-row,,\n`) });
-  await expect(picker.getByRole('status')).toHaveText('Using 2 ranked domains; 1 unreadable lines skipped.');
+  await expect(picker.getByRole('status')).toHaveText('Using 2 ranked domains; 1 unreadable line skipped.');
   await expect(picker).toContainText('lookalikes can also be popular');
   await expect(first.getByText('Ranked #42 in selected list', { exact: true })).toBeVisible();
   await expect(page.getByText(/Ranked #\d+ in selected list/u)).toHaveCount(1);
   expect(uploads).toEqual([]);
   await picker.getByRole('button', { name: 'Clear list', exact: true }).click();
+  await expect(page.getByText(/Ranked #\d+ in selected list/u)).toHaveCount(0);
+
+  // A slower earlier read never replaces a later choice or brings back a cleared list.
+  // Holding the request for slow.csv delays that worker's read until it is released.
+  await page.evaluate(() => {
+    const state = window as typeof window & { releaseSlowList?: () => void };
+    type Post = (this: Worker, message: unknown) => void;
+    const post = Worker.prototype.postMessage as Post;
+    (Worker.prototype as unknown as { postMessage: Post }).postMessage = function (message) {
+      const send = () => post.call(this, message);
+      if ((message as { file?: File } | null)?.file?.name === 'slow.csv') state.releaseSlowList = send;
+      else send();
+    };
+  });
+  const choose = (name: string, rank: number) => picker.locator('input[type="file"]').setInputFiles({
+    name, mimeType: 'text/csv', buffer: Buffer.from(`rank,domain\n${rank},${domain}\n`) });
+  const release = () => page.evaluate(() => (window as typeof window & { releaseSlowList?: () => void }).releaseSlowList?.());
+  await choose('slow.csv', 7);
+  await expect(picker.getByRole('status')).toHaveText('Reading slow.csv…');
+  await choose('fast.csv', 9);
+  await expect(first.getByText('Ranked #9 in selected list', { exact: true })).toBeVisible();
+  await release();
+  await expect(picker.getByRole('status')).toHaveText('Using 1 ranked domain.');
+  await expect(first.getByText('Ranked #9 in selected list', { exact: true })).toBeVisible();
+  await expect(page.getByText('Ranked #7 in selected list', { exact: true })).toHaveCount(0);
+  await choose('slow.csv', 7);
+  await picker.getByRole('button', { name: 'Clear list', exact: true }).click();
+  await release();
+  await expect(picker.getByRole('status')).toHaveText('Popularity list cleared.');
   await expect(page.getByText(/Ranked #\d+ in selected list/u)).toHaveCount(0);
 });
 

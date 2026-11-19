@@ -81,6 +81,7 @@
   let registryScope = $state('com');
   let customDictionaryText = $state('');
   let candidates = $state<Candidate[]>([]);
+  const candidateDomains = $derived(candidates.map((candidate) => candidate.domain));
   let generatedContext = $state<Candidate[]>([]);
   let excludedOpen = $state(false), excludedPage = $state(1);
   let excludedHeading = $state<HTMLHeadingElement>();
@@ -900,6 +901,7 @@
     {reviewControlsActive}
     {resetReviewControls}
     rows={candidateDisplayRows()}
+    candidateDomains={candidateDomains}
     visibleCount={visible.length}
     {currentPage}
     {pageCount}

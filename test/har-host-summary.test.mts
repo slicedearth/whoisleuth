@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { HarEntry } from '../packages/contracts/har-review.mts';
-import { MAX_HAR_HOST_GROUPS, summariseHarHosts } from '../packages/investigation/har-host-summary.mts';
+import { harHostPageNote, harHostWriteMethodNote, MAX_HAR_HOST_GROUPS, summariseHarHosts } from '../packages/investigation/har-host-summary.mts';
 import { selectedHarFixture } from '../fixtures/selected-input-examples.mts';
 import { runCli } from '../cli/runner.mts';
 
@@ -11,7 +11,7 @@ function entry(sequence: number, origin: string | null, overrides: Partial<HarEn
     timings, resourceType: 'other', reportedFailure: false, ...overrides };
 }
 
-test('groups requests by registrable domain and separates the page domain from third parties', () => {
+test('groups requests by registrable domain and separates the page domain from other domains', () => {
   const summary = summariseHarHosts([
     entry(3, 'https://cdn.portal.example', { resourceType: 'script' }),
     entry(1, 'https://www.portal.example', { resourceType: 'document', mimeCategory: 'html' }),
@@ -22,15 +22,32 @@ test('groups requests by registrable domain and separates the page domain from t
   ]);
   assert.equal(summary.pageOrigin, 'https://www.portal.example');
   assert.equal(summary.pageDomain, 'portal.example');
-  assert.deepEqual(summary.groups.map((group) => [group.label, group.firstParty, group.requests, group.writes, group.failures]), [
+  assert.equal(summary.pageEvidence, 'document');
+  assert.deepEqual(summary.groups.map((group) => [group.label, group.samePageDomain, group.requests, group.writeMethods, group.failures]), [
     ['portal.example', true, 2, 0, 0],
     ['other.example', false, 2, 1, 1],
     ['192.0.2.10', false, 1, 0, 1],
   ]);
   assert.deepEqual(summary.groups[0]?.origins.map((origin) => origin.origin), ['https://cdn.portal.example', 'https://www.portal.example']);
   assert.deepEqual(summary.groups[1]?.origins[0]?.resourceTypes, ['fetch']);
-  assert.equal(summary.thirdPartyWrites, 1);
+  assert.equal(summary.otherDomainWriteMethods, 1);
   assert.equal(summary.requestsWithoutOrigin, 1);
+  assert.equal(harHostPageNote(summary), 'Page domain portal.example, from the first recorded document request.');
+  assert.match(harHostWriteMethodNote(summary) ?? '', /^1 POST, PUT, PATCH or DELETE request went to other registrable domains\. The method alone/u);
+});
+
+test('without a document or HTML response the page stays unknown instead of following the first request', () => {
+  const summary = summariseHarHosts([
+    entry(1, 'https://assets.example.test', { resourceType: 'image', mimeCategory: 'image' }),
+    entry(2, 'https://forms.other.test', { method: 'POST', resourceType: 'fetch' }),
+  ]);
+  assert.deepEqual([summary.pageOrigin, summary.pageDomain, summary.pageEvidence], [null, null, null]);
+  assert.ok(summary.groups.every((group) => group.samePageDomain === null));
+  assert.equal(summary.otherDomainWriteMethods, 0);
+  assert.equal(harHostWriteMethodNote(summary), null);
+  assert.match(harHostPageNote(summary), /not compared with a page domain/u);
+  const html = summariseHarHosts([entry(1, 'https://cdn.example.test'), entry(2, 'https://www.example.test', { mimeCategory: 'html' })]);
+  assert.deepEqual([html.pageDomain, html.pageEvidence], ['example.test', 'html_response']);
 });
 
 test('an unknown page domain leaves party unclassified, and groups are bounded', () => {
@@ -41,7 +58,7 @@ test('an unknown page domain leaves party unclassified, and groups are bounded',
     entry(index + 1, `https://host-${index}.example`)));
   assert.equal(many.groups.length, MAX_HAR_HOST_GROUPS);
   assert.equal(many.omittedGroups, 5);
-  assert.equal(many.groups[0]?.firstParty, true);
+  assert.equal(many.groups[0]?.samePageDomain, null, 'no document or HTML response identifies the page');
 });
 
 test('CLI intake lists the same hosts without query strings or request content', async () => {
@@ -52,8 +69,8 @@ test('CLI intake lists the same hosts without query strings or request content',
     runUnifiedLookup: async () => { throw new Error('No collection'); },
   });
   assert.equal(code, 0, errors);
-  assert.match(output, /^Hosts contacted \(page domain request\.example\)$/mu);
-  assert.match(output, /^ {2}request\.example · page domain · 1 request · 1 write · 0 failures$/mu);
-  assert.match(output, /^ {2}later\.example · third party · 1 request · 0 writes · 1 failure$/mu);
+  assert.match(output, /^Hosts contacted\n {2}Page domain request\.example, from the first recorded document request\.$/mu);
+  assert.match(output, /^ {2}request\.example · page domain · 1 request · 1 write method · 0 failures$/mu);
+  assert.match(output, /^ {2}later\.example · other domain · 1 request · 0 write methods · 1 failure$/mu);
   assert.doesNotMatch(output, /private/u);
 });

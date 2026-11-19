@@ -44,6 +44,11 @@ async function runDiscoveryCommand(
     context,
   );
   const { seed } = metadata;
+  // Read and validate every selected input before the snapshot, the first durable write.
+  const popularity = args.popularityListSource
+    ? await popularityContext(args.popularityListSource,
+      result.candidates.flatMap((candidate) => typeof candidate.domain === 'string' ? [candidate.domain] : []), context)
+    : null;
   const snapshot = args.snapshotSource
     ? await updateDiscoverySnapshot(
         args.snapshotSource,
@@ -58,10 +63,6 @@ async function runDiscoveryCommand(
         },
         metadata.generatedAt,
       )
-    : null;
-  const popularity = args.popularityListSource
-    ? await popularityContext(args.popularityListSource,
-      result.candidates.flatMap((candidate) => typeof candidate.domain === 'string' ? [candidate.domain] : []), context)
     : null;
   const baseDocument = buildCliDiscoverDocument(seed, result, metadata);
   const document = { ...baseDocument, ...(snapshot ? { snapshot } : {}), ...(popularity ? { popularity } : {}) };

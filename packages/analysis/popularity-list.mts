@@ -1,8 +1,8 @@
 // Reads an analyst-selected ranked domain list, such as a downloaded Tranco
-// list, so lookalike candidates that are established, widely visited sites can
-// be recognised during triage. The list is never fetched or bundled. A rank
-// only shows that a domain appears in the selected list; it never establishes
-// that a domain is safe, legitimate or owned by the brand.
+// list, so triage can show which candidates appear in it and at what rank. The
+// list is never fetched or bundled. A rank only shows what the selected list
+// asserts; it never establishes that a domain is safe, legitimate or owned by
+// the brand.
 
 export const MAX_POPULARITY_LIST_BYTES = 32 * 1024 * 1024;
 export const MAX_POPULARITY_LIST_ENTRIES = 1_000_000;

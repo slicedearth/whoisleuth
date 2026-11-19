@@ -1,7 +1,9 @@
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 import { MAX_MESSAGE_INTAKE_BYTES, MESSAGE_INTAKE_INPUTS, type MessageIntakeReport } from '../packages/contracts/message-intake.mts';
 import { reviewSelectedInputInWorker } from './selected-input-worker.mts';
-import { summariseHarHosts } from '../packages/investigation/har-host-summary.mts';
+import {
+  harHostDomainLabel, harHostPageNote, harHostWriteMethodNote, summariseHarHosts,
+} from '../packages/investigation/har-host-summary.mts';
 import { reviewIdentityIncident } from '../packages/investigation/identity-incident-review.mts';
 import { intakeIndicators, intakeIndicatorSource } from '../packages/investigation/intake-indicators.mts';
 import { MAX_INTAKE_CONTEXT_BYTES, applyIntakeContextInput } from '../packages/investigation/intake-context.mts';
@@ -69,13 +71,13 @@ export function formatMessageIntake(report: MessageIntakeReport): string {
   if (report.harReview) {
     const hosts = summariseHarHosts(report.harReview.entries);
     if (hosts.groups.length) {
-      lines.push(`Hosts contacted${hosts.pageDomain ? ` (page domain ${hosts.pageDomain})` : ' (page domain unknown)'}`);
+      const writeMethodNote = harHostWriteMethodNote(hosts);
+      lines.push('Hosts contacted', `  ${harHostPageNote(hosts)}`);
       for (const group of hosts.groups) {
-        const party = group.firstParty === null ? 'party unknown' : group.firstParty ? 'page domain' : 'third party';
         const count = (value: number, noun: string) => `${value} ${noun}${value === 1 ? '' : 's'}`;
-        lines.push(`  ${group.label} · ${party} · ${count(group.requests, 'request')} · ${count(group.writes, 'write')} · ${count(group.failures, 'failure')}`);
+        lines.push(`  ${group.label} · ${harHostDomainLabel(group).toLowerCase()} · ${count(group.requests, 'request')} · ${count(group.writeMethods, 'write method')} · ${count(group.failures, 'failure')}`);
       }
-      if (hosts.thirdPartyWrites) lines.push(`  ${hosts.thirdPartyWrites} state-changing request${hosts.thirdPartyWrites === 1 ? '' : 's'} went to third-party hosts; the archive does not show what was sent.`);
+      if (writeMethodNote) lines.push(`  ${writeMethodNote}`);
       if (hosts.omittedGroups) lines.push(`  ${hosts.omittedGroups} more host groups omitted.`);
     }
     lines.push('Recorded HTTP sequence (not replayed)');

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { MAX_POPULARITY_LIST_BYTES, parsePopularityList } from '../packages/analysis/popularity-list.mts';
@@ -49,5 +49,17 @@ test('CLI discover marks candidates found in a selected list without fetching or
     assert.match(terminal.stdout, new RegExp(`^${domains[1]!.replaceAll('.', '\\.')}: .+ · ranked #7$`, 'mu'));
     const plain = await run(['discover', 'example.test', '--preset', 'common', '--json']);
     assert.equal(JSON.parse(plain.stdout).popularity, undefined);
+    // A failed command leaves no baseline behind, and an existing baseline does not advance.
+    const snapshot = join(root, 'baseline.json');
+    const missing = await run(['discover', 'example.test', '--preset', 'common', '--snapshot', snapshot, '--popularity-list', join(root, 'missing.csv'), '--json']);
+    assert.notEqual(missing.code, 0);
+    assert.equal(missing.stdout, '');
+    await assert.rejects(stat(snapshot), { code: 'ENOENT' });
+    assert.equal((await run(['discover', 'example.test', '--preset', 'common', '--snapshot', snapshot, '--json'])).code, 0);
+    const baseline = await readFile(snapshot, 'utf8');
+    const failed = await run(['discover', 'example.test', '--preset', 'impersonation', '--snapshot', snapshot, '--popularity-list', join(root, 'missing.csv'), '--json']);
+    assert.notEqual(failed.code, 0);
+    assert.match(failed.stderr, /missing\.csv|Popularity list/u);
+    assert.equal(await readFile(snapshot, 'utf8'), baseline);
   } finally { await rm(root, { recursive: true, force: true }); }
 });

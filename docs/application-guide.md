@@ -281,9 +281,10 @@ HAR files show request order, origins, statuses and timings without replaying
 anything, and the report leaves out headers, cookies, bodies and private URL
 parts. **Request order** switches between archive order and reported start time,
 and **Reported timings** breaks each request into phases. **Hosts contacted**
-groups the requests by domain, separates the page's own domain from third parties,
-and counts state-changing requests to third-party hosts; the archive does not show
-what those requests sent.
+groups the requests by registrable domain and separates the page's domain, taken
+from the first recorded document request or HTML response, from other domains. It
+counts POST, PUT, PATCH and DELETE requests to other domains; the method alone
+does not show what those requests sent or changed.
 
 Plain-text review can also pick out phone numbers for you to select, keeping the
 original spelling, source time and whether the text was transcribed or read by
@@ -428,9 +429,9 @@ different seed. Each candidate records how it was generated. A custom dictionary
 stays in the current tab, and only the candidates you select continue to Bulk.
 
 **Popularity list** marks candidates that appear in a ranked domain list you have
-downloaded, such as a Tranco CSV, so established, widely visited sites stand out
-from new lookalikes. The list stays in the tab and is never uploaded. A rank is
-context only: it does not make a candidate safe or connect it to the brand.
+downloaded, such as a Tranco CSV, with the rank the list gives them. The list
+stays in the tab and is never uploaded. A rank shows only what the selected list
+asserts: it does not make a candidate safe or connect it to the brand.
 
 **Excluded by exact profile match** lists candidates hidden by the active
 profile's official, partner or allowlist entries, with the matching declaration

@@ -52,11 +52,11 @@ test('document and HTTP-archive intake share offline navigation, provenance and 
       await expect(sequence).toContainText('Duration unavailable');
       await expect(sequence).toContainText('0 ms');
       await expect(records.first()).toContainText('#1 · POST · https://request.example');
-      // Hosts are grouped by domain, with the page's own domain separated from third parties.
+      // Hosts are grouped by registrable domain, with the recorded page's domain separated from others.
       const hosts = sequence.getByRole('region', { name: 'Hosts contacted' });
-      await expect(hosts).toContainText('Page domain request.example, from the first recorded document.');
-      await expect(hosts.locator('tr[data-party="first"]').getByRole('rowheader')).toContainText('request.example');
-      await expect(hosts.locator('tr[data-party="third"]')).toHaveCount(2);
+      await expect(hosts).toContainText('Page domain request.example, from the first recorded document request.');
+      await expect(hosts.locator('tr[data-domain="page"]').getByRole('rowheader')).toContainText('request.example');
+      await expect(hosts.locator('tr[data-domain="other"]')).toHaveCount(2);
       await expect(hosts).not.toContainText('private');
       const beforeOrder = await page.evaluate(() => ({
         hash: location.hash, local: Object.fromEntries(Object.entries(localStorage)), session: Object.fromEntries(Object.entries(sessionStorage)),
