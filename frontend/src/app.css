@@ -823,7 +823,7 @@ details.evidence-card > summary.evidence-summary { font: inherit; }
 .shell > aside nav a::before { content: ""; position: absolute; left: 8px; top: 11px; color: var(--interface-accent); font: 700 .72rem var(--mono); }
 .shell > aside nav a.active::before { content: ""; top: 10px; bottom: 10px; width: 2px; border-radius: 2px; color: inherit; background: currentColor; text-shadow: none; }
 .shell > aside nav a:hover { border-color: var(--border); background: rgb(var(--accent-rgb) / var(--interactive-fill-alpha)); }
-.shell > aside nav a.active { color: var(--text); border-color: var(--border-strong); border-left-color: currentColor; background: var(--panel-raised); }
+.shell > aside nav a.active { color: var(--text); border-color: var(--border-strong); background: var(--panel-raised); }
 .shell > aside nav a.active strong { color: inherit; }
 .shell > aside nav a strong { font: 650 var(--text-sm) var(--font-sans); }
 .shell > aside nav a small { margin-top: 2px; }
@@ -881,12 +881,13 @@ main { grid-area: main; width: min(1280px,100%); margin: auto; padding: 30px cla
   .console-sign-out { padding-inline: 10px; }
   .shell > header > a strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .navigation-toggle { display: grid; place-items: center; width: var(--console-icon-control-width); height: var(--console-control-height); padding: 0; border: 1px solid var(--quiet-control-border); border-radius: var(--radius-sm); background: var(--panel); }
-  .shell > aside { position: fixed; inset: var(--console-toolbar-height) auto auto 0; visibility: hidden; width: min(310px,86vw); height: calc(100dvh - var(--console-toolbar-height)); padding-bottom: max(74px,calc(env(safe-area-inset-bottom) + 24px)); overflow-y: auto; overscroll-behavior: contain; scroll-padding-bottom: max(74px,calc(env(safe-area-inset-bottom) + 24px)); pointer-events: none; transform: translateX(-105%); transition:none; }
-  .shell > aside .terminal-strip { padding-right: 52px; }
+  .shell > aside { position: fixed; inset: var(--console-toolbar-height) auto auto 0; visibility: hidden; width: min(310px,86vw); height: calc(100dvh - var(--console-toolbar-height)); padding-bottom: max(74px,calc(env(safe-area-inset-bottom) + 24px)); overflow-y: auto; overscroll-behavior: contain; scroll-padding-bottom: max(74px,calc(env(safe-area-inset-bottom) + 24px)); pointer-events: none; transform: translateX(-105%); transition:none; background: var(--panel); }
   .shell > aside .brand { display: none; }
   .shell > aside .session { flex: 0 0 auto; margin-bottom: 0; scroll-margin-bottom: max(74px,calc(env(safe-area-inset-bottom) + 24px)); }
   .shell.open > aside { visibility: visible; pointer-events: auto; transform: none; transition:transform .18s; }
-  .navigation-drawer-close { position: absolute; top: 5px; right: 8px; z-index: 1; display: grid; width: 30px; height: 30px; padding: 0; place-items: center; border: 1px solid var(--quiet-control-border); border-radius: var(--radius-sm); background: var(--panel); color:var(--text); font: 700 1.15rem/1 var(--mono); }
+  /* The drawer opens over page content, so it is opaque and its close control
+     takes its own row instead of overlapping the first navigation group. */
+  .navigation-drawer-close { align-self: flex-end; display: grid; flex: none; width: 44px; height: 44px; margin: 8px 8px -6px; padding: 0; place-items: center; border: 1px solid var(--quiet-control-border); border-radius: var(--radius-sm); background: var(--panel); color:var(--text); font: 700 1.15rem/1 var(--mono); }
   .navigation-drawer-close:hover,.navigation-drawer-close:focus-visible { border-color: var(--accent); color: var(--accent); }
   .scrim { position: fixed; inset: 0; z-index: 10; border: 0; background: rgb(var(--shadow-rgb) / .7); }
   main { padding: 30px 20px 64px; }

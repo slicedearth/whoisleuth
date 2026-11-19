@@ -105,6 +105,17 @@ for (const viewport of VIEWPORTS) {
       const closeButton = drawer.getByRole('button', { name: 'Close navigation' });
       await expect(closeButton).toBeFocused();
       await closeButton.hover();
+      // The drawer covers page content, so it must be opaque, and its close
+      // control is a full touch target on its own row above the first group.
+      expect(await drawer.evaluate((element) => {
+        const match = getComputedStyle(element).backgroundColor.match(/rgba?\(([^)]+)\)/u);
+        return match ? Number(match[1]!.split(',')[3] ?? 1) : 0;
+      })).toBe(1);
+      const closeBox = await boundingBox(closeButton);
+      expect(closeBox.width).toBeGreaterThanOrEqual(44);
+      expect(closeBox.height).toBeGreaterThanOrEqual(44);
+      const firstGroup = await boundingBox(drawer.locator('.console-nav-group .eyebrow').first());
+      expect(closeBox.y + closeBox.height).toBeLessThanOrEqual(firstGroup.y);
 
       const lastDrawerControl = drawer.locator('a[href], button:not([disabled])').last();
       const headerBrand = page.locator('.shell > header > a');
