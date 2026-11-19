@@ -312,13 +312,13 @@
   const caseEvidence = $derived(lookupAnalysis.caseEvidence);
   const checkpointFacts = $derived(lookupAnalysis.checkpointFacts);
   const keyFacts = $derived(session.observation.response ? buildLookupKeyFacts(session.observation.response) : []);
-  // Key facts are a display summary; the archive comparison uses only a creation
-  // date from a successful, complete registration source.
-  const registrationCreation = $derived(session.observation.response
-    ? selectRegistrationCreation(lookupRegistrationCreatedObservations(session.observation.response).map((item) => ({
-      source: item.source, value: item.value, sourceState: item.sourceState, complete: item.complete,
-    })))
-    : null);
+  // Key facts are a display summary; registration history and the archive
+  // comparison use only a creation date from a successful, complete source.
+  const registrationObservations = $derived(session.observation.response
+    ? lookupRegistrationCreatedObservations(session.observation.response) : []);
+  const registrationCreation = $derived(selectRegistrationCreation(registrationObservations.map((item) => ({
+    source: item.source, value: item.value, sourceState: item.sourceState, complete: item.complete,
+  }))));
   const profileContextLimitation = $derived(lookupAnalysis.profileContextLimitation);
 
   async function refreshProfileContext() {
@@ -841,9 +841,8 @@
         surfaces={sectionSurfaces['relationships-history']}
         controls={sectionNavigation.controls('relationships-history')}
         resultType={session.observation.response?.type ?? ''}
-        archiveTarget={session.observation.response?.type === 'domain' && session.observation.response.registrableDomain
-          ? { domain: session.observation.response.registrableDomain,
-            registrationCreatedAt: registrationCreation?.createdAt ?? null }
+        registrationHistory={session.observation.response?.type === 'domain' && session.observation.response.registrableDomain
+          ? { domain: session.observation.response.registrableDomain, creation: registrationCreation, observations: registrationObservations }
           : null}
         bind:visualView={session.visualView}
       />

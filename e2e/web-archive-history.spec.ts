@@ -61,6 +61,10 @@ test('web archive history shows captures and compares the earliest with the regi
   });
   await page.goto('/lookup');
   const panel = await openArchivePanel(page);
+  // Registration history names the creation date used for comparison and its source.
+  const history = page.getByRole('region', { name: 'Registration history' });
+  await expect(history.locator('[data-fact="created"] dd')).toContainText(/2020.* · Registry RDAP/u);
+  await expect(history.locator('[data-fact="certificate-logs"]')).toContainText('Not read in Lookup.');
   await expect(panel).toContainText('The archive receives the domain in two requests. WHOISleuth does not save the result; the archive’s own policies apply to the requests.');
   expect(requests).toBe(0);
   await panel.getByRole('button', { name: 'Read archive history', exact: true }).click();

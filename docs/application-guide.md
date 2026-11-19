@@ -371,12 +371,20 @@ The evidence graph keeps every supported relationship from the Lookup; lenses,
 grouping and the searchable list change only the view. Bulk public-infrastructure
 groups leave out non-public DNS answers.
 
-Where the deployment enables it, **Web archive history** in Relationships and
-history shows when the Internet Archive first and last recorded the homepage, with
-links to open each capture. It sends the domain to the archive only when you select
-**Read archive history**. If the earliest capture is more than 48 hours before the
-registry creation date, the panel says the name was observed before the current
-registration; that suggests an earlier registration, not who owned it.
+**Registration history** in Relationships and history shows the creation date used
+for comparison, from a successful and complete registration source, and lists any
+other source date with the reason it was not used. Certificate logs are not read
+in Lookup: a certificate search in Discover carries each candidate's earliest
+logged certificate to Bulk, and `whoisleuth prior-registration` compares saved
+results offline.
+
+Where the deployment enables it, **Web archive history** in the same section
+shows when the Internet Archive first and last recorded the homepage, with links
+to browse the archive at each capture time. It sends the domain to the archive
+only when you select **Read archive history**. If the earliest capture is more
+than 48 hours before the creation date, the panel says the name was observed
+before the current registration; that suggests an earlier registration, not who
+owned it.
 
 A full Deep domain result can include:
 
