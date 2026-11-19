@@ -203,11 +203,12 @@ export function buildLookupEvidenceReplayDiff(
       || selectedPageContext(left, right) && WEB_SCOPED_SOURCES.has(source)));
     const incompleteDnsFamily = (id === 'dns.a' || id === 'dns.aaaa') && !sourcesExplicitlyComplete;
     const incompletePage = !lookupEvidenceReplayPageFactComparable(left, id) || !lookupEvidenceReplayPageFactComparable(right, id);
-    const kind = sourceChanged || scopeChanged || incompleteDnsFamily
+    // Page facts are qualified on both sides before their values are compared.
+    const kind = sourceChanged || scopeChanged || incompleteDnsFamily || incompletePage
       ? 'collection_quality_difference'
       : unchanged
       ? 'unchanged'
-      : incompletePage || (!before || !after) && !sourcesExplicitlyComplete
+      : (!before || !after) && !sourcesExplicitlyComplete
         ? 'collection_quality_difference'
         : 'observed_change';
     rows.push({

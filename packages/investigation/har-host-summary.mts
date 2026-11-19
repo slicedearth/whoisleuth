@@ -27,7 +27,7 @@ export type HarHostGroup = Readonly<{
   /** Registrable domain, or the host itself for IP literals and other non-domain hosts. */
   label: string;
   registrableDomain: string | null;
-  /** Same registrable domain as the recorded page; null when the page domain is unknown. */
+  /** Same registrable domain as the recorded page; null when either side has no known registrable domain. */
   samePageDomain: boolean | null;
   requests: number;
   writeMethods: number;
@@ -39,8 +39,11 @@ export type HarHostGroup = Readonly<{
 export type HarHostSummary = Readonly<{
   pageOrigin: string | null;
   pageDomain: string | null;
-  /** Which recorded evidence identified the page; null when none did. */
-  pageEvidence: 'document' | 'html_response' | null;
+  /**
+   * Which recorded evidence identified the page: a document request, or an
+   * inference from an HTML response whose request type was not recorded.
+   */
+  pageEvidence: 'document' | 'inferred_html_response' | null;
   groups: readonly HarHostGroup[];
   /** POST, PUT, PATCH and DELETE requests to registrable domains other than the page's. */
   otherDomainWriteMethods: number;
@@ -57,15 +60,17 @@ function hostOf(origin: string): string | null {
 }
 
 /**
- * The page is the earliest document request, then the earliest HTML response.
+ * The page is the earliest document request. Without one, it is inferred from
+ * the earliest HTML response whose request type was not recorded; a response
+ * recorded as a fetch, XHR or other subresource never identifies the page.
  * Without either, the page stays unknown rather than assumed from another request.
  */
-function pageEntry(entries: readonly HarEntry[]): Readonly<{ entry: HarEntry; evidence: 'document' | 'html_response' }> | null {
+function pageEntry(entries: readonly HarEntry[]): Readonly<{ entry: HarEntry; evidence: 'document' | 'inferred_html_response' }> | null {
   const withOrigin = entries.filter((entry) => entry.origin !== null);
   const document = withOrigin.find((entry) => entry.resourceType === 'document');
   if (document) return { entry: document, evidence: 'document' };
-  const html = withOrigin.find((entry) => entry.mimeCategory === 'html');
-  return html ? { entry: html, evidence: 'html_response' } : null;
+  const html = withOrigin.find((entry) => entry.mimeCategory === 'html' && entry.resourceType === 'unknown');
+  return html ? { entry: html, evidence: 'inferred_html_response' } : null;
 }
 
 export function summariseHarHosts(entries: readonly HarEntry[]): HarHostSummary {
@@ -101,7 +106,7 @@ export function summariseHarHosts(entries: readonly HarEntry[]): HarHostSummary 
     return Object.freeze({
       label,
       registrableDomain: group.registrableDomain,
-      samePageDomain: pageDomain === null ? null : group.registrableDomain === pageDomain,
+      samePageDomain: pageDomain === null || group.registrableDomain === null ? null : group.registrableDomain === pageDomain,
       requests: total('requests'), writeMethods: total('writeMethods'), failures: total('failures'),
       origins: Object.freeze(origins.slice(0, MAX_HAR_HOST_ORIGINS)),
       omittedOrigins: Math.max(0, origins.length - MAX_HAR_HOST_ORIGINS),
@@ -121,15 +126,19 @@ export function summariseHarHosts(entries: readonly HarEntry[]): HarHostSummary 
 }
 
 /** Browser intake and the CLI describe each host group with these labels. */
-export function harHostDomainLabel(group: Pick<HarHostGroup, 'samePageDomain'>): string {
+export function harHostDomainLabel(group: Pick<HarHostGroup, 'samePageDomain' | 'registrableDomain'>): string {
+  if (group.registrableDomain === null) return 'No registrable domain';
   return group.samePageDomain === null ? 'Page domain unknown' : group.samePageDomain ? 'Page domain' : 'Other domain';
 }
 
-/** Where the page domain came from, or why hosts are not compared with one. */
-export function harHostPageNote(summary: Pick<HarHostSummary, 'pageDomain' | 'pageEvidence'>): string {
-  return summary.pageDomain
-    ? `Page domain ${summary.pageDomain}, from the first recorded ${summary.pageEvidence === 'document' ? 'document request' : 'HTML response'}.`
-    : 'No document request or HTML response identifies the page, so hosts are not compared with a page domain.';
+/** Where the page came from, or why hosts are not compared with its domain. */
+export function harHostPageNote(summary: Pick<HarHostSummary, 'pageOrigin' | 'pageDomain' | 'pageEvidence'>): string {
+  const source = summary.pageEvidence === 'document'
+    ? 'from the first recorded document request'
+    : 'inferred from the first HTML response whose request type was not recorded';
+  if (summary.pageDomain) return `Page domain ${summary.pageDomain}, ${source}.`;
+  if (summary.pageOrigin) return `Page origin ${summary.pageOrigin}, ${source}, has no registrable domain, so hosts are not compared by domain.`;
+  return 'No document request identifies the page, so hosts are not compared with a page domain.';
 }
 
 export function harHostWriteMethodNote(summary: Pick<HarHostSummary, 'otherDomainWriteMethods'>): string | null {

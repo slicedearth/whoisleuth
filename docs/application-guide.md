@@ -281,10 +281,12 @@ HAR files show request order, origins, statuses and timings without replaying
 anything, and the report leaves out headers, cookies, bodies and private URL
 parts. **Request order** switches between archive order and reported start time,
 and **Reported timings** breaks each request into phases. **Hosts contacted**
-groups the requests by registrable domain and separates the page's domain, taken
-from the first recorded document request or HTML response, from other domains. It
-counts POST, PUT, PATCH and DELETE requests to other domains; the method alone
-does not show what those requests sent or changed.
+groups the requests by registrable domain and separates the page's domain from
+other domains. The page is the first recorded document request; when request
+types were not recorded, it is inferred from the first HTML response and labelled
+as an inference. IP addresses have no registrable domain and are not compared.
+The summary counts POST, PUT, PATCH and DELETE requests to other domains; the
+method alone does not show what those requests sent or changed.
 
 Plain-text review can also pick out phone numbers for you to select, keeping the
 original spelling, source time and whether the text was transcribed or read by
@@ -1170,9 +1172,9 @@ and then preview the import:
   **Replay exported evidence** in browser Lookup. The saved Lookup and the evidence
   export are different formats.
 - To read evidence in the CLI, run `whoisleuth view evidence.json`, or
-  `whoisleuth diff earlier.json later.json` for two exports of one target, whether
+  `whoisleuth diff first.json second.json` for two exports of one target, whether
   they came from the CLI or **Export evidence JSON** in the browser. Both read the
-  file exactly as browser replay does.
+  file exactly as browser replay does, and `diff` keeps the order you give.
 - For a Case handoff, choose the audience, run `sharing-review` on the separate
   package and review its redaction manifest before sharing.
 

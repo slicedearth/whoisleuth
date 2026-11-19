@@ -5,7 +5,7 @@ import {
   type PriorRegistrationReview, type PriorRegistrationSource,
 } from '../packages/evidence/prior-registration.mts';
 import { readWebArchiveHistory } from '../packages/evidence/web-archive-history.mts';
-import { normalizeCtResponse } from '../packages/investigation/ct-results.mts';
+import { ctChronologyContradicted, normalizeCtResponse } from '../packages/investigation/ct-results.mts';
 import { lookupRegistrationCreatedObservations } from '../lib/lookup-key-facts.mts';
 import { parseLookupEvidenceReplay } from '../lib/lookup-evidence-replay.mts';
 import { CliUsageError } from './errors.mts';
@@ -28,6 +28,8 @@ export type CliPriorRegistrationDocument = Readonly<{
   domain: string;
   registrationSource: string | null;
   review: PriorRegistrationReview;
+  /** Supporting observations that were supplied but not used, and why. */
+  excludedObservations?: readonly string[];
 }>;
 
 type Registration = Readonly<{ domain: string; createdAt: string | null; source: string | null }>;
@@ -37,13 +39,9 @@ async function readRegistration(raw: string): Promise<Registration> {
     let replay;
     try { replay = await parseLookupEvidenceReplay(raw); }
     catch (error) { throw new CliUsageError(`Evidence export: ${error instanceof Error ? error.message : 'the file is invalid.'}`); }
-    const created = replay.facts.find((fact) => fact.id === 'registration.created');
     const domain = canonicalRegistrableDomain(replay.caseDomain ?? replay.target);
     if (!domain) throw new CliUsageError('The evidence export does not describe a registrable domain.');
-    const selected = created
-      ? selectRegistrationCreation([{ source: created.source, value: created.value, sourceState: created.sourceState, complete: created.sourceComplete }])
-      : null;
-    return { domain, createdAt: selected?.createdAt ?? null, source: selected?.source ?? null };
+    return { domain, createdAt: replay.registrationCreation?.createdAt ?? null, source: replay.registrationCreation?.source ?? null };
   }
   let document;
   try { document = parseCliLookupDocument(raw); }
@@ -56,7 +54,7 @@ async function readRegistration(raw: string): Promise<Registration> {
   return { domain, createdAt: selected?.createdAt ?? null, source: selected?.source ?? null };
 }
 
-function certificateObservation(raw: string, domain: string): string | null {
+function certificateObservation(raw: string, domain: string): Readonly<{ observedAt: string | null; excluded?: string }> {
   const document = parseBoundedJsonObject(raw, { label: 'Certificate search result', maximumBytes: MAX_PRIOR_REGISTRATION_SUPPORTING_BYTES,
     limits: boundedJsonLimitsForBytes(MAX_PRIOR_REGISTRATION_SUPPORTING_BYTES) });
   if (document.schema !== 'whoisleuth.cli.ct-search' || document.version !== 1) {
@@ -67,7 +65,12 @@ function certificateObservation(raw: string, domain: string): string | null {
   let result;
   try { result = normalizeCtResponse(document, document.keyword); }
   catch (error) { throw new CliUsageError(`--ct-results: ${error instanceof Error ? error.message : 'the certificate search result is invalid.'}`); }
-  return result.candidates.find((candidate) => candidate.domain === domain)?.certificateTransparency?.firstObservedAt ?? null;
+  // Display normalisation orders a contradictory first/last pair; the earliest
+  // date is then not established, so the certificate observation is not used.
+  if (ctChronologyContradicted(document.matches, domain)) {
+    return { observedAt: null, excluded: `The certificate search result reports a first observation later than the last for ${domain}, so it was not used.` };
+  }
+  return { observedAt: result.candidates.find((candidate) => candidate.domain === domain)?.certificateTransparency?.firstObservedAt ?? null };
 }
 
 function archiveObservation(raw: string, domain: string): string | null {
@@ -85,8 +88,9 @@ export async function buildCliPriorRegistration(input: Readonly<{
     throw new CliUsageError('prior-registration needs --ct-results, --archive-history or both.');
   }
   const registration = await readRegistration(input.registration);
+  const certificate = input.certificateResults ? certificateObservation(input.certificateResults, registration.domain) : null;
   const observations: Array<{ source: PriorRegistrationSource; observedAt: string | null }> = [
-    ...(input.certificateResults ? [{ source: 'certificate_log' as const, observedAt: certificateObservation(input.certificateResults, registration.domain) }] : []),
+    ...(certificate ? [{ source: 'certificate_log' as const, observedAt: certificate.observedAt }] : []),
     ...(input.archiveHistory ? [{ source: 'web_archive' as const, observedAt: archiveObservation(input.archiveHistory, registration.domain) }] : []),
   ];
   return Object.freeze({
@@ -96,6 +100,7 @@ export async function buildCliPriorRegistration(input: Readonly<{
     domain: registration.domain,
     registrationSource: registration.source,
     review: reviewPriorRegistration({ registrationCreatedAt: registration.createdAt, observations }),
+    ...(certificate?.excluded ? { excludedObservations: Object.freeze([certificate.excluded]) } : {}),
   });
 }
 
@@ -111,6 +116,6 @@ export function formatCliPriorRegistration(document: CliPriorRegistrationDocumen
     lines.push(`${observation.label.padEnd(29)}${safeTerminalValue(observation.observedAt)}${observation.daysBeforeRegistration !== null
       ? ` · ${observation.daysBeforeRegistration} days before creation` : ''}`);
   }
-  lines.push('', ...review.limitations);
+  lines.push('', ...(document.excludedObservations ?? []), ...review.limitations);
   return `${lines.join('\n')}\n`;
 }

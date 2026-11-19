@@ -8,6 +8,7 @@ import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
 import { CLI_PRIOR_REGISTRATION_SCHEMA } from '../cli/prior-registration.mts';
 import { WEB_ARCHIVE_HISTORY_SCHEMA, WEB_ARCHIVE_HISTORY_VERSION } from '../packages/evidence/web-archive-history.mts';
+import { buildLookupEvidence } from '../lib/evidence-export.mts';
 
 const AT = '2026-10-01T00:00:00.000Z';
 const lookup = JSON.parse(readFileSync(new URL('./fixtures/cli-lookup-v1.json', import.meta.url), 'utf8'));
@@ -89,4 +90,44 @@ test('uses only a creation date from a successful registration source and valida
   const invalid = await cli(['prior-registration', 'lookup.json', '--ct-results', 'uncounted.json'], files);
   assert.equal(invalid.code, EXIT_CODES.USAGE);
   assert.match(invalid.stderr, /certificate count/u);
+});
+
+test('a saved Lookup and its evidence export select the same qualified creation date', async () => {
+  // Partial RDAP retains one date; complete WHOIS supplies another.
+  const mixed = structuredClone(lookup);
+  mixed.diagnostics = { ...mixed.diagnostics, rdap: { status: 'partial', complete: false } };
+  mixed.rdap.parsed.lifecycle = { createdDateIso: '2024-09-01T00:00:00.000Z' };
+  mixed.whois.parsed = { ...mixed.whois.parsed, createdDate: '2024-02-01T00:00:00Z' };
+  const exported = buildLookupEvidence(mixed, { generatedAt: AT, idnAnalysis: null });
+  const certificate = { ...ctResults, matches: [
+    { domain: 'example.test', hostnames: ['example.test'], firstObservedAt: '2023-06-01T00:00:00.000Z', lastObservedAt: AT, certificateCount: 1 },
+  ] };
+  const files = { 'saved.json': mixed, 'evidence.json': exported, 'ct.json': certificate };
+  const results = [];
+  for (const input of ['saved.json', 'evidence.json']) {
+    const result = await cli(['prior-registration', input, '--ct-results', 'ct.json', '--json'], files);
+    assert.equal(result.code, EXIT_CODES.SUCCESS, result.stderr);
+    const document = JSON.parse(result.stdout);
+    results.push([document.registrationSource, document.review.registrationCreatedAt, document.review.state]);
+  }
+  assert.deepEqual(results[0], ['WHOIS', '2024-02-01T00:00:00.000Z', 'earlier_observation']);
+  assert.deepEqual(results[1], results[0]);
+});
+
+test('contradictory certificate chronology for the domain is not used as an earlier observation', async () => {
+  const pair = (firstObservedAt: string, lastObservedAt: string) => ({ ...ctResults, matches: [
+    { domain: 'example.test', hostnames: ['example.test'], firstObservedAt, lastObservedAt, certificateCount: 1 },
+    // A contradictory row for another domain does not affect this review.
+    { domain: 'other.example', hostnames: [], firstObservedAt: '2026-01-01T00:00:00.000Z', lastObservedAt: '2010-01-01T00:00:00.000Z', certificateCount: 1 },
+  ] });
+  const files = { 'lookup.json': lookup, 'valid.json': pair('2025-01-01T00:00:00.000Z', AT), 'contradictory.json': pair('2025-01-01T00:00:00.000Z', '2019-01-01T00:00:00.000Z') };
+  const valid = JSON.parse((await cli(['prior-registration', 'lookup.json', '--ct-results', 'valid.json', '--json'], files)).stdout);
+  assert.equal(valid.review.state, 'no_earlier_observation');
+  assert.equal(valid.excludedObservations, undefined);
+  const contradictory = JSON.parse((await cli(['prior-registration', 'lookup.json', '--ct-results', 'contradictory.json', '--json'], files)).stdout);
+  assert.equal(contradictory.review.state, 'not_comparable');
+  assert.deepEqual(contradictory.review.observations, []);
+  assert.match(contradictory.excludedObservations[0], /first observation later than the last for example\.test/u);
+  const terminal = await cli(['prior-registration', 'lookup.json', '--ct-results', 'contradictory.json'], files);
+  assert.match(terminal.stdout, /^The certificate search result reports a first observation later than the last/mu);
 });

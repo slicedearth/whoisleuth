@@ -379,6 +379,21 @@ function buildStructuredCandidates(
 }
 
 /**
+ * Whether any retained match for this registrable domain reports a first
+ * observation later than its last. Display normalisation orders such a pair,
+ * but an inference that depends on the earliest date must not rely on it.
+ */
+export function ctChronologyContradicted(matches: unknown, domain: string): boolean {
+  if (!Array.isArray(matches)) return false;
+  return matches.slice(0, MAX_CT_INPUT_MATCHES).some((match) => {
+    const record = plainRecord(match);
+    if (!record || normalizeEvidenceDomain(record.domain) !== domain) return false;
+    const first = normalizeTimestamp(record.firstObservedAt), last = normalizeTimestamp(record.lastObservedAt);
+    return first !== null && last !== null && first > last;
+  });
+}
+
+/**
  * Normalizes the entire untrusted CT search response into a bounded, ordered
  * candidate set plus display metadata.
  *

@@ -202,8 +202,12 @@ test('replay builds historical Case evidence without promoting it to a fresh sca
   assert.equal(caseEvidence.activityStatus, 'active');
   assert.equal(caseEvidence.httpFinalOrigin, 'https://example.test');
   assert.equal(caseEvidence.hasPasswordField, true);
-  assert.equal(caseEvidence.hasExternalFormAction, false);
+  // Without retained quality or an explicitly complete page source, a false cue stays unknown.
+  assert.equal(caseEvidence.hasExternalFormAction, null);
   assert.equal(caseEvidence.phishingLanguageMatch, 'Account access language observed');
+  (availability.pageIdentity as Record<string, unknown>).complete = true;
+  const complete = buildLookupReplayCaseEvidence(await parseLookupEvidenceReplay(JSON.stringify(document)));
+  assert.equal(complete.hasExternalFormAction, false);
 });
 
 test('replay requires explicit timestamps in supported documents', async () => {

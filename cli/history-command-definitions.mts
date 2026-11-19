@@ -45,11 +45,11 @@ export const HISTORY_COMMAND_DEFINITIONS = Object.freeze({
   }),
   diff: commandSeed({
     reference: {
-      description: 'Compare an earlier and later artefact from the same saved Lookup, Lookup evidence export, Bulk-session, or domain-portfolio family.',
-      example: 'whoisleuth diff earlier.json later.json --json',
-      boundary: 'Comparison is offline: the left input is earlier and the right input is later. Inputs must belong to the same supported family. Saved Lookups can describe the same or different domains; --browse opens their searchable comparison panels. Same-domain comparisons preserve observation times and collection uncertainty. Two Lookup evidence exports for one target, including browser downloads, use the same validation and difference classes as browser evidence replay; they are compared as left and right in the order given, because export time does not show when each source was observed. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.',
+      description: 'Compare two artefacts from the same saved Lookup, Lookup evidence export, Bulk-session, or domain-portfolio family.',
+      example: 'whoisleuth diff left.json right.json --json',
+      boundary: 'Comparison is offline, and both inputs must belong to the same supported family. Saved Lookups and Lookup evidence exports are compared as left and right in the order given; each side keeps its own observation or export time. Bulk-session and domain-portfolio exports must be given earlier first, by saved-session or review time. Saved Lookups can describe the same or different domains; --browse opens their searchable comparison panels. Same-domain comparisons preserve observation times and collection uncertainty. Two Lookup evidence exports for one target, including browser downloads, use the same validation and difference classes as browser evidence replay. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.',
     },
-    collection: { scope: 'Reads two compatible retained artefacts capped at 8 MiB each and retains no source paths.' },
+    collection: { scope: 'Reads two compatible retained artefacts capped at 8 MiB each, or 5 MiB for a Lookup evidence export, and retains no source paths.' },
     summary: 'Compare two compatible retained artefacts',
     options: ['--left-session', '--right-session', '--browse', '--json', '--quiet', '--no-color'],
     positionals: Object.freeze([positional('sources', 'file', 2, 2)]),

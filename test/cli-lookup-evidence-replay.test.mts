@@ -121,6 +121,34 @@ test('evidence diff does not report an uncollected page result as an observed ch
   assert.equal(observed.rows.find(row => row.id === 'fact:page.password-field')?.kind, 'observed_change');
 });
 
+test('page results are qualified on both sides before values are compared, with or without retained quality', async () => {
+  // Exports without optional retained quality fall back to the page identity source's own completeness.
+  const capture = (page: Record<string, unknown>, hasPasswordField: boolean, observedAt: string, quality?: string) => {
+    const lookup = structuredClone(saved);
+    Object.assign(lookup.availability, {
+      hasPasswordField, pageIdentity: { ...page, observedAt },
+      ...(quality ? { webCollectionQuality: { version: 1, page: quality, favicon: 'complete', combined: quality === 'complete' ? 'complete' : 'partial' } } : {}),
+    });
+    return parseLookupEvidenceReplay(`${JSON.stringify(buildLookupEvidence(lookup, { generatedAt: observedAt, idnAnalysis: null }))}\n`);
+  };
+  const kind = async (left: ReturnType<typeof capture>, right: ReturnType<typeof capture>) =>
+    buildLookupEvidenceReplayDiff(await left, await right).rows.find(row => row.id === 'fact:page.password-field');
+  const complete = { status: 'success', complete: true };
+
+  const unavailable = await capture({ status: 'unavailable' }, false, LATER);
+  assert.equal(unavailable.webCollection, undefined);
+  assert.equal(unavailable.facts.find(fact => fact.id === 'page.password-field'), undefined);
+  assert.equal((await kind(capture(complete, true, EARLIER), Promise.resolve(unavailable)))?.kind, 'collection_quality_difference');
+  // A page source without an explicit completeness flag does not prove an observed absence either.
+  assert.equal((await kind(capture(complete, true, EARLIER), capture({ status: 'success' }, false, LATER)))?.kind, 'collection_quality_difference');
+  // Equal values from a partial page are not reported as unchanged.
+  const partial = await kind(capture(complete, true, EARLIER, 'complete'), capture({ status: 'partial', complete: false }, true, LATER, 'partial'));
+  assert.deepEqual([partial?.kind, partial?.left, partial?.right], ['collection_quality_difference', 'true', 'true']);
+  // Explicitly complete page sources remain comparable without retained quality.
+  assert.equal((await kind(capture(complete, true, EARLIER), capture(complete, false, LATER)))?.kind, 'observed_change');
+  assert.equal((await kind(capture(complete, true, EARLIER), capture(complete, true, LATER)))?.kind, 'unchanged');
+});
+
 test('evidence diff refuses mixed, cross-target and browse requests before comparing', async t => {
   const file = await files(t);
   const earlier = await file('earlier.json', await cliExport(file, 'earlier', saved, EARLIER));
