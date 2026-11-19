@@ -547,7 +547,9 @@ validating it or extending trust to matching service names or nested messages.
 use the same offline review as the browser. Document results include part hashes,
 page references and extraction coverage. Encrypted documents require a separately
 decrypted copy; no password is requested. HAR results preserve file order and
-reported timings, with unavailable values distinct from zero. Neither document
+reported timings, with unavailable values distinct from zero, and list the hosts
+contacted, grouped by domain with the page's own domain separated from third
+parties. Neither document
 resources nor recorded requests are fetched. Add `--strict-exit` for exit 4 when
 coverage is partial, and `--json` for the minimised report.
 

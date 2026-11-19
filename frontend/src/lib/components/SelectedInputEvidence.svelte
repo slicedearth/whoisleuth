@@ -2,6 +2,7 @@
   import type { MessageIntakeReport } from '../../../../packages/contracts/message-intake.mts';
   import { HAR_TIMING_PHASES } from '../../../../packages/contracts/har-review.mts';
   import { projectHarWaterfall, type HarRequestOrder } from '../../../../packages/investigation/har-waterfall.mts';
+  import { summariseHarHosts } from '../../../../packages/investigation/har-host-summary.mts';
   import Pagination from './Pagination.svelte';
   import EvidenceTimestamp from './EvidenceTimestamp.svelte';
   let { report, headingTag = 'h4' }: { report: MessageIntakeReport; headingTag?: 'h3' | 'h4' } = $props();
@@ -10,6 +11,8 @@
   const PAGE_SIZE = 20;
   const waterfall = $derived(projectHarWaterfall(report.harReview?.entries ?? [], order));
   const entries = $derived(waterfall.rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE));
+  const hosts = $derived(summariseHarHosts(report.harReview?.entries ?? []));
+  const partyLabel = (firstParty: boolean | null) => firstParty === null ? 'Party unknown' : firstParty ? 'Page domain' : 'Third party';
 </script>
 
 {#if report.documentReview}
@@ -28,6 +31,24 @@
   <section class="input-evidence" aria-label="Recorded HTTP sequence">
     <svelte:element this={headingTag} class="heading">Recorded HTTP sequence</svelte:element>
     <p>{report.harReview.entries.length} request records · {report.harReview.invalidEntries} invalid entries omitted. Request numbers identify their original archive position.</p>
+    {#if hosts.groups.length}
+      <section class="hosts" aria-label="Hosts contacted">
+        <svelte:element this={headingTag === 'h3' ? 'h4' : 'h5'}>Hosts contacted</svelte:element>
+        <p>{hosts.pageDomain ? `Page domain ${hosts.pageDomain}, from the first recorded document.` : 'The page domain could not be identified, so hosts are not classified as first or third party.'}{hosts.thirdPartyWrites ? ` ${hosts.thirdPartyWrites} state-changing request${hosts.thirdPartyWrites === 1 ? '' : 's'} went to third-party hosts; the archive does not show what was sent.` : ''}</p>
+        <table>
+          <thead><tr><th scope="col">Host</th><th scope="col">Requests</th><th scope="col">Writes</th><th scope="col">Failures</th></tr></thead>
+          <tbody>
+            {#each hosts.groups as group (group.label)}
+              <tr data-party={group.firstParty === null ? 'unknown' : group.firstParty ? 'first' : 'third'}>
+                <th scope="row"><span>{group.label}</span><small>{partyLabel(group.firstParty)} · {group.origins.map(origin => origin.origin).join(', ')}{group.omittedOrigins ? ` +${group.omittedOrigins} more` : ''}</small></th>
+                <td>{group.requests}</td><td>{group.writes}</td><td>{group.failures}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+        {#if hosts.omittedGroups || hosts.requestsWithoutOrigin}<p>{hosts.omittedGroups ? `${hosts.omittedGroups} more host groups are outside this summary. ` : ''}{hosts.requestsWithoutOrigin ? `${hosts.requestsWithoutOrigin} request${hosts.requestsWithoutOrigin === 1 ? '' : 's'} had no usable origin.` : ''}</p>{/if}
+      </section>
+    {/if}
     <label class="request-order">Request order
       <select bind:value={order} onchange={() => page = 1}>
         <option value="archive">Archive order</option>
@@ -67,6 +88,11 @@
 
 <style>
   .input-evidence{display:grid;gap:12px;min-width:0}.heading,p{margin:0}.heading{font-size:var(--text-sm)}p,li,dt,dd{font-size:var(--text-xs);line-height:1.6;overflow-wrap:anywhere}ol,ul{display:grid;gap:12px;margin:0;padding-left:24px}ol>li{border-top:1px solid var(--border);padding-top:10px}ol>li>*+*{margin-top:8px}code{font-size:inherit;overflow-wrap:anywhere}summary{cursor:pointer;min-height:32px;padding-block:6px}dl{display:grid;gap:4px;margin:8px 0}dl>div{display:grid;grid-template-columns:minmax(80px,1fr) minmax(0,3fr);gap:12px}dd{margin:0}details>p{margin-block:8px}
+  .hosts{display:grid;gap:8px;min-width:0}.hosts>:first-child{margin:0;font-size:var(--text-xs)}
+  .hosts table{width:100%;border-collapse:collapse;font-size:var(--text-xs)}.hosts th,.hosts td{padding:6px 8px;border-top:1px solid var(--border);text-align:left;vertical-align:top}
+  .hosts thead th{color:var(--muted);font-weight:600}.hosts td{width:5.5rem;font-variant-numeric:tabular-nums}
+  .hosts tbody th{min-width:0;font-weight:600;overflow-wrap:anywhere}.hosts tbody th span,.hosts tbody th small{display:block}.hosts tbody th small{color:var(--muted);font-weight:400}
+  @media(max-width:520px){.hosts thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.hosts tr{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--border)}.hosts tbody th{grid-column:1/-1;border:0}.hosts td{width:auto;border:0}.hosts td::before{display:block;color:var(--muted)}.hosts td:nth-of-type(1)::before{content:'Requests'}.hosts td:nth-of-type(2)::before{content:'Writes'}.hosts td:nth-of-type(3)::before{content:'Failures'}}
   .request-order{display:grid;gap:4px;max-width:320px;min-width:0;font-size:var(--text-xs)}.request-order select{width:100%;min-width:0}
   .request-records{padding-left:0;list-style:none}.request-records>li{min-width:0}
   .timing-track{position:relative;height:14px;margin:8px 2px;background:var(--panel-raised);border-block:1px solid var(--border)}

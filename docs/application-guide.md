@@ -280,7 +280,10 @@ traced to its source part or page; no scripts, macros or external resources run.
 HAR files show request order, origins, statuses and timings without replaying
 anything, and the report leaves out headers, cookies, bodies and private URL
 parts. **Request order** switches between archive order and reported start time,
-and **Reported timings** breaks each request into phases.
+and **Reported timings** breaks each request into phases. **Hosts contacted**
+groups the requests by domain, separates the page's own domain from third parties,
+and counts state-changing requests to third-party hosts; the archive does not show
+what those requests sent.
 
 Plain-text review can also pick out phone numbers for you to select, keeping the
 original spelling, source time and whether the text was transcribed or read by
