@@ -231,6 +231,10 @@ test('reference pages expose the first recipe on mobile and constrain wide prose
     const firstCommand = page.locator('.start-steps .copyable-command').first();
     await expect(firstCommand.getByRole('button', { name: 'Copy run-once help command' })).toBeVisible();
     await expect(firstCommand.locator('code')).toBeInViewport({ ratio: 1 });
+    // On narrow screens the copy action is a footer spanning the whole command.
+    const [block, footer] = await Promise.all([firstCommand.boundingBox(), firstCommand.locator('.copy-control').boundingBox()]);
+    expect(block).not.toBeNull(); expect(footer).not.toBeNull();
+    expect(Math.abs(footer!.width - (block!.width - 2))).toBeLessThanOrEqual(1);
     if (captureVisualEvidenceEnabled()) await page.screenshot({ path: testInfo.outputPath(`first-recipe-${theme}.png`) });
     const copy = firstCommand.getByRole('button', { name: 'Copy run-once help command' });
     // The initial recipe was checked without scrolling. Centre the control for
@@ -535,6 +539,35 @@ test('keeps the final CLI section current at the end of the document', async ({ 
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   const contents = page.locator('.page-sections');
   await expect(contents.getByRole('link', { name: 'More documentation' })).toHaveAttribute('aria-current', 'location');
+});
+
+test('the reference sidebar keeps the current page and active section in view without scrolling the page', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto('/methodology');
+  const sidebar = page.locator('.reference-sidebar');
+  const tree = sidebar.locator('.desktop-navigation');
+  const within = async (link: ReturnType<typeof page.locator>) => {
+    const [outer, inner] = await Promise.all([tree.boundingBox(), link.boundingBox()]);
+    expect(outer).not.toBeNull(); expect(inner).not.toBeNull();
+    expect(inner!.y).toBeGreaterThanOrEqual(outer!.y);
+    expect(inner!.y + inner!.height).toBeLessThanOrEqual(outer!.y + outer!.height);
+  };
+  const current = sidebar.getByRole('navigation', { name: 'Documentation' }).getByRole('link', { name: 'Methodology', exact: true });
+  await expect(current).toHaveAttribute('aria-current', 'page');
+  // Methodology is listed below the first viewport of the sidebar tree.
+  await expect.poll(() => tree.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await within(current);
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  const sections = sidebar.getByRole('navigation', { name: 'Methodology sections' });
+  const last = sections.getByRole('link').last();
+  await expect(last).toHaveAttribute('aria-current', 'location');
+  await expect.poll(async () => {
+    const [outer, inner] = await Promise.all([tree.boundingBox(), last.boundingBox()]);
+    return Boolean(outer && inner && inner.y + inner.height <= outer.y + outer.height);
+  }).toBe(true);
+  await within(last);
 });
 
 test('renders methodology and deferred coverage from fixed metadata without requests', async ({ page }, testInfo) => {

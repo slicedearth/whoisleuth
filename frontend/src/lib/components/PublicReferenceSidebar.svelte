@@ -20,6 +20,7 @@
   let activeSectionHref = $state('');
   let navigator: HTMLDialogElement;
   let sidebar: HTMLElement;
+  let pageTree: HTMLElement;
   let navigatorOpen = $state(false);
   let navigatorTrigger: HTMLButtonElement | null = null;
   let dismissedTrigger: HTMLButtonElement | null = null;
@@ -82,6 +83,22 @@
     activeSectionHref = next;
   }
 
+  // The desktop page tree scrolls independently below the search field. Keep
+  // the current page and its active section inside it without moving the page.
+  function keepInPageTreeView(element: HTMLElement | null, align: 'nearest' | 'start' = 'nearest') {
+    if (!element || pageTree.scrollHeight <= pageTree.clientHeight) return;
+    const view = pageTree.getBoundingClientRect(), box = element.getBoundingClientRect();
+    const above = box.top - view.top - 8, below = box.bottom - view.bottom + 8;
+    if (align === 'start' || above < 0) pageTree.scrollTop += above;
+    else if (below > 0) pageTree.scrollTop += Math.min(below, above);
+  }
+
+  function revealCurrentPage() {
+    const current = pageTree.querySelector<HTMLElement>('.current-page');
+    if (current && current.offsetHeight > pageTree.clientHeight) keepInPageTreeView(current.querySelector<HTMLElement>('.page-link'), 'start');
+    else keepInPageTreeView(current);
+  }
+
   onMount(() => {
     let frame = 0;
     const scheduleUpdate = () => {
@@ -91,6 +108,7 @@
         updateActiveSection();
       });
     };
+    revealCurrentPage();
     scheduleUpdate();
     addEventListener('scroll', scheduleUpdate, { passive: true });
     addEventListener('resize', scheduleUpdate);
@@ -114,6 +132,14 @@
     activeSectionHref = currentSections[0]?.href ?? '';
     if (typeof window === 'undefined') return;
     const frame = requestAnimationFrame(updateActiveSection);
+    return () => cancelAnimationFrame(frame);
+  });
+
+  $effect(() => {
+    if (!activeSectionHref) return;
+    const frame = requestAnimationFrame(() => {
+      keepInPageTreeView(pageTree.querySelector<HTMLElement>('.page-sections a[aria-current="location"]'));
+    });
     return () => cancelAnimationFrame(frame);
   });
 </script>
@@ -147,7 +173,7 @@
 
 <aside class="reference-sidebar" bind:this={sidebar}>
   <div class="reference-search"><DocumentationSearch /></div>
-  <div class="desktop-navigation">
+  <div class="desktop-navigation" bind:this={pageTree}>
     {@render pages()}
   </div>
   <div class="reference-browser">
@@ -161,8 +187,10 @@
 </dialog>
 
 <style>
-  .reference-sidebar{position:sticky;top:18px;min-width:0;max-height:calc(100dvh - 36px);overflow-y:auto;scrollbar-width:thin;padding-right:18px;border-right:1px solid var(--border)}
-  .reference-search{position:sticky;top:0;z-index:1;padding-bottom:16px;background:var(--reading-surface,var(--bg))}
+  .reference-sidebar{position:sticky;top:18px;display:flex;flex-direction:column;min-width:0;max-height:calc(100dvh - 36px);padding-right:18px;border-right:1px solid var(--border)}
+  .reference-search{flex:none;padding-bottom:16px}
+  /* Only the page tree scrolls, so no link can pass underneath the search field. */
+  .desktop-navigation{min-height:0;overflow-y:auto;scrollbar-width:thin}
   .reference-group+.reference-group{margin-top:24px}
   .reference-group h2{margin:0 10px 8px;color:var(--text);font:700 var(--text-sm)/1.4 var(--font-sans)}
   ul{margin:0;padding:0;list-style:none}
@@ -183,7 +211,7 @@
   .reference-navigator button{flex:none;min-height:44px;padding:8px 12px;border:1px solid var(--border-strong);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font:600 var(--text-sm) var(--font-sans)}
   .reference-navigator .page-sections a,.reference-navigator .page-link{min-height:44px}
   @media(max-width:1080px){
-    .reference-sidebar{display:flex;align-items:center;justify-content:space-between;gap:12px;top:0;z-index:20;max-height:none;overflow:visible;margin-bottom:22px;padding:8px 0;background:var(--reading-surface,var(--bg));border:0;border-bottom:1px solid var(--border)}
+    .reference-sidebar{flex-direction:row;align-items:center;justify-content:space-between;gap:12px;top:0;z-index:20;max-height:none;overflow:visible;margin-bottom:22px;padding:8px 0;background:var(--reading-surface,var(--bg));border:0;border-bottom:1px solid var(--border)}
     .reference-search{position:static;padding:0;order:2}
     .desktop-navigation{display:none}
     .reference-browser{display:block}
