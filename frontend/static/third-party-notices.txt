@@ -36,7 +36,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ================================================================================
-@fastify/busboy@3.2.5
+@fastify/busboy@3.2.6
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: LICENSE
@@ -2951,7 +2951,7 @@ Apache License
    See the License for the specific language governing permissions and
    limitations under the License.
 ================================================================================
-@peculiar/asn1-asym-key@3.0.0
+@peculiar/asn1-asym-key@3.1.0
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: LICENSE
@@ -2978,7 +2978,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ================================================================================
-@peculiar/asn1-cms@3.0.0
+@peculiar/asn1-cms@3.1.0
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: LICENSE
@@ -3005,7 +3005,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ================================================================================
-@peculiar/asn1-csr@3.0.0
+@peculiar/asn1-csr@3.1.0
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: LICENSE
@@ -3032,7 +3032,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ================================================================================
-@peculiar/asn1-ecc@3.0.0
+@peculiar/asn1-ecc@3.1.0
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: LICENSE
@@ -3059,7 +3059,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ================================================================================
-@peculiar/asn1-pfx@3.0.0
+@peculiar/asn1-pfx@3.1.0
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: LICENSE
@@ -3086,7 +3086,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ================================================================================
-@peculiar/asn1-pkcs8@3.0.0
+@peculiar/asn1-pkcs8@3.1.0
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: LICENSE
@@ -3113,7 +3113,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ================================================================================
-@peculiar/asn1-pkcs9@3.0.0
+@peculiar/asn1-pkcs9@3.1.0
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: LICENSE
@@ -3140,7 +3140,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ================================================================================
-@peculiar/asn1-rsa@3.0.0
+@peculiar/asn1-rsa@3.1.0
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: LICENSE
@@ -3167,7 +3167,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ================================================================================
-@peculiar/asn1-schema@3.0.0
+@peculiar/asn1-schema@3.1.0
 Relationship: direct production dependency
 Declared licence: MIT
 Licence source: LICENSE
@@ -3194,7 +3194,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ================================================================================
-@peculiar/asn1-x509@3.0.0
+@peculiar/asn1-x509@3.1.0
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: LICENSE
@@ -3221,7 +3221,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ================================================================================
-@peculiar/asn1-x509-attr@3.0.0
+@peculiar/asn1-x509-attr@3.1.0
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: LICENSE
@@ -3248,7 +3248,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ================================================================================
-@peculiar/asn1-x509-logotype@3.0.0
+@peculiar/asn1-x509-logotype@3.1.0
 Relationship: direct production dependency
 Declared licence: MIT
 Licence source: LICENSE
@@ -3275,7 +3275,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ================================================================================
-@peculiar/asn1-x509-post-quantum@3.0.0
+@peculiar/asn1-x509-post-quantum@3.1.0
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: LICENSE
@@ -3302,7 +3302,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ================================================================================
-@peculiar/utils@4.1.0
+@peculiar/utils@4.1.1
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: LICENSE
@@ -4261,7 +4261,7 @@ The above copyright notice and this permission notice shall be included in all c
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ================================================================================
-encodeurl@2.0.1
+encodeurl@2.0.3
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: LICENSE
@@ -4375,7 +4375,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ================================================================================
-es-module-lexer@3.0.4
+es-module-lexer@3.0.5
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: LICENSE
@@ -5721,7 +5721,7 @@ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
 TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ================================================================================
-object-inspect@1.13.4
+object-inspect@1.14.0
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: LICENSE
@@ -6410,7 +6410,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ================================================================================
-router@2.2.0
+router@2.3.0
 Relationship: transitive production dependency
 Declared licence: MIT
 Licence source: LICENSE
