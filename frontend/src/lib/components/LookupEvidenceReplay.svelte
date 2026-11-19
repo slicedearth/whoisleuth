@@ -6,6 +6,7 @@
     type LookupEvidenceReplay,
   } from '#lib/analysis/lookup-evidence-replay.ts';
   import { buildLookupReplayCheckpointFacts } from '#lib/analysis/case-evidence-checkpoint.ts';
+  import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import { LookupCaseController } from '#lib/controllers/lookup-case-controller.ts';
   import type { CaseRecord, CaseTransitionExpectation } from '#lib/cases.ts';
   import LookupEvidenceReading from './LookupEvidenceReading.svelte';
@@ -26,6 +27,9 @@
   let statusState = $state<'idle' | 'success' | 'error'>('idle');
   let expectedSha256 = $state('');
   let comparison = $state<ReturnType<typeof buildLookupEvidenceReplayDiff> | null>(null);
+  // File names stay in page memory to label each side, as CLI diff labels its inputs.
+  let replayFileName = $state('');
+  let comparisonFileName = $state('');
   let comparisonStatus = $state('');
   let comparisonLoading = $state(false);
   let comparisonState = $state<'idle' | 'success' | 'error'>('idle');
@@ -65,6 +69,7 @@
       );
       if (generation !== replayGeneration) return;
       replay = next;
+      replayFileName = file.name;
       statusState = 'success';
       status = `Loaded ${file.name} locally${next.digestVerified ? ' and verified its checksum' : ''}. No source was contacted.`;
       const existing = next.caseDomain
@@ -143,6 +148,7 @@
       const second = await parseLookupEvidenceReplay(await file.text());
       if (generation !== comparisonGeneration || primaryGeneration !== replayGeneration || replay !== primary) return;
       comparison = buildLookupEvidenceReplayDiff(primary, second);
+      comparisonFileName = file.name;
       comparisonState = 'success';
       comparisonStatus = `Compared ${file.name} locally. No source was contacted.`;
     } catch (cause) {
@@ -214,8 +220,14 @@
           <label class="picker"><span>{comparisonLoading ? 'Reading second evidence…' : 'Choose second evidence JSON'}</span><input type="file" accept="application/json,.json" disabled={loading || comparisonLoading} onchange={loadComparison} /></label>
           <p class="comparison-status" class:status-success={comparisonState === 'success'} class:status-error={comparisonState === 'error'} role={comparisonState === 'error' ? 'alert' : 'status'} aria-live="polite" aria-atomic="true">{comparisonStatus}</p>
           {#if comparison}
+            <dl class="comparison-sides" aria-label="Compared exports">
+              {#each [{ label: 'Left', name: replayFileName, side: comparison.left }, { label: 'Right', name: comparisonFileName, side: comparison.right }] as item (item.label)}
+                <div><dt>{item.label}</dt><dd><strong>{item.name}</strong><small>Exported {formatEvidenceDate(item.side.exportedAt)} · sha256:{item.side.digestSha256.slice(0, 12)}</small></dd></div>
+              {/each}
+            </dl>
+            <p class="note">Sides keep the order the files were chosen; an export time does not show when each source was observed.</p>
             <div class="comparison-counts"><span><strong>{comparison.counts.observedChanges}</strong> observed</span><span><strong>{comparison.counts.collectionDifferences}</strong> collection</span><span><strong>{comparison.counts.interpretationDifferences}</strong> interpretation</span></div>
-            <ol>{#each comparison.rows.filter((item) => item.kind !== 'unchanged') as row}<li data-comparison-kind={row.kind}><div><strong>{row.label}</strong><span>{LOOKUP_EVIDENCE_REPLAY_DIFF_KIND_LABELS[row.kind]}</span></div><p>{row.left} → {row.right}</p><small>{row.explanation}</small></li>{/each}</ol>
+            <ol>{#each comparison.rows.filter((item) => item.kind !== 'unchanged') as row}<li data-comparison-kind={row.kind}><div><strong>{row.label}</strong><span>{LOOKUP_EVIDENCE_REPLAY_DIFF_KIND_LABELS[row.kind]}</span></div><dl class="comparison-values"><div><dt>Left</dt><dd>{row.left}</dd></div><div><dt>Right</dt><dd>{row.right}</dd></div></dl><small>{row.explanation}</small></li>{/each}</ol>
             {#if !comparison.rows.some((item) => item.kind !== 'unchanged')}<p>{LOOKUP_EVIDENCE_REPLAY_DIFF_NO_CHANGES}</p>{/if}
           {/if}
         </section>
@@ -246,7 +258,7 @@
   .case-handoff{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:8px 14px;padding:11px;border:1px solid color-mix(in srgb,var(--accent2) 38%,var(--border));border-radius:var(--radius-sm);background:var(--panel-raised)}
   .case-handoff h3,.case-handoff p{margin:0}.case-handoff .note{margin-top:5px}.case-status{grid-column:1/-1;margin:0;color:var(--muted);font-size:var(--text-xs)}.case-status:empty{display:none}.case-link{grid-column:1/-1;width:max-content;font:680 var(--text-xs) var(--mono)}
   h3{margin:2px 0 -3px;font-size:var(--text-sm)}
-  .comparison{display:grid;gap:8px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.comparison .picker{width:max-content;margin:0}.comparison-counts{display:flex;flex-wrap:wrap;gap:6px}.comparison-counts span{padding:6px 8px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font-size:var(--text-2xs)}.comparison ol{display:grid;gap:6px;margin:0;padding:0;list-style:none}.comparison li{min-width:0;padding:8px;border:1px solid color-mix(in srgb,var(--amber) 48%,var(--border));border-radius:var(--radius-sm);background:rgb(var(--amber-rgb) / .06)}.comparison li div{display:flex;justify-content:space-between;gap:8px}.comparison li span{color:var(--amber);font:650 var(--text-2xs) var(--mono)}.comparison li p,.comparison li small{overflow-wrap:anywhere}.comparison li p{margin:5px 0;font-size:var(--text-xs)}.comparison li small{color:var(--muted)}
+  .comparison{display:grid;gap:8px;padding:11px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}.comparison .picker{width:max-content;margin:0}.comparison-counts{display:flex;flex-wrap:wrap;gap:6px}.comparison-counts span{padding:6px 8px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font-size:var(--text-2xs)}.comparison ol{display:grid;gap:6px;margin:0;padding:0;list-style:none}.comparison li{min-width:0;padding:8px;border:1px solid color-mix(in srgb,var(--amber) 48%,var(--border));border-radius:var(--radius-sm);background:rgb(var(--amber-rgb) / .06)}.comparison li div{display:flex;justify-content:space-between;gap:8px}.comparison li span{color:var(--amber);font:650 var(--text-2xs) var(--mono)}.comparison li small{overflow-wrap:anywhere}.comparison-sides{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr));gap:6px;margin:0}.comparison-sides>div{min-width:0;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm)}.comparison-sides dt,.comparison-values dt{color:var(--muted);font:650 var(--text-2xs) var(--mono)}.comparison-sides dd{display:grid;gap:2px;margin:2px 0 0;min-width:0;overflow-wrap:anywhere;font-size:var(--text-xs)}.comparison-sides small{color:var(--muted)}.comparison-values{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 10px;margin:5px 0;font-size:var(--text-xs)}.comparison-values dd{margin:0;overflow-wrap:anywhere}.comparison li small{color:var(--muted)}
   @media(max-width:760px){
     .case-handoff{grid-template-columns:minmax(0,1fr)}.case-handoff .btn{width:100%}.case-status,.case-link{grid-column:1}
   }

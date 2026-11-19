@@ -196,6 +196,11 @@ test('offline replay uses isolated graph identifiers and has no live evidence li
     buffer: Buffer.from(JSON.stringify(comparisonEvidence)),
   });
   await expect(replay.getByText(/Compared lookup-evidence-comparison\.json locally/u)).toBeVisible();
+  // Each side is labelled with its file, export time and digest, in the order chosen.
+  const sides = replay.getByRole('definition').filter({ hasText: 'sha256:' });
+  await expect(sides).toHaveCount(2);
+  await expect(sides.nth(1)).toContainText('lookup-evidence-comparison.json');
+  await expect(sides.first()).toContainText(/^.+\.json\s*Exported .+ · sha256:[a-f0-9]{12}$/u);
   const interpretationDifferences = replay.locator('[data-comparison-kind="interpretation_difference"]');
   await expect(interpretationDifferences).toHaveCount(3);
   // Difference classes use the same labels as CLI evidence diff.
