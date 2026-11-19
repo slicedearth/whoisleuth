@@ -1,4 +1,4 @@
-import type { LookupEvidenceReplay } from './lookup-evidence-replay.mts';
+import { lookupEvidenceReplayPageFactComparable, type LookupEvidenceReplay } from './lookup-evidence-replay.mts';
 
 export const LOOKUP_EVIDENCE_REPLAY_DIFF_VERSION = 1;
 const MAX_DIFF_ROWS = 64;
@@ -84,6 +84,8 @@ function factSourceExplicitlyComplete(
   fallbackFact: LookupEvidenceReplay['facts'][number] | undefined,
   replay: LookupEvidenceReplay,
 ): boolean {
+  const factId = fact?.id ?? fallbackFact?.id;
+  if (factId && !lookupEvidenceReplayPageFactComparable(replay, factId)) return false;
   if (fact) return (fact.id === 'dns.a' || fact.id === 'dns.aaaa') && fact.sourceState === 'not_found'
     ? fact.sourceComplete === true : explicitlyCompleteSourceState(fact.sourceState, fact.sourceComplete);
   if (!fallbackFact) return false;
@@ -200,11 +202,12 @@ export function buildLookupEvidenceReplayDiff(
       observationTargetChanged && HOSTNAME_SCOPED_SOURCES.has(source)
       || selectedPageContext(left, right) && WEB_SCOPED_SOURCES.has(source)));
     const incompleteDnsFamily = (id === 'dns.a' || id === 'dns.aaaa') && !sourcesExplicitlyComplete;
+    const incompletePage = !lookupEvidenceReplayPageFactComparable(left, id) || !lookupEvidenceReplayPageFactComparable(right, id);
     const kind = sourceChanged || scopeChanged || incompleteDnsFamily
       ? 'collection_quality_difference'
       : unchanged
       ? 'unchanged'
-      : (!before || !after) && !sourcesExplicitlyComplete
+      : incompletePage || (!before || !after) && !sourcesExplicitlyComplete
         ? 'collection_quality_difference'
         : 'observed_change';
     rows.push({
@@ -222,6 +225,8 @@ export function buildLookupEvidenceReplayDiff(
             ? 'The retained source attribution changed, so the values are not represented as a target change even when they differ.'
             : incompleteDnsFamily
               ? 'The DNS family outcome is unknown or incomplete on at least one side; this is not evidence of address removal.'
+              : incompletePage
+                ? 'Page collection was incomplete or unavailable on at least one side, so this page result is not represented as a target change.'
               : 'One observation lacks this fact without explicitly complete positive source evidence on both sides; this is a collection or provenance difference, not observed removal.'
           : 'The bounded normalised value is unchanged.',
     });

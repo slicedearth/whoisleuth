@@ -31,7 +31,7 @@ import type { BoundedTextStream } from './bulk.mts';
 import type { TerminalEnvironment } from './terminal-presentation.mts';
 import { HISTORY_INLINE_COMMANDS } from './inline-command-families.mts';
 import { MAX_MCP_TOTAL_BYTES } from '../packages/contracts/local-tool-adapter.mts';
-import { LOOKUP_EVIDENCE_SCHEMA } from '../packages/contracts/lookup-evidence.mts';
+import { isLookupEvidenceText } from './lookup-evidence-format.mts';
 
 import { runDiscriminatedCommandHandler, type DiscriminatedCommandHandlerMap } from './discriminated-command-handlers.mts';
 
@@ -110,16 +110,6 @@ async function runViewCommand(
 
 // Routes view and diff inputs before full validation; malformed JSON falls
 // through to the saved-Lookup or retained-artefact parser, which reports it precisely.
-function isLookupEvidenceText(raw: string): boolean {
-  try {
-    const value: unknown = JSON.parse(raw);
-    return Boolean(value && typeof value === 'object' && !Array.isArray(value)
-      && (value as Record<string, unknown>).schema === LOOKUP_EVIDENCE_SCHEMA);
-  } catch {
-    return false;
-  }
-}
-
 async function runRetainedDiffCommand(
   args: Extract<HistoryCommandArguments, { action: 'diff' }>,
   dependencies: HistoryCommandDependencies,

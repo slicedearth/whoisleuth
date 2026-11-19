@@ -193,16 +193,16 @@ async function checkInstalledIntakeAndContext(repositoryRoot: string, temporaryR
   await writeFile(savedLookup, await readBoundedRegularFileWithin(repositoryRoot, 'test/fixtures/cli-lookup-v1.json', {
     maximumBytes: MAX_INVESTIGATION_RUN_BYTES, minimumBytes: 1, label: 'Public saved Lookup fixture',
   }), { mode: 0o600, flag: 'wx' });
-  // Two sequential exports of one observation: the later export is never earlier.
-  const earlierEvidence = path.join(temporaryRoot, 'earlier-evidence.json'), laterEvidence = path.join(temporaryRoot, 'later-evidence.json');
-  await writeFile(earlierEvidence, await run(['export', savedLookup], 'offline evidence export for diff'), { flag: 'wx', mode: 0o600 });
-  await writeFile(laterEvidence, await run(['export', savedLookup], 'offline later evidence export for diff'), { flag: 'wx', mode: 0o600 });
-  const evidenceDiff = record(JSON.parse(await run(['diff', earlierEvidence, laterEvidence, '--json'], 'offline evidence export diff')), 'Installed evidence diff');
+  // Two exports of one observation compare as unchanged in either order.
+  const firstEvidence = path.join(temporaryRoot, 'first-evidence.json'), secondEvidence = path.join(temporaryRoot, 'second-evidence.json');
+  await writeFile(firstEvidence, await run(['export', savedLookup], 'offline evidence export for diff'), { flag: 'wx', mode: 0o600 });
+  await writeFile(secondEvidence, await run(['export', savedLookup], 'offline second evidence export for diff'), { flag: 'wx', mode: 0o600 });
+  const evidenceDiff = record(JSON.parse(await run(['diff', secondEvidence, firstEvidence, '--json'], 'offline evidence export diff')), 'Installed evidence diff');
   const evidenceCounts = record(record(evidenceDiff.comparison, 'Evidence diff comparison').counts, 'Evidence diff counts');
   if (evidenceDiff.schema !== 'whoisleuth.cli.lookup-evidence-diff' || evidenceCounts.observedChanges !== 0 || evidenceCounts.interpretationDifferences !== 0) {
     throw new TypeError('Installed evidence diff did not compare two exports of one observation as unchanged.');
   }
-  const evidenceView = record(JSON.parse(await run(['view', earlierEvidence, '--json'], 'offline evidence export view')), 'Installed evidence view');
+  const evidenceView = record(JSON.parse(await run(['view', firstEvidence, '--json'], 'offline evidence export view')), 'Installed evidence view');
   if (evidenceView.schema !== 'whoisleuth.cli.lookup-evidence-view' || record(evidenceView.replay, 'Evidence view replay').target !== 'example.test') {
     throw new TypeError('Installed evidence view did not read the exported target.');
   }

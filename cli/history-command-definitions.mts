@@ -27,8 +27,8 @@ export const HISTORY_COMMAND_DEFINITIONS = Object.freeze({
       example: 'whoisleuth view lookup.json --browse',
       boundary: 'The command validates one saved Lookup or Lookup evidence export offline. Evidence exports, including browser downloads, use the same validation and summary as browser evidence replay. --browse opens the existing searchable terminal panels for a saved Lookup and reserves interactive stdin for navigation; it cannot be combined with redirected output. No file is modified and no source is contacted.',
     },
-    collection: { scope: 'Reads one saved Lookup or evidence export capped at 8 MiB.' },
-    summary: 'Read or browse a saved Lookup or evidence export offline',
+    collection: { scope: 'Reads one saved Lookup capped at 8 MiB or one evidence export capped at 5 MiB.' },
+    summary: 'Read a saved Lookup or evidence export offline, or browse a saved Lookup',
     options: ['--browse', '--json', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: Object.freeze([
@@ -47,7 +47,7 @@ export const HISTORY_COMMAND_DEFINITIONS = Object.freeze({
     reference: {
       description: 'Compare an earlier and later artefact from the same saved Lookup, Lookup evidence export, Bulk-session, or domain-portfolio family.',
       example: 'whoisleuth diff earlier.json later.json --json',
-      boundary: 'Comparison is offline: the left input is earlier and the right input is later. Inputs must belong to the same supported family. Saved Lookups can describe the same or different domains; --browse opens their searchable comparison panels. Same-domain comparisons preserve observation times and collection uncertainty. Two Lookup evidence exports for one target, including browser downloads, use the same validation and difference classes as browser evidence replay. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.',
+      boundary: 'Comparison is offline: the left input is earlier and the right input is later. Inputs must belong to the same supported family. Saved Lookups can describe the same or different domains; --browse opens their searchable comparison panels. Same-domain comparisons preserve observation times and collection uncertainty. Two Lookup evidence exports for one target, including browser downloads, use the same validation and difference classes as browser evidence replay; they are compared as left and right in the order given, because export time does not show when each source was observed. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.',
     },
     collection: { scope: 'Reads two compatible retained artefacts capped at 8 MiB each and retains no source paths.' },
     summary: 'Compare two compatible retained artefacts',

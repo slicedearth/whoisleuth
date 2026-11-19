@@ -10,7 +10,8 @@ import { safeTerminalValue } from './formatters/terminal-shared.mts';
 
 // Compares two exported evidence files with the same replay validation and
 // difference classification used by browser evidence replay, so a browser
-// download and a CLI export read identically in both surfaces.
+// download and a CLI export read identically in both surfaces. Export time is
+// custody metadata, not observation time, so the sides keep the order given.
 
 export const CLI_LOOKUP_EVIDENCE_DIFF_SCHEMA = 'whoisleuth.cli.lookup-evidence-diff';
 export const CLI_LOOKUP_EVIDENCE_DIFF_VERSION = 1;
@@ -51,9 +52,6 @@ export async function buildCliLookupEvidenceDiff(
     readCliLookupEvidenceReplay(leftRaw, 'Left evidence export'),
     readCliLookupEvidenceReplay(rightRaw, 'Right evidence export'),
   ]);
-  if (Date.parse(left.exportedAt) > Date.parse(right.exportedAt)) {
-    throw new CliUsageError('diff expects the earlier evidence export on the left and the later one on the right.');
-  }
   let comparison: ReturnType<typeof buildLookupEvidenceReplayDiff>;
   try {
     comparison = buildLookupEvidenceReplayDiff(left, right);
@@ -79,8 +77,8 @@ export function formatCliLookupEvidenceDiff(document: CliLookupEvidenceDiffDocum
   const output = [
     'Lookup evidence comparison',
     `Target           ${safeTerminalValue(document.target)}`,
-    `Earlier export   ${safeTerminalValue(document.left.exportedAt)} · sha256:${safeTerminalValue(document.left.digestSha256.slice(0, 12))}`,
-    `Later export     ${safeTerminalValue(document.right.exportedAt)} · sha256:${safeTerminalValue(document.right.digestSha256.slice(0, 12))}`,
+    `Left export      exported ${safeTerminalValue(document.left.exportedAt)} · sha256:${safeTerminalValue(document.left.digestSha256.slice(0, 12))}`,
+    `Right export     exported ${safeTerminalValue(document.right.exportedAt)} · sha256:${safeTerminalValue(document.right.digestSha256.slice(0, 12))}`,
     `Observed         ${counts.observedChanges}`,
     `Collection       ${counts.collectionDifferences}`,
     `Interpretation   ${counts.interpretationDifferences}`,
@@ -90,8 +88,8 @@ export function formatCliLookupEvidenceDiff(document: CliLookupEvidenceDiffDocum
   if (!rows.length) output.push(LOOKUP_EVIDENCE_REPLAY_DIFF_NO_CHANGES);
   for (const row of rows) {
     output.push(`${safeTerminalValue(row.label)} [${LOOKUP_EVIDENCE_REPLAY_DIFF_KIND_LABELS[row.kind]}]`);
-    output.push(`  Earlier: ${safeTerminalValue(row.left)}`);
-    output.push(`  Later:   ${safeTerminalValue(row.right)}`);
+    output.push(`  Left:  ${safeTerminalValue(row.left)}`);
+    output.push(`  Right: ${safeTerminalValue(row.right)}`);
     output.push(`  ${safeTerminalValue(row.explanation)}`);
   }
   if (document.comparison.truncated) output.push('', 'The comparison reached its row limit; further rows are not listed.');

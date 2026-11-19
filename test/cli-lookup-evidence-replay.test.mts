@@ -71,7 +71,57 @@ test('diff compares a browser evidence download with a CLI export exactly as bro
   assert.doesNotMatch(terminal.stdout, /\[unchanged\]/u);
 });
 
-test('evidence diff refuses reversed, mixed, cross-target and browse requests before comparing', async t => {
+test('evidence diff keeps the given order instead of inferring observation order from export time', async t => {
+  const file = await files(t);
+  // The left observation was exported later than the right one; neither export time is an observation time.
+  const left = await file('left.json', await cliExport(file, 'left', laterLookup(), LATER));
+  const right = await file('right.json', await cliExport(file, 'right', saved, EARLIER));
+  const result = await cli(['diff', left, right, '--json']);
+  assert.equal(result.code, EXIT_CODES.SUCCESS, result.stderr);
+  const document = JSON.parse(result.stdout);
+  assert.deepEqual([document.left.exportedAt, document.right.exportedAt], [LATER, EARLIER]);
+  const nameservers = document.comparison.rows.find((row: { id: string }) => row.id === 'fact:registration.nameservers');
+  assert.deepEqual([nameservers.left, nameservers.right], ['ns2.example.test', 'ns1.example.test']);
+  const terminal = await cli(['diff', left, right]);
+  assert.equal(terminal.code, EXIT_CODES.SUCCESS, terminal.stderr);
+  assert.match(terminal.stdout, new RegExp(`^Left export {6}exported ${LATER}`, 'mu'));
+  assert.match(terminal.stdout, /^ {2}Left: {2}ns2\.example\.test\n {2}Right: ns1\.example\.test$/mu);
+  assert.doesNotMatch(terminal.stdout, /Earlier|Later/u);
+});
+
+test('evidence diff does not report an uncollected page result as an observed change', async t => {
+  const file = await files(t);
+  // A complete page capture followed by an unavailable one whose fallback cue is false.
+  const capture = (page: 'complete' | 'unavailable', hasPasswordField: boolean, observedAt: string) => {
+    const lookup = structuredClone(saved);
+    Object.assign(lookup.availability, {
+      hasPasswordField,
+      pageIdentity: page === 'complete' ? { status: 'success', complete: true, observedAt } : { status: 'unavailable', observedAt },
+      webCollectionQuality: { version: 1, page, favicon: 'unknown', combined: page === 'complete' ? 'partial' : 'unavailable' },
+    });
+    return `${JSON.stringify(buildLookupEvidence(lookup, { generatedAt: observedAt, idnAnalysis: null }))}\n`;
+  };
+  const complete = capture('complete', true, EARLIER), unavailable = capture('unavailable', false, LATER);
+  const replay = await parseLookupEvidenceReplay(unavailable);
+  assert.equal(replay.webCollection?.page, 'unavailable');
+  assert.equal(replay.facts.find(fact => fact.id === 'page.password-field'), undefined, 'a fallback false is not an observed absence');
+  assert.ok(replay.limitations.some(item => /Page collection was unavailable/u.test(item)));
+
+  const result = await cli(['diff', await file('complete.json', complete), await file('unavailable.json', unavailable), '--json']);
+  assert.equal(result.code, EXIT_CODES.SUCCESS, result.stderr);
+  const rows: Array<{ id: string; kind: string; left: string; right: string }> = JSON.parse(result.stdout).comparison.rows;
+  assert.equal(rows.find(row => row.id === 'source:page-identity')?.kind, 'collection_quality_difference');
+  const password = rows.find(row => row.id === 'fact:page.password-field');
+  assert.deepEqual([password?.kind, password?.left, password?.right], ['collection_quality_difference', 'true', 'not recorded']);
+  assert.ok(rows.every(row => !row.id.startsWith('fact:page.') || row.kind !== 'observed_change'));
+
+  // Complete observed absence on both sides remains an observed change.
+  const absent = await parseLookupEvidenceReplay(capture('complete', false, LATER));
+  const observed = buildLookupEvidenceReplayDiff(await parseLookupEvidenceReplay(complete), absent);
+  assert.equal(observed.rows.find(row => row.id === 'fact:page.password-field')?.kind, 'observed_change');
+});
+
+test('evidence diff refuses mixed, cross-target and browse requests before comparing', async t => {
   const file = await files(t);
   const earlier = await file('earlier.json', await cliExport(file, 'earlier', saved, EARLIER));
   const later = await file('later.json', await cliExport(file, 'later', laterLookup(), LATER));
@@ -81,7 +131,6 @@ test('evidence diff refuses reversed, mixed, cross-target and browse requests be
   const savedLookup = await file('saved.json', JSON.stringify(saved));
 
   const cases: Array<[string[], RegExp]> = [
-    [['diff', later, earlier], /earlier evidence export on the left/u],
     [['diff', savedLookup, later], /Run whoisleuth export on the saved Lookup first/u],
     [['diff', earlier, otherEvidence], /same target/u],
     // Without an interactive terminal, the existing browse guard refuses first.

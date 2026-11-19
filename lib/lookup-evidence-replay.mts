@@ -41,9 +41,32 @@ import {
 import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
 import { dnsAddressFamilyEvidence } from '../packages/evidence/dns-query-outcome.mts';
 import { CLI_LOOKUP_SCHEMA } from '../packages/contracts/cli-lookup.mts';
+import {
+  normalizeWebCollectionQuality,
+  webCollectionAllowsComparison,
+  type WebCollectionQuality,
+} from '../packages/evidence/collection-quality.mts';
 
 export const LOOKUP_EVIDENCE_REPLAY_MAX_BYTES = LOOKUP_EVIDENCE_PORTABLE_MAX_BYTES;
 export const LOOKUP_EVIDENCE_REPLAY_MAX_ENTRIES = LOOKUP_EVIDENCE_PORTABLE_MAX_ENTRIES;
+
+/** Page-derived replay facts and the retained collection field that qualifies each one. */
+export const LOOKUP_EVIDENCE_REPLAY_PAGE_FACT_FIELDS: Readonly<Record<string, string>> = Object.freeze({
+  'page.title': 'pageTitle',
+  'page.password-field': 'hasPasswordField',
+  'page.external-form-action': 'hasExternalFormAction',
+  'page.external-password-form': 'hasExternalPasswordForm',
+  'page.phishing-language': 'phishingLanguageMatch',
+});
+
+/**
+ * Whether a page-derived fact in this replay can be compared as an observation.
+ * Exports that predate retained collection quality fall back to their source state.
+ */
+export function lookupEvidenceReplayPageFactComparable(replay: Pick<LookupEvidenceReplay, 'webCollection'>, factId: string): boolean {
+  const field = LOOKUP_EVIDENCE_REPLAY_PAGE_FACT_FIELDS[factId];
+  return !field || !replay.webCollection || webCollectionAllowsComparison(field, replay.webCollection, 'deep');
+}
 
 export type LookupEvidenceReplaySource = Readonly<{
   id: string;
@@ -74,6 +97,8 @@ export type LookupEvidenceReplay = Readonly<{
   target: string;
   observationHostname?: string | null;
   webObservationMode?: 'selected_url';
+  /** Retained web collection quality; absent from exports that predate it. */
+  webCollection?: WebCollectionQuality;
   caseDomain: string | null;
   targetType: string;
   availability: string;
@@ -568,6 +593,11 @@ export async function parseLookupEvidenceReplay(
     );
   }
   const replaySourcesById = new Map(replaySources.map((item) => [item.id, item]));
+  const webCollection = normalizeWebCollectionQuality(availability.webCollectionQuality);
+  // A negative page cue from an incomplete page collection is a fallback, not an
+  // observed absence, so it is left out as the Case evidence model does.
+  const pageCue = (field: string, value: unknown) => (
+    value === false && webCollection && !webCollectionAllowsComparison(field, webCollection, 'deep') ? null : value);
 
   const facts: LookupEvidenceReplayFact[] = [];
   for (const family of ['a', 'aaaa'] as const) {
@@ -614,9 +644,9 @@ export async function parseLookupEvidenceReplay(
   addFact(facts, 'tls.connected-address', 'Connected address', [{ value: tls.connectedAddress, sourceId: 'tls' }], replaySourcesById);
   addFact(facts, 'tls.certificate-fingerprint', 'Certificate fingerprint', [{ value: record(tls.certificate).fingerprintSha256, sourceId: 'tls' }], replaySourcesById);
   addFact(facts, 'page.title', 'Page title', [{ value: pageIdentity.title ?? availability.pageTitle, sourceId: 'page-identity' }], replaySourcesById);
-  addFact(facts, 'page.password-field', 'Password field', [{ value: availability.hasPasswordField, sourceId: 'page-identity' }], replaySourcesById);
-  addFact(facts, 'page.external-form-action', 'External form action', [{ value: availability.hasExternalFormAction, sourceId: 'page-identity' }], replaySourcesById);
-  addFact(facts, 'page.external-password-form', 'Password form declares external destination', [{ value: availability.hasExternalPasswordForm, sourceId: 'page-identity' }], replaySourcesById);
+  addFact(facts, 'page.password-field', 'Password field', [{ value: pageCue('hasPasswordField', availability.hasPasswordField), sourceId: 'page-identity' }], replaySourcesById);
+  addFact(facts, 'page.external-form-action', 'External form action', [{ value: pageCue('hasExternalFormAction', availability.hasExternalFormAction), sourceId: 'page-identity' }], replaySourcesById);
+  addFact(facts, 'page.external-password-form', 'Password form declares external destination', [{ value: pageCue('hasExternalPasswordForm', availability.hasExternalPasswordForm), sourceId: 'page-identity' }], replaySourcesById);
   addFact(facts, 'page.phishing-language', 'Phishing-language cue', [{ value: availability.phishingLanguageMatch, sourceId: 'page-identity' }], replaySourcesById);
   const technologyFindings = Array.isArray(technology.findings)
     ? technology.findings.slice(0, 12).map((item) => record(item).name)
@@ -670,6 +700,9 @@ export async function parseLookupEvidenceReplay(
   const limitations = unique([
     ...replaySources.flatMap((item) => item.limitations),
     ...stringList(availability.limitations, 12),
+    ...(webCollection && webCollection.page !== 'complete'
+      ? [`Page collection was ${webCollection.page.replaceAll('_', ' ')}, so page results not found are not shown as observed absence.`]
+      : []),
     'This is a local replay of a deliberate evidence export. It does not refresh any source or establish the target state at import time.',
     'Only bounded normalised facts are shown here. Raw source payloads in the export are not rendered.',
     'Missing or unsupported evidence remains unavailable and is not evidence of absence, safety, or equivalence.',
@@ -684,6 +717,7 @@ export async function parseLookupEvidenceReplay(
     generatorVersion,
     target: text(query.inputHostname ?? query.submitted ?? query.registrableDomain, 253) || 'Unknown target',
     ...(availability.webObservationMode === 'selected_url' ? { webObservationMode: 'selected_url' as const } : {}),
+    ...(webCollection ? { webCollection } : {}),
     observationHostname: lookupObservationHostname({
       ...availability, domain: availability.domain ?? query.registrableDomain,
     }),

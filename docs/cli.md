@@ -121,11 +121,13 @@ The reverse also works. `view` reads one Lookup evidence export and `diff`
 compares two for the same target, whether they came from `export` or from
 **Export evidence JSON** in browser Lookup. Both use the same validation as
 browser replay; `diff` keeps observed changes separate from collection and
-interpretation differences:
+interpretation differences. The two exports are compared as left and right in
+the order given, because an export time does not show when each source was
+observed:
 
 ```bash
 whoisleuth view evidence.json
-whoisleuth diff earlier-evidence.json later-evidence.json
+whoisleuth diff first-evidence.json second-evidence.json
 ```
 
 To compare a saved Lookup with an evidence export, run `export` on the saved

@@ -6173,7 +6173,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "common": true,
       "usage": "whoisleuth diff \u003csources...> [--left-session \u003cvalue>] [--right-session \u003cvalue>] [--browse] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth diff earlier.json later.json --json",
-      "boundary": "Comparison is offline: the left input is earlier and the right input is later. Inputs must belong to the same supported family. Saved Lookups can describe the same or different domains; --browse opens their searchable comparison panels. Same-domain comparisons preserve observation times and collection uncertainty. Two Lookup evidence exports for one target, including browser downloads, use the same validation and difference classes as browser evidence replay. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.",
+      "boundary": "Comparison is offline: the left input is earlier and the right input is later. Inputs must belong to the same supported family. Saved Lookups can describe the same or different domains; --browse opens their searchable comparison panels. Same-domain comparisons preserve observation times and collection uncertainty. Two Lookup evidence exports for one target, including browser downloads, use the same validation and difference classes as browser evidence replay; they are compared as left and right in the order given, because export time does not show when each source was observed. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.",
       "collection": {
         "mode": "offline",
         "scope": "Reads two compatible retained artefacts capped at 8 MiB each and retains no source paths."
@@ -6250,7 +6250,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     },
     {
       "id": "view",
-      "summary": "Read or browse a saved Lookup or evidence export offline",
+      "summary": "Read a saved Lookup or evidence export offline, or browse a saved Lookup",
       "description": "Read one saved Lookup or Lookup evidence export without collecting again.",
       "group": "investigate",
       "common": true,
@@ -6259,7 +6259,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "boundary": "The command validates one saved Lookup or Lookup evidence export offline. Evidence exports, including browser downloads, use the same validation and summary as browser evidence replay. --browse opens the existing searchable terminal panels for a saved Lookup and reserves interactive stdin for navigation; it cannot be combined with redirected output. No file is modified and no source is contacted.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads one saved Lookup or evidence export capped at 8 MiB."
+        "scope": "Reads one saved Lookup capped at 8 MiB or one evidence export capped at 5 MiB."
       },
       "inputs": [
         {
@@ -6289,7 +6289,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002ecli.lookup-evidence-view"
       ],
       "inputLimits": [
-        "Reads one saved Lookup or evidence export capped at 8 MiB.",
+        "Reads one saved Lookup capped at 8 MiB or one evidence export capped at 5 MiB.",
         "source: 0-1 file value"
       ],
       "outputLimits": [
