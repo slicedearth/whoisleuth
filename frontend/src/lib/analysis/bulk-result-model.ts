@@ -96,6 +96,8 @@ export interface ScanResult {
   ct: CertificateTransparencyProvenance | null;
   /** Rank from a popularity list selected in Discover; page memory only, never saved with a session. */
   popularity?: PopularityRankProvenance | null;
+  /** Creation date from a successful, complete registration source; page memory only. */
+  registrationCreation?: Readonly<{ createdAt: string; source: string }> | null;
   idn: IdnAnalysis | null;
   dns: BulkDnsEvidence | null;
   dnssec: string | null;

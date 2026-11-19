@@ -200,7 +200,7 @@ test('builds triage and table rows without route-owned transformation logic', ()
 test('Bulk rows compare the earliest logged certificate with the current registration date', () => {
   const ct = { firstObservedAt: '2019-06-10T12:00:00.000Z', lastObservedAt: '2026-06-01T00:00:00.000Z', certificateCount: 3, hostnames: ['candidate.example'] };
   const display = (createdDate: string | null) => buildBulkResultDisplayRows({
-    visibleResults: [result({ ct, saved: { createdDate } as Partial<ScanResult['saved']> as ScanResult['saved'] })],
+    visibleResults: [result({ ct, registrationCreation: createdDate ? { createdAt: createdDate, source: 'Registry RDAP' } : null })],
     allResults: [], shortlistedDomains: new Set(), caseByDomain: new Map(), reviewStateByDomain: new Map(), mutationLabels: {},
   })[0]!.ct!;
   const earlier = display('2024-03-01T00:00:00.000Z');
@@ -216,7 +216,7 @@ test('Bulk rows do not compare a contradictory certificate chronology with the r
   // A Discover candidate whose source reported first after last, carried through the handoff.
   const ct = requiredValue(normalizeCtProvenance({ firstObservedAt: '2025-01-01T00:00:00Z', lastObservedAt: '2019-01-01T00:00:00Z', certificateCount: 1 }));
   const display = buildBulkResultDisplayRows({
-    visibleResults: [result({ ct, saved: { createdDate: '2024-03-01T00:00:00.000Z' } as Partial<ScanResult['saved']> as ScanResult['saved'] })],
+    visibleResults: [result({ ct, registrationCreation: { createdAt: '2024-03-01T00:00:00.000Z', source: 'Registry RDAP' } })],
     allResults: [], shortlistedDomains: new Set(), caseByDomain: new Map(), reviewStateByDomain: new Map(), mutationLabels: {},
   })[0]!.ct!;
   assert.equal(display.chronologyContradicted, true);
@@ -232,4 +232,15 @@ test('Bulk rows show a Discover popularity rank with the selected list digest', 
     allResults: [], shortlistedDomains: new Set(), caseByDomain: new Map(), reviewStateByDomain: new Map(), mutationLabels: {},
   });
   assert.deepEqual(rows.map((row) => row.popularity), [popularity, null]);
+});
+
+test('Bulk compares only a creation date from a successful, complete registration source', () => {
+  const ct = { firstObservedAt: '2019-06-10T12:00:00.000Z', lastObservedAt: '2026-06-01T00:00:00.000Z', certificateCount: 1, hostnames: [] };
+  // The saved display value alone, without a qualified source, is not compared.
+  const display = buildBulkResultDisplayRows({
+    visibleResults: [result({ ct, registrationCreation: null, saved: { createdDate: '2024-03-01T00:00:00.000Z' } as Partial<ScanResult['saved']> as ScanResult['saved'] })],
+    allResults: [], shortlistedDomains: new Set(), caseByDomain: new Map(), reviewStateByDomain: new Map(), mutationLabels: {},
+  })[0]!.ct!;
+  assert.equal(display.priorRegistration.state, 'not_comparable');
+  assert.match(display.priorRegistration.limitations[0] ?? '', /successful, complete registration source/u);
 });

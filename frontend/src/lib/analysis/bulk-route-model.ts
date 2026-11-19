@@ -386,7 +386,7 @@ export function buildBulkResultDisplayRows(input: {
             certificateCount: row.ct.certificateCount,
             chronologyContradicted: row.ct.chronologyContradicted === true,
             priorRegistration: reviewPriorRegistration({
-              registrationCreatedAt: row.saved.createdDate ?? null,
+              registrationCreatedAt: row.registrationCreation?.createdAt ?? null,
               observations: certificateChronologyEligibility(row.ct).eligible
                 ? [{ source: 'certificate_log', observedAt: row.ct.firstObservedAt }] : [],
             }),

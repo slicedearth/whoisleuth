@@ -1036,7 +1036,7 @@ test('Bulk marks a CT candidate whose earliest certificate predates its current 
     const domain = new URL(route.request().url()).searchParams.get('q') ?? '';
     return route.fulfill({ json: {
       availability: { applicable: true, domain, observedAt: '2026-07-20T00:05:00.000Z', state: 'registered', confidence: 'high',
-        registrar: { name: 'Example Registrar' }, createdDate: created[domain], nameservers: ['ns1.shared.example'] },
+        registrar: { name: 'Example Registrar' }, createdDate: created[domain], source: 'rdap', nameservers: ['ns1.shared.example'] },
       diagnostics: { version: 7, rdap: { status: 'complete', fetchedAt: '2026-07-20T00:00:00.000Z' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
     } });
   });
