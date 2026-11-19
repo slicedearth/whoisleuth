@@ -1,7 +1,7 @@
 {
   "schema": "whoisleuth.common-infrastructure",
   "version": 1,
-  "generatedAt": "2026-11-18T10:56:00.681Z",
+  "generatedAt": "2026-11-19T12:54:29.258Z",
   "source": {
     "project": "MISP warning-lists",
     "repository": "https://github.com/MISP/misp-warninglists",
@@ -10,7 +10,7 @@
   },
   "freshnessDays": 30,
   "maximumEntries": 20000,
-  "entryCount": 4637,
+  "entryCount": 4640,
   "sources": [
     {
       "id": "amazon-aws",
@@ -18,9 +18,9 @@
       "category": "cloud_platform",
       "type": "cidr",
       "sourcePath": "https://ip-ranges.amazonaws.com/ip-ranges.json",
-      "sourceVersion": 20261118,
-      "sourceDate": "2026-11-18",
-      "sourceDigestSha256": "2ffa61c6670b44414f247df0ae06181c3ade86c8fc3367193c49f6e0e9f23c81",
+      "sourceVersion": 20261119,
+      "sourceDate": "2026-11-19",
+      "sourceDigestSha256": "749352c75143d27995cf03a43718e81e55ed7535b64855dca3d620e74791d8ce",
       "values": [
         "1.178.1.0/24",
         "1.178.100.0/22",
@@ -2343,7 +2343,8 @@
         "2600:f0fb:c004::/46",
         "2600:f0fb:c0ff::/56",
         "2600:f0fb:c800::/46",
-        "2600:f0fb:c804::/48",
+        "2600:f0fb:c804::/47",
+        "2600:f0fb:c806::/48",
         "2600:f0fb:c900::/49",
         "2600:f0fb:c900:8000::/51",
         "2600:f0fb:ca00::/50",
@@ -3335,12 +3336,14 @@
         "43.192.0.0/16",
         "43.193.0.0/18",
         "43.193.64.0/22",
+        "43.193.80.0/20",
         "43.194.0.0/20",
         "43.194.16.0/24",
         "43.195.0.0/20",
         "43.195.128.0/17",
         "43.195.16.0/22",
         "43.195.20.0/23",
+        "43.195.32.0/20",
         "43.196.0.0/16",
         "43.198.0.0/15",
         "43.200.0.0/13",
@@ -4172,7 +4175,7 @@
         "2c0f:f248::/32"
       ],
       "verification": {
-        "observedAt": "2026-11-18T10:56:00.681Z",
+        "observedAt": "2026-11-19T12:54:29.258Z",
         "rangesSha256": "062fcd25d844185a05c1ef42b1f713e2277b5cd6882211698d7177bdf8d5a7c7",
         "sources": [
           {
@@ -4192,9 +4195,9 @@
       "category": "cloud_platform",
       "type": "cidr",
       "sourcePath": "https://www.gstatic.com/ipranges/cloud.json",
-      "sourceVersion": 20261118,
-      "sourceDate": "2026-11-18",
-      "sourceDigestSha256": "94c66f1c8261159416bcb594726a88d2982c6931f67abb41e2cdb80d8d7f9547",
+      "sourceVersion": 20261119,
+      "sourceDate": "2026-11-19",
+      "sourceDigestSha256": "275b91cf7946e07830481fa54ec0382e3430773fe428e8fbc5106fa47cd203e9",
       "values": [
         "104.154.113.0/24",
         "104.154.114.0/23",
