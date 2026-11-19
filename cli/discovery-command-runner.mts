@@ -11,18 +11,18 @@ import { updateDiscoverySnapshot } from './discovery-snapshot.mts';
 import { formatTerminalDiscover } from './formatters/terminal.mts';
 import type { CliCommandContext } from './runner-types.mts';
 import { createHash } from 'node:crypto';
-import { MAX_POPULARITY_LIST_BYTES, POPULARITY_LIMITATION, parsePopularityList } from '../packages/analysis/popularity-list.mts';
+import { MAX_POPULARITY_LIST_BYTES, POPULARITY_LIMITATION, readPopularityRanks } from '../packages/analysis/popularity-list.mts';
 import { CliUsageError } from './errors.mts';
 
 /** Ranks from a selected local list; nothing is fetched and the list itself is not copied into output. */
 async function popularityContext(source: string, domains: readonly string[], context: CliCommandContext) {
   const text = await context.readInput(source, MAX_POPULARITY_LIST_BYTES, 'Popularity list');
   let list;
-  try { list = parsePopularityList(text); }
+  try { list = readPopularityRanks(text, domains); }
   catch (error) { throw new CliUsageError(error instanceof Error ? error.message : 'The popularity list is invalid.'); }
   const ranked = domains.flatMap((domain) => {
-    const rank = list.rank(domain);
-    return rank === null ? [] : [{ domain, rank }];
+    const rank = list.ranks.get(domain);
+    return rank === undefined ? [] : [{ domain, rank }];
   }).sort((left, right) => left.rank - right.rank || left.domain.localeCompare(right.domain));
   return Object.freeze({
     listSha256: createHash('sha256').update(text).digest('hex'),

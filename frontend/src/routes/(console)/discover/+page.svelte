@@ -82,6 +82,9 @@
   let customDictionaryText = $state('');
   let candidates = $state<Candidate[]>([]);
   const candidateDomains = $derived(candidates.map((candidate) => candidate.domain));
+  // Ranks from the popularity list selected in the results panel, carried to
+  // Bulk with the list's digest; the list itself never leaves the page.
+  let popularity = $state<Readonly<{ listSha256: string; ranks: ReadonlyMap<string, number> }> | null>(null);
   let generatedContext = $state<Candidate[]>([]);
   let excludedOpen = $state(false), excludedPage = $state(1);
   let excludedHeading = $state<HTMLHeadingElement>();
@@ -757,7 +760,14 @@
 
   async function sendToBulk() {
     if (!selectedCandidates.length) return;
-    const handoffResult = saveCandidateHandoff(mode, selectedCandidates, generatedContext);
+    const ranked = popularity;
+    const handoffCandidates = ranked
+      ? selectedCandidates.map((candidate) => {
+        const rank = ranked.ranks.get(candidate.domain);
+        return rank === undefined ? candidate : { ...candidate, popularityRank: { rank, listSha256: ranked.listSha256 } };
+      })
+      : selectedCandidates;
+    const handoffResult = saveCandidateHandoff(mode, handoffCandidates, generatedContext);
     if (!handoffResult.saved) {
       error = handoffResult.reason === 'too_large'
         ? 'The selected candidates are too large to transfer safely. Reduce the selection and try again.'
@@ -902,6 +912,7 @@
     {resetReviewControls}
     rows={candidateDisplayRows()}
     candidateDomains={candidateDomains}
+    onpopularitychange={(value) => popularity = value}
     visibleCount={visible.length}
     {currentPage}
     {pageCount}

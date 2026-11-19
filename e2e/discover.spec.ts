@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { expect, test } from './fixtures';
 import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, holdBrowserLocalReads, holdBrowserLocalTransaction, holdNextBrowserLocalCommitAcknowledgement, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
 import { BASE_URL } from './constants.ts';
@@ -362,6 +363,36 @@ test('a selected popularity list marks ranked candidates without uploading the l
   await release();
   await expect(picker.getByRole('status')).toHaveText('Popularity list cleared.');
   await expect(page.getByText(/Ranked #\d+ in selected list/u)).toHaveCount(0);
+});
+
+test.describe('popularity rank in Bulk', () => {
+  test.use({ allowExpectedBulkLookup400Noise: true });
+
+  test('a selected list rank and digest travel to Bulk without the list', async ({ page }) => {
+    await page.route('**/api/lookup**', (route) =>
+      route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: 'Rejected in test' }) }));
+    await page.getByRole('textbox', { name: 'Brand or domain' }).fill('acme');
+    await page.getByRole('textbox', { name: 'TLDs' }).fill('com');
+    await page.getByRole('button', { name: 'Generate candidates' }).click();
+    const first = page.locator('.candidate').first();
+    const domain = (await first.locator('label strong').textContent())?.trim() ?? '';
+    expect(domain).toMatch(/\.com$/u);
+    const list = `rank,domain\n1,unrelated.example\n42,${domain}\n`;
+    const picker = page.locator('details.popularity-list');
+    await picker.locator(':scope > summary').click();
+    await picker.locator('input[type="file"]').setInputFiles({ name: 'tranco.csv', mimeType: 'text/csv', buffer: Buffer.from(list) });
+    await expect(first.getByText('Ranked #42 in selected list', { exact: true })).toBeVisible();
+
+    await first.locator('input[type="checkbox"]').check();
+    await page.getByRole('button', { name: 'Continue to Bulk with 1' }).click();
+    await expect(page).toHaveURL(/\/bulk/);
+    expect(JSON.stringify(await page.evaluate(() => ({ ...sessionStorage })))).not.toContain('unrelated.example');
+    await page.getByRole('button', { name: /^Scan 1 domain$/ }).click();
+    await expect(page.locator('.status')).toHaveText('Completed 1 of 1 lookups.', { timeout: 20_000 });
+    const digest = createHash('sha256').update(list).digest('hex').slice(0, 12);
+    await expect(page.locator('.results-table tbody tr', { hasText: domain }).first().locator('.popularity-label'))
+      .toHaveText(`Ranked #42 in selected list · sha256:${digest}`);
+  });
 });
 
 test('lookalike generation discloses its limits and paginates every retained candidate', async ({ page }) => {

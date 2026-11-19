@@ -432,8 +432,10 @@ stays in the current tab, and only the candidates you select continue to Bulk.
 
 **Popularity list** marks candidates that appear in a ranked domain list you have
 downloaded, such as a Tranco CSV, with the rank the list gives them. The list
-stays in the tab and is never uploaded. A rank shows only what the selected list
-asserts: it does not make a candidate safe or connect it to the brand.
+stays in the tab and is never uploaded. Candidates that continue to Bulk carry
+their rank and the list's SHA-256, which the CLI reports for the same file, so a
+rank can be cited against the exact list. A rank shows only what the selected
+list asserts: it does not make a candidate safe or connect it to the brand.
 
 **Excluded by exact profile match** lists candidates hidden by the active
 profile's official, partner or allowlist entries, with the matching declaration

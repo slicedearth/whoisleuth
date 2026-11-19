@@ -21,13 +21,14 @@ export function runPopularityListWorker(request: PopularityListWorkerRequest, op
       const result = reply?.kind === 'rank' ? reply.result : null;
       const requested = new Set(request.domains);
       // Only ranks for the candidates that were sent are accepted.
-      if (!result || !count(result.entries, MAX_POPULARITY_LIST_ENTRIES) || !count(result.rejectedLines, Number.MAX_SAFE_INTEGER)
+      if (!result || typeof result.listSha256 !== 'string' || !/^[a-f0-9]{64}$/u.test(result.listSha256)
+        || !count(result.entries, MAX_POPULARITY_LIST_ENTRIES) || !count(result.rejectedLines, Number.MAX_SAFE_INTEGER)
         || typeof result.truncated !== 'boolean' || !Array.isArray(result.ranks) || result.ranks.length > requested.size
         || result.ranks.some((item) => !Array.isArray(item) || item.length !== 2 || !requested.has(item[0])
           || !Number.isSafeInteger(item[1]) || item[1] < 1)) {
         throw new Error('The local worker returned an unexpected popularity result.');
       }
-      return Object.freeze({ entries: result.entries, rejectedLines: result.rejectedLines, truncated: result.truncated,
+      return Object.freeze({ listSha256: result.listSha256, entries: result.entries, rejectedLines: result.rejectedLines, truncated: result.truncated,
         ranks: Object.freeze(result.ranks.map(([domain, rank]) => Object.freeze([domain, rank] as const))) });
     },
   });

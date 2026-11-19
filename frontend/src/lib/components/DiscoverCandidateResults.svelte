@@ -49,6 +49,7 @@
     resetReviewControls,
     rows,
     candidateDomains,
+    onpopularitychange,
     visibleCount,
     currentPage,
     pageCount,
@@ -81,6 +82,8 @@
     rows: CandidateRow[];
     /** Every current candidate, not only the visible page, so ranks survive paging. */
     candidateDomains: readonly string[];
+    /** Receives the current list's digest and candidate ranks, or null when no list is in use. */
+    onpopularitychange?: (value: Readonly<{ listSha256: string; ranks: ReadonlyMap<string, number> }> | null) => void;
     visibleCount: number;
     currentPage: number;
     pageCount: number;
@@ -112,7 +115,7 @@
   // clear or new candidate set starts a new generation, so a slower earlier
   // read cannot replace a later selection or bring back a cleared list.
   let popularityFile = $state<File | null>(null);
-  let popularity = $state<{ entries: number; ranks: ReadonlyMap<string, number> } | null>(null);
+  let popularity = $state<{ entries: number; listSha256: string; ranks: ReadonlyMap<string, number> } | null>(null);
   let popularityStatus = $state('');
   let popularityGeneration = 0;
   let popularityController: AbortController | null = null;
@@ -156,7 +159,7 @@
       const result = await runPopularityListWorker({ kind: 'rank', file, domains }, { signal: controller.signal });
       if (generation !== popularityGeneration) return;
       const count = (value: number, noun: string) => `${value.toLocaleString()} ${noun}${value === 1 ? '' : 's'}`;
-      popularity = { entries: result.entries, ranks: new Map(result.ranks) };
+      popularity = { entries: result.entries, listSha256: result.listSha256, ranks: new Map(result.ranks) };
       popularityStatus = `Using ${count(result.entries, 'ranked domain')}${result.rejectedLines ? `; ${count(result.rejectedLines, 'unreadable line')} skipped` : ''}${result.truncated ? '; later entries were beyond the limit' : ''}.`;
     } catch (error) {
       if (generation !== popularityGeneration) return;
@@ -176,6 +179,10 @@
       rankedFile = file; rankedDomains = key;
       void rankCandidates(file, domains);
     });
+  });
+  $effect(() => {
+    const current = popularity;
+    untrack(() => onpopularitychange?.(current ? { listSha256: current.listSha256, ranks: current.ranks } : null));
   });
   onDestroy(stopPopularityRead);
 

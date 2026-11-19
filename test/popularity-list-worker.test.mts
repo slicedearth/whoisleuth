@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { test } from 'node:test';
 import { MAX_POPULARITY_LIST_BYTES } from '../packages/analysis/popularity-list.mts';
 import { runPopularityListWorker } from '../frontend/src/lib/popularity-list-worker.ts';
@@ -7,9 +8,10 @@ import {
   type PopularityListWorkerRequest, type PopularityListWorkerResponse,
 } from '../frontend/src/lib/popularity-list-worker-model.ts';
 
+const LIST = '\uFEFFrank,domain\n1,unrelated.example\n7,candidate.example\n9,other-candidate.example\nnot,a,row\n';
 const request: PopularityListWorkerRequest = {
   kind: 'rank',
-  file: new Blob(['rank,domain\n1,unrelated.example\n7,candidate.example\n9,other-candidate.example\nnot,a,row\n']),
+  file: new Blob([LIST]),
   domains: ['candidate.example', 'other-candidate.example', 'unlisted.example', 'candidate.example'],
 };
 class ControlledWorker {
@@ -30,12 +32,16 @@ test('the worker returns only the requested candidates’ ranks, never the rest 
   assert.deepEqual(response.result.ranks, [['candidate.example', 7], ['other-candidate.example', 9]]);
   assert.deepEqual([response.result.entries, response.result.rejectedLines, response.result.truncated], [3, 1, false]);
   assert.equal(JSON.stringify(response).includes('unrelated.example'), false);
+  // The digest covers the file bytes, as the CLI digest of the same file does.
+  assert.equal(response.result.listSha256, createHash('sha256').update(LIST).digest('hex'));
+  const invalid = await runPopularityListWorkerOperation({ ...request, file: new Blob([new Uint8Array([0x31, 0x2c, 0xff, 0x0a])]) });
+  assert.deepEqual(invalid, { kind: 'error', detail: 'Popularity lists must contain valid UTF-8 text.' });
 });
 
 test('worker admission rejects oversized files before reading and unbounded candidate sets', async () => {
   class OversizedBlob extends Blob {
     override get size() { return MAX_POPULARITY_LIST_BYTES + 1; }
-    override text(): Promise<string> { throw new Error('must not read'); }
+    override arrayBuffer(): Promise<ArrayBuffer> { throw new Error('must not read'); }
   }
   const oversized = await runPopularityListWorkerOperation({ ...request, file: new OversizedBlob() });
   assert.deepEqual(oversized, { kind: 'error', detail: 'Popularity lists are limited to 32 MiB.' });
@@ -53,9 +59,10 @@ test('replies are validated against the request and cancellation terminates the 
   assert.equal(accepted.terminated, 1);
 
   for (const forged of [
-    { kind: 'rank', result: { entries: 3, rejectedLines: 0, truncated: false, ranks: [['unrequested.example', 1]] } },
-    { kind: 'rank', result: { entries: 3, rejectedLines: 0, truncated: false, ranks: [['candidate.example', 0]] } },
-    { kind: 'rank', result: { entries: -1, rejectedLines: 0, truncated: false, ranks: [] } },
+    { kind: 'rank', result: { listSha256: 'a'.repeat(64), entries: 3, rejectedLines: 0, truncated: false, ranks: [['unrequested.example', 1]] } },
+    { kind: 'rank', result: { listSha256: 'a'.repeat(64), entries: 3, rejectedLines: 0, truncated: false, ranks: [['candidate.example', 0]] } },
+    { kind: 'rank', result: { listSha256: 'a'.repeat(64), entries: -1, rejectedLines: 0, truncated: false, ranks: [] } },
+    { kind: 'rank', result: { listSha256: 'not-a-digest', entries: 3, rejectedLines: 0, truncated: false, ranks: [] } },
   ]) {
     const worker = new ControlledWorker();
     const rejection = assert.rejects(runPopularityListWorker(request, { createWorker: worker.factory }), /unexpected popularity result/u);

@@ -224,3 +224,12 @@ test('Bulk rows do not compare a contradictory certificate chronology with the r
   assert.equal(display.priorRegistration.state, 'not_comparable');
   assert.deepEqual(display.priorRegistration.observations, []);
 });
+
+test('Bulk rows show a Discover popularity rank with the selected list digest', () => {
+  const popularity = { rank: 42, listSha256: 'c'.repeat(64) };
+  const rows = buildBulkResultDisplayRows({
+    visibleResults: [result({ popularity }), result({ domain: 'unranked.example' })],
+    allResults: [], shortlistedDomains: new Set(), caseByDomain: new Map(), reviewStateByDomain: new Map(), mutationLabels: {},
+  });
+  assert.deepEqual(rows.map((row) => row.popularity), [popularity, null]);
+});

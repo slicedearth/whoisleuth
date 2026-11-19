@@ -75,6 +75,8 @@ export type BulkResultDisplayRow = Readonly<{
     /** Earliest logged certificate compared with the current registration's creation date. */
     priorRegistration: PriorRegistrationReview;
   }> | null;
+  /** Rank from the popularity list selected in Discover, with the list's SHA-256 for citation. */
+  popularity: Readonly<{ rank: number; listSha256: string }> | null;
   errorRow: boolean;
   error: string;
   availability: string;
@@ -390,6 +392,7 @@ export function buildBulkResultDisplayRows(input: {
             }),
           }
         : null,
+      popularity: row.popularity ?? null,
       errorRow: row.status === 'error',
       error: row.error,
       availability: row.availability,
