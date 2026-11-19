@@ -88,6 +88,14 @@
     { id: 'sources', label: 'Evidence' },
     { id: 'timeline', label: 'Timeline' },
   ];
+  // Follow the evidence into the assessment, then out to the next review action.
+  const evidencePath = [
+    'M142 44 C210 44 216 95 278 104',
+    'M142 102 C210 102 218 110 278 112',
+    'M142 160 C210 160 216 127 278 120',
+    'M478 70 C430 70 420 101 374 108',
+    'M374 118 C420 126 430 150 478 150',
+  ].join(' ');
   const topologyNodes = $derived([
     { id: 'registry', label: 'Registry', detail: selected.evidence.registry.status, status: sourceState(selected.evidence.registry.status), side: 'left' as const, glyph: 'R', family: 'registry' as const },
     { id: 'dns', label: 'DNS', detail: selected.evidence.dns.status, status: sourceState(selected.evidence.dns.status), side: 'left' as const, glyph: 'D', family: 'network' as const },
@@ -207,9 +215,8 @@
           <svg viewBox="0 0 620 230" role="img" aria-labelledby="homepage-evidence-svg-title homepage-evidence-svg-description">
             <title id="homepage-evidence-svg-title">Separately attributed evidence flow</title>
             <desc id="homepage-evidence-svg-description">Registry, DNS, website, and certificate observations remain separate. They feed an assessment layer, which suggests review or another bounded collection step.</desc>
-            <path class="evidence-edge" d="M142 44 C210 44 216 95 278 104 M142 102 C210 102 218 110 278 112 M142 160 C210 160 216 127 278 120 M478 70 C430 70 420 101 342 108 M478 150 C430 150 420 126 342 118 M342 114 C420 114 430 114 492 114" />
-            <!-- Decorative flow in reading order: each source into the assessment, then out to the next review action. -->
-            <path class="evidence-flow chart-flow" aria-hidden="true" d="M142 44 C210 44 216 95 278 104 M142 102 C210 102 218 110 278 112 M142 160 C210 160 216 127 278 120 M478 70 C430 70 420 101 342 108 M342 118 C420 126 430 150 478 150" />
+            <path class="evidence-edge" d={evidencePath} />
+            <path class="evidence-flow chart-flow" aria-hidden="true" d={evidencePath} />
             <g class={`map-node state-${topologyNodes[0]?.status}`} transform="translate(18 22)"><rect width="124" height="44" rx="9"/><text x="12" y="18">Registry</text><text class="node-state" x="12" y="34">{topologyNodes[0]?.status}</text></g>
             <g class={`map-node state-${topologyNodes[1]?.status}`} transform="translate(18 80)"><rect width="124" height="44" rx="9"/><text x="12" y="18">DNS</text><text class="node-state" x="12" y="34">{topologyNodes[1]?.status}</text></g>
             <g class={`map-node state-${topologyNodes[2]?.status}`} transform="translate(18 138)"><rect width="124" height="44" rx="9"/><text x="12" y="18">Website</text><text class="node-state" x="12" y="34">{topologyNodes[2]?.status}</text></g>

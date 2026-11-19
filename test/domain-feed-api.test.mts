@@ -136,6 +136,7 @@ test('the shared API budget rejects a saturated client before authentication, pa
     await request('{', { cookie: '', origin: 'https://other.example', 'content-encoding': 'gzip' }),
     await request('', { cookie: '', origin: 'https://other.example' }, 'GET'),
     await fetch(`${origin}/api/resolver-compare?q=fixture%20invalid`, { headers: { 'x-forwarded-for': '192.0.2.71' } }),
+    await fetch(`${origin}/api/web-archive-history?q=fixture%20invalid`, { headers: { 'x-forwarded-for': '192.0.2.71' } }),
   ]) {
     assert.equal(response.status, 429);
     const retryAfter = Number(response.headers.get('retry-after'));
