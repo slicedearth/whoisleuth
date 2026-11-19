@@ -387,8 +387,8 @@ expiry and withdrawal records. Previewing or revising them makes no requests;
 only deliberate downloads create output files. STIX and MISP exports are not
 submitted or applied automatically. Content digests do not authenticate authors.
 
-Current Case schema 21 is written for new saves. Exact public v1 Case schema 12
-and earlier v2 schemas 13–20 remain readable and migrate directly; migrated
+Current Case schema 22 is written for new saves. Exact public v1 Case schema 12
+and earlier v2 schemas 13–21 remain readable and migrate directly; migrated
 fields can remain null, unknown or blank because WHOISleuth does not reconstruct
 them from weaker evidence.
 Case report v15 JSON and Markdown do not add the snapshot hostname.
