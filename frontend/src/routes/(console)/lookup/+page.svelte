@@ -5,6 +5,7 @@
   import LocalSectionNav from '#lib/components/LocalSectionNav.svelte';
   import LookupAtAGlance from '#lib/components/LookupAtAGlance.svelte';
   import LookupKeyFacts from '#lib/components/LookupKeyFacts.svelte';
+  import DisclosureToggleIcon from '#lib/components/DisclosureToggleIcon.svelte';
   import { availabilityStatusDisplay } from '#lib/analysis/availability-status-display.ts';
   import { buildLookupKeyFacts } from '../../../../../lib/lookup-key-facts.mts';
   import LookupResultSkeleton from '#lib/components/LookupResultSkeleton.svelte';
@@ -712,15 +713,15 @@
 
         <details class="detailed-assessment card" bind:open={session.observation.assessmentOpen}>
           <summary>
-            <span
+            <span class="assessment-summary-copy"
               ><strong>Assessment detail</strong><small
                 >Evidence Readiness and portable hand-off{session.task === 'acquisition'
                   ? ', with acquisition review'
                   : ''}</small
               ></span
             >
-            <span
-              >{session.observation.assessmentOpen ? 'Close assessment' : 'Open assessment'}</span
+            <span class="assessment-toggle"
+              ><DisclosureToggleIcon expanded={session.observation.assessmentOpen} />{session.observation.assessmentOpen ? 'Close assessment' : 'Open assessment'}</span
             >
           </summary>
           <div class="detailed-assessment-body">
@@ -1034,7 +1035,7 @@
   .detailed-assessment > summary::-webkit-details-marker {
     display: none;
   }
-  .detailed-assessment > summary span:first-child {
+  .assessment-summary-copy {
     display: grid;
     gap: 4px;
     min-width: 0;
@@ -1048,23 +1049,22 @@
     font-size: var(--text-xs);
     line-height: 1.45;
   }
-  .detailed-assessment > summary span:last-child {
+  /* Matches the evidence family toggles below. */
+  .assessment-toggle {
+    display: inline-flex;
     flex: 0 0 auto;
-    color: var(--accent);
+    align-items: center;
+    gap: 7px;
+    color: var(--text);
     font: 700 var(--text-2xs) var(--mono);
-    text-transform: uppercase;
+    white-space: nowrap;
   }
-  .detailed-assessment > summary span:last-child::before {
-    content: '+';
-    display: inline-block;
-    width: 1.2em;
+  .detailed-assessment > summary:hover .assessment-toggle {
+    color: var(--accent);
   }
   .detailed-assessment[open] > summary {
     border-bottom: 1px solid var(--border);
     background: var(--panel-raised);
-  }
-  .detailed-assessment[open] > summary span:last-child::before {
-    content: '−';
   }
   .detailed-assessment-body {
     padding: 0 14px 14px;

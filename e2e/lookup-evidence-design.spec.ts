@@ -111,6 +111,12 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(keyFacts.locator('[data-fact-id="http.response_status"] small')).toHaveText(/^HTTP · success · \d{2} \w+ 2026, /u);
   await expect(keyFacts.getByRole('link', { name: 'Registration sources' })).toHaveAttribute('href', '#registry');
   await expect(page.getByRole('heading', { name: 'Web and DNS evidence' })).toBeVisible();
+  // Saved website snapshots compare against the collected evidence, so they follow it.
+  expect(await page.locator('#web-evidence').evaluate((section) => {
+    const http = section.querySelector('#evidence-http'), snapshots = [...section.querySelectorAll('h4, h3')]
+      .find((heading) => heading.textContent?.trim() === 'Website profile snapshots');
+    return Boolean(http && snapshots && http.compareDocumentPosition(snapshots) & Node.DOCUMENT_POSITION_FOLLOWING);
+  })).toBe(true);
   await expect(page.getByRole('heading', { name: /Registration$/ })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Validated lookup response' })).toBeVisible();
   await expect(page.getByLabel('Source diagnostics')).toContainText('rdap');
@@ -374,8 +380,13 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await taskQuestion.selectOption('brand');
   expect(lookupRequests).toHaveLength(1);
   const detailedAssessment = page.locator('details.detailed-assessment');
+  // The assessment disclosure uses the same toggle icon as the evidence families.
+  const assessmentToggle = detailedAssessment.locator(':scope > summary .assessment-toggle');
+  await expect(assessmentToggle).toHaveText('Open assessment');
+  await expect(assessmentToggle.locator('.toggle-icon')).not.toHaveClass(/expanded/u);
   await detailedAssessment.locator(':scope > summary').click();
   await expect(detailedAssessment).toHaveAttribute('open', '');
+  await expect(assessmentToggle.locator('.toggle-icon')).toHaveClass(/expanded/u);
   const impactPlan = detailedAssessment.locator('details.impact-plan');
   await expect(impactPlan).toHaveCount(1);
   const impactStateBefore = await page.evaluate(() => {

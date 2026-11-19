@@ -1,4 +1,6 @@
 <script lang="ts">
+  import DisclosureToggleIcon from './DisclosureToggleIcon.svelte';
+
   let {
     label,
     description,
@@ -46,7 +48,7 @@
     onpointermove={preloadFromPointerMovement}
     onpointerleave={() => pointerIntentHandled = false}
     aria-expanded={expanded} onfocus={onpreload} onclick={expanded ? onhide : onshow}>
-    <span class="toggle-icon" class:expanded aria-hidden="true"></span>
+    <DisclosureToggleIcon {expanded} />
     {actionLabel}
   </button>
 </div>
@@ -63,10 +65,6 @@
   .section-toggle{display:inline-flex;flex:0 0 auto;align-items:center;justify-content:center;gap:7px;min-height:28px;padding:0;border:0;background:none;white-space:nowrap;color:var(--text);font:700 var(--text-2xs) var(--mono);cursor:pointer}
   .section-toggle::after{content:"";position:absolute;inset:0;border-radius:inherit}
   .section-toggle:focus-visible{outline:none}
-  .toggle-icon{display:block;position:relative;width:17px;height:17px;border:1px solid currentColor;border-radius:50%}
-  .toggle-icon::before,.toggle-icon::after{content:"";position:absolute;top:50%;left:50%;width:7px;height:1.5px;border-radius:999px;background:currentColor;transform:translate(-50%,-50%)}
-  .toggle-icon::after{width:1.5px;height:7px}
-  .toggle-icon.expanded::after{display:none}
   .family-summary:hover .section-toggle{color:var(--accent)}
   @media(max-width:620px){
     .family-summary{align-items:stretch;flex-direction:column;gap:11px}

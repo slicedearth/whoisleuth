@@ -166,18 +166,6 @@
       </aside>
     {/if}
 
-    {#if result?.type === 'domain'}
-      <WebsiteSnapshotManager
-        domain={observationHostname}
-        canSave={!loading &&
-          lookupEvidenceDepth === 'deep' &&
-          Boolean(caseDomain) &&
-          technologyProfile.source === 'derived' &&
-          securityPosture.source === 'derived'}
-        {buildSnapshot}
-      />
-    {/if}
-
     {#if surfaces.reverseDns.visible}
       <div class="evidence-component" id="evidence-reverse-dns"
         ><DeferredSurface
@@ -521,6 +509,19 @@
           props={{ review: brandMimicryReview }}
         /></div
       >
+    {/if}
+
+    <!-- Saved snapshots compare against the evidence above, so they follow it. -->
+    {#if result?.type === 'domain'}
+      <WebsiteSnapshotManager
+        domain={observationHostname}
+        canSave={!loading &&
+          lookupEvidenceDepth === 'deep' &&
+          Boolean(caseDomain) &&
+          technologyProfile.source === 'derived' &&
+          securityPosture.source === 'derived'}
+        {buildSnapshot}
+      />
     {/if}
   {/if}
 </LookupEvidenceSection>
