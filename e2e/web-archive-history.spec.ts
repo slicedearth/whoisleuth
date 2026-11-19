@@ -61,6 +61,7 @@ test('web archive history shows captures and compares the earliest with the regi
   });
   await page.goto('/lookup');
   const panel = await openArchivePanel(page);
+  await expect(panel).toContainText('The archive receives the domain in two requests, and nothing is saved.');
   expect(requests).toBe(0);
   await panel.getByRole('button', { name: 'Read archive history', exact: true }).click();
 
