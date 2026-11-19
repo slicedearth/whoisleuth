@@ -1,9 +1,10 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import type { MessageIntakeReport } from '../../../../packages/contracts/message-intake.mts';
   import { HAR_TIMING_PHASES } from '../../../../packages/contracts/har-review.mts';
   import { projectHarWaterfall, type HarRequestOrder } from '../../../../packages/investigation/har-waterfall.mts';
   import {
-    harHostDomainLabel, harHostPageNote, harHostWriteMethodNote, summariseHarHosts,
+    harHostDomainLabel, harHostPageNote, harHostWriteMethodNote, harRecordedOrigins, summariseHarHosts,
   } from '../../../../packages/investigation/har-host-summary.mts';
   import Pagination from './Pagination.svelte';
   import EvidenceTimestamp from './EvidenceTimestamp.svelte';
@@ -13,7 +14,15 @@
   const PAGE_SIZE = 20;
   const waterfall = $derived(projectHarWaterfall(report.harReview?.entries ?? [], order));
   const entries = $derived(waterfall.rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE));
-  const hosts = $derived(summariseHarHosts(report.harReview?.entries ?? []));
+  const MAX_PAGE_ORIGIN_CHOICES = 100;
+  // When the archive records no document request, the analyst may choose which
+  // recorded origin was the page. The choice stays in page memory, is labelled
+  // as theirs and is not added to the minimised report or its download.
+  let selectedPageOrigin = $state('');
+  $effect(() => { report.harReview; untrack(() => { selectedPageOrigin = ''; }); });
+  const recordedOrigins = $derived(harRecordedOrigins(report.harReview?.entries ?? []));
+  const pageRecorded = $derived(summariseHarHosts(report.harReview?.entries ?? []).pageEvidence === 'document');
+  const hosts = $derived(summariseHarHosts(report.harReview?.entries ?? [], { selectedPageOrigin: selectedPageOrigin || null }));
 </script>
 
 {#if report.documentReview}
@@ -36,6 +45,15 @@
       <section class="hosts" aria-label="Hosts contacted">
         <svelte:element this={headingTag === 'h3' ? 'h4' : 'h5'}>Hosts contacted</svelte:element>
         <p>{[harHostPageNote(hosts), harHostWriteMethodNote(hosts)].filter(Boolean).join(' ')}</p>
+        {#if !pageRecorded && recordedOrigins.length}
+          <label class="page-origin">Page origin
+            <select bind:value={selectedPageOrigin}>
+              <option value="">Not selected</option>
+              {#each recordedOrigins.slice(0, MAX_PAGE_ORIGIN_CHOICES) as origin (origin)}<option value={origin}>{origin}</option>{/each}
+            </select>
+            {#if recordedOrigins.length > MAX_PAGE_ORIGIN_CHOICES}<small>The first {MAX_PAGE_ORIGIN_CHOICES} of {recordedOrigins.length} recorded origins are listed.</small>{/if}
+          </label>
+        {/if}
         <table>
           <thead><tr><th scope="col">Host</th><th scope="col">Requests</th><th scope="col">Write methods</th><th scope="col">Failures</th></tr></thead>
           <tbody>
@@ -94,7 +112,7 @@
   .hosts thead th{color:var(--muted);font-weight:600}.hosts td{width:5.5rem;font-variant-numeric:tabular-nums}
   .hosts tbody th{min-width:0;font-weight:600;overflow-wrap:anywhere}.hosts tbody th span,.hosts tbody th small{display:block}.hosts tbody th small{color:var(--muted);font-weight:400}
   @media(max-width:520px){.hosts thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.hosts tr{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--border)}.hosts tbody th{grid-column:1/-1;border:0}.hosts td{width:auto;border:0}.hosts td::before{display:block;color:var(--muted)}.hosts td:nth-of-type(1)::before{content:'Requests'}.hosts td:nth-of-type(2)::before{content:'Write methods'}.hosts td:nth-of-type(3)::before{content:'Failures'}}
-  .request-order{display:grid;gap:4px;max-width:320px;min-width:0;font-size:var(--text-xs)}.request-order select{width:100%;min-width:0}
+  .request-order,.page-origin{display:grid;gap:4px;max-width:320px;min-width:0;font-size:var(--text-xs)}.request-order select,.page-origin select{width:100%;min-width:0}.page-origin small{color:var(--muted)}
   .request-records{padding-left:0;list-style:none}.request-records>li{min-width:0}
   .timing-track{position:relative;height:14px;margin:8px 2px;background:var(--panel-raised);border-block:1px solid var(--border)}
   .timing-track .duration{position:absolute;top:3px;height:6px;background:var(--interface-accent);opacity:.65}

@@ -581,9 +581,10 @@ use the same offline review as the browser. Document results include part hashes
 page references and extraction coverage. Encrypted documents require a separately
 decrypted copy; no password is requested. HAR results preserve file order and
 reported timings, with unavailable values distinct from zero, and list the hosts
-contacted, grouped by domain with the page's own domain separated from third
-parties. Neither document
-resources nor recorded requests are fetched. Add `--strict-exit` for exit 4 when
+contacted, grouped by registrable domain with the page's domain separated from
+other domains. When the archive records no document request, `--page-origin`
+selects one recorded origin as the page for the terminal summary, labelled as
+your selection. Neither document resources nor recorded requests are fetched. Add `--strict-exit` for exit 4 when
 coverage is partial, and `--json` for the minimised report.
 
 `intake identity events.json --json` reads an Entra sign-in `value` array or an

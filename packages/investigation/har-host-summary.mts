@@ -40,10 +40,11 @@ export type HarHostSummary = Readonly<{
   pageOrigin: string | null;
   pageDomain: string | null;
   /**
-   * Which recorded evidence identified the page: a document request, or an
-   * inference from an HTML response whose request type was not recorded.
+   * Which evidence identified the page: a document request, an inference from
+   * an HTML response whose request type was not recorded, or an origin the
+   * analyst selected because the archive did not identify the page.
    */
-  pageEvidence: 'document' | 'inferred_html_response' | null;
+  pageEvidence: 'document' | 'inferred_html_response' | 'analyst_selected' | null;
   groups: readonly HarHostGroup[];
   /** POST, PUT, PATCH and DELETE requests to registrable domains other than the page's. */
   otherDomainWriteMethods: number;
@@ -73,10 +74,25 @@ function pageEntry(entries: readonly HarEntry[]): Readonly<{ entry: HarEntry; ev
   return html ? { entry: html, evidence: 'inferred_html_response' } : null;
 }
 
-export function summariseHarHosts(entries: readonly HarEntry[]): HarHostSummary {
+/** Recorded request origins in archive order, the only values an analyst may select as the page. */
+export function harRecordedOrigins(entries: readonly HarEntry[]): readonly string[] {
+  return Object.freeze([...new Set([...entries].sort((left, right) => left.sequence - right.sequence)
+    .flatMap((entry) => entry.origin === null ? [] : [entry.origin]))]);
+}
+
+export function summariseHarHosts(
+  entries: readonly HarEntry[],
+  options: Readonly<{ selectedPageOrigin?: string | null }> = {},
+): HarHostSummary {
   const ordered = [...entries].sort((left, right) => left.sequence - right.sequence);
-  const page = pageEntry(ordered);
-  const pageOrigin = page?.entry.origin ?? null;
+  const recorded = pageEntry(ordered);
+  // An analyst selection applies only when the archive itself did not record a
+  // document request, and only to an origin the archive recorded; it stays attributed.
+  const selected = recorded?.evidence !== 'document' && options.selectedPageOrigin
+    && harRecordedOrigins(ordered).includes(options.selectedPageOrigin) ? options.selectedPageOrigin : null;
+  const page = selected ? { origin: selected, evidence: 'analyst_selected' as const }
+    : recorded ? { origin: recorded.entry.origin, evidence: recorded.evidence } : null;
+  const pageOrigin = page?.origin ?? null;
   const pageHost = pageOrigin === null ? null : hostOf(pageOrigin);
   const pageDomain = pageHost === null ? null : canonicalRegistrableDomain(pageHost);
   const groups = new Map<string, { registrableDomain: string | null; origins: Map<string, { requests: number; writeMethods: number; failures: number; types: Set<HarEntry['resourceType']> }> }>();
@@ -135,7 +151,9 @@ export function harHostDomainLabel(group: Pick<HarHostGroup, 'samePageDomain' | 
 export function harHostPageNote(summary: Pick<HarHostSummary, 'pageOrigin' | 'pageDomain' | 'pageEvidence'>): string {
   const source = summary.pageEvidence === 'document'
     ? 'from the first recorded document request'
-    : 'inferred from the first HTML response whose request type was not recorded';
+    : summary.pageEvidence === 'analyst_selected'
+      ? 'selected by you because the archive does not record a document request'
+      : 'inferred from the first HTML response whose request type was not recorded';
   if (summary.pageDomain) return `Page domain ${summary.pageDomain}, ${source}.`;
   if (summary.pageOrigin) return `Page origin ${summary.pageOrigin}, ${source}, has no registrable domain, so hosts are not compared by domain.`;
   return 'No document request identifies the page, so hosts are not compared with a page domain.';

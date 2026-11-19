@@ -2,7 +2,7 @@ import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 import { MAX_MESSAGE_INTAKE_BYTES, MESSAGE_INTAKE_INPUTS, type MessageIntakeReport } from '../packages/contracts/message-intake.mts';
 import { reviewSelectedInputInWorker } from './selected-input-worker.mts';
 import {
-  harHostDomainLabel, harHostPageNote, harHostWriteMethodNote, summariseHarHosts,
+  harHostDomainLabel, harHostPageNote, harHostWriteMethodNote, harRecordedOrigins, summariseHarHosts,
 } from '../packages/investigation/har-host-summary.mts';
 import { reviewIdentityIncident } from '../packages/investigation/identity-incident-review.mts';
 import { intakeIndicators, intakeIndicatorSource } from '../packages/investigation/intake-indicators.mts';
@@ -19,7 +19,7 @@ export type IntakeCommandDependencies = {
   readBinaryArtifactInput?: (source: string) => Uint8Array | Promise<Uint8Array>;
 };
 
-export function formatMessageIntake(report: MessageIntakeReport): string {
+export function formatMessageIntake(report: MessageIntakeReport, options: Readonly<{ selectedPageOrigin?: string | null }> = {}): string {
   const lines = [`Offline ${report.source.kind} intake`, `Review: ${report.coverage.state} · Extracted links: ${report.links.length} · Reviewed parts: ${report.coverage.reviewedParts}`,
     `Source: ${report.source.digestSha256} · ${report.source.byteLength} bytes`];
   for (const identity of report.identities) lines.push(`Part ${identity.part} ${identity.role.replaceAll('_', ' ')}: ${identity.domain}`);
@@ -69,7 +69,7 @@ export function formatMessageIntake(report: MessageIntakeReport): string {
     lines.push(...report.documentReview.notes);
   }
   if (report.harReview) {
-    const hosts = summariseHarHosts(report.harReview.entries);
+    const hosts = summariseHarHosts(report.harReview.entries, options);
     if (hosts.groups.length) {
       const writeMethodNote = harHostWriteMethodNote(hosts);
       lines.push('Hosts contacted', `  ${harHostPageNote(hosts)}`);
@@ -122,6 +122,13 @@ export async function runIntakeCommand(args: Extract<CliArguments, { action: 'in
       if (args.intakeContextSource === '-') throw new CliUsageError('Distribution context requires a separate selected file, not stdin.');
       report = applyIntakeContextInput({ ...result, report }, await context.readInput(args.intakeContextSource, MAX_INTAKE_CONTEXT_BYTES, 'Intake context'));
     }
+    if (args.pageOrigin !== undefined) {
+      // The selection labels the terminal host summary only; JSON keeps the recorded sequence.
+      if (args.kind !== 'har' || args.output === 'json') throw new CliUsageError('--page-origin applies to the terminal host summary of HAR intake.');
+      const entries = report.harReview?.entries ?? [];
+      if (summariseHarHosts(entries).pageEvidence === 'document') throw new CliUsageError('The archive records a document request, so its page origin is used instead of a selection.');
+      if (!harRecordedOrigins(entries).includes(args.pageOrigin)) throw new CliUsageError('--page-origin must be one of the origins recorded in the archive.');
+    }
     dependencies.signal?.throwIfAborted();
     if (!args.quiet && result.phoneReview && (result.phoneReview.candidates.length || result.phoneReview.state === 'partial')) {
       const phones = result.phoneReview;
@@ -134,7 +141,7 @@ export async function runIntakeCommand(args: Extract<CliArguments, { action: 'in
         '',
       ].join('\n'));
     }
-    if (!args.quiet) context.writeStdout(args.output === 'json' ? formatJsonDocument(report) : context.terminal(formatMessageIntake(report), args.color));
+    if (!args.quiet) context.writeStdout(args.output === 'json' ? formatJsonDocument(report) : context.terminal(formatMessageIntake(report, { selectedPageOrigin: args.pageOrigin ?? null }), args.color));
     return args.strictExit && (report.coverage.state === 'partial' || result.phoneReview?.state === 'partial') ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;
   } finally { bytes.fill(0); }
 }

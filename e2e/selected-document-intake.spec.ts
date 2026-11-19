@@ -151,3 +151,26 @@ for (const document of selectedDocuments) {
     });
   }
 }
+
+test('HAR intake without a document request lets the analyst select the page origin', async ({ page }) => {
+  const { intake, collectionCount } = await openOfflineIntake(page);
+  const har = { log: { version: '1.2', entries: [
+    { startedDateTime: '2026-09-20T00:00:00Z', time: 1, request: { method: 'GET', url: 'https://api.other.example/a' }, response: { status: 401, content: { mimeType: 'text/html' } }, timings: {}, _resourceType: 'fetch' },
+    { startedDateTime: '2026-09-20T00:00:01Z', time: 1, request: { method: 'POST', url: 'https://portal.request.example/b' }, response: { status: 200, content: { mimeType: 'application/json' } }, timings: {}, _resourceType: 'fetch' },
+  ] } };
+  await intake.getByLabel('Input type').selectOption('har');
+  await intake.getByLabel('Select a file', { exact: true }).setInputFiles({ name: 'selected.har', mimeType: 'application/octet-stream', buffer: Buffer.from(JSON.stringify(har)) });
+  await intake.getByRole('button', { name: 'Review locally', exact: true }).click();
+  const hosts = intake.getByRole('region', { name: 'Hosts contacted' });
+  // A fetch that returned HTML is not taken as the page.
+  await expect(hosts).toContainText('No document request identifies the page');
+  await expect(hosts.locator('tr[data-domain="unknown"]')).toHaveCount(2);
+  const choice = hosts.getByLabel('Page origin');
+  await expect(choice.locator('option')).toHaveText(['Not selected', 'https://api.other.example', 'https://portal.request.example']);
+  await choice.selectOption('https://portal.request.example');
+  await expect(hosts).toContainText('Page domain request.example, selected by you because the archive does not record a document request.');
+  await expect(hosts.locator('tr[data-domain="page"]').getByRole('rowheader')).toContainText('request.example');
+  await choice.selectOption('');
+  await expect(hosts).toContainText('No document request identifies the page');
+  expect(collectionCount()).toBe(0);
+});

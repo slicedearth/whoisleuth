@@ -248,6 +248,7 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--json': flag('Write structured JSON to stdout or the selected output file.'),
   '--reported-action': optionDefinition('enum', 'Record an analyst-reported identity action; repeat for separate actions.', { values: IDENTITY_ACTIONS.map(action => action.id), occurrence: 'repeatable' }),
   '--trusted-auth-header': optionDefinition('text', 'Select a recognised receiver header by part:header-index. This records analyst trust, not independent authentication; repeat for separate headers.', { occurrence: 'repeatable' }),
+  '--page-origin': optionDefinition('text', 'For HAR intake without a recorded document request, select which recorded origin was the page. The terminal summary labels it as your selection.'),
   '--intake-context': optionDefinition('file', 'Read one selected version-1 distribution declaration or version-2 digest-bound phone/destination selection file. Declarations remain attributed claims.'),
   '--package': flag('Verify a portable evidence ZIP or encrypted package rather than a single report.'),
   '--folder': file('Verify the evidence package within this selected folder.'),

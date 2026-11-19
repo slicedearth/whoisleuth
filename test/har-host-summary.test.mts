@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { HarEntry } from '../packages/contracts/har-review.mts';
-import { harHostDomainLabel, harHostPageNote, harHostWriteMethodNote, MAX_HAR_HOST_GROUPS, summariseHarHosts } from '../packages/investigation/har-host-summary.mts';
+import { harHostDomainLabel, harHostPageNote, harHostWriteMethodNote, harRecordedOrigins, MAX_HAR_HOST_GROUPS, summariseHarHosts } from '../packages/investigation/har-host-summary.mts';
 import { selectedHarFixture } from '../fixtures/selected-input-examples.mts';
 import { runCli } from '../cli/runner.mts';
 
@@ -97,4 +97,50 @@ test('CLI intake lists the same hosts without query strings or request content',
   assert.match(output, /^ {2}request\.example · page domain · 1 request · 1 write method · 0 failures$/mu);
   assert.match(output, /^ {2}later\.example · other domain · 1 request · 0 write methods · 1 failure$/mu);
   assert.doesNotMatch(output, /private/u);
+});
+
+test('an analyst may select a recorded origin as the page only when no document request was recorded', () => {
+  const entries = [
+    entry(1, 'https://api.other.test', { resourceType: 'fetch', mimeCategory: 'html' }),
+    entry(2, 'https://portal.example.test', { method: 'POST', resourceType: 'fetch' }),
+  ];
+  assert.deepEqual(harRecordedOrigins(entries), ['https://api.other.test', 'https://portal.example.test']);
+  const selected = summariseHarHosts(entries, { selectedPageOrigin: 'https://portal.example.test' });
+  assert.deepEqual([selected.pageDomain, selected.pageEvidence, selected.otherDomainWriteMethods], ['example.test', 'analyst_selected', 0]);
+  assert.equal(harHostPageNote(selected),
+    'Page domain example.test, selected by you because the archive does not record a document request.');
+  // An origin the archive did not record is ignored, and a recorded document request is never replaced.
+  assert.equal(summariseHarHosts(entries, { selectedPageOrigin: 'https://elsewhere.test' }).pageEvidence, null);
+  const documented = [entry(1, 'https://www.example.test', { resourceType: 'document' }), ...entries.map((item) => ({ ...item, sequence: item.sequence + 1 }))];
+  assert.equal(summariseHarHosts(documented, { selectedPageOrigin: 'https://api.other.test' }).pageEvidence, 'document');
+});
+
+test('CLI intake applies a page origin selection to the terminal host summary only', async () => {
+  const har = new TextEncoder().encode(JSON.stringify({ log: { version: '1.2', entries: [
+    { startedDateTime: '2026-09-20T00:00:00Z', time: 1, request: { method: 'GET', url: 'https://api.other.test/a' }, response: { status: 401, content: { mimeType: 'text/html' } }, timings: {}, _resourceType: 'fetch' },
+    { startedDateTime: '2026-09-20T00:00:01Z', time: 1, request: { method: 'POST', url: 'https://portal.example.test/b' }, response: { status: 200, content: { mimeType: 'application/json' } }, timings: {}, _resourceType: 'fetch' },
+  ] } }));
+  const run = async (args: string[]) => {
+    let stdout = '', stderr = '';
+    const code = await runCli(['intake', 'har', 'selected.har', ...args], {
+      readBinaryArtifactInput: async () => Buffer.from(har), now: () => '2026-09-20T00:05:00.000Z',
+      stdout: { write(value: string) { stdout += value; } }, stderr: { write(value: string) { stderr += value; } },
+      runUnifiedLookup: async () => { throw new Error('No collection'); },
+    });
+    return { code, stdout, stderr };
+  };
+  const unselected = await run([]);
+  assert.match(unselected.stdout, /No document request identifies the page/u);
+  const selected = await run(['--page-origin', 'https://portal.example.test']);
+  assert.equal(selected.code, 0, selected.stderr);
+  assert.match(selected.stdout, /^ {2}Page domain example\.test, selected by you because the archive does not record a document request\.$/mu);
+  for (const [args, message] of [
+    [['--page-origin', 'https://elsewhere.test'], /recorded in the archive/u],
+    [['--page-origin', 'https://portal.example.test', '--json'], /terminal host summary/u],
+  ] as const) {
+    const refused = await run([...args]);
+    assert.equal(refused.code, 2);
+    assert.equal(refused.stdout, '');
+    assert.match(refused.stderr, message);
+  }
 });

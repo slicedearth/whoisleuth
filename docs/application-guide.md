@@ -284,7 +284,10 @@ and **Reported timings** breaks each request into phases. **Hosts contacted**
 groups the requests by registrable domain and separates the page's domain from
 other domains. The page is the first recorded document request; when request
 types were not recorded, it is inferred from the first HTML response and labelled
-as an inference. IP addresses have no registrable domain and are not compared.
+as an inference. Without a document request you can choose which recorded
+origin was the page; the summary labels it as your choice, and it is not added to
+the report or its download. IP addresses have no registrable domain and are not
+compared.
 The summary counts POST, PUT, PATCH and DELETE requests to other domains; the
 method alone does not show what those requests sent or changed.
 
