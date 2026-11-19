@@ -50,7 +50,7 @@
 <details class="web-archive-history card">
   <summary>Web archive history</summary>
   <div class="archive-body">
-    <p>Check when the {WEB_ARCHIVE_PROVIDER.label} first and last recorded the homepage of <strong>{domain}</strong>. The archive receives the domain in two requests, and nothing is saved.</p>
+    <p>Check when the {WEB_ARCHIVE_PROVIDER.label} first and last recorded the homepage of <strong>{domain}</strong>. The archive receives the domain in two requests. WHOISleuth does not save the result; the archive’s own policies apply to the requests.</p>
     <div class="actions">
       <button type="button" class="btn" disabled={busy || Boolean(disabled)} onclick={() => void collect()}>{busy ? 'Reading archive…' : 'Read archive history'}</button>
       {#if busy}<button type="button" class="btn" onclick={() => { cancel(); message = 'Archive request cancelled.'; }}>Cancel</button>{/if}
@@ -68,7 +68,7 @@
               <dd>
                 {#if query.capturedAt}
                   <time datetime={query.capturedAt}>{formatEvidenceDate(query.capturedAt)}</time>
-                  <small>{query.capturedStatus ? `Archive recorded HTTP ${query.capturedStatus}` : 'No HTTP status recorded'} · <a href={webArchiveCaptureUrl(report.domain, query.capturedAt)} target="_blank" rel="noreferrer">Open capture</a></small>
+                  <small>{query.capturedStatus ? `Archive recorded HTTP ${query.capturedStatus}` : 'No HTTP status recorded'} · <a href={webArchiveCaptureUrl(report.domain, query.capturedAt)} target="_blank" rel="noreferrer">Browse archive at this time</a></small>
                 {:else}
                   {query.outcome === 'no_capture' ? 'No capture found' : query.outcome === 'timeout' ? 'Timed out' : query.outcome === 'skipped' ? 'Not requested' : 'Unavailable'}
                 {/if}

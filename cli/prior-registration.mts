@@ -1,14 +1,15 @@
-import { LOOKUP_EVIDENCE_SCHEMA } from '../packages/contracts/lookup-evidence.mts';
-import { MAX_CT_RESPONSE_RESULTS } from '../packages/analysis/ct-response-bounds.mts';
 import { boundedJsonLimitsForBytes, parseBoundedJsonObject } from '../packages/analysis/bounded-json.mts';
 import { canonicalRegistrableDomain } from '../packages/analysis/registrable-domain.mts';
 import {
-  PRIOR_REGISTRATION_STATE_LABELS, reviewPriorRegistration, type PriorRegistrationReview, type PriorRegistrationSource,
+  PRIOR_REGISTRATION_STATE_LABELS, reviewPriorRegistration, selectRegistrationCreation,
+  type PriorRegistrationReview, type PriorRegistrationSource,
 } from '../packages/evidence/prior-registration.mts';
 import { readWebArchiveHistory } from '../packages/evidence/web-archive-history.mts';
-import { buildLookupKeyFacts } from '../lib/lookup-key-facts.mts';
+import { normalizeCtResponse } from '../packages/investigation/ct-results.mts';
+import { lookupRegistrationCreatedObservations } from '../lib/lookup-key-facts.mts';
 import { parseLookupEvidenceReplay } from '../lib/lookup-evidence-replay.mts';
 import { CliUsageError } from './errors.mts';
+import { isLookupEvidenceText } from './lookup-evidence-format.mts';
 import { safeTerminalValue } from './formatters/terminal-shared.mts';
 import { parseCliLookupDocument } from './saved-lookup.mts';
 
@@ -32,35 +33,41 @@ export type CliPriorRegistrationDocument = Readonly<{
 type Registration = Readonly<{ domain: string; createdAt: string | null; source: string | null }>;
 
 async function readRegistration(raw: string): Promise<Registration> {
-  let schema: unknown;
-  try { schema = (JSON.parse(raw) as Record<string, unknown> | null)?.schema; } catch { schema = undefined; }
-  if (schema === LOOKUP_EVIDENCE_SCHEMA) {
+  if (isLookupEvidenceText(raw)) {
     let replay;
     try { replay = await parseLookupEvidenceReplay(raw); }
     catch (error) { throw new CliUsageError(`Evidence export: ${error instanceof Error ? error.message : 'the file is invalid.'}`); }
     const created = replay.facts.find((fact) => fact.id === 'registration.created');
     const domain = canonicalRegistrableDomain(replay.caseDomain ?? replay.target);
     if (!domain) throw new CliUsageError('The evidence export does not describe a registrable domain.');
-    return { domain, createdAt: created?.value ?? null, source: created?.source ?? null };
+    const selected = created
+      ? selectRegistrationCreation([{ source: created.source, value: created.value, sourceState: created.sourceState, complete: created.sourceComplete }])
+      : null;
+    return { domain, createdAt: selected?.createdAt ?? null, source: selected?.source ?? null };
   }
   let document;
   try { document = parseCliLookupDocument(raw); }
   catch (error) { throw new CliUsageError(`Saved Lookup: ${error instanceof Error ? error.message : 'the file is invalid.'}`); }
   const domain = typeof document.registrableDomain === 'string' ? canonicalRegistrableDomain(document.registrableDomain) : null;
   if (document.type !== 'domain' || !domain) throw new CliUsageError('prior-registration needs a saved domain Lookup or its evidence export.');
-  const created = buildLookupKeyFacts(document).find((fact) => fact.id === 'registration.created');
-  return { domain, createdAt: created?.value ?? null, source: created?.value ? created.source : null };
+  const selected = selectRegistrationCreation(lookupRegistrationCreatedObservations(document).map((fact) => ({
+    source: fact.source, value: fact.value, sourceState: fact.sourceState, complete: fact.complete,
+  })));
+  return { domain, createdAt: selected?.createdAt ?? null, source: selected?.source ?? null };
 }
 
 function certificateObservation(raw: string, domain: string): string | null {
   const document = parseBoundedJsonObject(raw, { label: 'Certificate search result', maximumBytes: MAX_PRIOR_REGISTRATION_SUPPORTING_BYTES,
     limits: boundedJsonLimitsForBytes(MAX_PRIOR_REGISTRATION_SUPPORTING_BYTES) });
-  if (document.schema !== 'whoisleuth.cli.ct-search' || !Array.isArray(document.matches) || document.matches.length > MAX_CT_RESPONSE_RESULTS) {
+  if (document.schema !== 'whoisleuth.cli.ct-search' || document.version !== 1) {
     throw new CliUsageError('--ct-results expects JSON written by whoisleuth ct-search --json.');
   }
-  const match = (document.matches as unknown[]).find((item) => item && typeof item === 'object'
-    && canonicalRegistrableDomain((item as Record<string, unknown>).domain) === domain) as Record<string, unknown> | undefined;
-  return typeof match?.firstObservedAt === 'string' ? match.firstObservedAt : null;
+  // The shared normaliser validates counts and dates and merges duplicate
+  // domains, keeping the earliest observation, exactly as Discover does.
+  let result;
+  try { result = normalizeCtResponse(document, document.keyword); }
+  catch (error) { throw new CliUsageError(`--ct-results: ${error instanceof Error ? error.message : 'the certificate search result is invalid.'}`); }
+  return result.candidates.find((candidate) => candidate.domain === domain)?.certificateTransparency?.firstObservedAt ?? null;
 }
 
 function archiveObservation(raw: string, domain: string): string | null {

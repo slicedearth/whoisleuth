@@ -7,7 +7,8 @@
   import LookupKeyFacts from '#lib/components/LookupKeyFacts.svelte';
   import DisclosureToggleIcon from '#lib/components/DisclosureToggleIcon.svelte';
   import { availabilityStatusDisplay } from '#lib/analysis/availability-status-display.ts';
-  import { buildLookupKeyFacts } from '../../../../../lib/lookup-key-facts.mts';
+  import { buildLookupKeyFacts, lookupRegistrationCreatedObservations } from '../../../../../lib/lookup-key-facts.mts';
+  import { selectRegistrationCreation } from '../../../../../packages/evidence/prior-registration.mts';
   import LookupResultSkeleton from '#lib/components/LookupResultSkeleton.svelte';
   import LookupAssessment from '#lib/components/LookupAssessment.svelte';
   import LookupFamilySummary from '#lib/components/LookupFamilySummary.svelte';
@@ -311,6 +312,13 @@
   const caseEvidence = $derived(lookupAnalysis.caseEvidence);
   const checkpointFacts = $derived(lookupAnalysis.checkpointFacts);
   const keyFacts = $derived(session.observation.response ? buildLookupKeyFacts(session.observation.response) : []);
+  // Key facts are a display summary; the archive comparison uses only a creation
+  // date from a successful, complete registration source.
+  const registrationCreation = $derived(session.observation.response
+    ? selectRegistrationCreation(lookupRegistrationCreatedObservations(session.observation.response).map((item) => ({
+      source: item.source, value: item.value, sourceState: item.sourceState, complete: item.complete,
+    })))
+    : null);
   const profileContextLimitation = $derived(lookupAnalysis.profileContextLimitation);
 
   async function refreshProfileContext() {
@@ -835,7 +843,7 @@
         resultType={session.observation.response?.type ?? ''}
         archiveTarget={session.observation.response?.type === 'domain' && session.observation.response.registrableDomain
           ? { domain: session.observation.response.registrableDomain,
-            registrationCreatedAt: keyFacts.find((item) => item.id === 'registration.created')?.value ?? null }
+            registrationCreatedAt: registrationCreation?.createdAt ?? null }
           : null}
         bind:visualView={session.visualView}
       />

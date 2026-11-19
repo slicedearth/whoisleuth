@@ -38,6 +38,29 @@ const SOURCE_LABELS: Readonly<Record<PriorRegistrationSource, string>> = Object.
 const DAY_MS = 86_400_000;
 const TOLERANCE_MS = PRIOR_REGISTRATION_TOLERANCE_HOURS * 3_600_000;
 
+export type RegistrationCreationCandidate = Readonly<{
+  source: string;
+  value: string | null;
+  sourceState: string;
+  complete: boolean | null;
+}>;
+
+const ELIGIBLE_REGISTRATION_STATES = new Set(['success', 'complete']);
+
+/**
+ * The first creation date reported by a successful, complete registration
+ * source. A value retained from a failed, partial or incomplete source is shown
+ * to the analyst elsewhere, but it is not evidence for this comparison.
+ */
+export function selectRegistrationCreation(candidates: readonly RegistrationCreationCandidate[]): Readonly<{ createdAt: string; source: string }> | null {
+  for (const candidate of candidates) {
+    if (!ELIGIBLE_REGISTRATION_STATES.has(candidate.sourceState) || candidate.complete === false) continue;
+    const createdAt = registryDateIso(candidate.value);
+    if (createdAt) return Object.freeze({ createdAt, source: candidate.source });
+  }
+  return null;
+}
+
 export const PRIOR_REGISTRATION_STATE_LABELS: Readonly<Record<PriorRegistrationState, string>> = Object.freeze({
   earlier_observation: 'Observed before the current registration',
   no_earlier_observation: 'No earlier observation found',
@@ -73,7 +96,7 @@ export function reviewPriorRegistration(input: Readonly<{
     : state === 'no_earlier_observation'
       ? ['Certificate logs and web archives are incomplete, so this does not show that the current registration is the first.']
       : [createdAt === null
-        ? 'The current registration creation date is unavailable.'
+        ? 'No creation date is available from a successful, complete registration source.'
         : 'No dated certificate or archive observation is available for comparison.'];
   return Object.freeze({
     version: PRIOR_REGISTRATION_REVIEW_VERSION,

@@ -47,7 +47,8 @@ function technologyIds(value: unknown): { ids: string[]; truncated: boolean } {
   return { ids: [...output].sort(), truncated };
 }
 
-function issuerLabel(value: unknown): string | null {
+/** Issuer common names and organisations from the TLS collector's distinguished name. */
+export function tlsIssuerLabel(value: unknown): string | null {
   const issuer = record(value);
   const values = [
     ...(Array.isArray(issuer.commonNames) ? issuer.commonNames : []),
@@ -83,7 +84,7 @@ export function buildBulkComparisonEvidence(availabilityValue: unknown) {
     },
     tls: {
       state: tlsState,
-      issuerLabel: tlsUsable ? issuerLabel(certificate.issuer) : null,
+      issuerLabel: tlsUsable ? tlsIssuerLabel(certificate.issuer) : null,
       spkiSha256: tlsUsable && SHA256_RE.test(spki) ? spki.toLowerCase() : null,
     },
   };

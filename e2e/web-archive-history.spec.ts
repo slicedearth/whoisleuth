@@ -61,14 +61,14 @@ test('web archive history shows captures and compares the earliest with the regi
   });
   await page.goto('/lookup');
   const panel = await openArchivePanel(page);
-  await expect(panel).toContainText('The archive receives the domain in two requests, and nothing is saved.');
+  await expect(panel).toContainText('The archive receives the domain in two requests. WHOISleuth does not save the result; the archive’s own policies apply to the requests.');
   expect(requests).toBe(0);
   await panel.getByRole('button', { name: 'Read archive history', exact: true }).click();
 
   const captures = panel.getByRole('region', { name: 'Web archive captures' });
   await expect(captures.locator('[data-query="earliest"] dd')).toContainText('2012');
   await expect(captures.locator('[data-query="earliest"] dd')).toContainText('Archive recorded HTTP 200');
-  await expect(captures.locator('[data-query="earliest"]').getByRole('link', { name: 'Open capture' }))
+  await expect(captures.locator('[data-query="earliest"]').getByRole('link', { name: 'Browse archive at this time' }))
     .toHaveAttribute('href', `https://web.archive.org/web/20120304050607/${DOMAIN}/`);
   await expect(captures.locator('[data-query="latest"] dd')).toContainText('No HTTP status recorded');
   // The fixture registration was created on 2 January 2020, years after the earliest capture.

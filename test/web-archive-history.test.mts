@@ -55,8 +55,15 @@ test('requests, timestamps and capture links are validated and bounded', async (
   assert.throws(() => normaliseWebArchiveRequest('https://archive-review.example/'));
   assert.throws(() => normaliseWebArchiveRequest(' archive-review.example'));
   assert.throws(() => normaliseWebArchiveRequest('192.0.2.1'));
-  assert.equal(webArchiveTimestamp('2012'), '2012-01-01T00:00:00.000Z');
-  assert.equal(webArchiveTimestamp('20121399000000'), null);
+  // Only the registrable domain is sent; a hostname is refused, not retargeted.
+  assert.throws(() => normaliseWebArchiveRequest('portal.archive-review.example'), /registrable domain archive-review\.example/u);
+  const hostname = fixture(() => Response.json([]));
+  await assert.rejects(collectWebArchiveHistory('portal.archive-review.example', {}, hostname.dependencies), /registrable domain/u);
+  assert.equal(hostname.calls.length, 0);
+  // Shortened or impossible capture times are refused rather than padded into a precise instant.
+  for (const value of ['2012', '201203', '20121399000000', '20120230000000']) assert.equal(webArchiveTimestamp(value), null, value);
+  const shortened = await collectWebArchiveHistory(DOMAIN, {}, fixture(() => Response.json([['timestamp', 'statuscode'], ['2012', '200']])).dependencies);
+  assert.deepEqual(shortened.queries.map((query) => query.outcome), ['invalid_response', 'invalid_response']);
   assert.equal(webArchiveCaptureUrl(DOMAIN, '2012-03-04T05:06:07.000Z'), 'https://web.archive.org/web/20120304050607/archive-review.example/');
   const oversized = fixture(() => new Response(JSON.stringify([['timestamp', 'statuscode'], ['20120304050607', 'x'.repeat(20_000)]])));
   const report = await collectWebArchiveHistory(DOMAIN, {}, oversized.dependencies);

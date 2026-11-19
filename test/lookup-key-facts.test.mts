@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { buildLookupKeyFacts, lookupKeyFactProvenance, lookupKeyFactValueText } from '../lib/lookup-key-facts.mts';
+import {
+  buildLookupKeyFacts, lookupKeyFactProvenance, lookupKeyFactValueText, lookupRegistrationCreatedObservations,
+} from '../lib/lookup-key-facts.mts';
+import { selectRegistrationCreation } from '../packages/evidence/prior-registration.mts';
 import { formatTerminalLookup } from '../cli/formatters/terminal.mts';
 
 const saved = JSON.parse(readFileSync(new URL('./fixtures/cli-lookup-v1.json', import.meta.url), 'utf8'));
@@ -66,6 +69,30 @@ test('key facts bound untrusted values and reduce website URLs to their origin',
   assert.equal(facts.get('http.response_status')?.value, '200');
   assert.equal(byId({ type: 'domain', availability: { http: { status: 'success', finalUrl: 'https://user:pass@example.test/' } } })
     .get('http.final_origin')?.value, null);
+});
+
+test('the TLS issuer comes from the collector\u2019s distinguished name', () => {
+  const facts = byId({ type: 'domain', availability: { tls: { status: 'success', certificate: {
+    issuer: { commonNames: ['Example Issuing CA'], organizations: ['Example CA'], organizationalUnits: [], countries: [], localities: [], states: [] },
+  } } } });
+  assert.equal(facts.get('tls.issuer')?.value, 'Example Issuing CA · Example CA');
+});
+
+test('registration creation for inference skips values retained from failed or incomplete sources', () => {
+  const lookup = (rdapStatus: string, whoisStatus: string) => ({
+    type: 'domain',
+    rdap: { parsed: { lifecycle: { createdDateIso: '2024-03-01T00:00:00.000Z' } } },
+    whois: { parsed: { createdDate: '2019-05-01T00:00:00Z' } },
+    diagnostics: { rdap: { status: rdapStatus, complete: rdapStatus === 'success' ? true : false }, whois: { status: whoisStatus } },
+  });
+  // The displayed key fact still names the failed RDAP value with its state.
+  assert.equal(lookupKeyFactProvenance(byId(lookup('error', 'complete')).get('registration.created')!), 'Registry RDAP · error');
+  assert.deepEqual(selectRegistrationCreation(lookupRegistrationCreatedObservations(lookup('error', 'complete'))),
+    { createdAt: '2019-05-01T00:00:00.000Z', source: 'WHOIS' });
+  assert.deepEqual(selectRegistrationCreation(lookupRegistrationCreatedObservations(lookup('success', 'complete'))),
+    { createdAt: '2024-03-01T00:00:00.000Z', source: 'Registry RDAP' });
+  assert.equal(selectRegistrationCreation(lookupRegistrationCreatedObservations(lookup('error', 'error'))), null);
+  assert.deepEqual(lookupRegistrationCreatedObservations({ type: 'ipv4' }), []);
 });
 
 test('only domain Lookups produce key facts, and the CLI terminal view lists them outside summaries', () => {

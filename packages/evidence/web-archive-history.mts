@@ -1,3 +1,4 @@
+import { canonicalRegistrableDomain } from '../analysis/registrable-domain.mts';
 import { isValidAsciiDomainName } from '../contracts/domain-name.mts';
 import { normalizeExplicitIsoTimestamp } from './observation.mts';
 
@@ -48,20 +49,31 @@ export function normaliseWebArchiveRequest(domain: unknown): Readonly<{ domain: 
   }
   const name = domain.toLowerCase().replace(/\.$/u, '');
   if (!isValidAsciiDomainName(name) || /^\d+(?:\.\d+)*$/u.test(name)) throw new TypeError('Select a valid domain name.');
+  // Only a registrable domain is disclosed to the archive. A hostname is refused
+  // rather than silently replaced, so the request matches what was selected.
+  const registrable = canonicalRegistrableDomain(name);
+  if (!registrable) throw new TypeError('Select a registrable domain name.');
+  if (registrable !== name) throw new TypeError(`Select the registrable domain ${registrable}; archive history is only read for registrable domains.`);
   return Object.freeze({ domain: name });
 }
 
-/** Archive timestamps are UTC digits (YYYYMMDDhhmmss); partial precision is padded. */
+/**
+ * Archive timestamps are UTC digits (YYYYMMDDhhmmss). A shortened timestamp is
+ * refused rather than padded, because padding would invent a precise instant.
+ */
 export function webArchiveTimestamp(value: unknown): string | null {
-  if (typeof value !== 'string' || !/^\d{4,14}$/u.test(value)) return null;
-  const digits = value.padEnd(14, '0');
-  const month = digits.slice(4, 6) === '00' ? '01' : digits.slice(4, 6);
-  const day = digits.slice(6, 8) === '00' ? '01' : digits.slice(6, 8);
-  const iso = `${digits.slice(0, 4)}-${month}-${day}T${digits.slice(8, 10)}:${digits.slice(10, 12)}:${digits.slice(12, 14)}Z`;
-  return normalizeExplicitIsoTimestamp(iso);
+  if (typeof value !== 'string' || !/^\d{14}$/u.test(value)) return null;
+  const iso = `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}T${value.slice(8, 10)}:${value.slice(10, 12)}:${value.slice(12, 14)}Z`;
+  const normalised = normalizeExplicitIsoTimestamp(iso);
+  // Calendar overflow such as 30 February is refused instead of rolled forward.
+  return normalised && normalised.replace(/\D/gu, '').slice(0, 14) === value ? normalised : null;
 }
 
-/** Link to the archived capture so the analyst can open it deliberately; never fetched here. */
+/**
+ * Link to browse the archive at the reported capture time; never fetched here.
+ * Only the time and status are retained, so the archive picks the nearest
+ * capture of the homepage, which may use a different scheme or www prefix.
+ */
 export function webArchiveCaptureUrl(domain: string, capturedAt: string): string {
   const timestamp = capturedAt.replace(/\D/gu, '').slice(0, 14);
   return `https://web.archive.org/web/${timestamp}/${normaliseWebArchiveRequest(domain).domain}/`;

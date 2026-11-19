@@ -210,7 +210,7 @@ async function checkInstalledIntakeAndContext(repositoryRoot: string, temporaryR
   const dated = record(JSON.parse(await readFile(savedLookup, 'utf8')), 'Saved Lookup fixture');
   record(record(dated.rdap, 'Saved Lookup RDAP').parsed, 'Saved Lookup RDAP publication').lifecycle = { createdDateIso: '2024-03-01T00:00:00.000Z' };
   await writeFile(datedLookup, JSON.stringify(dated), { flag: 'wx', mode: 0o600 });
-  await writeFile(ctResults, JSON.stringify({ schema: 'whoisleuth.cli.ct-search', version: 1, matches: [
+  await writeFile(ctResults, JSON.stringify({ schema: 'whoisleuth.cli.ct-search', version: 1, keyword: 'example', certCount: 1, truncated: false, matches: [
     { domain: 'example.test', hostnames: ['example.test'], firstObservedAt: '2019-06-10T12:00:00.000Z', lastObservedAt: null, certificateCount: 1 },
   ] }), { flag: 'wx', mode: 0o600 });
   const prior = record(JSON.parse(await run(['prior-registration', datedLookup, '--ct-results', ctResults, '--json'], 'offline prior registration review')), 'Installed prior registration review');

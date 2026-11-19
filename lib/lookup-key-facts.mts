@@ -5,6 +5,7 @@
 // missing value keeps its source state instead of becoming an absence.
 
 import { normalizeExplicitIsoTimestamp } from '../packages/evidence/observation.mts';
+import { tlsIssuerLabel } from './bulk-comparison-evidence.mts';
 
 export type LookupKeyFactSection = 'registry' | 'web-evidence';
 
@@ -84,23 +85,43 @@ function fact(id: string, label: string, value: string | null, observed: Observa
     complete: observed.complete, observedAt: observed.observedAt, section });
 }
 
-/** Key facts for a domain Lookup document. Other target types return none. */
-export function buildLookupKeyFacts(document: unknown): readonly LookupKeyFact[] {
-  const lookup = record(document);
-  if (lookup.type !== 'domain') return Object.freeze([]);
+/**
+ * Registration sources in attribution order: registry RDAP, WHOIS, then the
+ * registration decision's repeated values under the source it names, never as
+ * unattributed values. Uncollected sources are left out.
+ */
+function registrationSources(lookup: JsonRecord) {
   const diagnostics = record(lookup.diagnostics);
   const availability = record(lookup.availability);
   const rdap = observation('Registry RDAP', { ...record(lookup.rdap), ...record(diagnostics.rdap) });
   const whois = observation('WHOIS', { ...record(lookup.whois), ...record(diagnostics.whois) });
-  // The registration decision repeats values from the source it names; use
-  // them only with that source's attribution, never as unattributed values.
   const decisionSource = text(availability.source).toLowerCase();
   const decision = decisionSource === 'rdap' ? rdap : decisionSource === 'whois' ? whois : null;
-  const registration = [
+  return [
     { parsed: record(record(lookup.rdap).parsed), observed: rdap },
     { parsed: record(record(lookup.whois).parsed), observed: whois },
     ...(decision ? [{ parsed: availability, observed: decision }] : []),
   ].filter((item) => item.observed.state !== 'not_collected');
+}
+
+/**
+ * Each registration source's own creation value. Inferences use these to
+ * qualify the source, rather than reading the displayed key fact, which may
+ * come from a failed or incomplete source.
+ */
+export function lookupRegistrationCreatedObservations(document: unknown): readonly LookupKeyFact[] {
+  const lookup = record(document);
+  if (lookup.type !== 'domain') return Object.freeze([]);
+  return Object.freeze(registrationSources(lookup)
+    .map((item) => fact('registration.created', 'Created', lifecycleValue(item.parsed, 'createdDate'), item.observed, 'registry')));
+}
+
+/** Key facts for a domain Lookup document. Other target types return none. */
+export function buildLookupKeyFacts(document: unknown): readonly LookupKeyFact[] {
+  const lookup = record(document);
+  if (lookup.type !== 'domain') return Object.freeze([]);
+  const availability = record(lookup.availability);
+  const registration = registrationSources(lookup);
   const registrationFact = (id: string, label: string, read: (parsed: JsonRecord) => string | null): LookupKeyFact => {
     const candidates = registration.map((item) => ({ ...item, value: read(item.parsed) }));
     const selected = candidates.find((item) => item.value !== null) ?? candidates[0];
@@ -126,7 +147,7 @@ export function buildLookupKeyFacts(document: unknown): readonly LookupKeyFact[]
     fact('dns.addresses', 'IP addresses', listValue(addresses), dns, 'web-evidence'),
     fact('http.final_origin', 'Final origin', websiteOrigin(httpEvidence.finalUrl), http, 'web-evidence'),
     fact('http.response_status', 'HTTP status', Number.isSafeInteger(status) ? String(status) : null, http, 'web-evidence'),
-    fact('tls.issuer', 'TLS issuer', entityName(certificate.issuer ?? record(availability.tls).issuer), tls, 'web-evidence'),
+    fact('tls.issuer', 'TLS issuer', tlsIssuerLabel(certificate.issuer), tls, 'web-evidence'),
     fact('tls.valid_to', 'TLS expiry', text(certificate.validTo) || null, tls, 'web-evidence'),
   ]);
 }

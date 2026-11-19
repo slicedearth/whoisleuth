@@ -12,7 +12,7 @@ import { WEB_ARCHIVE_HISTORY_SCHEMA, WEB_ARCHIVE_HISTORY_VERSION } from '../pack
 const AT = '2026-10-01T00:00:00.000Z';
 const lookup = JSON.parse(readFileSync(new URL('./fixtures/cli-lookup-v1.json', import.meta.url), 'utf8'));
 lookup.rdap.parsed.lifecycle = { createdDateIso: '2024-03-01T00:00:00.000Z' };
-const ctResults = { schema: 'whoisleuth.cli.ct-search', version: 1, generatedAt: AT, keyword: 'example', matches: [
+const ctResults = { schema: 'whoisleuth.cli.ct-search', version: 1, generatedAt: AT, keyword: 'example', certCount: 5, truncated: false, matches: [
   { domain: 'other.example', hostnames: [], firstObservedAt: '2010-01-01T00:00:00.000Z', lastObservedAt: null, certificateCount: 1 },
   { domain: 'example.test', hostnames: ['example.test'], firstObservedAt: '2019-06-10T12:00:00.000Z', lastObservedAt: AT, certificateCount: 4 },
 ] };
@@ -62,4 +62,31 @@ test('refuses missing supporting results, other domains and unrelated files', as
     assert.equal(result.stdout, '');
     assert.match(result.stderr, message);
   }
+});
+
+test('uses only a creation date from a successful registration source and validated certificate results', async () => {
+  // RDAP failed but its retained display value remains; WHOIS is unavailable too.
+  const failed = structuredClone(lookup);
+  failed.diagnostics = { ...failed.diagnostics, rdap: { status: 'error', complete: false }, whois: { status: 'error' } };
+  const files = {
+    'failed.json': failed, 'ct.json': ctResults,
+    // Duplicate rows for one domain merge to its earliest observation.
+    'duplicate.json': { ...ctResults, matches: [
+      { domain: 'example.test', hostnames: ['example.test'], firstObservedAt: '2023-01-01T00:00:00.000Z', lastObservedAt: AT, certificateCount: 1 },
+      { domain: 'example.test', hostnames: ['www.example.test'], firstObservedAt: '2018-02-01T00:00:00.000Z', lastObservedAt: AT, certificateCount: 1 },
+    ] },
+    'uncounted.json': { ...ctResults, certCount: undefined },
+    'lookup.json': lookup,
+  };
+  const unqualified = JSON.parse((await cli(['prior-registration', 'failed.json', '--ct-results', 'ct.json', '--json'], files)).stdout);
+  assert.equal(unqualified.review.state, 'not_comparable');
+  assert.equal(unqualified.registrationSource, null);
+  assert.match(unqualified.review.limitations[0], /successful, complete registration source/u);
+
+  const merged = JSON.parse((await cli(['prior-registration', 'lookup.json', '--ct-results', 'duplicate.json', '--json'], files)).stdout);
+  assert.equal(merged.review.observations[0].observedAt, '2018-02-01T00:00:00.000Z');
+
+  const invalid = await cli(['prior-registration', 'lookup.json', '--ct-results', 'uncounted.json'], files);
+  assert.equal(invalid.code, EXIT_CODES.USAGE);
+  assert.match(invalid.stderr, /certificate count/u);
 });
