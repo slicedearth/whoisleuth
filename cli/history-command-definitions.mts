@@ -105,6 +105,27 @@ export const HISTORY_COMMAND_DEFINITIONS = Object.freeze({
     additionalOutputFormats: Object.freeze([]),
     bootstrapProfile: 'allowed',
   }),
+  'prior-registration': commandSeed({
+    reference: {
+      description: 'Compare a domain\u2019s registration creation date with earlier certificate-log and web archive observations.',
+      example: 'whoisleuth prior-registration lookup.json --ct-results ct.json --archive-history archive.json --json',
+      boundary: 'The command is offline. It reads a saved domain Lookup or evidence export with ct-search and archive-history JSON for the same domain, and uses the same comparison as browser Bulk review and Lookup\u2019s web archive panel. An earlier observation suggests an earlier registration; it does not identify an owner, a transfer or intent, and no earlier observation does not show a first registration.',
+    },
+    collection: { scope: 'Reads one saved Lookup or evidence export capped at 8 MiB and up to two supporting results capped at 4 MiB each.' },
+    summary: 'Compare registration date with earlier observations',
+    options: ['--ct-results', '--archive-history', '--json', '--quiet', '--no-color'],
+    positionals: OPTIONAL_FILE_POSITIONAL,
+    // At least one supporting result is required; the runner reports a missing pair as a usage error.
+    constraints: EMPTY_CONSTRAINTS,
+    handlerOwner: 'history',
+    networkEffect: 'offline',
+    common: false,
+    schemaIdentifiers: Object.freeze(['whoisleuth.cli.prior-registration']),
+    primaryArtefacts: Object.freeze(['Prior registration review']),
+    planSupport: false,
+    additionalOutputFormats: Object.freeze([]),
+    bootstrapProfile: 'allowed',
+  }),
   export: commandSeed({
     reference: {
       description: 'Convert one saved lookup into a versioned evidence report.',

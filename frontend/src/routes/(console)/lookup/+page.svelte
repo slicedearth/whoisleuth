@@ -833,6 +833,10 @@
         surfaces={sectionSurfaces['relationships-history']}
         controls={sectionNavigation.controls('relationships-history')}
         resultType={session.observation.response?.type ?? ''}
+        archiveTarget={session.observation.response?.type === 'domain' && session.observation.response.registrableDomain
+          ? { domain: session.observation.response.registrableDomain,
+            registrationCreatedAt: keyFacts.find((item) => item.id === 'registration.created')?.value ?? null }
+          : null}
         bind:visualView={session.visualView}
       />
     {/snippet}

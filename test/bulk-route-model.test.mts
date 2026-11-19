@@ -194,3 +194,17 @@ test('builds triage and table rows without route-owned transformation logic', ()
   assert.match(display.risk.factors[0]?.label ?? '', /Observed review signal/u);
   assert.match(display.responseHref, /monitor\?case=/u);
 });
+
+test('Bulk rows compare the earliest logged certificate with the current registration date', () => {
+  const ct = { firstObservedAt: '2019-06-10T12:00:00.000Z', lastObservedAt: '2026-06-01T00:00:00.000Z', certificateCount: 3, hostnames: ['candidate.example'] };
+  const display = (createdDate: string | null) => buildBulkResultDisplayRows({
+    visibleResults: [result({ ct, saved: { createdDate } as Partial<ScanResult['saved']> as ScanResult['saved'] })],
+    allResults: [], shortlistedDomains: new Set(), caseByDomain: new Map(), reviewStateByDomain: new Map(), mutationLabels: {},
+  })[0]!.ct!;
+  const earlier = display('2024-03-01T00:00:00.000Z');
+  assert.equal(earlier.firstObservedAt, ct.firstObservedAt);
+  assert.equal(earlier.priorRegistration.state, 'earlier_observation');
+  assert.equal(earlier.priorRegistration.observations[0]?.daysBeforeRegistration, 1725);
+  assert.equal(display('2019-06-09T00:00:00.000Z').priorRegistration.state, 'no_earlier_observation');
+  assert.equal(display(null).priorRegistration.state, 'not_comparable');
+});

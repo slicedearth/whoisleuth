@@ -13,8 +13,9 @@ import { CtCollectionError } from '../lib/ct-search.mts';
 
 process.env.SITE_PASSWORD = process.env.SITE_PASSWORD || 'test-only-secret';
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'test-only-session-signing-secret';
-// Route fixtures below exercise the enabled resolver path; its default-off state is asserted separately.
+// Route fixtures below exercise the enabled opt-in paths; their default-off state is asserted separately.
 process.env.WHOISLEUTH_RESOLVER_COMPARISON_ENABLED = '1';
+process.env.WHOISLEUTH_WEB_ARCHIVE_HISTORY_ENABLED = '1';
 
 const { app, apiErrorHandler, pageErrorHandler, registerNetworkApiRoutes } = await import('../server.mts');
 const { buildSessionCookie, createSessionToken } = await import('../lib/auth.mts');
@@ -76,6 +77,11 @@ const fixtureServices = {
     serviceFailure(hostname);
     serviceCalls.push(['resolver-compare', hostname, resolvers, options]);
     return { hostname, fixtureComparison: true };
+  },
+  collectWebArchiveHistory: async (domain: string, options: unknown) => {
+    serviceFailure(domain);
+    serviceCalls.push(['web-archive-history', domain, options]);
+    return { domain, fixtureArchive: true };
   },
 } as unknown as NetworkRouteServices;
 
@@ -429,6 +435,26 @@ describe('fixture-injected Express network routes', () => {
     assert.ok((serviceCalls[0]?.[3] as { signal?: AbortSignal }).signal instanceof AbortSignal);
   });
 
+  test('web archive history stays off until the operator opts in, then sends only a validated domain', async () => {
+    serviceCalls.length = 0;
+    delete process.env.WHOISLEUTH_WEB_ARCHIVE_HISTORY_ENABLED;
+    try {
+      const response = await request('/api/web-archive-history?q=archive-review.example');
+      assert.equal(response.status, 503);
+      assert.equal((await response.json() as { errorCode: string }).errorCode, 'FEATURE_DISABLED');
+      assert.equal(serviceCalls.length, 0);
+    } finally { process.env.WHOISLEUTH_WEB_ARCHIVE_HISTORY_ENABLED = '1'; }
+    for (const invalid of ['https%3A%2F%2Farchive-review.example%2F', '192.0.2.1', '%20archive-review.example']) {
+      assert.equal((await request(`/api/web-archive-history?q=${invalid}`)).status, 400, invalid);
+    }
+    assert.equal(serviceCalls.length, 0);
+    const response = await request('/api/web-archive-history?q=Archive-Review.example');
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { domain: 'archive-review.example', fixtureArchive: true });
+    assert.deepEqual(serviceCalls[0]?.slice(0, 2), ['web-archive-history', 'archive-review.example']);
+    assert.ok((serviceCalls[0]?.[2] as { signal?: AbortSignal }).signal instanceof AbortSignal);
+  });
+
   test('disconnected individual routes cancel collectors, retain their lease until settlement and send no late response', async () => {
     const routes = [
       { route: 'rdap?q=example.test', feature: 'rdap', service: 'fetchRdapRecord', optionsIndex: 2 },
@@ -438,6 +464,7 @@ describe('fixture-injected Express network routes', () => {
       { route: 'ct-search?q=example', feature: 'certificate_transparency', service: 'searchCertificateTransparency', optionsIndex: 1 },
       { route: 'domain-posture?q=example.test', feature: 'domain_posture', service: 'checkDomainPosture', optionsIndex: 1 },
       { route: 'resolver-compare?q=child.example.test&resolvers=cloudflare,google', feature: 'resolver_comparison', service: 'collectResolverComparison', optionsIndex: 2 },
+      { route: 'web-archive-history?q=archive-review.example', feature: 'web_archive_history', service: 'collectWebArchiveHistory', optionsIndex: 1 },
     ];
     for (const { route, feature, service, optionsIndex } of routes) {
       const started = deferred<AbortSignal>(), cancelled = deferred<void>();
@@ -585,7 +612,7 @@ describe('fixture-injected Express network routes', () => {
   });
 
   test('preserves missing-query and non-domain responses without calling services', async () => {
-    for (const route of ['lookup', 'rdap', 'whois', 'availability', 'ct-search', 'domain-posture', 'resolver-compare']) {
+    for (const route of ['lookup', 'rdap', 'whois', 'availability', 'ct-search', 'domain-posture', 'resolver-compare', 'web-archive-history']) {
       const beforeCalls = serviceCalls.length;
       const response = await request(`/api/${route}`);
       assert.equal(response.status, 400, route);
@@ -626,6 +653,7 @@ describe('fixture-injected Express network routes', () => {
       '/api/ct-search?q=throw.test',
       '/api/domain-posture?q=throw.test',
       '/api/resolver-compare?q=throw.test&resolvers=cloudflare,google',
+      '/api/web-archive-history?q=throw.test',
     ];
     for (const route of routes) {
       const response = await request(route);

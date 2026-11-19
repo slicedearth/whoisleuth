@@ -134,6 +134,14 @@ test('selected resolver comparison is reported disabled until the operator opts 
   assert.equal('reason' in on, false);
 });
 
+test('web archive history is reported disabled until the operator opts in', () => {
+  const off = featureById(capabilityReport('netlify', {}), 'web_archive_history');
+  assert.equal(off.status, 'disabled');
+  assert.match(stringValue(off.reason), /not enabled for this deployment/u);
+  const on = featureById(capabilityReport('netlify', { WHOISLEUTH_WEB_ARCHIVE_HISTORY_ENABLED: '1' }), 'web_archive_history');
+  assert.equal(on.status, 'supported');
+});
+
 test('optional scheduled monitoring is explicit, credential-gated, and Netlify-only', () => {
   const disabled = capabilityReport('netlify', {});
   const unavailable = capabilityReport('netlify', { WHOISLEUTH_SCHEDULED_MONITORING: '1' });

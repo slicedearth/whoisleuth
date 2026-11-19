@@ -4,6 +4,7 @@ import type { ScanResult } from './bulk-result-model.ts';
 import { RISK_MODEL_VERSION } from './scoring.ts';
 import { outreachAction } from '../drafts.ts';
 import { webCollectionScoreLimitation } from '../../../../packages/evidence/collection-quality.mts';
+import { reviewPriorRegistration, type PriorRegistrationReview } from '../../../../packages/evidence/prior-registration.mts';
 
 export type BulkPrimaryFilter =
   | 'all'
@@ -64,9 +65,12 @@ export type BulkResultDisplayRow = Readonly<{
   hasPasswordField: boolean;
   phishingLanguageMatch: string;
   ct: Readonly<{
+    firstObservedAt: string | null;
     lastObservedAt: string | null;
     hostnameCount: number;
     certificateCount: number;
+    /** Earliest logged certificate compared with the current registration's creation date. */
+    priorRegistration: PriorRegistrationReview;
   }> | null;
   errorRow: boolean;
   error: string;
@@ -371,9 +375,14 @@ export function buildBulkResultDisplayRows(input: {
       phishingLanguageMatch: row.phishingLanguageMatch || '',
       ct: row.ct
         ? {
+            firstObservedAt: row.ct.firstObservedAt,
             lastObservedAt: row.ct.lastObservedAt,
             hostnameCount: row.ct.hostnames.length,
             certificateCount: row.ct.certificateCount,
+            priorRegistration: reviewPriorRegistration({
+              registrationCreatedAt: row.saved.createdDate ?? null,
+              observations: row.ct.firstObservedAt ? [{ source: 'certificate_log', observedAt: row.ct.firstObservedAt }] : [],
+            }),
           }
         : null,
       errorRow: row.status === 'error',

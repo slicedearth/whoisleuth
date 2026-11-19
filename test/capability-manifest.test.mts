@@ -92,6 +92,7 @@ const EXPECTED_CAPABILITY_IDS = [
   'network_directory',
   'domain_posture',
   'resolver_comparison',
+  'web_archive_history',
   'dnssec_validation',
   'mail_transport_review',
   'rendered_web_capture',
@@ -123,6 +124,7 @@ const EXPECTED_LEGACY_CAPABILITY_IDS = [
   'domain_feed_search',
   'domain_posture',
   'resolver_comparison',
+  'web_archive_history',
   'idn_confusables',
   'analyst_cases',
   'watchlists',
@@ -160,6 +162,10 @@ const EXPECTED_LEGACY_CAPABILITIES = [
   {
     id: 'resolver_comparison', status: 'disabled', execution: 'hosted', scanModes: [],
     reason: 'Selected resolver comparison is not enabled for this deployment.',
+  },
+  {
+    id: 'web_archive_history', status: 'disabled', execution: 'hosted', scanModes: [],
+    reason: 'Web archive history is not enabled for this deployment.',
   },
   { id: 'idn_confusables', status: 'local_only', execution: 'browser', scanModes: ['fast', 'deep'] },
   { id: 'analyst_cases', status: 'local_only', execution: 'browser', scanModes: [] },

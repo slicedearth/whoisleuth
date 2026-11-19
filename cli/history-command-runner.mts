@@ -265,12 +265,34 @@ async function runExportCommand(
   return EXIT_CODES.SUCCESS;
 }
 
+async function runPriorRegistrationCommand(
+  args: Extract<HistoryCommandArguments, { action: 'prior-registration' }>,
+  _dependencies: HistoryCommandDependencies,
+  context: CliCommandContext,
+): Promise<number> {
+  context.setFailureLabel('Prior registration review');
+  const { buildCliPriorRegistration, formatCliPriorRegistration, MAX_PRIOR_REGISTRATION_SUPPORTING_BYTES } = await import('./prior-registration.mts');
+  if (!args.certificateResults && !args.archiveHistory) throw new CliUsageError('prior-registration needs --ct-results, --archive-history or both.');
+  const supporting = (path: string | null, label: string) => path
+    ? context.readInput(path, MAX_PRIOR_REGISTRATION_SUPPORTING_BYTES, label) : Promise.resolve(null);
+  const [registration, certificateResults, archiveHistory] = await Promise.all([
+    context.readInput(args.source, MAX_SAVED_LOOKUP_INPUT_BYTES, 'Saved Lookup'),
+    supporting(args.certificateResults, 'Certificate search result'),
+    supporting(args.archiveHistory, 'Web archive history'),
+  ]);
+  const document = await buildCliPriorRegistration({ registration, certificateResults, archiveHistory }, context.now());
+  if (!args.quiet) context.writeStdout(args.output === 'json'
+    ? formatJsonDocument(document) : context.terminal(formatCliPriorRegistration(document), args.color));
+  return EXIT_CODES.SUCCESS;
+}
+
 const HISTORY_COMMAND_HANDLERS = Object.freeze({
   'mcp': runMcpCommand,
   'view': runViewCommand,
   'diff': runRetainedDiffCommand,
   'reconcile': runReconciliationCommand,
   'timeline': runTimelineCommand,
+  'prior-registration': runPriorRegistrationCommand,
   'export': runExportCommand,
 } satisfies DiscriminatedCommandHandlerMap<
   HistoryCommandArguments,

@@ -32,6 +32,21 @@ export const NETWORK_COMMAND_DEFINITIONS = Object.freeze({
     schemaIdentifiers: Object.freeze(['whoisleuth.resolver-comparison']), primaryArtefacts: Object.freeze([]),
     planSupport: false, additionalOutputFormats: Object.freeze([]), bootstrapProfile: 'allowed',
   }),
+  'archive-history': commandSeed({
+    reference: {
+      description: 'Read the earliest and latest web archive captures of one domain\u2019s homepage.',
+      example: 'whoisleuth archive-history example.test --json',
+      boundary: 'The Internet Archive receives the domain in two requests, with no retries and no page content retained. A capture records when the archive saw the homepage; it does not establish ownership, continuous operation or an earlier registration on its own.',
+    },
+    collection: { scope: 'The fixed Internet Archive capture index; two requests, 16 KiB per response and twelve seconds total.' },
+    summary: 'Read web archive capture history',
+    options: ['--json', '--quiet', '--no-color'],
+    positionals: Object.freeze([positional('domain', 'text', 1, 1)]),
+    constraints: EMPTY_CONSTRAINTS,
+    handlerOwner: 'network', networkEffect: 'always_network', common: false,
+    schemaIdentifiers: Object.freeze(['whoisleuth.web-archive-history']), primaryArtefacts: Object.freeze([]),
+    planSupport: false, additionalOutputFormats: Object.freeze([]), bootstrapProfile: 'allowed',
+  }),
   "ct-search": commandSeed({
     reference: {
       description: 'Search certificate-transparency observations for one bounded keyword.',

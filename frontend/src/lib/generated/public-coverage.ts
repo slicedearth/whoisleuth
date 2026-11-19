@@ -33,8 +33,8 @@ export const PUBLIC_COVERAGE = {
     }
   ],
   "summary": {
-    "capabilityFamilies": 35,
-    "cliOperations": 58,
+    "capabilityFamilies": 36,
+    "cliOperations": 60,
     "registrySnapshot": {
       "schema": "whoisleuth\u002eregistry-standards-coverage",
       "version": 1,
@@ -698,6 +698,36 @@ export const PUBLIC_COVERAGE = {
       "limitations": [
         "Explicitly selected HTTPS resolvers receive the hostname and A/AAAA questions. Four requests maximum; normal Lookup, Bulk and monitoring do not invoke this action.",
         "Resolver agreement is not authoritative truth or local DNSSEC validation. Provider retention policies apply.",
+        "Off unless the deployment operator explicitly enables it; the emergency switch still disables it."
+      ]
+    },
+    {
+      "id": "web_archive_history",
+      "title": "Web archive history",
+      "job": "investigate",
+      "implemented": true,
+      "reviewBasis": "Versioned capability contract and deterministic repository verification",
+      "optionalOrConfigurationDependent": false,
+      "executionPlanes": [
+        "hosted_bounded_passive"
+      ],
+      "scanModes": [
+        "deep"
+      ],
+      "networkMode": "bounded_passive",
+      "runtimeAvailability": "not_evaluated_by_public_catalogue",
+      "outcomes": [
+        "complete",
+        "partial",
+        "blocked",
+        "unsupported",
+        "unavailable",
+        "budget_exhausted"
+      ],
+      "partialResultContract": "explicit_per_source",
+      "limitations": [
+        "The Internet Archive receives the registrable domain in two requests for its earliest and latest homepage captures. No page content, retries or automatic invocation by Lookup, Bulk or monitoring.",
+        "Captures show when the archive recorded the homepage, not ownership or continuous operation. The archive’s own terms and privacy policy apply.",
         "Off unless the deployment operator explicitly enables it; the emergency switch still disables it."
       ]
     },

@@ -384,6 +384,31 @@ empty agreement. Exit `4` means some comparison evidence is incomplete;
 different complete answers still exit `0`. Agreement is not authoritative truth,
 local DNSSEC validation or a safety verdict. Provider privacy policies apply.
 
+To see when the Internet Archive first and last recorded a domain's homepage:
+
+```sh
+whoisleuth archive-history example.test --json
+```
+
+This sends the domain in two requests, with no retries and a twelve-second
+deadline, and keeps capture times and recorded HTTP statuses, not page content.
+Exit `4` means a query failed or timed out; no capture is a complete answer. A
+capture does not establish ownership or continuous operation.
+
+To check whether a name was observed before its current registration, compare a
+saved Lookup or evidence export with either or both results, offline:
+
+```sh
+whoisleuth prior-registration lookup.json --ct-results ct.json --archive-history archive.json
+```
+
+`ct.json` is written by `ct-search --json` and `archive.json` by
+`archive-history --json`. An observation more than 48 hours before the registry
+creation date suggests an earlier registration of the name; it does not identify
+a previous or current owner, a transfer or intent, and no earlier observation
+does not show that the current registration is the first. Browser Bulk review
+and Lookup's web archive panel use the same comparison.
+
 ### Selected network-directory context
 
 ```sh

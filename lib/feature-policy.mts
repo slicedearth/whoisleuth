@@ -24,6 +24,7 @@ const NETWORK_FEATURE_DEFINITIONS = Object.freeze({
   certificate_transparency: Object.freeze({ env: 'WHOISLEUTH_DISABLE_CERTIFICATE_TRANSPARENCY', label: 'Certificate Transparency search' }),
   domain_posture: Object.freeze({ env: 'WHOISLEUTH_DISABLE_DOMAIN_POSTURE', label: 'domain-posture auditing' }),
   resolver_comparison: Object.freeze({ env: 'WHOISLEUTH_DISABLE_RESOLVER_COMPARISON', enableEnv: 'WHOISLEUTH_RESOLVER_COMPARISON_ENABLED', label: 'selected resolver comparison' }),
+  web_archive_history: Object.freeze({ env: 'WHOISLEUTH_DISABLE_WEB_ARCHIVE_HISTORY', enableEnv: 'WHOISLEUTH_WEB_ARCHIVE_HISTORY_ENABLED', label: 'web archive history' }),
 } satisfies Record<string, Readonly<{ env: string; enableEnv?: string; label: string }>>);
 
 type NetworkFeatureId = keyof typeof NETWORK_FEATURE_DEFINITIONS;

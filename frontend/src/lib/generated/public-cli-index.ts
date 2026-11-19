@@ -1,6 +1,6 @@
 // Generated from canonical runtime-neutral metadata. Do not edit by hand.
 export const PUBLIC_CLI_INDEX = {
-  "commandCount": 58,
+  "commandCount": 60,
   "groups": [
     "investigate",
     "respond",
@@ -120,6 +120,13 @@ export const PUBLIC_CLI_INDEX = {
     {
       "id": "peeringdb-context",
       "summary": "Read selected network-directory context",
+      "group": "investigate",
+      "common": false,
+      "mode": "network"
+    },
+    {
+      "id": "archive-history",
+      "summary": "Read web archive capture history",
       "group": "investigate",
       "common": false,
       "mode": "network"
@@ -408,6 +415,13 @@ export const PUBLIC_CLI_INDEX = {
       "id": "timeline",
       "summary": "Build same-domain history from saved lookups",
       "group": "assure",
+      "common": false,
+      "mode": "offline"
+    },
+    {
+      "id": "prior-registration",
+      "summary": "Compare registration date with earlier observations",
+      "group": "investigate",
       "common": false,
       "mode": "offline"
     },

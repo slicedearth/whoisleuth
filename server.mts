@@ -30,6 +30,8 @@ import { checkDomainPosture, normalizeAuditDomain, normalizeDkimSelectors, norma
 import { parseInheritedDnsSelection } from './lib/dns-inheritance-review.mts';
 import { collectResolverComparison } from './lib/resolver-comparison.mts';
 import { normaliseResolverComparisonRequest } from './packages/evidence/resolver-comparison.mts';
+import { collectWebArchiveHistory } from './lib/web-archive-history.mts';
+import { normaliseWebArchiveRequest } from './packages/evidence/web-archive-history.mts';
 import { capabilityReport } from './lib/capabilities.mts';
 import { DOMAIN_FEED_BODY_BYTES } from './lib/server/domain-feed-config.mts';
 import { parseDomainFeedOperation, executeDomainFeedOperation } from './lib/server/domain-feed-client.mts';
@@ -116,6 +118,7 @@ type NetworkRouteServices = Readonly<{
   searchCertificateTransparency: typeof searchCertificateTransparency;
   checkDomainPosture: typeof checkDomainPosture;
   collectResolverComparison?: typeof collectResolverComparison;
+  collectWebArchiveHistory?: typeof collectWebArchiveHistory;
   executeDomainFeedOperation?: typeof executeDomainFeedOperation;
 }>;
 
@@ -371,6 +374,7 @@ const DEFAULT_NETWORK_ROUTE_SERVICES: NetworkRouteServices = Object.freeze({
   searchCertificateTransparency,
   checkDomainPosture,
   collectResolverComparison,
+  collectWebArchiveHistory,
 });
 
 function registerNetworkApiRoutes(
@@ -384,6 +388,17 @@ function registerNetworkApiRoutes(
     return withExpressOperationBudget(req, res, operationBudgetTargetFor('resolver_comparison'), async signal => {
       try {
         const report = await (services.collectResolverComparison ?? collectResolverComparison)(request.hostname, request.resolvers, { signal });
+        if (!signal.aborted) res.json(report);
+      } catch { if (!signal.aborted) sendUnexpectedApiError(res); }
+    });
+  });
+  target.get('/api/web-archive-history', apiRateLimit, requireAuth, requireNetworkRequestAdmission, requireFeature('web_archive_history'), async (req: RequestLike, res: Response) => {
+    let request;
+    try { request = normaliseWebArchiveRequest(req.query.q); }
+    catch { return res.status(400).json({ error: 'Select one domain name.' }); }
+    return withExpressOperationBudget(req, res, operationBudgetTargetFor('web_archive_history'), async signal => {
+      try {
+        const report = await (services.collectWebArchiveHistory ?? collectWebArchiveHistory)(request.domain, { signal });
         if (!signal.aborted) res.json(report);
       } catch { if (!signal.aborted) sendUnexpectedApiError(res); }
     });

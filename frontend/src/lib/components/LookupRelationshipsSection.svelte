@@ -2,6 +2,7 @@
   import LookupEvidenceSection from './LookupEvidenceSection.svelte';
   import LookupFamilySummary from './LookupFamilySummary.svelte';
   import DeferredSurface from './DeferredSurface.svelte';
+  import WebArchiveHistory from './WebArchiveHistory.svelte';
   import type { LookupSectionControls } from '#lib/controllers/lookup-section-navigation.ts';
   import type { buildLookupRouteAnalysis } from '#lib/analysis/lookup-route-analysis.ts';
   import type { LookupVisualView } from './LookupVisualWorkspace.svelte';
@@ -14,12 +15,14 @@
     surfaces,
     controls,
     resultType,
+    archiveTarget = null,
     visualView = $bindable(),
   }: {
     analysis: Analysis;
     surfaces: ReturnType<typeof lookupSectionSurfaces>['relationships-history'];
     controls: LookupSectionControls;
     resultType: string;
+    archiveTarget?: Readonly<{ domain: string; registrationCreatedAt: string | null }> | null;
     visualView: LookupVisualView;
   } = $props();
   const {
@@ -71,5 +74,6 @@
         onnavigate: controls.onnavigate,
       }}
     />
+    {#if archiveTarget}<WebArchiveHistory domain={archiveTarget.domain} registrationCreatedAt={archiveTarget.registrationCreatedAt} />{/if}
   {/if}
 </LookupEvidenceSection>

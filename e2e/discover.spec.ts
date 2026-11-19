@@ -946,6 +946,35 @@ test.describe('CT provenance badge in Bulk results', () => {
   });
 });
 
+test('Bulk marks a CT candidate whose earliest certificate predates its current registration', async ({ page }) => {
+  // example.invalid was first logged on 1 January 2026; other.invalid on 1 February 2026.
+  const created: Record<string, string> = { 'example.invalid': '2026-05-01T00:00:00.000Z', 'other.invalid': '2025-01-01T00:00:00.000Z' };
+  await page.route('**/api/lookup?*', (route) => {
+    const domain = new URL(route.request().url()).searchParams.get('q') ?? '';
+    return route.fulfill({ json: {
+      availability: { applicable: true, domain, observedAt: '2026-07-20T00:05:00.000Z', state: 'registered', confidence: 'high',
+        registrar: { name: 'Example Registrar' }, createdDate: created[domain], nameservers: ['ns1.shared.example'] },
+      diagnostics: { version: 7, rdap: { status: 'complete', fetchedAt: '2026-07-20T00:00:00.000Z' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+    } });
+  });
+  await mockCtSearch(page, structuredResponse);
+  await runCtSearch(page);
+  await page.getByRole('button', { name: 'Select filtered (2)' }).click();
+  await page.getByRole('button', { name: 'Continue to Bulk with 2' }).click();
+  await page.getByRole('button', { name: /^Scan 2 domains$/ }).click();
+  await expect(page.locator('.status')).toHaveText('Completed 2 of 2 lookups.', { timeout: 20_000 });
+
+  const earlier = page.locator('.results-table tbody tr', { hasText: 'example.invalid' }).first();
+  await expect(earlier.getByText('Certificate logged before current registration', { exact: true })).toBeVisible();
+  await earlier.locator('details.ct-source summary').click();
+  await expect(earlier.locator('details.ct-source')).toContainText('120 days before the current registration was created');
+  await expect(earlier.locator('details.ct-source')).toContainText('does not identify a previous or current owner');
+  const later = page.locator('.results-table tbody tr', { hasText: 'other.invalid' }).first();
+  await expect(later.getByText('Certificate logged before current registration', { exact: true })).toHaveCount(0);
+  await later.locator('details.ct-source summary').click();
+  await expect(later.locator('details.ct-source')).toContainText('does not show that the current registration is the first');
+});
+
 test('a complete CT baseline persists across reload and labels newly observed domains', async ({ page }) => {
   let requestCount = 0;
   await page.route('**/api/ct-search**', (route) => {

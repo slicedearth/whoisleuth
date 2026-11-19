@@ -39,6 +39,14 @@ type TimelineArguments = {
   output: 'terminal' | 'json';
 } & TerminalOptions;
 
+type PriorRegistrationArguments = {
+  action: 'prior-registration';
+  source: string | null;
+  certificateResults: string | null;
+  archiveHistory: string | null;
+  output: 'terminal' | 'json';
+} & TerminalOptions;
+
 type ExportArguments = {
   action: 'export';
   source: string | null;
@@ -82,6 +90,14 @@ export const HISTORY_ARGUMENT_PARSERS = Object.freeze({
   timeline: (parsed: ParsedCommandArguments<TimelineArguments['action']>): TimelineArguments => ({
     action: 'timeline',
     sources: uniqueSources(parsed, 'timeline'),
+    output: jsonOutput(parsed),
+    ...terminalOptions(parsed),
+  }),
+  'prior-registration': (parsed: ParsedCommandArguments<PriorRegistrationArguments['action']>): PriorRegistrationArguments => ({
+    action: 'prior-registration',
+    source: parsed.positionalValue('source'),
+    certificateResults: parsed.optionValue('--ct-results'),
+    archiveHistory: parsed.optionValue('--archive-history'),
     output: jsonOutput(parsed),
     ...terminalOptions(parsed),
   }),

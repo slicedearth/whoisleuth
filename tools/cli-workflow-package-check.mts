@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { Byte, Encoder } from '@nuintun/qrcode';
 import { encode } from 'fast-png';
 import { readBoundedRegularFileWithin } from '../lib/bounded-file.mts';
@@ -205,6 +205,17 @@ async function checkInstalledIntakeAndContext(repositoryRoot: string, temporaryR
   const evidenceView = record(JSON.parse(await run(['view', earlierEvidence, '--json'], 'offline evidence export view')), 'Installed evidence view');
   if (evidenceView.schema !== 'whoisleuth.cli.lookup-evidence-view' || record(evidenceView.replay, 'Evidence view replay').target !== 'example.test') {
     throw new TypeError('Installed evidence view did not read the exported target.');
+  }
+  const datedLookup = path.join(temporaryRoot, 'dated-lookup.json'), ctResults = path.join(temporaryRoot, 'ct-results.json');
+  const dated = record(JSON.parse(await readFile(savedLookup, 'utf8')), 'Saved Lookup fixture');
+  record(record(dated.rdap, 'Saved Lookup RDAP').parsed, 'Saved Lookup RDAP publication').lifecycle = { createdDateIso: '2024-03-01T00:00:00.000Z' };
+  await writeFile(datedLookup, JSON.stringify(dated), { flag: 'wx', mode: 0o600 });
+  await writeFile(ctResults, JSON.stringify({ schema: 'whoisleuth.cli.ct-search', version: 1, matches: [
+    { domain: 'example.test', hostnames: ['example.test'], firstObservedAt: '2019-06-10T12:00:00.000Z', lastObservedAt: null, certificateCount: 1 },
+  ] }), { flag: 'wx', mode: 0o600 });
+  const prior = record(JSON.parse(await run(['prior-registration', datedLookup, '--ct-results', ctResults, '--json'], 'offline prior registration review')), 'Installed prior registration review');
+  if (prior.schema !== 'whoisleuth.cli.prior-registration' || record(prior.review, 'Prior registration result').state !== 'earlier_observation') {
+    throw new TypeError('Installed prior registration review did not compare the certificate observation with the creation date.');
   }
   const emailFile = path.join(temporaryRoot, 'selected-message.eml');
   await writeFile(emailFile, 'From: private-local-part@sender.example\r\nContent-Type: text/html\r\n\r\n<a href="https://destination.example/private?token=excluded-value">https://sender.example</a>', { flag: 'wx', mode: 0o600 });

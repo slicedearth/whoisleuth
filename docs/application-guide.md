@@ -365,6 +365,13 @@ The evidence graph keeps every supported relationship from the Lookup; lenses,
 grouping and the searchable list change only the view. Bulk public-infrastructure
 groups leave out non-public DNS answers.
 
+Where the deployment enables it, **Web archive history** in Relationships and
+history shows when the Internet Archive first and last recorded the homepage, with
+links to open each capture. It sends the domain to the archive only when you select
+**Read archive history**. If the earliest capture is more than 48 hours before the
+registry creation date, the panel says the name was observed before the current
+registration; that suggests an earlier registration, not who owned it.
+
 A full Deep domain result can include:
 
 - registry RDAP and a separate registrar RDAP follow-up;
@@ -437,9 +444,14 @@ compact Deep mode. Each domain is a separate request, so progress and pacing sta
 visible.
 
 Filters separate registered, unregistered, inconclusive, failed and
-source-limited results. Relationship summaries name the exact field behind a
-shared address, nameserver, mail server or certificate; shared infrastructure is
-common and does not by itself link domains.
+source-limited results. Candidates from a Certificate Transparency search show
+their earliest and latest certificate observations, and are marked **Certificate
+logged before current registration** when the earliest predates the registry
+creation date by more than 48 hours.
+
+Relationship summaries name the exact field behind a shared address, nameserver,
+mail server or certificate; shared infrastructure is common and does not by itself
+link domains.
 
 You can save Bulk sessions, named views and per-domain review state. Saved
 sessions contain your targets, so treat them as investigation data.

@@ -1657,6 +1657,28 @@ const SHARED_OPTIONS = [
     "metaAction": null
   },
   {
+    "option": "--ct-results",
+    "scope": "command",
+    "arity": 1,
+    "valueKind": "file",
+    "values": [],
+    "integerRanges": [],
+    "occurrence": "once",
+    "acceptsOptionLikeValue": false,
+    "metaAction": null
+  },
+  {
+    "option": "--archive-history",
+    "scope": "command",
+    "arity": 1,
+    "valueKind": "file",
+    "values": [],
+    "integerRanges": [],
+    "occurrence": "once",
+    "acceptsOptionLikeValue": false,
+    "metaAction": null
+  },
+  {
     "option": "--compact",
     "scope": "command",
     "arity": 0,
@@ -2661,6 +2683,48 @@ export const PUBLIC_CLI_GRAMMAR = {
       "kind": "required",
       "options": [
         "--permitted-use"
+      ]
+    }
+  ],
+  "metaActions": [
+    "help"
+  ]
+},
+"archive-history": {
+  "parserKey": "archive-history",
+  "bootstrapProfile": "allowed",
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
+  "positionals": [
+    {
+      "name": "domain",
+      "valueKind": "text",
+      "minimum": 1,
+      "maximum": 1,
+      "values": [],
+      "inputSource": "argv",
+      "requiredWhenOptions": []
+    }
+  ],
+  "constraints": [
+    {
+      "kind": "requires_all",
+      "option": "--force",
+      "requiredOptions": [
+        "--output"
+      ]
+    },
+    {
+      "kind": "mutually_exclusive",
+      "options": [
+        "--quiet",
+        "--output"
+      ]
+    },
+    {
+      "kind": "excludes_all",
+      "option": "--quiet",
+      "excludedOptions": [
+        "--json"
       ]
     }
   ],
@@ -4671,10 +4735,52 @@ export const PUBLIC_CLI_GRAMMAR = {
     "help"
   ]
 },
+"prior-registration": {
+  "parserKey": "prior-registration",
+  "bootstrapProfile": "allowed",
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[128], SHARED_OPTIONS[129], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
+  "positionals": [
+    {
+      "name": "source",
+      "valueKind": "file",
+      "minimum": 0,
+      "maximum": 1,
+      "values": [],
+      "inputSource": "argv_or_stdin",
+      "requiredWhenOptions": []
+    }
+  ],
+  "constraints": [
+    {
+      "kind": "requires_all",
+      "option": "--force",
+      "requiredOptions": [
+        "--output"
+      ]
+    },
+    {
+      "kind": "mutually_exclusive",
+      "options": [
+        "--quiet",
+        "--output"
+      ]
+    },
+    {
+      "kind": "excludes_all",
+      "option": "--quiet",
+      "excludedOptions": [
+        "--json"
+      ]
+    }
+  ],
+  "metaActions": [
+    "help"
+  ]
+},
 "export": {
   "parserKey": "export",
   "bootstrapProfile": "allowed",
-  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[22], SHARED_OPTIONS[23], SHARED_OPTIONS[128], SHARED_OPTIONS[24]],
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[22], SHARED_OPTIONS[23], SHARED_OPTIONS[130], SHARED_OPTIONS[24]],
   "positionals": [
     {
       "name": "source",

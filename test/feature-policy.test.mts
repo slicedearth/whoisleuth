@@ -15,8 +15,17 @@ describe('network feature policy', () => {
     const policy = networkFeaturePolicy({});
     assert.deepEqual(Object.keys(policy).sort(), Object.keys(NETWORK_FEATURE_DEFINITIONS).sort());
     const optIns = Object.entries(NETWORK_FEATURE_DEFINITIONS).filter(([, definition]) => 'enableEnv' in definition).map(([id]) => id);
-    assert.deepEqual(optIns, ['resolver_comparison']);
+    assert.deepEqual(optIns, ['resolver_comparison', 'web_archive_history']);
     for (const [id, enabled] of Object.entries(policy)) assert.equal(enabled, !optIns.includes(id), id);
+  });
+
+  test('web archive history needs an exact operator opt-in and its emergency switch still wins', () => {
+    for (const value of [undefined, '', '0', 'true', ' 1']) {
+      assert.equal(featureDecision('web_archive_history', networkFeaturePolicy({ WHOISLEUTH_WEB_ARCHIVE_HISTORY_ENABLED: value })).enabled, false, String(value));
+    }
+    assert.equal(featureDecision('web_archive_history', networkFeaturePolicy({ WHOISLEUTH_WEB_ARCHIVE_HISTORY_ENABLED: '1' })).enabled, true);
+    assert.equal(featureDecision('web_archive_history', networkFeaturePolicy({
+      WHOISLEUTH_WEB_ARCHIVE_HISTORY_ENABLED: '1', WHOISLEUTH_DISABLE_WEB_ARCHIVE_HISTORY: '1' })).enabled, false);
   });
 
   test('resolver comparison needs an exact operator opt-in and its emergency switch still wins', () => {

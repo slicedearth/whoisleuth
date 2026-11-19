@@ -1568,6 +1568,26 @@ const SHARED_COMMAND_OPTIONS = [
     "defaultDescription": null
   },
   {
+    "option": "--ct-results",
+    "scope": "command",
+    "usage": "--ct-results \u003cfile>",
+    "description": "Read certificate-log search JSON written by ct-search --json.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--archive-history",
+    "scope": "command",
+    "usage": "--archive-history \u003cfile>",
+    "description": "Read web archive history JSON written by archive-history --json.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
     "option": "--compact",
     "scope": "command",
     "usage": "--compact",
@@ -1579,7 +1599,7 @@ const SHARED_COMMAND_OPTIONS = [
   }
 ] as const;
 export const PUBLIC_CLI_CATALOGUE = {
-  "commandCount": 58,
+  "commandCount": 60,
   "groups": [
     "investigate",
     "respond",
@@ -2967,6 +2987,82 @@ export const PUBLIC_CLI_CATALOGUE = {
         "documentStates": [],
         "privacyLimitations": [
           "One ASN is sent to the selected fixed directory for acknowledged permitted operational use or existing provider permission. No contact expansion, cache, output file or automatic invocation. Provider terms still apply."
+        ]
+      }
+    },
+    {
+      "id": "archive-history",
+      "summary": "Read web archive capture history",
+      "description": "Read the earliest and latest web archive captures of one domain’s homepage.",
+      "group": "investigate",
+      "common": false,
+      "usage": "whoisleuth archive-history \u003cdomain> [--json] [--quiet] [--no-color]",
+      "example": "whoisleuth archive-history example.test --json",
+      "boundary": "The Internet Archive receives the domain in two requests, with no retries and no page content retained. A capture records when the archive saw the homepage; it does not establish ownership, continuous operation or an earlier registration on its own.",
+      "collection": {
+        "mode": "network",
+        "scope": "The fixed Internet Archive capture index; two requests, 16 KiB per response and twelve seconds total."
+      },
+      "inputs": [
+        {
+          "name": "domain",
+          "valueKind": "text",
+          "minimum": 1,
+          "maximum": 1,
+          "values": [],
+          "inputSource": "argv",
+          "requiredWhenOptions": []
+        }
+      ],
+      "importantOptions": [
+        "--json",
+        "--quiet",
+        "--no-color"
+      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "networkEffect": "always_network",
+      "disclosureClass": "bounded_passive",
+      "explicitAuthorisationRequired": false,
+      "planSupport": false,
+      "failurePolicySupport": false,
+      "supportedSchemaIdentifiers": [
+        "whoisleuth\u002eweb-archive-history"
+      ],
+      "inputLimits": [
+        "The fixed Internet Archive capture index; two requests, 16 KiB per response and twelve seconds total.",
+        "domain: 1-1 text value"
+      ],
+      "outputLimits": [
+        "Output is bounded by the command-owned formatter and document contract.",
+        "Selected file output is atomic and replacement requires --force."
+      ],
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
+      ],
+      "fileOutput": true,
+      "primaryEvidenceArtefacts": [],
+      "capability": {
+        "familyId": "web_archive_history",
+        "networkMode": "bounded_passive",
+        "dataSent": [
+          "normalised_target"
+        ],
+        "recipients": [
+          "web_archive_service"
+        ],
+        "authorisation": "explicit_action",
+        "retention": "local_output_deliberate",
+        "export": "local_output",
+        "outcomes": [
+          "complete",
+          "partial"
+        ],
+        "documentStates": [],
+        "privacyLimitations": [
+          "The Internet Archive receives the registrable domain in two bounded requests for its earliest and latest homepage captures. No page content, retry or automatic invocation by other commands."
         ]
       }
     },
@@ -6448,6 +6544,87 @@ export const PUBLIC_CLI_CATALOGUE = {
       }
     },
     {
+      "id": "prior-registration",
+      "summary": "Compare registration date with earlier observations",
+      "description": "Compare a domain’s registration creation date with earlier certificate-log and web archive observations.",
+      "group": "investigate",
+      "common": false,
+      "usage": "whoisleuth prior-registration [\u003csource>] [--ct-results \u003cfile>] [--archive-history \u003cfile>] [--json] [--quiet] [--no-color]",
+      "example": "whoisleuth prior-registration lookup.json --ct-results ct.json --archive-history archive.json --json",
+      "boundary": "The command is offline. It reads a saved domain Lookup or evidence export with ct-search and archive-history JSON for the same domain, and uses the same comparison as browser Bulk review and Lookup’s web archive panel. An earlier observation suggests an earlier registration; it does not identify an owner, a transfer or intent, and no earlier observation does not show a first registration.",
+      "collection": {
+        "mode": "offline",
+        "scope": "Reads one saved Lookup or evidence export capped at 8 MiB and up to two supporting results capped at 4 MiB each."
+      },
+      "inputs": [
+        {
+          "name": "source",
+          "valueKind": "file",
+          "minimum": 0,
+          "maximum": 1,
+          "values": [],
+          "inputSource": "argv_or_stdin",
+          "requiredWhenOptions": []
+        }
+      ],
+      "importantOptions": [
+        "--ct-results",
+        "--archive-history",
+        "--json",
+        "--quiet",
+        "--no-color"
+      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[132], SHARED_COMMAND_OPTIONS[133], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "networkEffect": "offline",
+      "disclosureClass": "none",
+      "explicitAuthorisationRequired": false,
+      "planSupport": false,
+      "failurePolicySupport": false,
+      "supportedSchemaIdentifiers": [
+        "whoisleuth\u002ecli.prior-registration"
+      ],
+      "inputLimits": [
+        "Reads one saved Lookup or evidence export capped at 8 MiB and up to two supporting results capped at 4 MiB each.",
+        "source: 0-1 file value"
+      ],
+      "outputLimits": [
+        "Output is bounded by the command-owned formatter and document contract.",
+        "Selected file output is atomic and replacement requires --force."
+      ],
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
+      ],
+      "fileOutput": true,
+      "primaryEvidenceArtefacts": [
+        "Prior registration review"
+      ],
+      "capability": {
+        "familyId": "offline_review",
+        "networkMode": "none",
+        "dataSent": [
+          "none"
+        ],
+        "recipients": [
+          "none"
+        ],
+        "authorisation": "explicit_action",
+        "retention": "local_output_deliberate",
+        "export": "local_output",
+        "outcomes": [
+          "complete",
+          "partial"
+        ],
+        "documentStates": [],
+        "privacyLimitations": [
+          "The command reads only selected bounded local input and makes no network request.",
+          "Output remains under the operator's local retention and deletion control."
+        ]
+      }
+    },
+    {
       "id": "export",
       "summary": "Convert a lookup to an evidence report",
       "description": "Convert one saved lookup into a versioned evidence report.",
@@ -6477,7 +6654,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--compact",
         "--no-attribution"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[22], SHARED_COMMAND_OPTIONS[23], SHARED_COMMAND_OPTIONS[132], SHARED_COMMAND_OPTIONS[24]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[22], SHARED_COMMAND_OPTIONS[23], SHARED_COMMAND_OPTIONS[134], SHARED_COMMAND_OPTIONS[24]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,

@@ -7,6 +7,7 @@ export const CAPABILITY_IDS = Object.freeze({
   DOMAIN_EVIDENCE: 'domain_evidence',
   DNS_INTELLIGENCE: 'dns_intelligence',
   RESOLVER_COMPARISON: 'resolver_comparison',
+  WEB_ARCHIVE_HISTORY: 'web_archive_history',
   WEBSITE_PROBE: 'website_probe',
   TLS_INTELLIGENCE: 'tls_intelligence',
   CERTIFICATE_TRANSPARENCY: 'certificate_transparency',
@@ -73,6 +74,7 @@ export const CLI_COMMAND_SEMANTICS = Object.freeze({
   posture: semantic('investigate', CAPABILITY_IDS.DOMAIN_POSTURE),
   'resolver-compare': semantic('investigate', CAPABILITY_IDS.RESOLVER_COMPARISON),
   'peeringdb-context': semantic('investigate', CAPABILITY_IDS.NETWORK_DIRECTORY),
+  'archive-history': semantic('investigate', CAPABILITY_IDS.WEB_ARCHIVE_HISTORY),
   http: semantic('investigate', CAPABILITY_IDS.WEBSITE_PROBE),
   tls: semantic('investigate', CAPABILITY_IDS.TLS_INTELLIGENCE),
   'dnssec-validate': semantic('assure', CAPABILITY_IDS.DNSSEC_VALIDATION),
@@ -114,5 +116,6 @@ export const CLI_COMMAND_SEMANTICS = Object.freeze({
   mcp: semantic('utilities', CAPABILITY_IDS.OFFLINE_REVIEW),
   reconcile: semantic('assure', CAPABILITY_IDS.OFFLINE_REVIEW),
   timeline: semantic('assure', CAPABILITY_IDS.OFFLINE_REVIEW),
+  'prior-registration': semantic('investigate', CAPABILITY_IDS.OFFLINE_REVIEW),
   export: semantic('respond', CAPABILITY_IDS.PORTABLE_EVIDENCE),
 } as const satisfies Readonly<Record<string, CliCommandSemantic>>);

@@ -78,6 +78,7 @@ type CapabilityRecipientClass =
   | 'configured_intelligence_provider'
   | 'selected_public_resolver'
   | 'selected_network_directory'
+  | 'web_archive_service'
   | 'selected_mail_endpoint'
   | 'configured_worker_store'
   | 'configured_control_provider';
@@ -330,6 +331,7 @@ type CliOperationPolicy =
   | Readonly<{ kind: 'posture' }>
   | Readonly<{ kind: 'resolver_comparison' }>
   | Readonly<{ kind: 'network_directory' }>
+  | Readonly<{ kind: 'web_archive_history' }>
   | Readonly<{ kind: 'http' }>
   | Readonly<{ kind: 'tls' }>
   | Readonly<{ kind: 'dnssec_validate' }>
@@ -369,6 +371,7 @@ const CLI_OPERATION_POLICY = Object.freeze({
   posture: Object.freeze({ kind: 'posture' }),
   'resolver-compare': Object.freeze({ kind: 'resolver_comparison' }),
   'peeringdb-context': Object.freeze({ kind: 'network_directory' }),
+  'archive-history': Object.freeze({ kind: 'web_archive_history' }),
   http: Object.freeze({ kind: 'http' }),
   tls: Object.freeze({ kind: 'tls' }),
   'dnssec-validate': Object.freeze({ kind: 'dnssec_validate' }),
@@ -414,6 +417,7 @@ const CLI_OPERATION_POLICY = Object.freeze({
   mcp: OFFLINE_ALL_OR_NOTHING,
   reconcile: OFFLINE_PER_SOURCE,
   timeline: OFFLINE_PER_SOURCE,
+  'prior-registration': OFFLINE_PER_SOURCE,
   export: OFFLINE_ALL_OR_NOTHING,
 } as const satisfies Readonly<Record<CliCommand, CliOperationPolicy>>);
 
@@ -989,6 +993,21 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
       'Off unless the deployment operator explicitly enables it; the emergency switch still disables it.'],
     featurePolicyId: 'resolver_comparison', featurePolicyDependencies: ['dns_intelligence'],
     operationBudgetVariants: [{ featureId: 'resolver_comparison', classId: 'posture_audit' }],
+    legacyCapability: { status: 'supported', execution: 'hosted', scanModes: [] },
+  }),
+  freezeCapability({
+    id: CAPABILITY_IDS.WEB_ARCHIVE_HISTORY,
+    title: 'Web archive history', job: 'investigate',
+    planes: ['hosted_bounded_passive'], trigger: 'explicit_browser_action', networkMode: 'bounded_passive', scanModes: ['deep'],
+    disclosedData: ['normalised_target'], recipients: ['web_archive_service'],
+    requestBudget: 'certificate_search', responseBudget: 'collector_specific', concurrency: 'certificate_search',
+    credentialModel: 'none', retention: 'transient', export: 'none', scoringEffect: 'none',
+    authorisation: 'authenticated_explicit_action', cancellation: 'client_stops_waiting', partialResults: 'explicit_per_source', outcomes: COMPLETE_OR_LIMITED,
+    privacyLimitations: ['The Internet Archive receives the registrable domain in two requests for its earliest and latest homepage captures. No page content, retries or automatic invocation by Lookup, Bulk or monitoring.',
+      'Captures show when the archive recorded the homepage, not ownership or continuous operation. The archive\u2019s own terms and privacy policy apply.',
+      'Off unless the deployment operator explicitly enables it; the emergency switch still disables it.'],
+    featurePolicyId: 'web_archive_history',
+    operationBudgetVariants: [{ featureId: 'web_archive_history', classId: 'certificate_search' }],
     legacyCapability: { status: 'supported', execution: 'hosted', scanModes: [] },
   }),
   freezeCapability({
@@ -1717,6 +1736,13 @@ function cliOperation(command: CliCommand, capabilityId: CapabilityId): CliOpera
       disclosedData: ['normalised_target', 'dns_question'], recipients: ['selected_public_resolver'],
       requestBudget: 'collector_specific', partialResults: 'explicit_per_source',
       privacyLimitations: ['The explicitly selected resolvers receive four bounded A/AAAA questions over HTTPS. No target connection, retry or automatic invocation by other commands.'],
+    });
+  }
+  if (policy.kind === 'web_archive_history') {
+    return passiveCliOperation(command, capabilityId, {
+      disclosedData: ['normalised_target'], recipients: ['web_archive_service'],
+      requestBudget: 'collector_specific', partialResults: 'explicit_per_source',
+      privacyLimitations: ['The Internet Archive receives the registrable domain in two bounded requests for its earliest and latest homepage captures. No page content, retry or automatic invocation by other commands.'],
     });
   }
   if (policy.kind === 'network_directory') {

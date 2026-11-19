@@ -331,6 +331,17 @@ address and apply its own retention policy. Google queries explicitly suppress
 EDNS Client Subnet forwarding. Provider-reported DNSSEC flags are not local
 cryptographic validation; negative answers and failed queries remain distinct.
 
+The separate web archive history action is likewise available only where the
+deployment operator enables it; its panel in Relationships and history states
+whether it is available. When deliberately started, it sends the registrable
+domain to the Internet Archive's Wayback Machine capture index in two requests,
+for the earliest and latest homepage captures, without retries or automatic
+retention, and does not replace the original Lookup. It returns capture times and
+the HTTP status the archive recorded, never archived page content. The archive can
+observe the runtime's source address; its terms of use and privacy policy apply.
+The local CLI `archive-history` command sends the same two requests from this
+machine. Opening a capture link visits the archive directly from your browser.
+
 The optional local `peeringdb-context` command sends one explicitly selected ASN
 to PeeringDB after a permitted-use acknowledgement. It requests only minimal
 network and policy fields, not contacts, and creates no cache or export file.

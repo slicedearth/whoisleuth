@@ -5,8 +5,8 @@
     "capabilityManifest": {
       "schema": "whoisleuth.capability-manifest",
       "version": 1,
-      "capabilityCount": 35,
-      "cliOperationCount": 58,
+      "capabilityCount": 36,
+      "cliOperationCount": 60,
       "cliVariantCount": 18
     },
     "cliCommandCatalogue": {
@@ -2492,6 +2492,82 @@
       ]
     },
     {
+      "id": "web_archive_history",
+      "title": "Web archive history",
+      "requestPurpose": "Read the earliest and latest web archive capture times for one domain’s homepage.",
+      "job": "investigate",
+      "executionPlanes": [
+        "hosted_bounded_passive"
+      ],
+      "trigger": "explicit_browser_action",
+      "networkMode": "bounded_passive",
+      "authorisation": "authenticated_explicit_action",
+      "dataSent": [
+        "normalised_target"
+      ],
+      "dataDeliberatelyNotSent": [
+        "browser_local_records",
+        "unselected_local_files",
+        "cookies_and_session_data",
+        "unrelated_evidence_values",
+        "complete_query_bearing_urls",
+        "credentials"
+      ],
+      "recipientClasses": [
+        "web_archive_service"
+      ],
+      "returnedDataCategories": [
+        "archive_capture_times",
+        "archive_capture_statuses",
+        "source_health"
+      ],
+      "processingClasses": [
+        "transient_processing",
+        "hosted_bounded_processing",
+        "third_party_disclosure"
+      ],
+      "requestBudget": "certificate_search",
+      "responseBudget": "collector_specific",
+      "concurrency": "certificate_search",
+      "retention": {
+        "mode": "transient",
+        "storageClass": "transient_process_memory",
+        "durationControl": "bounded_operation_or_cache_lifetime"
+      },
+      "exports": {
+        "mode": "none",
+        "classes": [
+          "none"
+        ]
+      },
+      "credentialModel": "none",
+      "credentialUse": "No operation credential is required.",
+      "cancellation": "client_stops_waiting",
+      "partialResults": "explicit_per_source",
+      "outcomes": [
+        "complete",
+        "partial",
+        "blocked",
+        "unsupported",
+        "unavailable",
+        "budget_exhausted"
+      ],
+      "normalisedOutcomes": {
+        "unavailable": "explicit_outcome",
+        "blocked": "explicit_outcome",
+        "partial": "explicit_outcome",
+        "unsupported": "explicit_outcome"
+      },
+      "documentStates": [],
+      "scoringEffect": "none",
+      "nonInferences": [
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "The Internet Archive receives the registrable domain in two requests for its earliest and latest homepage captures. No page content, retries or automatic invocation by Lookup, Bulk or monitoring.",
+        "Captures show when the archive recorded the homepage, not ownership or continuous operation. The archive’s own terms and privacy policy apply.",
+        "Off unless the deployment operator explicitly enables it; the emergency switch still disables it."
+      ]
+    },
+    {
       "id": "website_probe",
       "title": "Bounded homepage or selected static page evidence",
       "requestPurpose": "Observe one bounded homepage or explicitly selected URL through the static response workflow.",
@@ -2737,6 +2813,80 @@
     }
   ],
   "cliOperationFlows": [
+    {
+      "id": "command.cli.archive-history",
+      "command": "archive-history",
+      "capabilityFamilyId": "web_archive_history",
+      "title": "Read web archive capture history",
+      "requestPurpose": "The fixed Internet Archive capture index; two requests, 16 KiB per response and twelve seconds total.",
+      "collectionMode": "network",
+      "executionPlanes": [
+        "local_cli_network"
+      ],
+      "trigger": "explicit_cli_command",
+      "networkMode": "bounded_passive",
+      "authorisation": "explicit_action",
+      "dataSent": [
+        "normalised_target"
+      ],
+      "dataDeliberatelyNotSent": [
+        "browser_local_records",
+        "unselected_local_files",
+        "cookies_and_session_data",
+        "unrelated_evidence_values",
+        "complete_query_bearing_urls",
+        "credentials"
+      ],
+      "recipientClasses": [
+        "web_archive_service"
+      ],
+      "returnedDataCategories": [
+        "archive_capture_times",
+        "archive_capture_statuses",
+        "source_health"
+      ],
+      "processingClasses": [
+        "transient_processing",
+        "deliberate_local_file_export",
+        "third_party_disclosure"
+      ],
+      "requestBudget": "collector_specific",
+      "responseBudget": "collector_specific",
+      "concurrency": "command_bounded",
+      "retention": {
+        "mode": "local_output_deliberate",
+        "storageClass": "operator_controlled_local_output",
+        "durationControl": "no_automatic_retention_beyond_process_unless_operator_saves_output"
+      },
+      "exports": {
+        "mode": "local_output",
+        "classes": [
+          "operator_selected_local_output"
+        ]
+      },
+      "credentialModel": "none",
+      "credentialUse": "No operation credential is required.",
+      "cancellation": "client_stops_waiting",
+      "partialResults": "explicit_per_source",
+      "outcomes": [
+        "complete",
+        "partial"
+      ],
+      "normalisedOutcomes": {
+        "unavailable": "not_declared_for_boundary",
+        "blocked": "not_declared_for_boundary",
+        "partial": "explicit_outcome",
+        "unsupported": "not_declared_for_boundary"
+      },
+      "documentStates": [],
+      "scoringEffect": "none",
+      "nonInferences": [
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "The Internet Archive receives the domain in two requests, with no retries and no page content retained. A capture records when the archive saw the homepage; it does not establish ownership, continuous operation or an earlier registration on its own.",
+        "The Internet Archive receives the registrable domain in two bounded requests for its earliest and latest homepage captures. No page content, retry or automatic invocation by other commands."
+      ],
+      "variants": []
+    },
     {
       "id": "command.cli.assurance",
       "command": "assurance",
@@ -6790,6 +6940,78 @@
         "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
         "Missing or failed DNS observations remain inconclusive. --include-inherited-dns adds inherited policy and reporting-boundary reviews within 32 additional TXT queries and ten seconds, plus a direct parent-delegation sample. No message is sent and receiver enforcement is not inferred.",
         "The posture review performs bounded RDAP, DNS and MTA-STS publication checks without changing configuration."
+      ],
+      "variants": []
+    },
+    {
+      "id": "command.cli.prior-registration",
+      "command": "prior-registration",
+      "capabilityFamilyId": "offline_review",
+      "title": "Compare registration date with earlier observations",
+      "requestPurpose": "Reads one saved Lookup or evidence export capped at 8 MiB and up to two supporting results capped at 4 MiB each.",
+      "collectionMode": "offline",
+      "executionPlanes": [
+        "local_cli_offline"
+      ],
+      "trigger": "explicit_cli_command",
+      "networkMode": "none",
+      "authorisation": "explicit_action",
+      "dataSent": [
+        "none"
+      ],
+      "dataDeliberatelyNotSent": [
+        "no_network_request",
+        "no_third_party_disclosure",
+        "credentials",
+        "cookies_and_session_data",
+        "local_paths"
+      ],
+      "recipientClasses": [
+        "none"
+      ],
+      "returnedDataCategories": [
+        "bounded_local_derivation"
+      ],
+      "processingClasses": [
+        "transient_processing",
+        "deliberate_local_file_export",
+        "offline_processing_no_request"
+      ],
+      "requestBudget": "none",
+      "responseBudget": "bounded_local_input",
+      "concurrency": "none",
+      "retention": {
+        "mode": "local_output_deliberate",
+        "storageClass": "operator_controlled_local_output",
+        "durationControl": "no_automatic_retention_beyond_process_unless_operator_saves_output"
+      },
+      "exports": {
+        "mode": "local_output",
+        "classes": [
+          "operator_selected_local_output"
+        ]
+      },
+      "credentialModel": "none",
+      "credentialUse": "No operation credential is required.",
+      "cancellation": "bounded_atomic",
+      "partialResults": "explicit_per_source",
+      "outcomes": [
+        "complete",
+        "partial"
+      ],
+      "normalisedOutcomes": {
+        "unavailable": "not_declared_for_boundary",
+        "blocked": "not_declared_for_boundary",
+        "partial": "explicit_outcome",
+        "unsupported": "not_declared_for_boundary"
+      },
+      "documentStates": [],
+      "scoringEffect": "none",
+      "nonInferences": [
+        "Missing, unavailable, unsupported, stale, blocked, partial or unobserved evidence never establishes absence, safety, ownership, control, activity or maliciousness.",
+        "The command is offline. It reads a saved domain Lookup or evidence export with ct-search and archive-history JSON for the same domain, and uses the same comparison as browser Bulk review and Lookup’s web archive panel. An earlier observation suggests an earlier registration; it does not identify an owner, a transfer or intent, and no earlier observation does not show a first registration.",
+        "The command reads only selected bounded local input and makes no network request.",
+        "Output remains under the operator's local retention and deletion control."
       ],
       "variants": []
     },
