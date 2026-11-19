@@ -53,9 +53,9 @@ export const CRITICAL_MUTATION_MANIFEST: readonly CriticalMutant[] = Object.free
   }),
   Object.freeze({
     id: 'replay-requires-admitted-source-state', area: 'replay_source_qualification',
-    search: "return complete === true && ['complete', 'success', 'provided'].includes(canonical);",
-    replacement: 'return complete === true;',
-    focusedTests: Object.freeze(['test/lookup-evidence-replay-diff.test.mts']), timeoutMs: 20_000,
+    search: 'if (!COMPLETE_STATES.has(state)) {',
+    replacement: 'if (false) {',
+    focusedTests: Object.freeze(['test/evidence-eligibility-matrix.test.mts', 'test/lookup-evidence-replay-diff.test.mts']), timeoutMs: 20_000,
   }),
   Object.freeze({
     id: 'injected-client-deadline-remains-bounded', area: 'client_deadline_bound',
