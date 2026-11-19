@@ -256,7 +256,12 @@ test('keeps the Bulk queue available when browser-local context cannot be loaded
   await expect(page.getByLabel('Session name')).toHaveCount(0);
   await openBulkWorkspaceTools(page, 'review');
   await expect(page.getByText(/Saved views and review state could not be read/u)).toBeVisible();
-  await page.locator('button.mobile-disclosure-toggle', { hasText: 'Shortlist' }).click();
+  // Bulk panel disclosures share the circled toggle icon used across the console.
+  const shortlistToggle = page.locator('button.mobile-disclosure-toggle', { hasText: 'Shortlist' });
+  await expect(shortlistToggle.locator('.toggle-icon')).not.toHaveClass(/expanded/u);
+  await shortlistToggle.click();
+  await expect(shortlistToggle.locator('.toggle-icon')).toHaveClass(/expanded/u);
+  await expect(page.locator('button.mobile-workspace-toggle .toggle-icon')).toHaveClass(/expanded/u);
   await expect(page.getByText(/The shortlist could not be read/u)).toBeVisible();
   await expect(page.getByText(/No shortlisted domains/u)).toHaveCount(0);
 });

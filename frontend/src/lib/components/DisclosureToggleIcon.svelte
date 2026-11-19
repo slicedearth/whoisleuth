@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The circled plus and minus used by Lookup evidence disclosures.
+  // The circled plus and minus shared by console panel disclosures.
   let { expanded }: { expanded: boolean } = $props();
 </script>
 

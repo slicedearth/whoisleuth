@@ -1,5 +1,6 @@
 <script lang="ts">
   import { HANDOFF_SOURCE_LABELS } from '#lib/candidate-handoff-core.ts';
+  import DisclosureToggleIcon from '#lib/components/DisclosureToggleIcon.svelte';
   import { downloadLocalFile } from '#lib/download-local-file.ts';
   import { goto } from '$app/navigation';
   import { page as routePage } from '$app/state';
@@ -1487,7 +1488,7 @@
     onclick={toggleWorkspaceTools}
   >
     <span><strong>Workspace tools</strong><small>Saved sessions, views, and review queues</small></span>
-    <span aria-hidden="true">{workspaceToolsOpen ? '−' : '+'}</span>
+    <span aria-hidden="true"><DisclosureToggleIcon expanded={workspaceToolsOpen} /></span>
   </button>
   {#if workspaceToolsOpen}
     <div id="bulk-workspace-content" class="bulk-workspace-content">
@@ -1690,7 +1691,6 @@
   .mobile-workspace-toggle span:last-child {
     flex: 0 0 auto;
     color: var(--accent);
-    font: 700 var(--text-lg) var(--mono);
   }
   .bulk-workspace-content {
     display: block;
