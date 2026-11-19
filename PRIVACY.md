@@ -786,7 +786,9 @@ is read locally to mark ranked candidates. The browser keeps it in page memory
 only; neither surface uploads, saves or copies the list. When ranked candidates
 continue to Bulk, each carries only its rank and the list's SHA-256 in the
 tab's session storage, and Bulk keeps them in page memory, not in a saved
-session.
+session. Creating or refreshing a Case from a ranked Bulk row records that rank
+and digest in the Case as analyst context, separate from its evidence. Private
+backups and internal and trusted packs keep it; public packs leave it out.
 
 Message intake processes selected text, email, calendar, still PNG, PDF, DOCX and HAR files
 locally, without opening links or executing attachments. Exact URLs remain in

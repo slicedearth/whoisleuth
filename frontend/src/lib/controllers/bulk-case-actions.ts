@@ -39,7 +39,10 @@ export function bulkCaseInput(row: ScanResult) {
     pageBaselineMatch: saved.pageBaselineMatch, hasActiveBrandProfile: saved.hasActiveBrandProfile,
     profileContextState: saved.profileContext.sourceState === 'ready' ? 'ready' : 'unavailable',
     profileContextLimitation: saved.profileContext.limitation || null, mutationTypes: saved.mutationTypes,
-  } } satisfies CaseInput;
+  },
+  // A rank from the list selected in Discover is analyst context, kept beside the evidence.
+  ...(row.popularity ? { popularityRank: { rank: row.popularity.rank, listSha256: row.popularity.listSha256 } } : {}),
+  } satisfies CaseInput;
 }
 
 /** Owns action state; all writes still pass through the existing Case service. */
@@ -83,7 +86,9 @@ export class BulkCaseActions {
       const selected = context.selected.get(row.domain);
       const input = bulkCaseInput(row);
       const opened = await context.api.openCase(input, selected ? { caseId: selected.id } : {});
-      const committed = opened.created ? opened : await context.api.editCase(opened.record.id, { source: 'bulk', evidence: input.evidence });
+      const committed = opened.created ? opened : await context.api.editCase(opened.record.id, {
+        source: 'bulk', evidence: input.evidence, ...(input.popularityRank ? { popularityRank: input.popularityRank } : {}),
+      });
       this.#pruned += committed.pruned;
       await this.#reconcile(context.api, committed);
       this.#set(opened.created ? `Opened a case for ${committed.record.domain}.` : `Refreshed the retained case evidence for ${committed.record.domain}.`);

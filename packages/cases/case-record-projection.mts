@@ -1,6 +1,6 @@
 import type { CaseRecord } from './case-record-contracts.mts';
 import { withoutSightingContext } from './case-sighting-context.mts';
-import { SIGHTING_CONTEXT_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';
+import { ANALYST_CONTEXT_CASE_SCHEMA_VERSION, SIGHTING_CONTEXT_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';
 import { COLLECTION_RECEIPT_CASE_SCHEMA_VERSION, PUBLIC_CASE_SCHEMA_VERSION, INCIDENT_CASE_SCHEMA_VERSION, EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION, MAX_CASE_IMPORT_BYTES } from '../contracts/case-portability.mts';
 import { caseStatusIsClosed } from './case-record-decisions.mts';
 import { caseEvidenceWithoutCollectionReceipts } from './case-evidence-model.mts';
@@ -263,6 +263,9 @@ const CASE_FIELD_RULES = Object.freeze({
       public: { label: 'Retained file references and provenance', order: 5, sinceVersion: INCIDENT_CASE_SCHEMA_VERSION },
     },
   }),
+  analystContext: fieldRule('analystContext', PUBLIC_EXCLUDE, (record, profile) => (
+    profile === 'public' ? undefined : structuredClone(record.analystContext)
+  ), { audienceExclusions: { public: { label: 'Analyst-selected list ranks', order: 5, sinceVersion: ANALYST_CONTEXT_CASE_SCHEMA_VERSION } } }),
   createdAt: preservedField('createdAt'),
   updatedAt: preservedField('updatedAt'),
 } satisfies { [K in CaseField]: CaseFieldRule<K> });

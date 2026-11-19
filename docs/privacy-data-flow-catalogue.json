@@ -3412,7 +3412,7 @@
       "command": "case",
       "capabilityFamilyId": "analyst_cases",
       "title": "Review and update ordinary local case files",
-      "requestPurpose": "Reads exact case schemas 15 or 16 or 17 or 18 or 19 or 20 or 21. Input is bounded to 16 MiB including formatting; the complete canonical case store must fit 4 MiB without pruning. Writes current schema 21.",
+      "requestPurpose": "Reads exact case schemas 15 or 16 or 17 or 18 or 19 or 20 or 21 or 22. Input is bounded to 16 MiB including formatting; the complete canonical case store must fit 4 MiB without pruning. Writes current schema 22.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -3483,7 +3483,7 @@
       "command": "case-pack",
       "capabilityFamilyId": "portable_evidence",
       "title": "Build a reviewed case package",
-      "requestPurpose": "Reads one bounded case export from schemas 15 or 16 or 17 or 18 or 19 or 20 or 21 and writes a separate audience-specific Case-pack v2.",
+      "requestPurpose": "Reads one bounded case export from schemas 15 or 16 or 17 or 18 or 19 or 20 or 21 or 22 and writes a separate audience-specific Case-pack v2.",
       "collectionMode": "offline",
       "executionPlanes": [
         "local_cli_offline"
@@ -9241,7 +9241,7 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.browser.case-store",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 21,
+      "currentVersion": 22,
       "supportedVersions": [
         12,
         13,
@@ -9252,7 +9252,8 @@
         18,
         19,
         20,
-        21
+        21,
+        22
       ],
       "futureVersionBehavior": "preserve_without_write",
       "migration": "normalize_to_current",
@@ -10066,7 +10067,7 @@
       "schema": null,
       "lifecycleSchema": "whoisleuth.case-export",
       "coverageClass": "registered_non_schema_identity",
-      "currentVersion": 21,
+      "currentVersion": 22,
       "supportedVersions": [
         12,
         13,
@@ -10077,7 +10078,8 @@
         18,
         19,
         20,
-        21
+        21,
+        22
       ],
       "futureVersionBehavior": "reject",
       "migration": "normalize_to_current",
@@ -12860,7 +12862,8 @@
             18,
             19,
             20,
-            21
+            21,
+            22
           ],
           "mode": "direct",
           "discriminator": null
@@ -12868,7 +12871,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.browser.case-store",
-        "version": 21,
+        "version": 22,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.browser-state",
@@ -12896,7 +12899,8 @@
             18,
             19,
             20,
-            21
+            21,
+            22
           ],
           "mode": "direct",
           "discriminator": null
@@ -12904,7 +12908,7 @@
       ],
       "emittedContract": {
         "schema": "whoisleuth.case-export",
-        "version": 21,
+        "version": 22,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.portable-output",
@@ -12932,7 +12936,8 @@
             18,
             19,
             20,
-            21
+            21,
+            22
           ],
           "mode": "direct",
           "discriminator": null
@@ -13046,7 +13051,7 @@
       "acceptedContracts": [],
       "emittedContract": {
         "schema": "whoisleuth.case-export",
-        "version": 21,
+        "version": 22,
         "discriminator": null
       },
       "privacyProfileId": "case.privacy.portable-output",
@@ -13346,7 +13351,8 @@
             18,
             19,
             20,
-            21
+            21,
+            22
           ],
           "mode": "direct",
           "discriminator": null

@@ -11,11 +11,11 @@
   },
   "startingCurrentProtection": {
     "browserCase": {
-      "version": 21,
+      "version": 22,
       "path": "read-write-exact-current"
     },
     "portableCase": {
-      "version": 21,
+      "version": 22,
       "path": "export-import-non-destructive-merge"
     },
     "caseReport": {
@@ -28,7 +28,7 @@
     },
     "cliCasePack": {
       "version": 2,
-      "caseVersion": 21,
+      "caseVersion": 22,
       "path": "current-writer-browser-import-and-offline-verifier"
     },
     "workspaceArchive": {
@@ -47,7 +47,7 @@
         "id": "browser.cases",
         "kind": "browser_store",
         "schema": null,
-        "currentVersion": 21,
+        "currentVersion": 22,
         "supportedVersions": [
           12,
           13,
@@ -58,7 +58,8 @@
           18,
           19,
           20,
-          21
+          21,
+          22
         ],
         "acceptsUnversionedLegacy": false,
         "futureVersionBehavior": "preserve_without_write",
@@ -135,7 +136,7 @@
         "id": "export.cases",
         "kind": "export",
         "schema": null,
-        "currentVersion": 21,
+        "currentVersion": 22,
         "supportedVersions": [
           12,
           13,
@@ -146,7 +147,8 @@
           18,
           19,
           20,
-          21
+          21,
+          22
         ],
         "acceptsUnversionedLegacy": false,
         "futureVersionBehavior": "reject",
@@ -234,7 +236,7 @@
         "futureVersionBehaviour": "preserve_without_write",
         "migrationTarget": {
           "schema": "whoisleuth.browser.case-store",
-          "version": 21
+          "version": 22
         },
         "canonicalisation": null,
         "byteBudget": 4194304,
@@ -254,7 +256,7 @@
         "futureVersionBehaviour": "preserve_without_write",
         "migrationTarget": {
           "schema": "whoisleuth.browser.case-store",
-          "version": 21
+          "version": 22
         },
         "canonicalisation": null,
         "byteBudget": 4194304,
@@ -274,7 +276,7 @@
         "futureVersionBehaviour": "preserve_without_write",
         "migrationTarget": {
           "schema": "whoisleuth.browser.case-store",
-          "version": 21
+          "version": 22
         },
         "canonicalisation": null,
         "byteBudget": 4194304,
@@ -294,7 +296,7 @@
         "futureVersionBehaviour": "preserve_without_write",
         "migrationTarget": {
           "schema": "whoisleuth.browser.case-store",
-          "version": 21
+          "version": 22
         },
         "canonicalisation": null,
         "byteBudget": 4194304,
@@ -314,7 +316,7 @@
         "futureVersionBehaviour": "preserve_without_write",
         "migrationTarget": {
           "schema": "whoisleuth.browser.case-store",
-          "version": 21
+          "version": 22
         },
         "canonicalisation": null,
         "byteBudget": 4194304,
@@ -334,7 +336,7 @@
         "futureVersionBehaviour": "preserve_without_write",
         "migrationTarget": {
           "schema": "whoisleuth.browser.case-store",
-          "version": 21
+          "version": 22
         },
         "canonicalisation": null,
         "byteBudget": 4194304,
@@ -354,7 +356,7 @@
         "futureVersionBehaviour": "preserve_without_write",
         "migrationTarget": {
           "schema": "whoisleuth.browser.case-store",
-          "version": 21
+          "version": 22
         },
         "canonicalisation": null,
         "byteBudget": 4194304,
@@ -374,7 +376,7 @@
         "futureVersionBehaviour": "preserve_without_write",
         "migrationTarget": {
           "schema": "whoisleuth.browser.case-store",
-          "version": 21
+          "version": 22
         },
         "canonicalisation": null,
         "byteBudget": 4194304,
@@ -394,7 +396,7 @@
         "futureVersionBehaviour": "preserve_without_write",
         "migrationTarget": {
           "schema": "whoisleuth.browser.case-store",
-          "version": 21
+          "version": 22
         },
         "canonicalisation": null,
         "byteBudget": 4194304,
@@ -406,6 +408,26 @@
         "key": "browser.cases@21",
         "compatibilityId": "browser.cases",
         "version": 21,
+        "lifecycle": "legacy",
+        "readable": true,
+        "emitted": false,
+        "exactKeys": false,
+        "extensionPolicy": "discard_bounded",
+        "futureVersionBehaviour": "preserve_without_write",
+        "migrationTarget": {
+          "schema": "whoisleuth.browser.case-store",
+          "version": 22
+        },
+        "canonicalisation": null,
+        "byteBudget": 4194304,
+        "fixtureIds": [
+          "browser-case-v21"
+        ]
+      },
+      {
+        "key": "browser.cases@22",
+        "compatibilityId": "browser.cases",
+        "version": 22,
         "lifecycle": "current",
         "readable": true,
         "emitted": true,
@@ -416,7 +438,7 @@
         "canonicalisation": null,
         "byteBudget": 4194304,
         "fixtureIds": [
-          "browser-case-v21"
+          "browser-case-v22"
         ]
       },
       {
@@ -805,7 +827,7 @@
         "futureVersionBehaviour": "reject",
         "migrationTarget": {
           "schema": "whoisleuth.case-export",
-          "version": 21
+          "version": 22
         },
         "canonicalisation": null,
         "byteBudget": 16777216,
@@ -825,7 +847,7 @@
         "futureVersionBehaviour": "reject",
         "migrationTarget": {
           "schema": "whoisleuth.case-export",
-          "version": 21
+          "version": 22
         },
         "canonicalisation": null,
         "byteBudget": 16777216,
@@ -845,7 +867,7 @@
         "futureVersionBehaviour": "reject",
         "migrationTarget": {
           "schema": "whoisleuth.case-export",
-          "version": 21
+          "version": 22
         },
         "canonicalisation": null,
         "byteBudget": 16777216,
@@ -865,7 +887,7 @@
         "futureVersionBehaviour": "reject",
         "migrationTarget": {
           "schema": "whoisleuth.case-export",
-          "version": 21
+          "version": 22
         },
         "canonicalisation": null,
         "byteBudget": 16777216,
@@ -885,7 +907,7 @@
         "futureVersionBehaviour": "reject",
         "migrationTarget": {
           "schema": "whoisleuth.case-export",
-          "version": 21
+          "version": 22
         },
         "canonicalisation": null,
         "byteBudget": 16777216,
@@ -905,7 +927,7 @@
         "futureVersionBehaviour": "reject",
         "migrationTarget": {
           "schema": "whoisleuth.case-export",
-          "version": 21
+          "version": 22
         },
         "canonicalisation": null,
         "byteBudget": 16777216,
@@ -925,7 +947,7 @@
         "futureVersionBehaviour": "reject",
         "migrationTarget": {
           "schema": "whoisleuth.case-export",
-          "version": 21
+          "version": 22
         },
         "canonicalisation": null,
         "byteBudget": 16777216,
@@ -945,7 +967,7 @@
         "futureVersionBehaviour": "reject",
         "migrationTarget": {
           "schema": "whoisleuth.case-export",
-          "version": 21
+          "version": 22
         },
         "canonicalisation": null,
         "byteBudget": 16777216,
@@ -965,7 +987,7 @@
         "futureVersionBehaviour": "reject",
         "migrationTarget": {
           "schema": "whoisleuth.case-export",
-          "version": 21
+          "version": 22
         },
         "canonicalisation": null,
         "byteBudget": 16777216,
@@ -977,6 +999,27 @@
         "key": "export.cases@21",
         "compatibilityId": "export.cases",
         "version": 21,
+        "lifecycle": "legacy",
+        "readable": true,
+        "emitted": false,
+        "exactKeys": true,
+        "extensionPolicy": "reject",
+        "futureVersionBehaviour": "reject",
+        "migrationTarget": {
+          "schema": "whoisleuth.case-export",
+          "version": 22
+        },
+        "canonicalisation": null,
+        "byteBudget": 16777216,
+        "fixtureIds": [
+          "case-export-v21",
+          "case-export-v21-context"
+        ]
+      },
+      {
+        "key": "export.cases@22",
+        "compatibilityId": "export.cases",
+        "version": 22,
         "lifecycle": "current",
         "readable": true,
         "emitted": true,
@@ -987,8 +1030,8 @@
         "canonicalisation": null,
         "byteBudget": 16777216,
         "fixtureIds": [
-          "case-export-v21",
-          "case-export-v21-context"
+          "case-export-v22",
+          "case-export-v22-context"
         ]
       },
       {
@@ -1015,7 +1058,8 @@
           "cli-case-pack-v2-case-v18-current",
           "cli-case-pack-v2-case-v19-current",
           "cli-case-pack-v2-case-v20-current",
-          "cli-case-pack-v2-case-v21-current"
+          "cli-case-pack-v2-case-v21-current",
+          "cli-case-pack-v2-case-v22-current"
         ]
       },
       {
@@ -1052,6 +1096,7 @@
           "workspace-archive-v10-case-v19-empty-current",
           "workspace-archive-v10-case-v20-empty-current",
           "workspace-archive-v10-case-v21-empty-current",
+          "workspace-archive-v10-case-v22-empty-current",
           "workspace-archive-v10-empty-current"
         ]
       },
@@ -1178,126 +1223,140 @@
         "key": "browser.cases@12",
         "target": {
           "schema": "whoisleuth.browser.case-store",
-          "version": 21
+          "version": 22
         }
       },
       {
         "key": "browser.cases@13",
         "target": {
           "schema": "whoisleuth.browser.case-store",
-          "version": 21
+          "version": 22
         }
       },
       {
         "key": "browser.cases@14",
         "target": {
           "schema": "whoisleuth.browser.case-store",
-          "version": 21
+          "version": 22
         }
       },
       {
         "key": "browser.cases@15",
         "target": {
           "schema": "whoisleuth.browser.case-store",
-          "version": 21
+          "version": 22
         }
       },
       {
         "key": "browser.cases@16",
         "target": {
           "schema": "whoisleuth.browser.case-store",
-          "version": 21
+          "version": 22
         }
       },
       {
         "key": "browser.cases@17",
         "target": {
           "schema": "whoisleuth.browser.case-store",
-          "version": 21
+          "version": 22
         }
       },
       {
         "key": "browser.cases@18",
         "target": {
           "schema": "whoisleuth.browser.case-store",
-          "version": 21
+          "version": 22
         }
       },
       {
         "key": "browser.cases@19",
         "target": {
           "schema": "whoisleuth.browser.case-store",
-          "version": 21
+          "version": 22
         }
       },
       {
         "key": "browser.cases@20",
         "target": {
           "schema": "whoisleuth.browser.case-store",
-          "version": 21
+          "version": 22
+        }
+      },
+      {
+        "key": "browser.cases@21",
+        "target": {
+          "schema": "whoisleuth.browser.case-store",
+          "version": 22
         }
       },
       {
         "key": "export.cases@12",
         "target": {
           "schema": "whoisleuth.case-export",
-          "version": 21
+          "version": 22
         }
       },
       {
         "key": "export.cases@13",
         "target": {
           "schema": "whoisleuth.case-export",
-          "version": 21
+          "version": 22
         }
       },
       {
         "key": "export.cases@14",
         "target": {
           "schema": "whoisleuth.case-export",
-          "version": 21
+          "version": 22
         }
       },
       {
         "key": "export.cases@15",
         "target": {
           "schema": "whoisleuth.case-export",
-          "version": 21
+          "version": 22
         }
       },
       {
         "key": "export.cases@16",
         "target": {
           "schema": "whoisleuth.case-export",
-          "version": 21
+          "version": 22
         }
       },
       {
         "key": "export.cases@17",
         "target": {
           "schema": "whoisleuth.case-export",
-          "version": 21
+          "version": 22
         }
       },
       {
         "key": "export.cases@18",
         "target": {
           "schema": "whoisleuth.case-export",
-          "version": 21
+          "version": 22
         }
       },
       {
         "key": "export.cases@19",
         "target": {
           "schema": "whoisleuth.case-export",
-          "version": 21
+          "version": 22
         }
       },
       {
         "key": "export.cases@20",
         "target": {
           "schema": "whoisleuth.case-export",
-          "version": 21
+          "version": 22
+        }
+      },
+      {
+        "key": "export.cases@21",
+        "target": {
+          "schema": "whoisleuth.case-export",
+          "version": 22
         }
       },
       {
@@ -1434,8 +1493,18 @@
         "sha256": "e1eec412403cc9f26e5e713bae2e42ff00406711d8085bd1b9be500007f4131b",
         "contentDigestSha256": null,
         "version": 21,
-        "expectation": "accepted_exact",
+        "expectation": "normalises_to_current_output",
         "shapeId": "case.browser-store.v21"
+      },
+      {
+        "id": "browser-case-v22",
+        "path": "test/fixtures/case-lifecycle/browser-case-v22.json",
+        "bytes": 3312,
+        "sha256": "7010199e6260e52c6df5daffe2b2e1b910530a3305e011270d72df80de8c0c57",
+        "contentDigestSha256": null,
+        "version": 22,
+        "expectation": "accepted_exact",
+        "shapeId": "case.browser-store.v22"
       },
       {
         "id": "case-export-v12-public",
@@ -1534,7 +1603,7 @@
         "sha256": "a90ba2d72206162078274ac9f02a137d7c28174a66002bc7484808844489cfe3",
         "contentDigestSha256": null,
         "version": 21,
-        "expectation": "accepted_exact",
+        "expectation": "normalises_to_current_output",
         "shapeId": "case.export.v21"
       },
       {
@@ -1546,6 +1615,26 @@
         "version": 21,
         "expectation": "accepted_exact",
         "shapeId": "case.export.v21"
+      },
+      {
+        "id": "case-export-v22",
+        "path": "test/fixtures/case-lifecycle/case-export-v22.json",
+        "bytes": 3356,
+        "sha256": "4b31e8e94b653072801c7af90031cf9a3cf4ff36eff8907d9eab14a06130f714",
+        "contentDigestSha256": null,
+        "version": 22,
+        "expectation": "accepted_exact",
+        "shapeId": "case.export.v22"
+      },
+      {
+        "id": "case-export-v22-context",
+        "path": "test/fixtures/case-lifecycle/case-export-v22-context.json",
+        "bytes": 4332,
+        "sha256": "88fcd3c7274fb4dafcd18fa5b6de38bd5837f60257dfc06bf352c18b3b5868b6",
+        "contentDigestSha256": null,
+        "version": 22,
+        "expectation": "accepted_exact",
+        "shapeId": "case.export.v22"
       },
       {
         "id": "case-report-v10",
@@ -1878,6 +1967,16 @@
         "shapeId": "case.cli-pack.current"
       },
       {
+        "id": "cli-case-pack-v2-case-v22-current",
+        "path": "test/fixtures/case-lifecycle/cli-case-pack-v2-case-v22-current.json",
+        "bytes": 9875,
+        "sha256": "89e0effcfb473387d525fdea0bc796620f9233bc29f04b737849c2f1a16e2631",
+        "contentDigestSha256": "sha256:f72f5b5eb6307a7c21efd95156cd2ff1342c0509b1c4575e736c9517a19c2533",
+        "version": 2,
+        "expectation": "accepted_exact",
+        "shapeId": "case.cli-pack.current"
+      },
+      {
         "id": "encrypted-workspace-archive-v1",
         "path": "test/fixtures/case-lifecycle/encrypted-workspace-archive-v1.json",
         "bytes": 7502,
@@ -1912,6 +2011,16 @@
         "path": "test/fixtures/case-lifecycle/workspace-archive-v10-case-v21-empty-current.json",
         "bytes": 7616,
         "sha256": "26e190465f274c90205fae4a84447cef7e746fc0945280206f1335cdcd4098ce",
+        "contentDigestSha256": null,
+        "version": 10,
+        "expectation": "accepted_exact",
+        "shapeId": "case.workspace-archive.v10"
+      },
+      {
+        "id": "workspace-archive-v10-case-v22-empty-current",
+        "path": "test/fixtures/case-lifecycle/workspace-archive-v10-case-v22-empty-current.json",
+        "bytes": 7616,
+        "sha256": "811ec22a98cd924c5de4fdff5952b7f996592cb7b653a3ed0fd2aa8cb26ddf09",
         "contentDigestSha256": null,
         "version": 10,
         "expectation": "accepted_exact",
@@ -2070,6 +2179,14 @@
         "target": null
       },
       {
+        "id": "case.browser-store.v22",
+        "versions": [
+          22
+        ],
+        "normalisation": "project_known_fields",
+        "target": null
+      },
+      {
         "id": "case.export.v12",
         "versions": [
           12
@@ -2145,6 +2262,14 @@
         "id": "case.export.v21",
         "versions": [
           21
+        ],
+        "normalisation": "preserve_document",
+        "target": null
+      },
+      {
+        "id": "case.export.v22",
+        "versions": [
+          22
         ],
         "normalisation": "preserve_document",
         "target": null
@@ -2762,7 +2887,7 @@
       {
         "id": "case.browser-store.json",
         "versions": [
-          21
+          22
         ],
         "mediaType": "application/json",
         "encoding": "utf-8",
@@ -2778,7 +2903,7 @@
       {
         "id": "case.export.json",
         "versions": [
-          21
+          22
         ],
         "mediaType": "application/json",
         "encoding": "utf-8",
@@ -2911,7 +3036,8 @@
               18,
               19,
               20,
-              21
+              21,
+              22
             ],
             "mode": "direct",
             "discriminator": null
@@ -2919,7 +3045,7 @@
         ],
         "emittedContract": {
           "compatibilityId": "browser.cases",
-          "version": 21,
+          "version": 22,
           "discriminator": null
         },
         "shapeIds": [
@@ -2932,7 +3058,8 @@
           "case.browser-store.v18",
           "case.browser-store.v19",
           "case.browser-store.v20",
-          "case.browser-store.v21"
+          "case.browser-store.v21",
+          "case.browser-store.v22"
         ],
         "boundProfileIds": [
           "case.browser-store.bounds",
@@ -2964,7 +3091,8 @@
               18,
               19,
               20,
-              21
+              21,
+              22
             ],
             "mode": "direct",
             "discriminator": null
@@ -2981,7 +3109,8 @@
           "case.export.v18",
           "case.export.v19",
           "case.export.v20",
-          "case.export.v21"
+          "case.export.v21",
+          "case.export.v22"
         ],
         "boundProfileIds": [
           "case.portable.bounds",
@@ -3002,11 +3131,11 @@
         "acceptedContracts": [],
         "emittedContract": {
           "compatibilityId": "export.cases",
-          "version": 21,
+          "version": 22,
           "discriminator": null
         },
         "shapeIds": [
-          "case.export.v21"
+          "case.export.v22"
         ],
         "boundProfileIds": [
           "case.portable.bounds",
@@ -3308,7 +3437,8 @@
               18,
               19,
               20,
-              21
+              21,
+              22
             ],
             "mode": "direct",
             "discriminator": null
@@ -3316,7 +3446,7 @@
         ],
         "emittedContract": {
           "compatibilityId": "export.cases",
-          "version": 21,
+          "version": 22,
           "discriminator": null
         },
         "shapeIds": [
@@ -3326,7 +3456,8 @@
           "case.export.v18",
           "case.export.v19",
           "case.export.v20",
-          "case.export.v21"
+          "case.export.v21",
+          "case.export.v22"
         ],
         "boundProfileIds": [
           "case.editable.bounds",
@@ -3356,7 +3487,8 @@
               18,
               19,
               20,
-              21
+              21,
+              22
             ],
             "mode": "direct",
             "discriminator": null
@@ -3375,6 +3507,7 @@
           "case.export.v19",
           "case.export.v20",
           "case.export.v21",
+          "case.export.v22",
           "case.cli-pack.current"
         ],
         "boundProfileIds": [

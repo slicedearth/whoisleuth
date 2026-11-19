@@ -39,6 +39,7 @@ import {
 import type { CaseInvestigationBranch } from './case-investigation-branch-model.mts';
 import type { CaseAttachment } from './case-attachment-model.mts';
 import type { CaseEvidenceLink } from './case-evidence-links.mts';
+import type { CaseAnalystContext } from './case-analyst-context.mts';
 import type { CaseWorkflowMetadata, CaseTypeId } from './case-workflow-metadata.mts';
 import {
   CASE_DISPOSITIONS,
@@ -192,6 +193,8 @@ export type CaseRecord = {
   closures: CaseClosureHistory;
   branches?: CaseInvestigationBranch[];
   attachments?: CaseAttachment[];
+  /** Analyst-selected context, such as a selected list's rank; never domain evidence. */
+  analystContext?: CaseAnalystContext[];
   createdAt: string;
   updatedAt: string;
 };
@@ -228,6 +231,8 @@ export type CaseInput = {
   branch?: unknown;
   branchUpdate?: unknown;
   note?: unknown;
+  /** Record the rank a selected popularity list gives the Case domain: { rank, listSha256 }. */
+  popularityRank?: unknown;
 };
 type CaseEditExpectations = {
   expectedTitle?: string;

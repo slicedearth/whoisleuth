@@ -40,6 +40,7 @@ async function currentCase() {
   // Published records intentionally lack optional retained-file metadata.
   // Supply it independently so the complete field/projection contract is exercised.
   record.evidenceLinks = [{ id: 'private-link', fromPinId: 'derived-pin', toPinId: 'source-pin', kind: 'derived_from', basis: 'Private relationship basis', createdAt: NOW }];
+  record.analystContext = [{ id: 'selected-rank', kind: 'popularity_rank', rank: 42, listSha256: 'c'.repeat(64), recordedAt: NOW }];
   return addCaseAttachments(record, [{ id: 'selected-file', fileName: 'private-selected.png', mediaType: 'image/png',
     source: 'Private selected-file provenance', observedAt: null, retainedAt: NOW,
     byteLength: 123, digestSha256: `sha256:${'a'.repeat(64)}` }], NOW);
@@ -104,7 +105,7 @@ describe('Case decision and projection ownership', () => {
     assert.deepEqual(buildCaseExport([record], NOW).cases[0], durable);
     for (const audience of ['internal', 'trusted', 'public'] as const) {
       const projected = projectCaseForAudience(record, audience);
-      assert.deepEqual(Object.keys(projected).sort(), fields.filter(field => !(audience !== 'internal' && (field === 'attachments' || field === 'checkpointCollectionReceipts')) && !(audience === 'public' && field === 'evidenceLinks')));
+      assert.deepEqual(Object.keys(projected).sort(), fields.filter(field => !(audience !== 'internal' && (field === 'attachments' || field === 'checkpointCollectionReceipts')) && !(audience === 'public' && (field === 'evidenceLinks' || field === 'analystContext'))));
       if (audience === 'public') assert.doesNotMatch(JSON.stringify(projected), /Private relationship basis|private-link|derived-pin|source-pin/u);
       if (audience !== 'internal') {
         assert.doesNotMatch(JSON.stringify(projected), /private-selected\.png|Private selected-file provenance|selected-file|sha256:aaaaaaaa/u);

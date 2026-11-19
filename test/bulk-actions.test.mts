@@ -50,6 +50,11 @@ test('Bulk Case projection retains unknown evidence and excludes contacts', () =
   assert.equal(projected.evidence?.profileContextState, 'unavailable');
   assert.equal(projected.evidence?.profileContextLimitation, 'Unavailable context');
   assert.doesNotMatch(JSON.stringify(projected), /Private person|private@example|registrant|abuseEmail/u);
+  assert.equal(Object.hasOwn(projected, 'popularityRank'), false);
+  // A Discover popularity rank travels as analyst context beside the evidence, never inside it.
+  const ranked = bulkCaseInput({ ...row(), popularity: { rank: 42, listSha256: 'd'.repeat(64) } });
+  assert.deepEqual(ranked.popularityRank, { rank: 42, listSha256: 'd'.repeat(64) });
+  assert.doesNotMatch(JSON.stringify(ranked.evidence), /listSha256|popularity/u);
 });
 
 test('committed pruning receipts survive aggregate summaries, later rejection and refresh failure', async () => {

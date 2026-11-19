@@ -50,7 +50,8 @@ import {
 import { canonicalArtifactJsonV2 } from '../evidence/artifact-integrity.mts';
 import { readCaseAttachments, mergeCaseAttachments, type CaseAttachment } from './case-attachment-model.mts';
 import { readCaseEvidenceLinks, mergeCaseEvidenceLinks, type CaseEvidenceLink } from './case-evidence-links.mts';
-import { EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';
+import { mergeCaseAnalystContext, readCaseAnalystContext, type CaseAnalystContext } from './case-analyst-context.mts';
+import { ANALYST_CONTEXT_CASE_SCHEMA_VERSION, EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION } from '../contracts/case-portability.mts';
 import { assertBoundedJsonStructure } from '../analysis/bounded-json.mts';
 import {
   inspectCaseBrandProfileIds,
@@ -123,6 +124,7 @@ type ImportPatch = {
   branches: CaseInvestigationBranch[];
   attachments: CaseAttachment[] | undefined;
   evidenceLinks: CaseEvidenceLink[] | undefined;
+  analystContext: CaseAnalystContext[] | undefined;
   tags: string[];
   workflowMetadata: CaseWorkflowMetadata | undefined;
   notes: CaseNote[];
@@ -208,6 +210,7 @@ function assertModernCaseShape(raw: unknown, sourceVersion: number): void {
   for (const item of boundedCaseList(raw).items) {
     const itemRecord = objectRecord(item);
     if (sourceVersion < EVIDENCE_FOLLOW_UP_CASE_SCHEMA_VERSION && Object.hasOwn(itemRecord, 'evidenceLinks')) throw new TypeError('Evidence relationships require the current Case schema.');
+    if (sourceVersion < ANALYST_CONTEXT_CASE_SCHEMA_VERSION && Object.hasOwn(itemRecord, 'analystContext')) throw new TypeError('Analyst context requires the current Case schema; no data was changed.');
     if (sourceVersion < INCIDENT_CASE_SCHEMA_VERSION && Object.hasOwn(itemRecord, 'attachments')) {
       throw new TypeError('Retained file references require the current Case schema; no data was changed.');
     }
@@ -377,6 +380,7 @@ function extractImportPatch(raw: unknown, importedVersion: number): ImportPatch 
       : [],
     attachments: importedVersion >= INCIDENT_CASE_SCHEMA_VERSION ? readCaseAttachments(record.attachments) : undefined,
     evidenceLinks: readCaseEvidenceLinks(record.evidenceLinks),
+    analystContext: readCaseAnalystContext(record.analystContext, importedVersion),
     tags: workflow.tags,
     workflowMetadata: hasWorkflow ? workflow.workflowMetadata : undefined,
     // Imported notes fall back only to the imported record's own timestamps
@@ -436,6 +440,7 @@ function caseFromPatch(patch: ImportPatch, now: string): CaseRecord {
     branches: patch.branches,
     ...(patch.attachments === undefined ? {} : { attachments: patch.attachments }),
     ...(patch.evidenceLinks === undefined ? {} : { evidenceLinks: patch.evidenceLinks }),
+    ...(patch.analystContext === undefined ? {} : { analystContext: patch.analystContext }),
     createdAt: patch.createdAt || patch.updatedAt || now,
     updatedAt: patch.updatedAt || patch.createdAt || now,
   };
@@ -491,6 +496,7 @@ function applyImportPatch(
   const manualTrail = normalizeCaseManualTrail(trailSelection.records, fallback);
   const attachments = mergeCaseAttachments(local.attachments, patch.attachments);
   const evidenceLinks = mergeCaseEvidenceLinks(local.evidenceLinks, patch.evidenceLinks);
+  const analystContext = mergeCaseAnalystContext(local.analystContext, patch.analystContext);
   const authoredHistoryOmitted = patch.authoredHistoryOmitted
     + noteSelection.omitted
     + pinSelection.omitted
@@ -498,7 +504,7 @@ function applyImportPatch(
     + assertionSelection.omitted
     + trailSelection.omitted
     + sightingSelection.omitted;
-  const { checkpointCollectionReceipts: _previousReceipts, ...localFields } = local;
+  const { checkpointCollectionReceipts: _previousReceipts, analystContext: _previousContext, ...localFields } = local;
   return { record: {
     ...localFields,
     title: patch.title !== undefined && importNewer ? patch.title : local.title ?? '',
@@ -520,6 +526,7 @@ function applyImportPatch(
     branches: mergeCaseInvestigationBranches(local.branches ?? [], patch.branches, fallback, branchReferences),
     ...(attachments === undefined ? {} : { attachments }),
     ...(evidenceLinks === undefined ? {} : { evidenceLinks }),
+    ...(analystContext === undefined ? {} : { analystContext }),
     tags: normalizeTags([...local.tags, ...patch.tags]),
     workflowMetadata: patch.workflowMetadata === undefined
       ? local.workflowMetadata ?? emptyCaseWorkflowMetadata()

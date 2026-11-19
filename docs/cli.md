@@ -684,7 +684,9 @@ whoisleuth case recheck cases.json --input recheck.json --output cases.json --fo
 For `link`, use `fromPinId`, `toPinId`, `kind` (`derived_from` or
 `shared_source`) and `basis`. `withdraw-link` takes the relationship `id` and
 `reason`; its original declaration remains in the file. `case show` lists the
-identities and `--json` includes the full history.
+identities and `--json` includes the full history. A popularity rank recorded
+from browser Bulk appears as analyst context with the list's SHA-256; it is not
+evidence, and public `case-pack` output leaves it out.
 
 A pin describes the supplied observation, not a new collection. For example:
 

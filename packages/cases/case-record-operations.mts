@@ -43,6 +43,7 @@ import {
 } from './case-record-contracts.mts';
 import { MAX_CASE_OBJECTIVE_LENGTH, MAX_RESPONSE_VALUE_LENGTH } from '../contracts/case-portability.mts';
 import { caseRecordVersionInput } from './case-record-version-input.mts';
+import { readCaseAnalystContext, recordCasePopularityRank } from './case-analyst-context.mts';
 import { readCaseCheckpointReceipts, mergeCaseCheckpointReceipts } from './case-checkpoint-receipts.mts';
 import { readCaseAttachments } from './case-attachment-model.mts';
 import { readCaseEvidenceLinks, appendCaseEvidenceLink, withdrawCaseEvidenceLink } from './case-evidence-links.mts';
@@ -184,6 +185,7 @@ export function normalizeCase(
   const branchReferences = caseInvestigationBranchReferences({ evidencePins, actions, assertions });
   const attachments = readCaseAttachments(record.attachments);
   const evidenceLinks = readCaseEvidenceLinks(record.evidenceLinks);
+  const analystContext = readCaseAnalystContext(record.analystContext, sourceVersion);
   return {
     id: existing ? existing.id : safeId(record.id) || deterministicId(domain),
     domain,
@@ -211,6 +213,7 @@ export function normalizeCase(
     branches: normalizeCaseInvestigationBranches(record.branches, updatedAt, branchReferences, timestampOptions),
     ...(attachments === undefined ? {} : { attachments }),
     ...(evidenceLinks === undefined ? {} : { evidenceLinks }),
+    ...(analystContext === undefined ? {} : { analystContext }),
     createdAt,
     updatedAt,
   };
@@ -308,6 +311,7 @@ export function createCase(input: CaseInput, nowIso?: string): CaseRecord {
     branches: input.branch !== undefined
       ? appendCaseInvestigationBranch([], input.branch, now, branchReferences)
       : [],
+    ...(input.popularityRank === undefined ? {} : { analystContext: recordCasePopularityRank(undefined, input.popularityRank, now, makeId) }),
     createdAt: now,
     updatedAt: now,
   };
@@ -564,6 +568,7 @@ export function updateCase(
     closures,
     branches,
     notes,
+    ...(patch.popularityRank === undefined ? {} : { analystContext: recordCasePopularityRank(current.analystContext, patch.popularityRank, now, makeId) }),
     updatedAt: now,
   };
   const next = [...cases];

@@ -331,3 +331,14 @@ test('long Case prose uses its domain bound without changing terminal sanitisati
   assert.equal(safeTerminalValue('\u001b[31mignore\u202ethis', '—', MAX_NOTE_LENGTH).includes('\u001b'), false);
   assert.throws(() => safeTerminalValue('text', '—', Infinity), /bound/u);
 });
+
+test('case show lists a recorded popularity rank as analyst context, not evidence', async (context) => {
+  const root = await directory(context);
+  const record = createCase({ domain: 'example.test', popularityRank: { rank: 42, listSha256: 'e'.repeat(64) } }, NOW);
+  const file = join(root, 'cases.json');
+  await writeFile(file, JSON.stringify(buildCaseExport([record], NOW)), { mode: 0o600 });
+  const result = await invoke(['case', 'show', file]);
+  assert.equal(result.code, EXIT_CODES.SUCCESS, result.stderr);
+  assert.match(result.stdout, new RegExp(`^Analyst context ${NOW.replaceAll('.', '\\.')} · ranked #42 in a selected popularity list · sha256:e{64}$`, 'mu'));
+  assert.doesNotMatch(result.stdout, /^Pin .*popularity/mu);
+});
