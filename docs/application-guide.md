@@ -373,10 +373,13 @@ groups leave out non-public DNS answers.
 
 **Registration history** in Relationships and history shows the creation date used
 for comparison, from a successful and complete registration source, and lists any
-other source date with the reason it was not used. Certificate logs are not read
-in Lookup: a certificate search in Discover carries each candidate's earliest
-logged certificate to Bulk, and `whoisleuth prior-registration` compares saved
-results offline.
+other source date with the reason it was not used. **Read certificate history**
+sends the domain to the certificate-search service once, when you select it, and
+shows the earliest and latest logged certificate; contradictory first and last
+dates are shown but not compared. The section compares the eligible certificate
+and archive observations with the creation date in one place.
+`whoisleuth prior-registration` makes the same comparison offline from saved
+results.
 
 Where the deployment enables it, **Web archive history** in the same section
 shows when the Internet Archive first and last recorded the homepage, with links

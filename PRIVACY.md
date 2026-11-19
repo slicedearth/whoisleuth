@@ -331,6 +331,13 @@ address and apply its own retention policy. Google queries explicitly suppress
 EDNS Client Subnet forwarding. Provider-reported DNSSEC flags are not local
 cryptographic validation; negative answers and failed queries remain distinct.
 
+**Read certificate history** in Lookup's Registration history sends the
+registrable domain to the certificate-search service as one search term, only
+when selected, through the same bounded endpoint and deployment control as
+Discover's certificate search. It keeps the domain's earliest and latest logged
+dates and certificate count in page memory, does not record certificate-search
+history and does not change the Lookup.
+
 The separate web archive history action is likewise available only where the
 deployment operator enables it; its panel in Relationships and history states
 whether it is available. When deliberately started, it sends the registrable

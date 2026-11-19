@@ -7,9 +7,10 @@
     WEB_ARCHIVE_HISTORY_BYTES, WEB_ARCHIVE_LIMITATIONS, WEB_ARCHIVE_PROVIDER,
     readWebArchiveHistory, webArchiveCaptureUrl, type WebArchiveHistory,
   } from '../../../../packages/evidence/web-archive-history.mts';
-  import { PRIOR_REGISTRATION_STATE_LABELS, reviewPriorRegistration } from '../../../../packages/evidence/prior-registration.mts';
 
-  let { domain, registrationCreatedAt }: { domain: string; registrationCreatedAt: string | null } = $props();
+  // The registration comparison belongs to Registration history, which combines
+  // this panel's earliest capture with any certificate observation.
+  let { domain, onearliestcapture }: { domain: string; onearliestcapture?: (capturedAt: string | null) => void } = $props();
   const capabilities = getContext<CapabilityGetter | undefined>(CAPABILITY_CONTEXT);
   const disabled = $derived(disabledCapability(capabilities?.() ?? null, 'web_archive_history'));
   let busy = $state(false);
@@ -18,9 +19,7 @@
   let generation = 0;
   let controller: AbortController | null = null;
   const earliest = $derived(report?.queries.find((query) => query.kind === 'earliest') ?? null);
-  const prior = $derived(report && earliest?.capturedAt ? reviewPriorRegistration({
-    registrationCreatedAt, observations: [{ source: 'web_archive', observedAt: earliest.capturedAt }],
-  }) : null);
+  $effect(() => { const capturedAt = earliest?.capturedAt ?? null; untrack(() => onearliestcapture?.(capturedAt)); });
   const summary = $derived(report ? `Web archive history finished: ${report.queries.map((query) =>
     `${query.kind} ${query.capturedAt ? formatEvidenceDate(query.capturedAt) : query.outcome.replaceAll('_', ' ')}`).join(', ')}.` : '');
 
@@ -76,15 +75,6 @@
             </div>
           {/each}
         </dl>
-        {#if prior}
-          <section class="prior" data-state={prior.state} aria-label="Registration comparison">
-            <strong>{PRIOR_REGISTRATION_STATE_LABELS[prior.state]}</strong>
-            {#each prior.observations as observation (observation.source)}
-              {#if observation.daysBeforeRegistration !== null}<p>The earliest capture is {observation.daysBeforeRegistration} days before the current registration was created ({formatEvidenceDate(prior.registrationCreatedAt)}).</p>{/if}
-            {/each}
-            {#each prior.limitations as limitation}<p class="note">{limitation}</p>{/each}
-          </section>
-        {/if}
       </div>
       {#each WEB_ARCHIVE_LIMITATIONS as limitation}<p class="note">{limitation}</p>{/each}
     {/if}
@@ -105,6 +95,4 @@
   dt { color: var(--muted); font-size: var(--text-xs); }
   dd { display: grid; gap: 3px; margin: 3px 0 0; font-weight: 600; overflow-wrap: anywhere; }
   small { color: var(--muted); font-size: var(--text-2xs); font-weight: 400; }
-  .prior { display: grid; gap: 6px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel-raised); }
-  .prior[data-state='earlier_observation'] { border-color: color-mix(in srgb, var(--amber) 55%, var(--border)); }
 </style>

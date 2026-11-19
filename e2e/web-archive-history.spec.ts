@@ -64,7 +64,7 @@ test('web archive history shows captures and compares the earliest with the regi
   // Registration history names the creation date used for comparison and its source.
   const history = page.getByRole('region', { name: 'Registration history' });
   await expect(history.locator('[data-fact="created"] dd')).toContainText(/2020.* · Registry RDAP/u);
-  await expect(history.locator('[data-fact="certificate-logs"]')).toContainText('Not read in Lookup.');
+  await expect(history.locator('[data-fact="certificate-logs"]')).toContainText('Not read yet');
   await expect(panel).toContainText('The archive receives the domain in two requests. WHOISleuth does not save the result; the archive’s own policies apply to the requests.');
   expect(requests).toBe(0);
   await panel.getByRole('button', { name: 'Read archive history', exact: true }).click();
@@ -76,9 +76,10 @@ test('web archive history shows captures and compares the earliest with the regi
     .toHaveAttribute('href', `https://web.archive.org/web/20120304050607/${DOMAIN}/`);
   await expect(captures.locator('[data-query="latest"] dd')).toContainText('No HTTP status recorded');
   // The fixture registration was created on 2 January 2020, years after the earliest capture.
-  const comparison = captures.getByRole('region', { name: 'Registration comparison' });
+  const comparison = history.getByRole('region', { name: 'Registration comparison' });
   await expect(comparison).toHaveAttribute('data-state', 'earlier_observation');
   await expect(comparison).toContainText('Observed before the current registration');
+  await expect(comparison).toContainText(/Earliest web archive capture is \d+ days before the current registration/u);
   await expect(comparison).toContainText('does not identify a previous or current owner');
   await expect(panel.getByRole('status').filter({ hasText: 'Web archive history finished' })).toHaveText(/^Web archive history finished: earliest .+, latest .+\.$/u);
   expect(requests).toBe(1);
@@ -92,4 +93,33 @@ test('web archive history shows captures and compares the earliest with the regi
       if (captureVisualEvidenceEnabled()) await panel.screenshot({ path: testInfo.outputPath(`web-archive-${width}-${theme}.png`) });
     }
   }
+});
+
+test('certificate history is read only on request and combined with the registration date', async ({ page }) => {
+  await page.route('**/api/lookup?*', route => route.fulfill({ json: sectionedLookupFixture(DOMAIN) }));
+  const queries: string[] = [];
+  await page.route('**/api/ct-search?*', async route => {
+    queries.push(new URL(route.request().url()).searchParams.get('q') ?? '');
+    await route.fulfill({ json: { keyword: DOMAIN, certCount: 3, truncated: false, certificateGroups: [], certificateGroupsTruncated: false, matches: [
+      // The fixture registration was created on 2 January 2020.
+      { domain: DOMAIN, hostnames: [DOMAIN, `www.${DOMAIN}`], firstObservedAt: '2017-05-01T00:00:00.000Z', lastObservedAt: '2026-06-01T00:00:00.000Z', certificateCount: 2 },
+      { domain: 'unrelated.example', hostnames: ['unrelated.example'], firstObservedAt: '2010-01-01T00:00:00.000Z', lastObservedAt: '2011-01-01T00:00:00.000Z', certificateCount: 1 },
+    ] } });
+  });
+  await page.goto('/lookup');
+  await page.locator('#query').fill(DOMAIN);
+  await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
+  await expandLookupFamilies(page);
+  const history = page.getByRole('region', { name: 'Registration history' });
+  const logs = history.locator('[data-fact="certificate-logs"]');
+  await expect(logs).toContainText(`Sends ${DOMAIN} to the certificate-search service in one request`);
+  expect(queries).toEqual([]);
+  await logs.getByRole('button', { name: 'Read certificate history', exact: true }).click();
+  await expect(logs).toContainText('Earliest logged');
+  await expect(logs).toContainText('2 distinct certificates');
+  expect(queries).toEqual([DOMAIN]);
+  const comparison = history.getByRole('region', { name: 'Registration comparison' });
+  await expect(comparison).toHaveAttribute('data-state', 'earlier_observation');
+  await expect(comparison).toContainText(/Earliest logged certificate is \d+ days before the current registration/u);
+  await expect(history).not.toContainText('unrelated.example');
 });
