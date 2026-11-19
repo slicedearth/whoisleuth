@@ -43,6 +43,25 @@ test('web archive history stays unavailable until the deployment opts in', async
   expect(requests).toBe(0);
 });
 
+test('registration history explains an imprecise date without implying a date was selected', async ({ page }, testInfo) => {
+  const fixture = sectionedLookupFixture(DOMAIN);
+  await page.route('**/api/lookup?*', route => route.fulfill({ json: {
+    ...fixture,
+    availability: { ...fixture.availability, createdDateIso: null },
+    whois: { ...fixture.whois, parsed: { createdDate: 'Before Aug-1996' } },
+  } }));
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.goto('/lookup');
+  await page.locator('#query').fill(DOMAIN);
+  await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
+  await expandLookupFamilies(page);
+  const history = page.getByRole('region', { name: 'Registration history' });
+  const creation = history.locator('[data-fact="created"] dd');
+  await expect(creation.getByText(/Before Aug-1996.*not a usable date/u)).toBeVisible();
+  await expect(creation.locator('time')).toHaveCount(0);
+  if (captureVisualEvidenceEnabled()) await history.screenshot({ path: testInfo.outputPath('registration-history-390.png') });
+});
+
 test('web archive history shows captures and compares the earliest with the registration date', async ({ page }, testInfo) => {
   await enableArchiveCapability(page);
   let lookups = 0;

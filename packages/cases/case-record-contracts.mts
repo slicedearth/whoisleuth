@@ -243,7 +243,10 @@ type CaseEditExpectations = {
   expectedResponseContext?: string;
   expectedCaseTypes?: readonly CaseTypeId[];
 };
-export type CasePatch = Omit<Partial<CaseInput>, 'domain'> & CaseEditExpectations;
+export type CasePatch = Omit<Partial<CaseInput>, 'domain'> & CaseEditExpectations & {
+  /** Let bundled evidence refresh without replacing a retained rank when all list slots are occupied. */
+  omitPopularityRankAtCapacity?: true;
+};
 
 /** Application-authored response values, distinct from hostile import admission.
  * Runtime operations still validate relationships, limits and lifecycle policy. */

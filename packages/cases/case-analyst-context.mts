@@ -65,32 +65,39 @@ export function recordCasePopularityRank(
   input: unknown,
   now: string,
   makeId: () => string,
+  options: Readonly<{ omitAtCapacity?: boolean }> = {},
 ): CaseAnalystContext[] {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new TypeError('Select a popularity rank to record.');
   const raw = input as Record<string, unknown>;
   const entry = readEntry({ id: makeId(), kind: 'popularity_rank', rank: raw.rank, listSha256: raw.listSha256, recordedAt: now });
   const others = (current ?? []).filter((item) => item.listSha256 !== entry.listSha256);
   if (others.length >= MAX_CASE_ANALYST_CONTEXT) {
+    if (options.omitAtCapacity) return [...(current ?? [])];
     throw new Error(`This Case already retains ${MAX_CASE_ANALYST_CONTEXT} list ranks. No rank was added.`);
   }
   return ordered([...others, entry]);
 }
 
-/** Additive import merge: one entry per list, keeping the later recording; bounded deterministically. */
+/** Additive import merge: reserve local lists, then admit the newest distinct incoming lists that fit. */
 export function mergeCaseAnalystContext(
   local: readonly CaseAnalystContext[] | undefined,
   incoming: readonly CaseAnalystContext[] | undefined,
-): CaseAnalystContext[] | undefined {
-  const byList = new Map<string, CaseAnalystContext>();
-  for (const entry of [...(local ?? []), ...(incoming ?? [])]) {
+): { records: CaseAnalystContext[] | undefined; omitted: number } {
+  const byList = new Map((local ?? []).map(entry => [entry.listSha256, entry]));
+  let omitted = 0;
+  for (const entry of ordered(incoming ?? []).reverse()) {
     const previous = byList.get(entry.listSha256);
+    if (!previous && byList.size >= MAX_CASE_ANALYST_CONTEXT) {
+      omitted += 1;
+      continue;
+    }
     if (!previous || previous.recordedAt < entry.recordedAt || (previous.recordedAt === entry.recordedAt && previous.id < entry.id)) {
       byList.set(entry.listSha256, entry);
     }
   }
-  const merged = ordered(byList.values()).slice(-MAX_CASE_ANALYST_CONTEXT);
+  const merged = ordered(byList.values());
   if (new Set(merged.map((entry) => entry.id)).size !== merged.length) {
     throw new TypeError('Conflicting analyst context entries share an identity. No context was changed.');
   }
-  return merged.length ? merged : undefined;
+  return { records: merged.length ? merged : undefined, omitted };
 }

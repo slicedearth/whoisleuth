@@ -568,7 +568,11 @@ export function updateCase(
     closures,
     branches,
     notes,
-    ...(patch.popularityRank === undefined ? {} : { analystContext: recordCasePopularityRank(current.analystContext, patch.popularityRank, now, makeId) }),
+    ...(patch.popularityRank === undefined ? {} : {
+      analystContext: recordCasePopularityRank(current.analystContext, patch.popularityRank, now, makeId, {
+        omitAtCapacity: patch.omitPopularityRankAtCapacity === true,
+      }),
+    }),
     updatedAt: now,
   };
   const next = [...cases];

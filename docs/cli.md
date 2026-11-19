@@ -300,8 +300,8 @@ whoisleuth brief lookup.json
 `discover --popularity-list tranco.csv` marks candidates found in a ranked list
 you have downloaded, adding a `popularity` section with each rank and the SHA-256 of the list file to
 `--json` output; browser Discover reports the same digest for the same file. The
-`entries` count is the number of valid ranked rows. The list is read locally, never fetched, and not
-copied into output; a rank is context, not a safety verdict.
+`entries` count is the number of valid ranked rows; `rejectedLines` includes oversized rows.
+The list is read locally, never fetched, and not copied into output; a rank is context, not a safety verdict.
 
 One strict domain, IP address or ASN can occupy command position as Lookup
 shorthand. URL-like or ambiguous input requires the explicit `lookup` command.

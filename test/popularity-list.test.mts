@@ -47,6 +47,17 @@ test('chunked reading keeps only requested ranks and matches a single read', () 
   assert.deepEqual([result.entries, result.truncated, result.ranks.size], [MAX_POPULARITY_LIST_ENTRIES, true, 0]);
 });
 
+test('an overlong row is rejected once across chunks, and parsing resumes after its newline', () => {
+  const paddedDomain = ' '.repeat(600) + 'absent.example';
+  const text = `first.example\r\n${paddedDomain}\r\nsecond.example\n${paddedDomain}`;
+  const reader = createPopularityRankReader(WANTED);
+  for (let offset = 0; offset < text.length; offset += 91) reader.push(text.slice(offset, offset + 91));
+  const result = reader.finish();
+  assert.deepEqual([result.entries, result.rejectedLines, result.truncated], [2, 2, false]);
+  assert.deepEqual([...result.ranks], [['first.example', 1], ['second.example', 3]]);
+  assert.deepEqual(readPopularityRanks(text, WANTED), result);
+});
+
 test('CLI discover marks candidates found in a selected list without fetching or copying it', async () => {
   const run = async (args: string[]) => {
     let stdout = '', stderr = '';

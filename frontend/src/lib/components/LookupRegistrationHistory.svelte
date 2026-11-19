@@ -13,6 +13,7 @@
   import {
     PRIOR_REGISTRATION_STATE_LABELS, reviewPriorRegistration, type PriorRegistrationSource,
   } from '../../../../packages/evidence/prior-registration.mts';
+  import { registryDateIso } from '../../../../packages/evidence/registry-dates.mts';
 
   // Brings the dates that bear on an earlier registration together: the
   // creation date used for comparison, every source date that was not used and
@@ -26,10 +27,14 @@
 
   // The registration decision repeats a source's value, so identical source dates appear once.
   const unused = $derived([...new Map(observations.flatMap((item) => {
-    if (item.value === null || (creation && item.source === creation.source)) return [];
+    if (item.value === null) return [];
     const eligibility = sourceEligibility({ state: item.sourceState, complete: item.complete });
+    const date = registryDateIso(item.value);
+    if (eligibility.eligible && creation && item.source === creation.source && date === creation.createdAt) return [];
+    const reason = !eligibility.eligible ? EVIDENCE_INELIGIBLE_LABELS[eligibility.reason]
+      : !date ? EVIDENCE_INELIGIBLE_LABELS.value_unusable : 'another observation was selected for comparison';
     return [[`${item.source}\n${item.value}`, { key: `${item.source}\n${item.value}`, source: item.source, value: item.value,
-      reason: eligibility.eligible ? 'an earlier source already supplied a date' : EVIDENCE_INELIGIBLE_LABELS[eligibility.reason] }] as const];
+      reason }] as const];
   })).values()]);
 
   const capabilities = getContext<CapabilityGetter | undefined>(CAPABILITY_CONTEXT);

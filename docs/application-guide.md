@@ -448,10 +448,11 @@ stays in the current tab, and only the candidates you select continue to Bulk.
 downloaded, such as a Tranco CSV, with the rank the list gives them. The list
 stays in the tab and is never uploaded. Candidates that continue to Bulk carry
 their rank and the list's SHA-256, which the CLI reports for the same file, so a
-rank can be cited against the exact list. Creating a Case from a ranked Bulk row
-records the rank and digest under **Analyst context** in the Case, separate from
-its evidence; public packs leave it out. A rank shows only what the selected list
-asserts: it does not make a candidate safe or connect it to the brand.
+rank can be cited against the exact list. Bulk can save the rank and digest
+under **Analyst context** in a Case. If that Case is full, Bulk still refreshes
+the evidence and tells you the rank was not saved. Import preserves existing
+list slots and reports incoming ranks that do not fit. Public packs leave
+retained ranks out. A rank does not make a candidate safe or connect it to the brand.
 
 **Excluded by exact profile match** lists candidates hidden by the active
 profile's official, partner or allowlist entries, with the matching declaration

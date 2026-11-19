@@ -496,14 +496,15 @@ function applyImportPatch(
   const manualTrail = normalizeCaseManualTrail(trailSelection.records, fallback);
   const attachments = mergeCaseAttachments(local.attachments, patch.attachments);
   const evidenceLinks = mergeCaseEvidenceLinks(local.evidenceLinks, patch.evidenceLinks);
-  const analystContext = mergeCaseAnalystContext(local.analystContext, patch.analystContext);
+  const { records: analystContext, omitted: analystContextOmitted } = mergeCaseAnalystContext(local.analystContext, patch.analystContext);
   const authoredHistoryOmitted = patch.authoredHistoryOmitted
     + noteSelection.omitted
     + pinSelection.omitted
     + decisionSelection.omitted
     + assertionSelection.omitted
     + trailSelection.omitted
-    + sightingSelection.omitted;
+    + sightingSelection.omitted
+    + analystContextOmitted;
   const { checkpointCollectionReceipts: _previousReceipts, analystContext: _previousContext, ...localFields } = local;
   return { record: {
     ...localFields,

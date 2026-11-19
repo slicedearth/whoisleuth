@@ -8,6 +8,9 @@ export const MAX_POPULARITY_LIST_BYTES = 32 * 1024 * 1024;
 export const MAX_POPULARITY_LIST_ENTRIES = 1_000_000;
 export const POPULARITY_LIMITATION = 'A rank shows that the domain appears in the selected list. It does not show that the domain is safe, legitimate or connected to the brand, and lookalikes can also be popular.';
 
+// Fits a maximum-length hostname and rank, with room for CSV whitespace, BOM and CRLF.
+const MAX_ROW_LENGTH = 512;
+
 /** Ranks a selected list gives to the requested domains; the rest of the list is not retained. */
 export type PopularityRanks = Readonly<{
   /** Valid ranked rows read from the list, counting any repeated domain each time it appears. */
@@ -40,17 +43,25 @@ export function createPopularityRankReader(domains: Iterable<string>): Popularit
   const wanted = new Set([...domains].map(canonicalDomain));
   const ranks = new Map<string, number>();
   let remainder = '', entries = 0, rejectedLines = 0, position = 0, truncated = false;
+  let oversized = false;
 
-  function line(raw: string): void {
-    const value = raw.replace(/^\uFEFF/u, '').trim();
-    if (!value || value.startsWith('#')) return;
+  function finishRow(): void {
+    const value = remainder.replace(/^\uFEFF/u, '').trim();
+    const tooLong = oversized;
+    remainder = '';
+    oversized = false;
+    if (!tooLong && (!value || value.startsWith('#'))) return;
     if (entries >= MAX_POPULARITY_LIST_ENTRIES) { truncated = true; return; }
     position += 1;
-    const parts = value.split(',');
-    const [rankText, domainText] = parts.length === 2 ? parts : [null, parts[0]];
-    const domain = canonicalDomain(domainText ?? '');
+    const comma = value.indexOf(',');
+    if (tooLong || (comma >= 0 && value.indexOf(',', comma + 1) >= 0)) {
+      rejectedLines += 1;
+      return;
+    }
+    const rankText = comma < 0 ? null : value.slice(0, comma);
+    const domain = canonicalDomain(value.slice(comma + 1));
     const rank = rankText === null ? position : Number(rankText.trim());
-    if (parts.length > 2 || !DOMAIN.test(domain) || !Number.isSafeInteger(rank) || rank < 1) {
+    if (!DOMAIN.test(domain) || !Number.isSafeInteger(rank) || rank < 1) {
       // A single header row such as "rank,domain" is not counted as rejected.
       if (!(position === 1 && /[a-z]/iu.test(rankText ?? ''))) rejectedLines += 1;
       return;
@@ -61,17 +72,20 @@ export function createPopularityRankReader(domains: Iterable<string>): Popularit
 
   return Object.freeze({
     push(text: string) {
-      if (truncated) return;
-      const combined = remainder + text;
-      let start = 0;
-      for (let end = combined.indexOf('\n'); end !== -1 && !truncated; end = combined.indexOf('\n', start)) {
-        line(combined.slice(start, end));
-        start = end + 1;
+      for (let start = 0; start < text.length && !truncated;) {
+        const newline = text.indexOf('\n', start);
+        const end = newline < 0 ? text.length : newline;
+        if (!oversized) {
+          oversized = remainder.length + (end - start) > MAX_ROW_LENGTH;
+          remainder = oversized ? '' : remainder + text.slice(start, end);
+        }
+        if (newline < 0) break;
+        finishRow();
+        start = newline + 1;
       }
-      remainder = truncated ? '' : combined.slice(start);
     },
     finish() {
-      if (remainder) { line(remainder); remainder = ''; }
+      if (remainder || oversized) finishRow();
       return Object.freeze({ entries, rejectedLines, truncated, ranks });
     },
   });

@@ -57,11 +57,25 @@ test('import merges ranks additively and rejects analyst context in older schema
   assert.deepEqual(buildCaseExport([imported], NOW).cases[0]!.analystContext, imported.analystContext);
   assert.deepEqual(normalizeCaseStore({ version: CASE_SCHEMA_VERSION, cases: [imported] }).cases[0]!.analystContext, imported.analystContext);
   // Later recording wins for one list; other lists are added.
-  assert.deepEqual(mergeCaseAnalystContext([entry('old', digest('b'), 50, NOW)], [entry('new', digest('b'), 40, LATER), entry('c', digest('c'), 9)])
-    ?.map((item) => [item.id, item.rank]), [['c', 9], ['new', 40]]);
+  const merged = mergeCaseAnalystContext([entry('old', digest('b'), 50, NOW)], [entry('new', digest('b'), 40, LATER), entry('c', digest('c'), 9)]);
+  assert.deepEqual(merged.records?.map((item) => [item.id, item.rank]), [['c', 9], ['new', 40]]);
+  assert.equal(merged.omitted, 0);
   const older = structuredClone(fixture);
   older.version = 21;
   assert.throws(() => mergeCases([], older), /Analyst context requires the current Case schema/u);
+});
+
+test('Case import reports a newer incoming rank that cannot fit without removing a local one', () => {
+  const original = createCase({ domain: 'ranked.example' }, NOW);
+  let local = original;
+  for (let index = 0; index < MAX_CASE_ANALYST_CONTEXT; index++) {
+    const popularityRank = { rank: index + 1, listSha256: index.toString(16).padStart(64, '0') };
+    local = updateCase([local], local.id, { popularityRank }, NOW).record;
+  }
+  const incoming = updateCase([original], original.id, { popularityRank: { rank: 80, listSha256: digest('f') } }, LATER).record;
+  const merged = mergeCases([local], JSON.parse(JSON.stringify(buildCaseExport([incoming], LATER))));
+  assert.deepEqual(merged.cases[0]?.analystContext, local.analystContext);
+  assert.deepEqual([merged.updated, merged.skipped, merged.authoredHistoryOmitted], [1, 0, 1]);
 });
 
 test('public packs leave out analyst-selected list ranks', () => {
