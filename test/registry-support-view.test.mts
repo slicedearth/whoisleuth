@@ -129,6 +129,9 @@ test('returns a defensive inspection profile rather than shared mutable catalogu
 test('filters registry profiles by suffix, capability text, and explicit coverage state', () => {
   const { rows } = registrySupportCatalogue();
 
+  assert.deepEqual(filterRegistrySupportRows(rows, ' .PR ', 'all').map((row) => row.suffixes[0]), ['pr']);
+  assert.deepEqual(filterRegistrySupportRows(rows, '.invalid', 'all'), []);
+  assert.deepEqual(filterRegistrySupportRows(rows, '.xn--p1ai', 'all').map((row) => row.suffixes[0]), ['xn--p1ai']);
   assert.deepEqual(filterRegistrySupportRows(rows, '.vn', 'all').map((row) => row.suffixes[0]), ['vn']);
   assert.deepEqual(filterRegistrySupportRows(rows, 'bracketed', 'all').map((row) => row.suffixes[0]), ['jp']);
   assert.deepEqual(filterRegistrySupportRows(rows, 'structured underscore', 'all').map((row) => row.suffixes[0]), ['nz']);
