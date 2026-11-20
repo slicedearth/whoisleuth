@@ -1,6 +1,6 @@
 import { classifyQuery } from './classify.mts';
 import { runUnifiedLookup, LOOKUP_ERROR_CODES, type LookupOptions } from './lookup.mts';
-import { createLookupHttpResponse } from './lookup-response-contract.mts';
+import { createLookupHttpResponse, LOOKUP_INVALID_QUERY_MESSAGE } from './lookup-response-contract.mts';
 import { parseLookupWebSelection } from './lookup-selected-request.mts';
 import { plannedLookupProgressSources } from './lookup-source-progress.mts';
 import { LOOKUP_PROGRESS_CONTENT_TYPE } from './lookup-progress-http.mts';
@@ -25,7 +25,7 @@ export function prepareLookupHttpOperation(request: Readonly<{
   if (!q) return { ok: false as const, status: 400, body: { error: 'Missing query parameter "q"', errorCode: LOOKUP_ERROR_CODES.MISSING_QUERY } };
   let classified;
   try { classified = classifyQuery(q); }
-  catch { return { ok: false as const, status: 400, body: { error: 'Invalid query', errorCode: LOOKUP_ERROR_CODES.INVALID_QUERY } }; }
+  catch { return { ok: false as const, status: 400, body: { error: LOOKUP_INVALID_QUERY_MESSAGE, errorCode: LOOKUP_ERROR_CODES.INVALID_QUERY } }; }
   const enabled = (key: string) => request.params[key] === '1' || request.params[key] === 'true';
   const options = {
     fast: enabled('fast'), compact: enabled('compact'), externalIntelligence: enabled('intelligence'),

@@ -28,7 +28,7 @@ test('saved Bulk columns survive reload without collecting targets or dropping r
   await expect(row.locator('td[data-label="Registrar"]')).toHaveCount(0);
   await expect(row.locator('td[data-label="Risk"]')).toHaveCount(1);
   await expect(row.locator('td[data-label="Domain"]')).toContainText('columns.example');
-  await expect(row.getByRole('button', { name: 'Inspect', exact: true })).toBeVisible();
+  await expect(row.getByRole('button', { name: 'Inspect columns.example', exact: true })).toBeVisible();
   await openBulkWorkspaceTools(page, 'review');
   await page.getByRole('textbox', { name: 'New view name' }).fill('Evidence columns');
   await page.getByRole('button', { name: 'Save current view', exact: true }).click();

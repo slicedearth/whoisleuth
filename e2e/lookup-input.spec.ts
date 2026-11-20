@@ -953,7 +953,7 @@ test('does not show a saved Fast result after a same-domain Deep handoff', async
   await page.getByLabel('Scan mode').selectOption('deep');
   await page.getByRole('button', { name: 'Scan 1 domain' }).click();
   await expect(page.locator('.results-table tbody tr')).toHaveCount(1);
-  await page.getByRole('button', { name: 'Inspect', exact: true }).click();
+  await page.getByRole('button', { name: `Inspect ${domain}`, exact: true }).click();
 
   await expect(page.locator('#query')).toHaveValue(domain);
   await expect(page.getByRole('radio', { name: /Deep/u })).toBeChecked();

@@ -36,7 +36,7 @@
   import {
     canonicalBulkTargets,
   } from '#lib/analysis/bulk-scan-normalizer.ts';
-  import { parseDomainInput } from '#lib/analysis/utils.ts';
+  import { looksLikeLookupToken, parseDomainInput } from '#lib/analysis/utils.ts';
   import {
     buildScanRelationships,
     RELATIONSHIP_EVIDENCE_VERSION,
@@ -484,6 +484,10 @@
     `${scan.revision}\u0000${sessionState.currentId || 'transient'}\u0000${scanStartedAt}`,
   );
   const parsedInput = $derived(parseDomainInput(input));
+  // The server stays the only validator and every entry is still sent. The
+  // queue may give a neutral hint from the local list heuristic, but it never
+  // predicts a rejection.
+  const implausibleEntries = $derived(parsedInput.entries.filter((entry) => !looksLikeLookupToken(entry)));
   const scanTargets = $derived(canonicalBulkTargets(parsedInput.entries));
   const equivalentTargetCount = $derived(
     Math.max(0, parsedInput.entries.length - scanTargets.length),
@@ -1464,6 +1468,7 @@
   entryCount={scanTargets.length}
   queryLimit={currentQueryLimit}
   duplicateCount={parsedInput.duplicates}
+  implausibleEntries={implausibleEntries}
   equivalentCount={equivalentTargetCount}
   inputTooLarge={parsedInput.tooLarge}
   {importDomainFile}

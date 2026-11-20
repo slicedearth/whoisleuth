@@ -3,7 +3,7 @@ import { openCaseMetadata, openCaseSection, openConsoleView } from './console-na
 import { createHash } from 'node:crypto';
 import { gzipSync, zipSync } from 'fflate';
 import { expect, test } from './fixtures';
-import { expectFocusedResultsVisible, expectNoHorizontalOverflow, failNextBrowserLocalCollectionReadAfterWrite, failNextBrowserLocalManifestWrite, readBrowserLocalCollection, runBulkScan, useTheme } from './helpers';
+import { expectFocusedResultsVisible, expectNoHorizontalOverflow, failNextBrowserLocalCollectionReadAfterWrite, failNextBrowserLocalManifestWrite, holdBrowserLocalTransaction, readBrowserLocalCollection, runBulkScan, useTheme } from './helpers';
 import { createCase, openCaseResponseWorkspace, openCasesView } from './case-test-fixtures';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { EXTERNAL_FINDINGS_VERSION } from '../packages/interchange/external-findings-import.mts';
@@ -822,9 +822,22 @@ test.describe('cases from Bulk', () => {
     await runBulkScan(page, bulkDomains);
 
     const caseCell = page.locator('td[data-label="Case"]').first();
-    await caseCell.getByRole('button', { name: /Create case/ }).click();
-    await expect(caseCell.locator('select.case-disp')).toBeVisible();
-    await expect(caseCell.getByRole('link', { name: 'Open' })).toBeVisible();
+    const create = caseCell.getByRole('button', { name: /Create case/ });
+    const disposition = caseCell.locator('select.case-disp');
+    const release = await holdBrowserLocalTransaction(page);
+    try {
+      await create.focus();
+      await page.keyboard.press('Enter');
+      await expect(create).toBeFocused();
+      await page.keyboard.press('Enter');
+      await expect(disposition).toHaveCount(0);
+    } finally {
+      await release();
+    }
+    // The repeat activation did not take focus ownership from the original save.
+    await expect(disposition).toBeVisible();
+    await expect(disposition).toBeFocused();
+    await expect(caseCell.getByRole('link', { name: /^Open case for / })).toBeVisible();
 
     await page.goto('/monitor');
     await openConsoleView(page, 'cases');

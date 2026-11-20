@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { onDestroy, tick } from 'svelte';
+  import { LOOKUP_INVALID_QUERY_MESSAGE } from '#lib/analysis/lookup-response.ts';
   import type { PriorRegistrationReview } from '../../../../packages/evidence/prior-registration.mts';
   import { CT_DATE_LABELS } from '../../../../packages/investigation/ct-results.mts';
   import { EVIDENCE_INELIGIBLE_LABELS } from '../../../../packages/evidence/evidence-eligibility.mts';
@@ -85,7 +87,7 @@
     toggleSaved: (resultIndex: number) => void;
     caseOptions: readonly CaseOption[];
     setDisposition: (resultIndex: number, value: string) => void;
-    trackCase: (resultIndex: number) => void;
+    trackCase: (resultIndex: number) => void | Promise<unknown>;
     inspectDomain: (resultIndex: number) => void | Promise<void>;
     copyDraft: (text: string, label: string) => void | Promise<void>;
     currentPage: number;
@@ -101,6 +103,63 @@
 
   let expandedRows = $state<Set<number>>(new Set());
   let tableRoot: HTMLDivElement;
+
+  // Only the server's own invalid-query rejection removes Case creation; a
+  // valid target whose collection failed keeps the action.
+
+  // Creating a Case replaces its button with the disposition control. The save
+  // is asynchronous, so focus moves when that control renders, and only while
+  // the initiating action still owns focus: the button itself, or the page body
+  // after the button was removed. Focus the analyst moved elsewhere is kept.
+  // Raw state keeps the original object, so identity checks below compare the
+  // same value rather than a reactive proxy of it.
+  type PendingCaseFocus = Readonly<{ domain: string; initiator: HTMLElement | null; release: (event: FocusEvent) => void }>;
+  let pendingCaseFocus = $state.raw<PendingCaseFocus | null>(null);
+  // Every way a pending action ends (focus restored, focus moved away, a
+  // failed or finished save, a newer action or unmounting) removes its listener.
+  function endPendingCaseFocus(pending: PendingCaseFocus | null) {
+    if (!pending) return;
+    document.removeEventListener('focusin', pending.release, true);
+    if (pendingCaseFocus === pending) pendingCaseFocus = null;
+  }
+  async function createCase(resultIndex: number, domain: string, initiator: HTMLElement | null) {
+    // Repeating the same activation cannot start a new write. Keep the
+    // original save's focus recovery until the action actually ends.
+    if (pendingCaseFocus && pendingCaseFocus.domain === domain && pendingCaseFocus.initiator === initiator) return;
+    endPendingCaseFocus(pendingCaseFocus);
+    // Any focus the analyst moves elsewhere during the save cancels the restore.
+    const release = (event: FocusEvent) => {
+      if (event.target !== initiator) endPendingCaseFocus(pending);
+    };
+    const pending: PendingCaseFocus = { domain, initiator, release };
+    pendingCaseFocus = pending;
+    document.addEventListener('focusin', release, true);
+    try {
+      await trackCase(resultIndex);
+    } finally {
+      // A failed or unchanged save never renders the control; give a
+      // successful one its update before deciding.
+      await tick();
+      if (pendingCaseFocus === pending && !rows.some((row) => row.domain === domain && row.caseRecord)) endPendingCaseFocus(pending);
+    }
+  }
+  onDestroy(() => endPendingCaseFocus(pendingCaseFocus));
+  function caseActionOwnsFocus(initiator: HTMLElement | null): boolean {
+    const active = document.activeElement;
+    return !active || active === document.body || active === document.documentElement || active === initiator;
+  }
+  $effect(() => {
+    const pending = pendingCaseFocus;
+    if (!pending || !rows.some((row) => row.domain === pending.domain && row.caseRecord)) return;
+    void tick().then(() => {
+      if (pendingCaseFocus !== pending) return;
+      endPendingCaseFocus(pending);
+      if (!caseActionOwnsFocus(pending.initiator)) return;
+      const disposition = [...(tableRoot?.querySelectorAll<HTMLSelectElement>('select.case-disp') ?? [])]
+        .find((control) => control.getAttribute('aria-label') === `Disposition for ${pending.domain}`);
+      disposition?.focus();
+    });
+  });
   const shortlistAvailable = $derived(shortlistSourceState === 'ready');
   const caseAvailable = $derived(caseSourceState === 'ready');
   const reviewAvailable = $derived(reviewSourceState === 'ready');
@@ -174,11 +233,12 @@
             {:else if !caseAvailable}<span class="source-unavailable">Case unavailable</span>
             {:else}
               {#if incidents.length>1}<CasePicker id={`bulk-incident-${row.resultIndex}`} records={incidents} selectedId={row.caseRecord?.id??''} select={(id)=>selectIncident(row.domain,id)} />{/if}
-              {#if row.caseRecord}<div class="case-cell"><select class="case-disp" aria-label={`Disposition for ${row.domain}`} value={row.caseRecord.disposition} onchange={(event) => setDisposition(row.resultIndex, event.currentTarget.value)}>{#each caseOptions as option}<option value={option.value}>{option.label}</option>{/each}</select><a class="case-open" href={`/monitor?case=${encodeURIComponent(row.caseRecord.id)}`}>Open</a></div>
-              {:else if !incidents.length}<button class="btn small case-track" onclick={() => trackCase(row.resultIndex)}>＋ Create case</button>{/if}
+              {#if row.caseRecord}<div class="case-cell"><select class="case-disp" aria-label={`Disposition for ${row.domain}`} value={row.caseRecord.disposition} onchange={(event) => setDisposition(row.resultIndex, event.currentTarget.value)}>{#each caseOptions as option}<option value={option.value}>{option.label}</option>{/each}</select><a class="case-open" href={`/monitor?case=${encodeURIComponent(row.caseRecord.id)}`} aria-label={`Open case for ${row.domain}`}>Open</a></div>
+              {:else if row.errorRow && row.error === LOOKUP_INVALID_QUERY_MESSAGE}<span class="source-unavailable">Rejected as not a lookup target</span>
+              {:else if !incidents.length}<button class="btn small case-track" aria-label={`Create case for ${row.domain}`} onclick={(event) => void createCase(row.resultIndex, row.domain, event.currentTarget)}>＋ Create case</button>{/if}
             {/if}
           </td>{/if}
-          <td class="mobile-secondary" data-label="Actions"><div class="draft-actions"><button class="inspect" onclick={() => inspectDomain(row.resultIndex)}>Inspect</button>{#if row.outreach}<a href={row.outreach.mailto}>Outreach</a><button onclick={() => copyDraft(row.outreach?.body ?? '', `${row.domain} outreach draft`)}>Copy</button>{/if}{#if row.responseHref}<a href={row.responseHref}>Prepare reviewed report</a>{/if}</div></td>
+          <td class="mobile-secondary" data-label="Actions"><div class="draft-actions"><button class="inspect" aria-label={`Inspect ${row.domain}`} onclick={() => inspectDomain(row.resultIndex)}>Inspect</button>{#if row.outreach}<a href={row.outreach.mailto} aria-label={`Outreach email for ${row.domain}`}>Outreach</a><button aria-label={`Copy outreach draft for ${row.domain}`} onclick={() => copyDraft(row.outreach?.body ?? '', `${row.domain} outreach draft`)}>Copy</button>{/if}{#if row.responseHref}<a href={row.responseHref} aria-label={`Prepare reviewed report for ${row.domain}`}>Prepare reviewed report</a>{/if}</div></td>
         </tr>
       {/each}
     </tbody>
