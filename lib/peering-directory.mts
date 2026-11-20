@@ -77,12 +77,12 @@ export async function collectPeeringDirectory(value: unknown, options: Readonly<
 }
 
 export function formatPeeringDirectory(context: DirectoryContext): string {
-  return [`${context.source} context · ${context.asn}`, `Collected: ${context.observedAt}`,
+  return `${[`${context.source} context · ${context.asn}`, `Collected: ${context.observedAt}`,
     ...(context.network ? [`Network: ${context.network.name}`, `Directory record: ${context.network.id}`,
       `Reported scope: ${context.network.scope ?? 'Not supplied'}`, `Reported peering policy: ${context.network.peeringPolicy ?? 'Not supplied'}`,
       `Source updated: ${context.network.updatedAt ?? 'Unknown'}`]
       : [context.state === 'not_listed' ? 'No matching directory entry was returned.' : `Directory unavailable (${context.failure}).`]),
     'Community-maintained operational context, not registration authority, verified reachability, ownership or reputation.',
     'Use only within the provider’s permitted purpose or existing permission. No cache or export file is created; redistribution is not authorised by this command.',
-  ].join('\n');
+  ].join('\n')}\n`;
 }

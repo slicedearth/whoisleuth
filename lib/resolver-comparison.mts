@@ -163,7 +163,8 @@ export async function collectResolverComparison(hostname: unknown, selection: un
 }
 
 export function formatResolverComparison(report: Awaited<ReturnType<typeof collectResolverComparison>>) {
-  return [`Resolver comparison · ${report.hostname}`, ...report.rows.map(row => `${row.type}: ${row.state}`),
+  return `${[`Resolver comparison · ${report.hostname}`, ...report.rows.map(row => `${row.type}: ${row.state}`),
     ...report.queries.map(query => `${RESOLVER_PROVIDERS.find(provider => provider.id === query.provider)!.label} ${query.type}: ${query.outcome}${query.values.length ? ` · ${query.values.map(value => value.value).join(', ')}` : ''}${query.aliasChain.length ? ` · via alias ${query.aliasChain.join(' → ')}` : ''}${query.aliasObserved ? ' · unfollowed alias or other-name answer' : ''}`),
-    'Resolver agreement is not an authority, DNSSEC validation or safety verdict. Alias chains are followed only within each resolver\u2019s own answer. Negative answers and unavailable queries remain distinct.'].join('\n');
+    'Resolver agreement is not an authority, DNSSEC validation or safety verdict. Alias chains are followed only within each resolver\u2019s own answer. Negative answers and unavailable queries remain distinct.',
+    'An empty answer without a negative SOA record stays partial. Different answers can reflect location-based or load-balanced responses rather than a change.'].join('\n')}\n`;
 }

@@ -49,6 +49,8 @@ export function registrySupportLabel(value: unknown): string {
     ? value.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, 128)
     : '';
   if (!text) return 'Unknown';
+  // Encoding names keep their standard spelling.
+  if (text.toLowerCase() === 'utf-8') return 'UTF-8';
   return text.replaceAll('_', ' ').replaceAll('-', ' ')
     .replace(/\b(?:icann|iana|rdap|whois|dnssec|dns)\b|\b\w/gi, (word) => word.toUpperCase());
 }
@@ -147,6 +149,18 @@ export function inspectRegistrySupport(value: unknown): {
     : { state: 'invalid', profile: null };
 }
 
+// Catalogue suffixes use their ASCII (A-label) form; accept a Unicode suffix
+// such as an internationalised ccTLD by converting it the same way a browser
+// converts a hostname. Invalid input stays as typed and simply matches nothing.
+function asciiSuffix(value: string): string {
+  if (!value || /^[\x00-\x7f]*$/u.test(value)) return value;
+  try {
+    return new URL(`http://example.${value}/`).hostname.slice('example.'.length);
+  } catch {
+    return value;
+  }
+}
+
 export function filterRegistrySupportRows(
   rows: readonly RegistryCompatibilityRow[] | null,
   query: unknown,
@@ -157,7 +171,7 @@ export function filterRegistrySupportRows(
   const normalizedQuery = typeof query === 'string'
     ? query.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, MAX_REGISTRY_SUPPORT_FILTER_LENGTH).toLowerCase()
     : '';
-  const suffixQuery = normalizedQuery.startsWith('.') ? normalizedQuery.slice(1) : null;
+  const suffixQuery = normalizedQuery.startsWith('.') ? asciiSuffix(normalizedQuery.slice(1)) : null;
   const searchableQuery = normalizedQuery.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
   const normalizedCoverage = ['fixture_verified', 'access_documented'].includes(String(coverage))
     ? String(coverage)

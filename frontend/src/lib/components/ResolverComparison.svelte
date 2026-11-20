@@ -76,7 +76,7 @@
           </section>
         {/each}
       </div>
-      <p class="note">Agreement is resolver context, not authoritative truth or a safety verdict. Alias chains are followed only within each resolver’s own answer. The provider’s AD flag is reported, not locally verified.</p>
+      <p class="note">Agreement is resolver context, not authoritative truth or a safety verdict. Alias chains are followed only within each resolver’s own answer. The provider’s AD flag is reported, not locally verified. An empty answer without a negative SOA record stays partial. Different answers can reflect location-based or load-balanced responses rather than a change.</p>
     {/if}
   </div>
 </details>

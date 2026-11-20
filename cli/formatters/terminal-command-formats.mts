@@ -33,7 +33,8 @@ function formatTerminalRegistrySupport(document: TerminalRecord): string {
   const documentation = Array.isArray(verification.documentationUrls) ? verification.documentationUrls : [];
   const standards = terminalRecord(document.standardsCoverage);
   const genericCoverage = terminalRecord(standards.genericAndRestricted);
-  const supportLabel = (value: unknown) => titleCase(safeTerminalValue(value, 'unknown').replaceAll('-', '_'));
+  // Encoding names keep their standard spelling; other tokens are title-cased.
+  const supportLabel = (value: unknown) => value === 'utf-8' ? 'UTF-8' : titleCase(safeTerminalValue(value, 'unknown').replaceAll('-', '_'));
   const lines = [
     `Input          ${safeTerminalValue(document.requestedInput)}`,
     `Suffix         .${safeTerminalValue(document.suffix)}`,
@@ -55,9 +56,9 @@ function formatTerminalRegistrySupport(document: TerminalRecord): string {
     ...(typeof profile.officialLookupUrl === 'string' && profile.officialLookupUrl
       ? [`Official lookup ${safeTerminalValue(profile.officialLookupUrl)}`]
       : []),
-    `Fixture states ${fixtures.length ? fixtures.map((value: unknown) => supportLabel(value)).join(', ') : 'None documented'}`,
+    `Test scenarios ${fixtures.length ? fixtures.map((value: unknown) => supportLabel(value)).join(', ') : 'None documented'}`,
   ];
-  for (const file of files) lines.push(`Verified by    ${safeTerminalValue(file)}`);
+  for (const file of files) lines.push(`Test file      ${safeTerminalValue(file)}`);
   for (const url of documentation) lines.push(`Documentation  ${safeTerminalValue(url)}`);
   lines.push(
     `Limitation     ${safeTerminalValue(document.limitation)}`,

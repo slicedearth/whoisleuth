@@ -83,5 +83,5 @@ async function collectQuery(kind: WebArchiveQueryKind, domain: string, signal: A
 export function formatWebArchiveHistory(report: WebArchiveHistory): string {
   const line = (query: WebArchiveQuery) => `${query.kind === 'earliest' ? 'Earliest capture' : 'Latest capture'}: ${
     query.capturedAt ? `${query.capturedAt}${query.capturedStatus ? ` · HTTP ${query.capturedStatus}` : ''}` : query.outcome.replaceAll('_', ' ')}`;
-  return [`Web archive history · ${report.domain} · ${WEB_ARCHIVE_PROVIDER.label}`, ...report.queries.map(line), ...WEB_ARCHIVE_LIMITATIONS].join('\n');
+  return `${[`Web archive history · ${report.domain} · ${WEB_ARCHIVE_PROVIDER.label}`, ...report.queries.map(line), ...WEB_ARCHIVE_LIMITATIONS].join('\n')}\n`;
 }
