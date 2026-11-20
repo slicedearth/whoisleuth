@@ -27,6 +27,8 @@ const MAX_ENTITIES_PER_ROLE = 5;
 const MAX_VCARD_ENTRIES = 100;
 const MAX_ENTITY_ROLES = 12;
 const MAX_CONTACT_VALUES = 8;
+// Scalars walked per vCard property, blanks included, before it is partial.
+const MAX_CONTACT_SCALARS_PER_PROPERTY = 32;
 const MAX_ENTITY_LINKS = 10;
 const MAX_RDAP_LINKS = 20;
 const MAX_RDAP_VARIANT_GROUPS = 20;
@@ -114,26 +116,57 @@ function vcardRawValues(vcardArray: unknown, field: string): unknown[] {
     .map((entry) => entry[3]);
 }
 
-function normalizeContactValues(
+// A blank value inside the field bound publishes nothing (vCard requires an
+// fn property, so role contacts often carry an empty one). An overlong or
+// control-character value is not blank: it is supplied input that cannot be
+// retained.
+function blankContactValue(value: string, maxLength: number): boolean {
+  return value.length <= maxLength && !/[\u0000-\u001f\u007f]/u.test(value) && value.trim() === '';
+}
+
+// One bounded walk decides both which contact values are retained and whether
+// any supplied value was dropped, so retention and completeness cannot
+// disagree. Blank placeholders neither consume the retention budget nor count
+// as omitted evidence; every other dropped value marks the field truncated.
+function scanContactValues(
   vcardArray: unknown,
   field: string,
   maxLength: number,
   { lower = false }: { lower?: boolean } = {},
-): string[] {
+): { values: string[]; truncated: boolean } {
   const values: string[] = [];
   const seen = new Set<string>();
+  let truncated = false;
   for (const raw of vcardRawValues(vcardArray, field)) {
-    for (const scalar of flattenScalarValues(raw, MAX_CONTACT_VALUES)) {
+    const flattened = flattenScalarValuesWithCompleteness(raw, MAX_CONTACT_SCALARS_PER_PROPERTY);
+    if (flattened.truncated) truncated = true;
+    for (const scalar of flattened.values) {
+      if (blankContactValue(scalar, maxLength)) continue;
       const normalized = boundedString(scalar, maxLength, { lower });
-      if (!normalized) continue;
+      if (!normalized) {
+        truncated = true;
+        continue;
+      }
       const key = normalized.toLowerCase();
       if (seen.has(key)) continue;
+      if (values.length >= MAX_CONTACT_VALUES) {
+        truncated = true;
+        continue;
+      }
       seen.add(key);
       values.push(normalized);
-      if (values.length >= MAX_CONTACT_VALUES) return values;
     }
   }
-  return values;
+  return { values, truncated };
+}
+
+function normalizeContactValues(
+  vcardArray: unknown,
+  field: string,
+  maxLength: number,
+  options: { lower?: boolean } = {},
+): string[] {
+  return scanContactValues(vcardArray, field, maxLength, options).values;
 }
 
 function normalizeAddresses(vcardArray: unknown): string[] {
@@ -160,14 +193,7 @@ function contactValuesTruncated(vcardArray: unknown): boolean {
     { field: 'tel', maxLength: 100, lower: false },
   ];
   for (const { field, maxLength, lower } of scalarFields) {
-    let count = 0;
-    for (const raw of vcardRawValues(vcardArray, field)) {
-      const flattened = flattenScalarValuesWithCompleteness(raw, MAX_CONTACT_VALUES + 1);
-      if (flattened.truncated
-        || flattened.values.some((value) => boundedString(value, maxLength, { lower }) === null)) return true;
-      count += flattened.values.length;
-      if (count > MAX_CONTACT_VALUES) return true;
-    }
+    if (scanContactValues(vcardArray, field, maxLength, { lower }).truncated) return true;
   }
   const addressValues = vcardRawValues(vcardArray, 'adr');
   if (addressValues.length > MAX_CONTACT_VALUES) return true;
