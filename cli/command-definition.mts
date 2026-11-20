@@ -299,7 +299,7 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
     ]), (_command, deep) => Math.min(deep ? 2 : 4, bulkConcurrencyLimit(deep ? 'deep' : 'fast'))),
   '--checkpoint': file('Save resumable collection state to this local file.'),
   '--resume': flag('Resume collection from the selected checkpoint.'),
-  '--tlds': text('Use this comma-separated set of domain endings.', true),
+  '--tlds': text('Use this comma-separated set of domain endings. The TLD typo family separately adds delegated typing variants of the seed\'s ending; leave it out with --families.', true),
   '--preset': enumeration('Choose candidate-generation families; explicit families select a custom set instead.', ['common', 'impersonation', 'all'], 'all'),
   '--families': text('Select the candidate-generation families explicitly.'),
   '--keyboard': enumeration('Choose keyboard layouts for adjacent-key candidates.', ['qwerty', 'azerty', 'qwertz', 'all'], 'qwerty'),

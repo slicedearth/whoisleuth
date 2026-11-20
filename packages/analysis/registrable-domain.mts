@@ -1,4 +1,4 @@
-import { getDomain, getPublicSuffix } from 'tldts';
+import { getDomain, getPublicSuffix, parse } from 'tldts';
 
 import { isValidAsciiDomainName } from '../contracts/domain-name.mts';
 import { MAX_DOMAIN_NAME_LENGTH, MAX_DOMAIN_LABEL_LENGTH } from '../contracts/domain-name.mts';
@@ -10,6 +10,13 @@ export const MAX_DISCOVERY_SUFFIX_LENGTH = MAX_DOMAIN_NAME_LENGTH - 2;
 export function publicSuffixForAsciiHostname(value: unknown): string | null {
   if (!isValidAsciiDomainName(value, { requireDot: false, requireLowercase: true })) return null;
   return getPublicSuffix(value);
+}
+
+/** True when a single label is an ICANN top-level domain in the local suffix rules, so a name under it can be registered. */
+export function isIcannTopLevelDomain(label: unknown): boolean {
+  if (typeof label !== 'string' || !/^[a-z0-9-]{2,63}$/u.test(label)) return false;
+  const parsed = parse(`example.${label}`);
+  return parsed.isIcann === true && parsed.publicSuffix === label;
 }
 
 /** Preserve reserved single labels; compound suffixes must match the local ICANN suffix rules. */

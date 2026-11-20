@@ -9,7 +9,7 @@ import {
   MAX_ADVANCED_CONFUSABLE_VARIANTS,
   wholeLabelConfusableVariantsForAscii,
 } from './idn-confusables.mts';
-import { canonicalRegistrableDomain, normalizeDiscoverySuffix } from '../packages/analysis/registrable-domain.mts';
+import { canonicalRegistrableDomain, isIcannTopLevelDomain, normalizeDiscoverySuffix } from '../packages/analysis/registrable-domain.mts';
 import { MAX_DOMAIN_NAME_LENGTH, MAX_DOMAIN_LABEL_LENGTH } from '../packages/contracts/domain-name.mts';
 
 export { MAX_ADVANCED_CONFUSABLE_VARIANTS };
@@ -149,11 +149,16 @@ const IMPERSONATION_TERMS = Object.freeze([
   'customer-support',
   'security-check',
 ]);
-const TLD_TYPOS: Readonly<Record<string, readonly string[]>> = {
+const TLD_TYPO_CANDIDATES: Readonly<Record<string, readonly string[]>> = {
   com: ['cm', 'co', 'om', 'con', 'comm', 'cim', 'vom'],
   net: ['ner', 'nte', 'ne'],
   org: ['ogr', 'rg', 'orgg'],
 };
+// Only typing variants that are delegated top-level domains can be registered,
+// so undelegated endings would spend review and scan budget without a result.
+const TLD_TYPOS: Readonly<Record<string, readonly string[]>> = Object.freeze(Object.fromEntries(
+  Object.entries(TLD_TYPO_CANDIDATES).map(([tld, typos]) => [tld, Object.freeze(typos.filter(isIcannTopLevelDomain))]),
+));
 
 export const MAX_GENERATION_TLDS = 20;
 export const MAX_NAME_VARIANTS = 1_500;

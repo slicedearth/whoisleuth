@@ -565,7 +565,7 @@ const SHARED_COMMAND_OPTIONS = [
     "option": "--tlds",
     "scope": "command",
     "usage": "--tlds \u003cvalue>",
-    "description": "Use this comma-separated set of domain endings.",
+    "description": "Use this comma-separated set of domain endings. The TLD typo family separately adds delegated typing variants of the seed's ending; leave it out with --families.",
     "values": [],
     "repeatable": false,
     "ranges": [],

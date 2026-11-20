@@ -78,6 +78,17 @@ describe('provenance-aware typosquat generation', () => {
     assert.equal(candidate.tld, 'cm');
   });
 
+  test('generates only delegated top-level domains as TLD typos', () => {
+    const typoTlds = (seed: string) => generator.generateTyposquatCandidates(seed, [])
+      .filter((item) => item.mutationTypes.includes('tld_typo'))
+      .map((item) => item.tld)
+      .sort();
+    // Undelegated endings such as con, comm, cim or vom cannot be registered.
+    assert.deepEqual(typoTlds('example.com'), ['cm', 'co', 'om']);
+    assert.deepEqual(typoTlds('example.net'), ['ne']);
+    assert.deepEqual(typoTlds('example.org'), []);
+  });
+
   test('expands a domain seed across selected alternate TLDs', () => {
     const candidates = generator.generateTyposquatCandidates('acme.invalid', ['invalid', 'test', 'example']);
     assert.deepEqual(candidates.find((candidate) => candidate.domain === 'acme.test'), {
