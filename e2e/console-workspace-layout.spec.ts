@@ -14,54 +14,63 @@ const viewports = [
   { width: 3840, height: 2160 },
 ] as const;
 
-test('public and console footers keep one layout and complete accessible links', async ({ page }, testInfo) => {
-  for (const width of [320, 390, 412, 720, 1024, 1280]) for (const theme of ['light', 'dark'] as const) {
-    await page.setViewportSize({ width, height: 900 });
-    let publicLayout: number[] | undefined;
-    for (const path of ['/', '/resources', '/dashboard']) {
+test('public and console footers keep one layout and complete accessible links', async ({ page, browserName }, testInfo) => {
+  for (const theme of ['light', 'dark'] as const) {
+    const publicLayouts = new Map<number, number[]>();
+    for (const path of ['/', '/resources', '/dashboard', '/lookup']) {
       await page.goto(path);
-      await useTheme(page, theme);
+      if (path === '/') await useTheme(page, theme);
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
       const footer = page.locator('.site-footer');
       const links = footer.getByRole('navigation', { name: 'Footer', exact: true });
-      await expect(links.getByRole('link')).toHaveCount(5);
       for (const [label, href] of [['Privacy', '/privacy'], ['Terms', '/terms'], ['Request policy', '/request-policy'], ['Contact', '/contact']] as const) {
         const link = links.getByRole('link', { name: new RegExp(`^${label}(?: \\(|$)`, 'u') });
         await expect(link).toHaveAttribute('href', href);
         await expect(link).toBeVisible();
-        if (path === '/dashboard') {
+        if (path === '/dashboard' || path === '/lookup') {
           await expect(link).toHaveAttribute('target', '_blank');
           await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
         } else await expect(link).not.toHaveAttribute('target');
       }
       await expect(links.getByRole('link', { name: 'Source and licence (opens in a new tab)', exact: true })).toHaveAttribute('target', '_blank');
       await page.evaluate(() => document.fonts.ready);
-      await footer.scrollIntoViewIfNeeded();
-      await expectNoHorizontalOverflow(page);
-      const layout = await footer.evaluate(element => {
-        const box = element.getBoundingClientRect();
-        const metadata = element.querySelector('p')!.getBoundingClientRect();
-        const author = element.querySelector('p a')!.getBoundingClientRect();
-        const navigation = element.querySelector('nav')!.getBoundingClientRect();
-        return {
-          metadataBottom: metadata.bottom - box.top,
-          navigationTop: navigation.top - box.top,
-          positions: [metadata.height, author.left - box.left, author.top - box.top, ...Array.from(element.querySelectorAll('nav > a')).flatMap(link => {
-            const bounds = link.getBoundingClientRect();
-            return [bounds.left - box.left, bounds.top - box.top];
-          })],
-        };
-      });
-      expect(layout.navigationTop).toBeGreaterThan(layout.metadataBottom);
-      if (publicLayout) {
-        expect(layout.positions).toHaveLength(publicLayout.length);
-        layout.positions.forEach((value, index) => expect(value).toBeCloseTo(publicLayout![index]!, 0));
-      } else publicLayout = layout.positions;
-      if (captureVisualEvidenceEnabled()) await footer.screenshot({ path: testInfo.outputPath(`footer-${path.slice(1) || 'home'}-${width}-${theme}.png`) });
+      for (const width of [320, 360, 390, 430, 768, 901, 1024, 1440, 1920]) {
+        await test.step(`${path} at ${width}px in ${theme} mode`, async () => {
+          await page.setViewportSize({ width, height: 900 });
+          await expectNoHorizontalOverflow(page);
+          const layout = await footer.evaluate(element => {
+            const box = element.getBoundingClientRect();
+            const metadata = element.querySelector('p')!.getBoundingClientRect();
+            const author = element.querySelector('p a')!.getBoundingClientRect();
+            const navigation = element.querySelector('nav')!.getBoundingClientRect();
+            const linkBoxes = Array.from(element.querySelectorAll('nav > a'), link => link.getBoundingClientRect());
+            return {
+              linkTops: linkBoxes.map(bounds => bounds.top),
+              metadataBottom: metadata.bottom,
+              navigationTop: navigation.top,
+              positions: [box.height, metadata.height, author.left - box.left, author.top - box.top,
+                ...linkBoxes.flatMap(bounds => [bounds.left - box.left, bounds.top - box.top])],
+            };
+          });
+          expect(layout.navigationTop).toBeGreaterThan(layout.metadataBottom);
+          if (width >= 360) expect(Math.max(...layout.linkTops) - Math.min(...layout.linkTops)).toBeLessThan(1);
+          const publicLayout = publicLayouts.get(width);
+          if (publicLayout) {
+            expect(layout.positions).toHaveLength(publicLayout.length);
+            layout.positions.forEach((position, index) => expect(position).toBeCloseTo(publicLayout[index]!, 0));
+          } else publicLayouts.set(width, layout.positions);
+          if (captureVisualEvidenceEnabled() && [320, 390, 768, 1440].includes(width)) {
+            await footer.screenshot({ path: testInfo.outputPath(`footer-${path.slice(1) || 'home'}-${width}-${theme}.png`) });
+          }
+        });
+      }
     }
   }
-  await page.getByRole('navigation', { name: 'Footer' }).getByRole('link').first().focus();
-  await page.keyboard.press('Tab');
-  await expect(page.getByRole('navigation', { name: 'Footer' }).getByRole('link', { name: /^Terms/u })).toBeFocused();
+  const links = page.getByRole('navigation', { name: 'Footer', exact: true });
+  await links.getByRole('link', { name: /^Privacy/u }).focus();
+  // WebKit on macOS includes links in the tab order when Option is held.
+  await page.keyboard.press(browserName === 'webkit' && process.platform === 'darwin' ? 'Alt+Tab' : 'Tab');
+  await expect(links.getByRole('link', { name: /^Terms/u })).toBeFocused();
   expect((await new AxeBuilder({ page }).include('.site-footer').withTags(['wcag2a','wcag2aa','wcag21aa','wcag22aa']).analyze()).violations).toEqual([]);
 });
 
