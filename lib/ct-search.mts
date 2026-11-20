@@ -36,6 +36,9 @@ type CtGroup = {
   certIds: Set<string>;
   firstObservedAt: string | null;
   lastObservedAt: string | null;
+  /** Validity starts of certificates whose rows published no log entry time. */
+  firstValidFrom: string | null;
+  lastValidFrom: string | null;
 };
 type CtMatch = {
   domain: string;
@@ -43,6 +46,13 @@ type CtMatch = {
   firstObservedAt: string | null;
   lastObservedAt: string | null;
   certificateCount: number;
+  /**
+   * Validity-start range for certificates whose rows published no log entry
+   * time. Present only when such a date exists; it never fills the log
+   * observation fields above.
+   */
+  firstValidFrom?: string;
+  lastValidFrom?: string;
 };
 type CtCertificateGroup = {
   certificateKey: string;
@@ -385,10 +395,12 @@ function summarizeCtResults(rows: unknown): { domains: string[]; matches: CtMatc
     const malformedNameField = ['name_value', 'common_name'].some((field) => (
       Object.hasOwn(row, field) && typeof row[field] !== 'string'
     ));
-    const malformedTimestamp = Object.hasOwn(row, 'entry_timestamp')
-      && row.entry_timestamp !== null
-      && row.entry_timestamp !== undefined
-      && validateEntryTimestamp(row.entry_timestamp) === null;
+    const suppliedMalformed = (field: string) => Object.hasOwn(row, field)
+      && row[field] !== null
+      && row[field] !== undefined
+      && validateEntryTimestamp(row[field]) === null;
+    const malformedTimestamp = suppliedMalformed('entry_timestamp')
+      || (validateEntryTimestamp(row.entry_timestamp) === null && suppliedMalformed('not_before'));
     if (missingNameFields || malformedNameField || malformedTimestamp || suppliedCertificateIdentityMalformed(row)) {
       rejectedRows += 1;
     }
@@ -403,6 +415,10 @@ function summarizeCtResults(rows: unknown): { domains: string[]; matches: CtMatc
       typeof row.common_name === 'string' ? row.common_name : '',
     ];
     const ts = validateEntryTimestamp(row.entry_timestamp);
+    // Some responses publish no log entry time. A certificate's validity start
+    // still dates the certificate, so it is retained in its own range; the log
+    // observation dates and per-certificate groups keep log entry times only.
+    const validityStart = ts === null ? validateEntryTimestamp(row.not_before) : null;
     let certificate = certificateMap.get(certId);
     if (!certificate) {
       certificate = {
@@ -457,6 +473,8 @@ function summarizeCtResults(rows: unknown): { domains: string[]; matches: CtMatc
                 certIds: new Set<string>(),
                 firstObservedAt: null,
                 lastObservedAt: null,
+                firstValidFrom: null,
+                lastValidFrom: null,
               };
               groupMap.set(regDomain, group);
             }
@@ -469,6 +487,10 @@ function summarizeCtResults(rows: unknown): { domains: string[]; matches: CtMatc
               if (group.lastObservedAt === null || ts > group.lastObservedAt) {
                 group.lastObservedAt = ts;
               }
+            }
+            if (validityStart !== null) {
+              if (group.firstValidFrom === null || validityStart < group.firstValidFrom) group.firstValidFrom = validityStart;
+              if (group.lastValidFrom === null || validityStart > group.lastValidFrom) group.lastValidFrom = validityStart;
             }
           }
         }
@@ -494,6 +516,8 @@ function summarizeCtResults(rows: unknown): { domains: string[]; matches: CtMatc
       firstObservedAt: group.firstObservedAt,
       lastObservedAt: group.lastObservedAt,
       certificateCount: group.certIds.size,
+      ...(group.firstValidFrom !== null && group.lastValidFrom !== null
+        ? { firstValidFrom: group.firstValidFrom, lastValidFrom: group.lastValidFrom } : {}),
     });
   }
 

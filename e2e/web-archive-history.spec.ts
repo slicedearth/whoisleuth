@@ -142,3 +142,27 @@ test('certificate history is read only on request and combined with the registra
   await expect(comparison).toContainText(/Earliest logged certificate is \d+ days before the current registration/u);
   await expect(history).not.toContainText('unrelated.example');
 });
+
+test('certificate validity starts are shown as context and cannot establish an earlier registration', async ({ page }) => {
+  await page.route('**/api/lookup?*', route => route.fulfill({ json: sectionedLookupFixture(DOMAIN) }));
+  await page.route('**/api/ct-search?*', route => route.fulfill({ json: { keyword: DOMAIN, certCount: 1, truncated: false, certificateGroups: [], certificateGroupsTruncated: false, matches: [
+    // No log time was published, so only a validity start dates the certificate.
+    { domain: DOMAIN, hostnames: [DOMAIN], firstObservedAt: null, lastObservedAt: null, certificateCount: 1,
+      firstValidFrom: '2018-03-01T00:00:00.000Z', lastValidFrom: '2018-03-01T00:00:00.000Z' },
+  ] } }));
+  await page.goto('/lookup');
+  await page.locator('#query').fill(DOMAIN);
+  await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
+  await expandLookupFamilies(page);
+  const history = page.getByRole('region', { name: 'Registration history' });
+  const logs = history.locator('[data-fact="certificate-logs"]');
+  await logs.getByRole('button', { name: 'Read certificate history', exact: true }).click();
+  await expect(logs).toContainText('Logged; log times not reported');
+  await expect(logs).toContainText('Certificates without a published log time became valid from');
+  await expect(logs).not.toContainText('Earliest logged');
+  const comparison = history.getByRole('region', { name: 'Registration comparison' });
+  // The earlier validity start is reported as context but does not decide the state.
+  await expect(comparison).toHaveAttribute('data-state', 'not_comparable');
+  await expect(comparison).toContainText(/Earliest certificate validity start is \d+ days before the current registration was created \(.+\); context only\./u);
+  await expect(comparison).toContainText('Certificate validity starts are context only.');
+});

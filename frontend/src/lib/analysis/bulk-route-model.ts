@@ -4,8 +4,7 @@ import type { ScanResult } from './bulk-result-model.ts';
 import { RISK_MODEL_VERSION } from './scoring.ts';
 import { outreachAction } from '../drafts.ts';
 import { webCollectionScoreLimitation } from '../../../../packages/evidence/collection-quality.mts';
-import { reviewPriorRegistration, type PriorRegistrationReview } from '../../../../packages/evidence/prior-registration.mts';
-import { certificateChronologyEligibility } from '../../../../packages/evidence/evidence-eligibility.mts';
+import { certificatePriorRegistrationObservations, reviewPriorRegistration, type PriorRegistrationReview } from '../../../../packages/evidence/prior-registration.mts';
 
 export type BulkPrimaryFilter =
   | 'all'
@@ -72,7 +71,9 @@ export type BulkResultDisplayRow = Readonly<{
     certificateCount: number;
     /** The source reported a first observation later than its last, so the dates are not compared. */
     chronologyContradicted: boolean;
-    /** Earliest logged certificate compared with the current registration's creation date. */
+    /** Validity-start range for certificates without a published log time; context only. */
+    validityRange: Readonly<{ first: string; last: string }> | null;
+    /** Earliest logged certificate compared with the current registration's creation date; validity starts are context. */
     priorRegistration: PriorRegistrationReview;
   }> | null;
   /** Rank from the popularity list selected in Discover, with the list's SHA-256 for citation. */
@@ -385,10 +386,11 @@ export function buildBulkResultDisplayRows(input: {
             hostnameCount: row.ct.hostnames.length,
             certificateCount: row.ct.certificateCount,
             chronologyContradicted: row.ct.chronologyContradicted === true,
+            validityRange: row.ct.firstValidFrom && row.ct.lastValidFrom
+              ? { first: row.ct.firstValidFrom, last: row.ct.lastValidFrom } : null,
             priorRegistration: reviewPriorRegistration({
               registrationCreatedAt: row.registrationCreation?.createdAt ?? null,
-              observations: certificateChronologyEligibility(row.ct).eligible
-                ? [{ source: 'certificate_log', observedAt: row.ct.firstObservedAt }] : [],
+              observations: certificatePriorRegistrationObservations(row.ct),
             }),
           }
         : null,

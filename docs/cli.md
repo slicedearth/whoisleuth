@@ -415,7 +415,13 @@ whoisleuth prior-registration lookup.json --ct-results ct.json --archive-history
 creation date suggests an earlier registration of the name; it does not identify
 a previous or current owner, a transfer or intent, and no earlier observation
 does not show that the current registration is the first. Browser Bulk review
-and Lookup's web archive panel use the same comparison.
+and Lookup's web archive panel use the same comparison. `firstObservedAt` and
+`lastObservedAt` in `ct-search` output are always log observation times. When
+some certificates have no published log time, a match also carries
+`firstValidFrom` and `lastValidFrom`; terminal output shows them as `Valid from`.
+The comparison reports a validity start only as context, because it dates a
+certificate rather than a public observation of the name, so it never shows an
+earlier registration on its own.
 
 ### Selected network-directory context
 

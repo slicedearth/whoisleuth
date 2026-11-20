@@ -553,6 +553,42 @@ describe('certificate identity', () => {
     assert.equal(result.certificateGroups.length, 2);
   });
 
+  test('keeps log observation dates and validity starts apart in a mixed match', () => {
+    const withoutLogTime = (overrides: Record<string, unknown>) => {
+      const value: Record<string, unknown> = row(overrides);
+      delete value.entry_timestamp;
+      return value;
+    };
+    const result = summarizeCtResults([
+      row({ id: 61, name_value: 'one.mixed.example', entry_timestamp: '2026-01-01T00:00:00', not_before: '2025-12-31T00:00:00' }),
+      // The validity-only certificate falls between the two genuine log dates.
+      withoutLogTime({ id: 62, name_value: 'two.mixed.example', not_before: '2026-03-01T10:00:00' }),
+      row({ id: 63, name_value: 'three.mixed.example', entry_timestamp: '2026-06-01T00:00:00', not_before: '2026-05-31T00:00:00' }),
+      withoutLogTime({ id: 71, name_value: 'only.validity.example', not_before: '2026-04-01T00:00:00' }),
+    ]);
+    const mixed = requiredValue(result.matches.find((match) => match.domain === 'mixed.example'));
+    // Both log dates survive as log observations; the validity start is separate.
+    assert.equal(mixed.firstObservedAt, '2026-01-01T00:00:00.000Z');
+    assert.equal(mixed.lastObservedAt, '2026-06-01T00:00:00.000Z');
+    assert.equal(mixed.firstValidFrom, '2026-03-01T10:00:00.000Z');
+    assert.equal(mixed.lastValidFrom, '2026-03-01T10:00:00.000Z');
+    assert.equal(mixed.certificateCount, 3);
+    // A validity-only match has no log observation dates at all.
+    const validityOnly = requiredValue(result.matches.find((match) => match.domain === 'validity.example'));
+    assert.equal(validityOnly.firstObservedAt, null);
+    assert.equal(validityOnly.lastObservedAt, null);
+    assert.equal(validityOnly.firstValidFrom, '2026-04-01T00:00:00.000Z');
+    // Logged-only matches carry no validity fields, and groups keep log times only.
+    const logged = summarizeCtResults([row({ id: 81, name_value: 'logged.example.org', entry_timestamp: '2026-02-01T00:00:00', not_before: '2025-12-01T00:00:00' })]);
+    assert.equal(Object.hasOwn(requiredValue(logged.matches[0]), 'firstValidFrom'), false);
+    assert.equal(requiredValue(result.certificateGroups.find((group) => group.certificateKey === 'id:62')).observedAt, null);
+    assert.equal(result.rejectedRows, 0);
+    // A malformed validity start is counted as rejected content when it would be used.
+    const malformed = summarizeCtResults([withoutLogTime({ id: 54, name_value: 'bad.example.com', not_before: 'soon' })]);
+    assert.equal(malformed.rejectedRows, 1);
+    assert.equal(Object.hasOwn(requiredValue(malformed.matches[0]), 'firstValidFrom'), false);
+  });
+
   test('numeric string id equivalent to number id', () => {
     const result = summarizeCtResults([
       row({ id: 12345, name_value: 'a.example.com', common_name: '' }),

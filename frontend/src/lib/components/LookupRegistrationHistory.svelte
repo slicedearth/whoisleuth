@@ -11,7 +11,7 @@
     certificateChronologyEligibility, EVIDENCE_INELIGIBLE_LABELS, sourceEligibility,
   } from '../../../../packages/evidence/evidence-eligibility.mts';
   import {
-    PRIOR_REGISTRATION_STATE_LABELS, reviewPriorRegistration, type PriorRegistrationSource,
+    certificatePriorRegistrationObservations, PRIOR_REGISTRATION_STATE_LABELS, reviewPriorRegistration, type PriorRegistrationSource,
   } from '../../../../packages/evidence/prior-registration.mts';
   import { registryDateIso } from '../../../../packages/evidence/registry-dates.mts';
 
@@ -31,10 +31,13 @@
     const eligibility = sourceEligibility({ state: item.sourceState, complete: item.complete });
     const date = registryDateIso(item.value);
     if (eligibility.eligible && creation && item.source === creation.source && date === creation.createdAt) return [];
+    // Another eligible source reporting the same instant agrees with the
+    // comparison date; it is not a conflicting, unused value.
+    const agrees = eligibility.eligible && Boolean(creation) && date !== null && date === creation?.createdAt;
     const reason = !eligibility.eligible ? EVIDENCE_INELIGIBLE_LABELS[eligibility.reason]
       : !date ? EVIDENCE_INELIGIBLE_LABELS.value_unusable : 'another observation was selected for comparison';
     return [[`${item.source}\n${item.value}`, { key: `${item.source}\n${item.value}`, source: item.source, value: item.value,
-      reason }] as const];
+      reason, agrees }] as const];
   })).values()]);
 
   const capabilities = getContext<CapabilityGetter | undefined>(CAPABILITY_CONTEXT);
@@ -89,8 +92,7 @@
 
   const certificateEligibility = $derived(certificate?.provenance ? certificateChronologyEligibility(certificate.provenance) : null);
   const comparisonObservations = $derived([
-    ...(certificate?.provenance && certificateEligibility?.eligible
-      ? [{ source: 'certificate_log' as PriorRegistrationSource, observedAt: certificate.provenance.firstObservedAt }] : []),
+    ...certificatePriorRegistrationObservations(certificate?.provenance),
     ...(archiveEarliest ? [{ source: 'web_archive' as PriorRegistrationSource, observedAt: archiveEarliest }] : []),
   ]);
   const prior = $derived(comparisonObservations.length
@@ -109,7 +111,7 @@
         {:else}
           <span>Not established from a successful, complete registration source</span>
         {/if}
-        {#each unused as item (item.key)}<small>{item.source} reported {item.value}; not used because {item.reason}.</small>{/each}
+        {#each unused as item (item.key)}<small>{#if item.agrees}{item.source} reports the same date.{:else}{item.source} reported {item.value}; not used because {item.reason}.{/if}</small>{/each}
       </dd>
     </div>
     <div data-fact="certificate-logs">
@@ -117,9 +119,10 @@
       <dd>
         {#if certificate?.provenance}
           {@const logged = certificate.provenance}
-          <span>{#if logged.firstObservedAt}Earliest logged <time datetime={logged.firstObservedAt}>{formatEvidenceDate(logged.firstObservedAt)}</time>{:else}Logged; dates not reported{/if}</span>
+          <span>{#if logged.firstObservedAt}Earliest logged <time datetime={logged.firstObservedAt}>{formatEvidenceDate(logged.firstObservedAt)}</time>{:else}Logged; log times not reported{/if}</span>
           <small>{logged.certificateCount} distinct certificate{logged.certificateCount === 1 ? '' : 's'}{logged.lastObservedAt ? ` · latest logged ${formatEvidenceDate(logged.lastObservedAt)}` : ''}</small>
-          {#if certificateEligibility && !certificateEligibility.eligible && certificateEligibility.reason}<small>Not compared: {EVIDENCE_INELIGIBLE_LABELS[certificateEligibility.reason]}.</small>{/if}
+          {#if logged.firstValidFrom && logged.lastValidFrom}<small>Certificates without a published log time became valid from <time datetime={logged.firstValidFrom}>{formatEvidenceDate(logged.firstValidFrom)}</time>{logged.lastValidFrom !== logged.firstValidFrom ? ` to ${formatEvidenceDate(logged.lastValidFrom)}` : ''}. Validity starts are context, not log observations.</small>{/if}
+          {#if logged.firstObservedAt && certificateEligibility && !certificateEligibility.eligible && certificateEligibility.reason}<small>Not compared: {EVIDENCE_INELIGIBLE_LABELS[certificateEligibility.reason]}.</small>{/if}
           {#if certificate.truncated}<small>The search result was capped, so an earlier certificate may not be included.</small>{/if}
         {:else if certificate}
           <span>No logged certificate found for {domain}</span>
@@ -141,7 +144,7 @@
     <section class="prior" data-state={prior.state} aria-label="Registration comparison">
       <strong>{PRIOR_REGISTRATION_STATE_LABELS[prior.state]}</strong>
       {#each prior.observations as observation (observation.source)}
-        {#if observation.daysBeforeRegistration !== null}<p>{observation.label} is {observation.daysBeforeRegistration} days before the current registration was created ({formatEvidenceDate(prior.registrationCreatedAt ?? '')}).</p>{/if}
+        {#if observation.daysBeforeRegistration !== null}<p>{observation.label} is {observation.daysBeforeRegistration} days before the current registration was created ({formatEvidenceDate(prior.registrationCreatedAt ?? '')}){observation.context ? '; context only' : ''}.</p>{/if}
       {/each}
       {#each prior.limitations as limitation}<p class="note">{limitation}</p>{/each}
     </section>

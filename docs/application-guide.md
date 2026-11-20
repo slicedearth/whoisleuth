@@ -376,7 +376,9 @@ for comparison, from a successful and complete registration source, and lists an
 other source date with the reason it was not used. **Read certificate history**
 sends the domain to the certificate-search service once, when you select it, and
 shows the earliest and latest logged certificate; contradictory first and last
-dates are shown but not compared. The section compares the eligible certificate
+dates are shown but not compared. When the certificate source publishes no log
+time for some certificates, their validity starts are shown separately as
+context; they never replace the logged dates or show an earlier registration. The section compares the eligible certificate
 and archive observations with the creation date in one place.
 `whoisleuth prior-registration` makes the same comparison offline from saved
 results.
@@ -460,7 +462,9 @@ for each. Exclusions match exact names only, and an excluded domain is not marke
 as safe.
 
 A certificate log entry shows that a certificate was issued for a name, not that
-it is in use today or who controls it. Shared certificates and similar names are
+it is in use today or who controls it. Where the certificate source publishes no
+log time for some certificates, Discover and Bulk show their validity starts
+separately as context. Observed dates, including Bulk CSV, remain log times. Shared certificates and similar names are
 leads to review. Nameserver search covers only the selected registry, so it is a
 partial list rather than a complete reverse lookup.
 

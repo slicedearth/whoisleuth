@@ -508,6 +508,46 @@ describe('normalizeCtProvenance (handoff revalidation)', () => {
     assert.equal(mergeCtProvenance(consistent, ct)?.chronologyContradicted, true);
     assert.equal(normalizeCtProvenance({ ...consistent, chronologyContradicted: 'yes' })?.chronologyContradicted, undefined);
   });
+
+  test('dates carrying the unpublished date-basis marker are excluded as ambiguous', () => {
+    const legacy = requiredValue(normalizeCtProvenance({
+      hostnames: ['a.example.com'], firstObservedAt: '2018-03-01T00:00:00Z', lastObservedAt: '2018-04-01T00:00:00Z',
+      certificateCount: 2, dateBasis: 'validity_start',
+    }));
+    assert.equal(legacy.firstObservedAt, null);
+    assert.equal(legacy.lastObservedAt, null);
+    assert.equal(legacy.certificateCount, 2);
+    assert.deepEqual(legacy.hostnames, ['a.example.com']);
+    assert.equal(Object.hasOwn(legacy, 'dateBasis'), false);
+    // Any value of the marker makes the dates ambiguous; absent, they are log observations.
+    assert.equal(normalizeCtProvenance({ firstObservedAt: '2018-03-01T00:00:00Z', lastObservedAt: null, certificateCount: 1, dateBasis: 'log_entry' })?.firstObservedAt, null);
+    assert.equal(normalizeCtProvenance({ firstObservedAt: '2018-03-01T00:00:00Z', lastObservedAt: null, certificateCount: 1 })?.firstObservedAt, '2018-03-01T00:00:00.000Z');
+  });
+
+  test('a validity-start range stays separate from log dates through normalisation and merging', () => {
+    const mixed = requiredValue(normalizeCtProvenance({
+      firstObservedAt: '2026-01-01T00:00:00Z', lastObservedAt: '2026-06-01T00:00:00Z', certificateCount: 3,
+      firstValidFrom: '2026-03-01T00:00:00Z', lastValidFrom: '2026-03-01T00:00:00Z',
+    }));
+    assert.equal(mixed.firstObservedAt, '2026-01-01T00:00:00.000Z');
+    assert.equal(mixed.lastObservedAt, '2026-06-01T00:00:00.000Z');
+    assert.equal(mixed.firstValidFrom, '2026-03-01T00:00:00.000Z');
+    assert.deepEqual(requiredValue(normalizeCtProvenance(JSON.parse(JSON.stringify(mixed)))), mixed);
+    // Merging keeps the earliest and latest log dates and widens the validity range independently.
+    const other = requiredValue(normalizeCtProvenance({ firstObservedAt: '2025-12-01T00:00:00Z', lastObservedAt: '2026-02-01T00:00:00Z', certificateCount: 1,
+      firstValidFrom: '2026-04-01T00:00:00Z', lastValidFrom: '2026-05-01T00:00:00Z' }));
+    const merged = requiredValue(mergeCtProvenance(mixed, other));
+    assert.deepEqual([merged.firstObservedAt, merged.lastObservedAt], ['2025-12-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z']);
+    assert.deepEqual([merged.firstValidFrom, merged.lastValidFrom], ['2026-03-01T00:00:00.000Z', '2026-05-01T00:00:00.000Z']);
+    const loggedOnly = requiredValue(normalizeCtProvenance({ firstObservedAt: '2025-01-01T00:00:00Z', lastObservedAt: '2025-02-01T00:00:00Z', certificateCount: 1 }));
+    assert.equal(Object.hasOwn(loggedOnly, 'firstValidFrom'), false);
+    assert.equal(Object.hasOwn(requiredValue(mergeCtProvenance(loggedOnly, loggedOnly)), 'firstValidFrom'), false);
+    // An incomplete, reversed or malformed range is left out rather than guessed.
+    for (const range of [{ firstValidFrom: '2026-03-01T00:00:00Z' }, { firstValidFrom: '2026-05-01T00:00:00Z', lastValidFrom: '2026-03-01T00:00:00Z' }, { firstValidFrom: 'soon', lastValidFrom: 'later' }]) {
+      assert.equal(Object.hasOwn(requiredValue(normalizeCtProvenance({ ...loggedOnly, ...range })), 'firstValidFrom'), false, JSON.stringify(range));
+    }
+    assert.equal(bounds.CT_DATE_LABELS.firstObserved, 'Earliest CT observation');
+  });
 });
 
 describe('mergeCtProvenance', () => {

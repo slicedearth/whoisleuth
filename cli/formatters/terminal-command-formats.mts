@@ -118,6 +118,11 @@ function formatTerminalCtSearch(document: TerminalRecord): string {
       lines.push(`  Certificates ${safeTerminalValue(match.certificateCount, '0')}`);
       lines.push(`  Hostnames     ${shownHosts.join(', ')}${omitted > 0 ? ` (+${omitted} more)` : ''}`);
       lines.push(`  Observed      ${safeTerminalValue(match.firstObservedAt)} → ${safeTerminalValue(match.lastObservedAt)}`);
+      // Validity starts of certificates without a published log time stay
+      // separate from the log observation dates above.
+      if (match.firstValidFrom && match.lastValidFrom) {
+        lines.push(`  Valid from    ${safeTerminalValue(match.firstValidFrom)} → ${safeTerminalValue(match.lastValidFrom)} (no log time published; context only)`);
+      }
     }
   }
   if (matches.length > visible.length) {

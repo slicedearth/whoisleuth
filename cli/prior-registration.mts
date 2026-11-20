@@ -1,7 +1,7 @@
 import { boundedJsonLimitsForBytes, parseBoundedJsonObject } from '../packages/analysis/bounded-json.mts';
 import { canonicalRegistrableDomain } from '../packages/analysis/registrable-domain.mts';
 import {
-  PRIOR_REGISTRATION_STATE_LABELS, reviewPriorRegistration, selectRegistrationCreation,
+  certificatePriorRegistrationObservations, PRIOR_REGISTRATION_STATE_LABELS, reviewPriorRegistration, selectRegistrationCreation,
   type PriorRegistrationReview, type PriorRegistrationSource,
 } from '../packages/evidence/prior-registration.mts';
 import { readWebArchiveHistory } from '../packages/evidence/web-archive-history.mts';
@@ -55,7 +55,7 @@ async function readRegistration(raw: string): Promise<Registration> {
   return { domain, createdAt: selected?.createdAt ?? null, source: selected?.source ?? null };
 }
 
-function certificateObservation(raw: string, domain: string): Readonly<{ observedAt: string | null; excluded?: string }> {
+function certificateObservations(raw: string, domain: string): Readonly<{ observations: readonly Readonly<{ source: PriorRegistrationSource; observedAt: string }>[]; excluded?: string }> {
   const document = parseBoundedJsonObject(raw, { label: 'Certificate search result', maximumBytes: MAX_PRIOR_REGISTRATION_SUPPORTING_BYTES,
     limits: boundedJsonLimitsForBytes(MAX_PRIOR_REGISTRATION_SUPPORTING_BYTES) });
   if (document.schema !== 'whoisleuth.cli.ct-search' || document.version !== 1) {
@@ -67,10 +67,13 @@ function certificateObservation(raw: string, domain: string): Readonly<{ observe
   try { result = normalizeCtResponse(document, document.keyword); }
   catch (error) { throw new CliUsageError(`--ct-results: ${error instanceof Error ? error.message : 'the certificate search result is invalid.'}`); }
   const provenance = result.candidates.find((candidate) => candidate.domain === domain)?.certificateTransparency ?? null;
+  // The shared helper admits only an eligible log observation and adds any
+  // validity start as context, exactly as Lookup and Bulk do.
+  const observations = certificatePriorRegistrationObservations(provenance);
   if (certificateChronologyEligibility(provenance).reason === 'chronology_contradictory') {
-    return { observedAt: null, excluded: `The certificate search result reports a first observation later than the last for ${domain}, so it was not used.` };
+    return { observations, excluded: `The certificate search result reports a first observation later than the last for ${domain}, so it was not used.` };
   }
-  return { observedAt: provenance?.firstObservedAt ?? null };
+  return { observations };
 }
 
 function archiveObservation(raw: string, domain: string): string | null {
@@ -88,9 +91,9 @@ export async function buildCliPriorRegistration(input: Readonly<{
     throw new CliUsageError('prior-registration needs --ct-results, --archive-history or both.');
   }
   const registration = await readRegistration(input.registration);
-  const certificate = input.certificateResults ? certificateObservation(input.certificateResults, registration.domain) : null;
+  const certificate = input.certificateResults ? certificateObservations(input.certificateResults, registration.domain) : null;
   const observations: Array<{ source: PriorRegistrationSource; observedAt: string | null }> = [
-    ...(certificate ? [{ source: 'certificate_log' as const, observedAt: certificate.observedAt }] : []),
+    ...(certificate?.observations ?? []),
     ...(input.archiveHistory ? [{ source: 'web_archive' as const, observedAt: archiveObservation(input.archiveHistory, registration.domain) }] : []),
   ];
   return Object.freeze({
@@ -113,8 +116,8 @@ export function formatCliPriorRegistration(document: CliPriorRegistrationDocumen
     `Result           ${PRIOR_REGISTRATION_STATE_LABELS[review.state]}`,
   ];
   for (const observation of review.observations) {
-    lines.push(`${observation.label.padEnd(29)}${safeTerminalValue(observation.observedAt)}${observation.daysBeforeRegistration !== null
-      ? ` · ${observation.daysBeforeRegistration} days before creation` : ''}`);
+    lines.push(`${observation.label.padEnd(Math.max(29, observation.label.length + 1))}${safeTerminalValue(observation.observedAt)}${observation.daysBeforeRegistration !== null
+      ? ` · ${observation.daysBeforeRegistration} days before creation` : ''}${observation.context ? ' · context only' : ''}`);
   }
   lines.push('', ...(document.excludedObservations ?? []), ...review.limitations);
   return `${lines.join('\n')}\n`;

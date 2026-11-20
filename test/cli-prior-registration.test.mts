@@ -131,3 +131,31 @@ test('contradictory certificate chronology for the domain is not used as an earl
   const terminal = await cli(['prior-registration', 'lookup.json', '--ct-results', 'contradictory.json'], files);
   assert.match(terminal.stdout, /^The certificate search result reports a first observation later than the last/mu);
 });
+
+test('certificate validity starts are reported as context and cannot establish an earlier registration', async () => {
+  const validityOnly = { ...ctResults, matches: [
+    { domain: 'example.test', hostnames: ['example.test'], firstObservedAt: null, lastObservedAt: null, certificateCount: 1,
+      firstValidFrom: '2019-01-01T00:00:00.000Z', lastValidFrom: '2019-01-01T00:00:00.000Z' },
+  ] };
+  const files = { 'lookup.json': lookup, 'validity.json': validityOnly, 'archive.json': archive() };
+  const json = JSON.parse((await cli(['prior-registration', 'lookup.json', '--ct-results', 'validity.json', '--json'], files)).stdout);
+  assert.equal(json.review.state, 'not_comparable');
+  assert.deepEqual(json.review.observations.map((item: { source: string; context: boolean }) => [item.source, item.context]), [['certificate_validity', true]]);
+  assert.ok(json.review.limitations.some((item: string) => /context only/u.test(item)));
+  // An archive capture after creation decides the state; the earlier validity start does not.
+  const combined = JSON.parse((await cli(['prior-registration', 'lookup.json', '--ct-results', 'validity.json', '--archive-history', 'archive.json', '--json'], files)).stdout);
+  assert.equal(combined.review.state, 'no_earlier_observation');
+  const terminal = await cli(['prior-registration', 'lookup.json', '--ct-results', 'validity.json'], files);
+  assert.match(terminal.stdout, /Earliest certificate validity start\s+2019-01-01T00:00:00\.000Z · \d+ days before creation · context only/u);
+});
+
+test('a certificate result from the unpublished date-basis format cannot establish an earlier registration', async () => {
+  const legacy = { ...ctResults, matches: [
+    { domain: 'example.test', hostnames: ['example.test'], firstObservedAt: '2018-03-01T00:00:00.000Z', lastObservedAt: '2018-03-01T00:00:00.000Z',
+      certificateCount: 1, dateBasis: 'validity_start' },
+  ] };
+  const files = { 'lookup.json': lookup, 'legacy.json': legacy };
+  const json = JSON.parse((await cli(['prior-registration', 'lookup.json', '--ct-results', 'legacy.json', '--json'], files)).stdout);
+  assert.equal(json.review.state, 'not_comparable');
+  assert.deepEqual(json.review.observations, []);
+});

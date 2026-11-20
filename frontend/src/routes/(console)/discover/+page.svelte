@@ -753,6 +753,8 @@
           firstObservedAt: candidate.certificateTransparency.firstObservedAt,
           lastObservedAt: candidate.certificateTransparency.lastObservedAt,
           hostnames: candidate.certificateTransparency.hostnames.map(String),
+          validityRange: candidate.certificateTransparency.firstValidFrom && candidate.certificateTransparency.lastValidFrom
+            ? { first: candidate.certificateTransparency.firstValidFrom, last: candidate.certificateTransparency.lastValidFrom } : null,
         } : null,
       };
     });

@@ -1,5 +1,6 @@
 <script lang="ts">
   import Pagination from '#lib/components/Pagination.svelte';
+  import { CT_DATE_LABELS } from '#lib/analysis/ct-results.ts';
   import type { CtHistoryObservationState } from '#lib/analysis/ct-history.ts';
   import { onDestroy, untrack } from 'svelte';
   import { MAX_POPULARITY_LIST_BYTES, POPULARITY_LIMITATION } from '../../../../packages/analysis/popularity-list.mts';
@@ -10,6 +11,7 @@
     firstObservedAt: string | null;
     lastObservedAt: string | null;
     hostnames: string[];
+    validityRange: { first: string; last: string } | null;
   };
   type CandidateRow = {
     domain: string;
@@ -278,8 +280,8 @@
             {@const ct = candidate.certificateEvidence}
             <div class="ct-meta">
               <span class="ct-stat">{ct.certificateCount} distinct certificate{ct.certificateCount === 1 ? '' : 's'}</span>
-              {#if ct.firstObservedAt}<span class="ct-stat">Earliest CT observation <time datetime={ct.firstObservedAt}>{ct.firstObservedAt.slice(0, 10)}</time></span>{/if}
-              {#if ct.lastObservedAt}<span class="ct-stat">Latest CT observation <time datetime={ct.lastObservedAt}>{ct.lastObservedAt.slice(0, 10)}</time></span>{/if}
+              {#if ct.firstObservedAt}<span class="ct-stat">{CT_DATE_LABELS.firstObserved} <time datetime={ct.firstObservedAt}>{ct.firstObservedAt.slice(0, 10)}</time></span>{/if}
+              {#if ct.lastObservedAt}<span class="ct-stat">{CT_DATE_LABELS.lastObserved} <time datetime={ct.lastObservedAt}>{ct.lastObservedAt.slice(0, 10)}</time></span>{/if}{#if ct.validityRange}<span class="ct-stat">{CT_DATE_LABELS.validityRange} <time datetime={ct.validityRange.first}>{ct.validityRange.first.slice(0, 10)}</time>{#if ct.validityRange.last !== ct.validityRange.first} to <time datetime={ct.validityRange.last}>{ct.validityRange.last.slice(0, 10)}</time>{/if} (context only)</span>{/if}
             </div>
             {#if ct.hostnames.length}
               <div class="ct-hosts">

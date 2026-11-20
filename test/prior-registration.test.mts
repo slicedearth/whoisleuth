@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { reviewPriorRegistration } from '../packages/evidence/prior-registration.mts';
+import {
+  certificatePriorRegistrationObservations, PRIOR_REGISTRATION_CONTEXT_LIMITATION, reviewPriorRegistration,
+} from '../packages/evidence/prior-registration.mts';
 
 test('an observation well before the creation date suggests an earlier registration', () => {
   const review = reviewPriorRegistration({
@@ -38,5 +40,39 @@ test('missing dates, invalid times and unknown sources are not comparable rather
   ] });
   assert.equal(invalid.state, 'not_comparable');
   assert.deepEqual(invalid.observations, []);
-  assert.match(invalid.limitations[0]!, /No dated certificate or archive observation/u);
+  assert.match(invalid.limitations[0]!, /No dated certificate log or archive observation/u);
+});
+
+test('a certificate validity start is context and cannot establish an earlier observation', () => {
+  const validityOnly = reviewPriorRegistration({
+    registrationCreatedAt: '2024-03-01T00:00:00Z',
+    observations: [{ source: 'certificate_validity', observedAt: '2020-03-01T00:00:00Z' }],
+  });
+  assert.equal(validityOnly.state, 'not_comparable');
+  assert.deepEqual(validityOnly.observations.map((item) => [item.source, item.label, item.context]),
+    [['certificate_validity', 'Earliest certificate validity start', true]]);
+  assert.ok(validityOnly.limitations.includes(PRIOR_REGISTRATION_CONTEXT_LIMITATION));
+  // A later log entry beside an earlier validity start still yields no earlier observation.
+  const laterLog = reviewPriorRegistration({
+    registrationCreatedAt: '2024-03-01T00:00:00Z',
+    observations: [{ source: 'certificate_validity', observedAt: '2020-03-01T00:00:00Z' }, { source: 'certificate_log', observedAt: '2024-06-01T00:00:00Z' }],
+  });
+  assert.equal(laterLog.state, 'no_earlier_observation');
+  // Qualifying log entries and archive captures still establish one.
+  for (const source of ['certificate_log', 'web_archive'] as const) {
+    const review = reviewPriorRegistration({ registrationCreatedAt: '2024-03-01T00:00:00Z', observations: [{ source, observedAt: '2020-03-01T00:00:00Z' }] });
+    assert.equal(review.state, 'earlier_observation', source);
+    assert.equal(review.observations[0]?.context, false);
+  }
+});
+
+test('certificate provenance yields an eligible log observation and validity context', () => {
+  assert.deepEqual(certificatePriorRegistrationObservations({ firstObservedAt: '2020-01-01T00:00:00.000Z', firstValidFrom: '2019-06-01T00:00:00.000Z' }), [
+    { source: 'certificate_log', observedAt: '2020-01-01T00:00:00.000Z' },
+    { source: 'certificate_validity', observedAt: '2019-06-01T00:00:00.000Z' },
+  ]);
+  assert.deepEqual(certificatePriorRegistrationObservations({ firstObservedAt: '2020-01-01T00:00:00.000Z', chronologyContradicted: true }), []);
+  assert.deepEqual(certificatePriorRegistrationObservations({ firstObservedAt: null, firstValidFrom: '2019-06-01T00:00:00.000Z' }),
+    [{ source: 'certificate_validity', observedAt: '2019-06-01T00:00:00.000Z' }]);
+  assert.deepEqual(certificatePriorRegistrationObservations(null), []);
 });
