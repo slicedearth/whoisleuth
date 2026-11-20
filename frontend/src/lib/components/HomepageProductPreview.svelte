@@ -313,6 +313,10 @@
     .preview-tab-panel{flex:1 1 auto}
     .preview-tab-panel.source-view{display:flex}
     .preview-tab-panel.source-view .preview-evidence-map{display:flex;width:100%;flex:1 1 auto;align-items:center}
+    /* The three-column summary narrows between the stacked and wide layouts;
+       scale its values and padding so single-word states are never clipped. */
+    .assessment div{padding-inline:clamp(9px,1vw,13px)}
+    .assessment strong{font-size:clamp(.88rem,1.3vw,1.05rem)}
   }
   @media(max-width:820px){.product-preview{grid-template-columns:1fr 1fr;grid-template-rows:auto auto}.lookup-panel{grid-column:1 / -1;grid-row:1}.discover-panel{grid-column:1;grid-row:2}.monitor-panel{grid-column:2;grid-row:2}}
   @media(max-width:560px){

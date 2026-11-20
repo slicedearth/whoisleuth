@@ -215,7 +215,7 @@ test('methodology claims keep contrary accounts and unavailable rechecks inspect
   await conflict.getByRole('link', { name: 'Inspect the fictional assessment input', exact: true }).click();
   await expect(page).toHaveURL(/\/examples#example-case-assess-input$/u);
   const assessment = page.locator('#example-case-assess-input');
-  await assessment.getByRole('button', { name: 'Open synthetic input', exact: true }).click();
+  await assessment.getByRole('button', { name: /^Open synthetic input for / }).click();
   const supplied = JSON.parse(await assessment.getByRole('textbox').inputValue());
   expect(supplied.evidence.map((item: { stance: string }) => item.stance)).toEqual(['supports', 'contradicts']);
   expect(await page.evaluate(() => Reflect.get(window, 'methodologyStorageAttempts'))).toBe(0);

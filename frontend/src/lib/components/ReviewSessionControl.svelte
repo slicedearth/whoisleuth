@@ -76,8 +76,8 @@
   <label class="question">Question for your next review (optional)<input type="text" bind:value={question} oninput={() => { questionRevision++; }} maxlength={MAX_ANALYST_REVIEW_RATIONALE_LENGTH} autocomplete="off" aria-describedby="review-question-retention"></label>
   <p id="review-question-retention" class="notice">Saved only when you save the current position, protected by this workspace's encryption when enabled, and excluded from backups and exports. Discarding the checkpoint removes its saved question and baseline.</p>
   <div class="checkpoint-preview">
-    <section aria-label="Current review position"><h4>Current review</h4><p>Current filters · {position.selected ? 'one selected item' : 'no selected item'} · {position.drafts.length} unfinished review {position.drafts.length === 1 ? 'form' : 'forms'}.</p></section>
-    {#if ready && saved}<section aria-label="Saved review checkpoint"><h4>Saved for later</h4><p>Saved filters · {saved.selected ? 'one selected item' : 'no selected item'} · {saved.drafts.length} review-form {saved.drafts.length === 1 ? 'copy' : 'copies'}.</p><p>Question: {saved.question === null ? 'Not retained by this older checkpoint' : saved.question || 'No question entered'}</p><p>Later navigation and edits do not update this checkpoint. Resuming checks current evidence and keeps newer open drafts.</p></section>{/if}
+    <section aria-label="Current review position"><p class="section-label">Current review</p><p>Current filters · {position.selected ? 'one selected item' : 'no selected item'} · {position.drafts.length} unfinished review {position.drafts.length === 1 ? 'form' : 'forms'}.</p></section>
+    {#if ready && saved}<section aria-label="Saved review checkpoint"><p class="section-label">Saved for later</p><p>Saved filters · {saved.selected ? 'one selected item' : 'no selected item'} · {saved.drafts.length} review-form {saved.drafts.length === 1 ? 'copy' : 'copies'}.</p><p>Question: {saved.question === null ? 'Not retained by this older checkpoint' : saved.question || 'No question entered'}</p><p>Later navigation and edits do not update this checkpoint. Resuming checks current evidence and keeps newer open drafts.</p></section>{/if}
   </div>
   <div class="toolbar">
     <button class="btn" type="button" bind:this={saveButton} disabled={!ready || busy} onclick={() => void save()}>Save current position</button>
@@ -92,7 +92,7 @@
     {@const checkpoint = resumed.checkpoint}
     {@const briefing = resumed.briefing}
     <section class="resume-briefing" aria-label="Return-to-work briefing">
-      <h4>Return-to-work briefing</h4>
+      <p class="section-label">Return-to-work briefing</p>
       <p>Results when you resumed the checkpoint saved {formatEvidenceDate(checkpoint.updatedAt)}.</p>
       <dl>
         <div><dt>Saved question</dt><dd>{checkpoint.question === null ? 'Not retained by this older checkpoint' : checkpoint.question || 'No question entered'}</dd></div>
@@ -117,10 +117,11 @@
   .checkpoint-state{display:inline-block;margin-inline-start:8px;color:var(--muted);font:400 var(--text-sm)/1.5 var(--font-sans)}
   .checkpoint-preview{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-block:16px}
   .checkpoint-preview section{min-width:0;line-height:1.6;overflow-wrap:anywhere}
-  .checkpoint-preview h4{margin:0 0 4px;font:650 var(--text-sm)/1.5 var(--font-sans)}
+  /* Named regions inside the disclosure; visual labels rather than headings so the page outline does not skip levels. */
+  .checkpoint-preview .section-label{margin:0 0 4px;color:var(--text);font:650 var(--text-sm)/1.5 var(--font-sans)}
   .checkpoint-preview p{margin:0 0 8px;font-size:var(--text-sm)}
   .toolbar{display:flex;flex-wrap:wrap;gap:8px}
-  .resume-briefing{min-width:0;margin-block:16px;font-size:var(--text-sm);line-height:1.6}.resume-briefing h4{margin:0}.resume-briefing p{margin-block:6px;color:var(--muted)}.resume-briefing dl{display:grid;gap:8px}.resume-briefing dl>div{display:grid;grid-template-columns:minmax(0,12rem) minmax(0,1fr);gap:8px}.resume-briefing dt{color:var(--muted)}.resume-briefing dd{margin:0;overflow-wrap:anywhere}.resume-briefing summary{cursor:pointer}
+  .resume-briefing{min-width:0;margin-block:16px;font-size:var(--text-sm);line-height:1.6}.resume-briefing .section-label{margin:0;color:var(--text);font-weight:650}.resume-briefing p{margin-block:6px;color:var(--muted)}.resume-briefing dl{display:grid;gap:8px}.resume-briefing dl>div{display:grid;grid-template-columns:minmax(0,12rem) minmax(0,1fr);gap:8px}.resume-briefing dt{color:var(--muted)}.resume-briefing dd{margin:0;overflow-wrap:anywhere}.resume-briefing summary{cursor:pointer}
   @media(max-width:640px){.checkpoint-preview{grid-template-columns:1fr}}
   @media(max-width:640px){.resume-briefing dl>div{grid-template-columns:minmax(0,1fr);gap:0}}
 </style>

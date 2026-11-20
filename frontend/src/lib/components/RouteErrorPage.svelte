@@ -8,7 +8,7 @@
 </script>
 
 <svelte:head>
-  <title>{missing ? 'Page not found' : 'Page unavailable'} — WHOISleuth</title>
+  <title>{missing ? 'Page not found' : 'Page unavailable'} | WHOISleuth</title>
   <meta name="robots" content="noindex, nofollow" />
 </svelte:head>
 

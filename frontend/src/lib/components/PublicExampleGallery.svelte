@@ -111,7 +111,7 @@
         <h3>{example.title}</h3>
         <p>{example.summary}</p>
         <code>{example.command}</code>
-        <button type="button" disabled={!clientReady || Boolean(loadError)} aria-expanded={openedId === example.id} aria-controls={openedId === example.id && outputFor(example.id) ? `example-output-${example.id}` : undefined} onpointerenter={() => preloadOutput(example.id)} onfocus={() => preloadOutput(example.id)} onclick={() => void toggleOutput(example.id)}>{loadingId === example.id ? `Loading synthetic ${example.direction}…` : openedId === example.id ? `Close synthetic ${example.direction}` : `Open synthetic ${example.direction}`}</button>
+        <button type="button" disabled={!clientReady || Boolean(loadError)} aria-expanded={openedId === example.id} aria-controls={openedId === example.id && outputFor(example.id) ? `example-output-${example.id}` : undefined} onpointerenter={() => preloadOutput(example.id)} onfocus={() => preloadOutput(example.id)} aria-label={`${loadingId === example.id ? `Loading synthetic ${example.direction}` : openedId === example.id ? `Close synthetic ${example.direction}` : `Open synthetic ${example.direction}`} for ${example.title}`} onclick={() => void toggleOutput(example.id)}>{loadingId === example.id ? `Loading synthetic ${example.direction}…` : openedId === example.id ? `Close synthetic ${example.direction}` : `Open synthetic ${example.direction}`}</button>
         {#if openedId === example.id && outputFor(example.id)}
           {@const output = outputFor(example.id)!}
           <div class="example-output" id={`example-output-${example.id}`}>

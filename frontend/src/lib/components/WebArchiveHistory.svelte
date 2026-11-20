@@ -53,7 +53,7 @@
     <div class="actions">
       <button type="button" class="btn" disabled={busy || Boolean(disabled)} onclick={() => void collect()}>{busy ? 'Reading archive…' : 'Read archive history'}</button>
       {#if busy}<button type="button" class="btn" onclick={() => { cancel(); message = 'Archive request cancelled.'; }}>Cancel</button>{/if}
-      <a href={WEB_ARCHIVE_PROVIDER.termsUrl} target="_blank" rel="noreferrer">Archive terms and privacy policy</a>
+      <a href={WEB_ARCHIVE_PROVIDER.termsUrl} target="_blank" rel="noreferrer">Archive terms and privacy policy<span class="sr-only"> (opens in a new tab)</span></a>
     </div>
     {#if disabled}<p class="note">{disabled.reason}</p>{/if}
     {#if message}<p role="status">{message}</p>{/if}
@@ -67,7 +67,7 @@
               <dd>
                 {#if query.capturedAt}
                   <time datetime={query.capturedAt}>{formatEvidenceDate(query.capturedAt)}</time>
-                  <small>{query.capturedStatus ? `Archive recorded HTTP ${query.capturedStatus}` : 'No HTTP status recorded'} · <a href={webArchiveCaptureUrl(report.domain, query.capturedAt)} target="_blank" rel="noreferrer">Browse archive at this time</a></small>
+                  <small>{query.capturedStatus ? `Archive recorded HTTP ${query.capturedStatus}` : 'No HTTP status recorded'} · <a href={webArchiveCaptureUrl(report.domain, query.capturedAt)} target="_blank" rel="noreferrer">Browse archive at this time<span class="sr-only"> (opens in a new tab)</span></a></small>
                 {:else}
                   {query.outcome === 'no_capture' ? 'No capture found' : query.outcome === 'timeout' ? 'Timed out' : query.outcome === 'skipped' ? 'Not requested' : 'Unavailable'}
                 {/if}

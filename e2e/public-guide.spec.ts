@@ -28,7 +28,7 @@ test('CLI guide previews actual terminal panels and generated command output wit
   await page.goto('/cli#command-lookup');
   const command = page.locator('[data-command-detail="lookup"]');
   const preview = command.getByTestId('public-example-gallery');
-  await preview.getByRole('button', { name: 'Open synthetic output', exact: true }).click();
+  await preview.getByRole('button', { name: /^Open synthetic output for / }).click();
   await expect(preview.getByRole('textbox')).toHaveValue(/lookup preflight/iu);
   for (const width of [390, 1280]) {
     await page.setViewportSize({ width, height: 900 });

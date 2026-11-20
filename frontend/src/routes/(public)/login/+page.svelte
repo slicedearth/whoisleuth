@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { afterNavigate, goto } from '$app/navigation';
   import { page } from '$app/state';
   import BrandMark from '#lib/components/BrandMark.svelte';
@@ -14,6 +14,7 @@
   let busy=$state(false);
   let checking=$state(true);
   let localApplication=$state(false);
+  let passwordInput=$state<HTMLInputElement|null>(null);
 
   function returnTarget(){
     return protectedReturnTarget(page.url.searchParams.get('next'),page.url.origin);
@@ -85,6 +86,9 @@
       await goto(returnTarget(),{replace: true});
     }catch(cause){error=cause instanceof Error?cause.message:'Sign-in failed';}
     finally{busy=false;}
+    // The field is disabled while signing in, which drops focus; return it so
+    // the announced error and a corrected attempt start from the password.
+    if(error){await tick();passwordInput?.focus();passwordInput?.select();}
   }
 </script>
 
@@ -105,8 +109,8 @@
     <h2>Console sign-in</h2>
     <p class="muted">Enter the deployment password.</p>
     <label for="password">Password</label>
-    <input id="password" type="password" autocomplete="current-password" bind:value={password} disabled={checking||busy}>
-    {#if error}<p class="error" role="alert">{error}</p>{/if}
+    <input id="password" type="password" autocomplete="current-password" bind:value={password} bind:this={passwordInput} disabled={checking||busy} aria-invalid={error ? 'true' : undefined} aria-describedby={error ? 'password-error' : undefined}>
+    {#if error}<p id="password-error" class="error" role="alert">{error}</p>{/if}
     <button class="primary" disabled={checking||busy||!password}>{checking?'Checking session…':busy?'Signing in…':'Sign in'}</button>
   </form>
   {/if}
