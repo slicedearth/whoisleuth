@@ -649,7 +649,12 @@ export function validateLookupEvidenceArtifactStructure(value: UnknownRecord): v
       analysis.availability,
       currentAvailability ? ['registryContactsExcluded'] : [],
       currentAvailability
-        ? [...LOOKUP_AVAILABILITY_ANALYSIS_KEYS, ...(version >= HOSTNAME_SCOPED_LOOKUP_EVIDENCE_SCHEMA_VERSION ? ['observationHostname', 'webObservationMode'] : [])]
+        // Hostname-scoped reports may carry the bounded web collection quality
+        // summary that the shared exporter projects; the deep-equality check
+        // below still requires its exact normalised form.
+        ? [...LOOKUP_AVAILABILITY_ANALYSIS_KEYS, ...(version >= HOSTNAME_SCOPED_LOOKUP_EVIDENCE_SCHEMA_VERSION
+          ? ['observationHostname', 'webObservationMode', 'webCollectionQuality']
+          : [])]
         : PUBLIC_LOOKUP_AVAILABILITY_ANALYSIS_KEYS,
       'Lookup evidence availability analysis',
     );
