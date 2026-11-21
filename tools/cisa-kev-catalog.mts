@@ -9,9 +9,9 @@ import {
   projectCatalogue, parseKevSource,
 } from '../lib/cisa-kev-source.mts';
 
-const SOURCE_VERSION = '2026.11.18';
-const SOURCE_RELEASED_AT = '2026-11-18T19:17:41.0354Z';
-const SOURCE_SHA256 = 'ad618e404a43d72ac6435b6e5a8d75000778b9245a6b70dbde46530152f2eef3';
+const SOURCE_VERSION = '2026.11.20';
+const SOURCE_RELEASED_AT = '2026-11-20T17:48:39.1516Z';
+const SOURCE_SHA256 = '12c9ca4c5350ecacdf22bdce91b4ffcf06b8c8dc9c69b8bfb4c1a21be7a5fe50';
 const OUTPUT_PATH = 'lib/generated/cisa-kev-catalog.mts';
 const OUTPUT_DIGEST_PATH = 'lib/generated/cisa-kev-catalog.sha256';
 

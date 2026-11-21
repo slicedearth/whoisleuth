@@ -86,12 +86,12 @@ const MAX_CAPABILITY_INPUT_LENGTH = 253;
 const REGISTRY_STANDARDS_COVERAGE_SNAPSHOT = Object.freeze({
   schema: REGISTRY_STANDARDS_COVERAGE_SCHEMA,
   version: 1,
-  verifiedAt: '2026-11-19',
+  verifiedAt: '2026-11-21',
   sources: Object.freeze({
-    rootZoneVersion: '2026111900',
-    rootZoneLastUpdatedAt: '2026-11-19T07:07:01.000Z',
+    rootZoneVersion: '2026112000',
+    rootZoneLastUpdatedAt: '2026-11-20T07:07:01.000Z',
     rootZoneTldSetSha256: 'e1b16e306440e2f9313e02736b5a8669fcd54a341a25aaf24c8a153d2bb0b036',
-    rdapBootstrapPublication: '2026-11-19T00:00:03.000Z',
+    rdapBootstrapPublication: '2026-11-20T23:00:03.000Z',
     rdapBootstrapVersion: '1.0',
     urls: Object.freeze([
       'https://data.iana.org/TLD/tlds-alpha-by-domain.txt',
