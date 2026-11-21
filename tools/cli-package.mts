@@ -37,7 +37,7 @@ import { checkInstalledCaseFiles } from './cli-case-package-check.mts';
 import { createInstalledCliRunner } from './installed-cli-check.mts';
 import { verifyPackageRuntimes, readPackageRuntimeRequest, withPackageInstallation } from './package-runtime-check.mts';
 import { checkInstalledCliDiscovery } from './cli-discovery-package-check.mts';
-import { checkInstalledCliEvidence } from './cli-evidence-package-check.mts';
+import { checkInstalledCliEvidence, checkInstalledReadOnlyMcp } from './cli-evidence-package-check.mts';
 import { checkInstalledCliWorkflows } from './cli-workflow-package-check.mts';
 import { checkInstalledCliIncidents } from './cli-incident-package-check.mts';
 import { installedDependencyEvidence } from './installed-dependency-evidence.mts';
@@ -192,18 +192,24 @@ const INSTALLED_INLINE_FAMILY_MODULES = Object.freeze([
   Object.freeze({ source: 'cli/history-command-runner.mjs', exportName: 'runHistoryCommand', label: 'history-family-handler' }),
 ]);
 export const CLI_RUNTIME_DEPENDENCIES = Object.freeze([
+  '@modelcontextprotocol/server',
   '@nuintun/qrcode',
+  '@peculiar/asn1-schema',
+  '@peculiar/asn1-x509-logotype',
   '@peculiar/x509',
+  'asn1js',
   'fast-png',
   'fflate',
   'maxmind',
   'parse5',
   'pdfjs-dist',
+  'pkijs',
   'postal-mime',
   'reflect-metadata',
   'saxes',
   'tldts',
   'undici',
+  'zod',
 ]);
 const CLI_PACKAGE_COMPILER_CONTEXT_FILES = Object.freeze([
   'frontend/package.json',
@@ -557,6 +563,7 @@ async function verifyInstalledCli(tarball: string, input: CliInstalledInput) {
     const installed = createInstalledCliRunner(executable, commonEnvironment);
     await checkInstalledCliDiscovery(temporaryRoot, packageVersion, installed.run);
     await checkInstalledCliEvidence(repositoryRoot, temporaryRoot, installed.run);
+    await checkInstalledReadOnlyMcp(executable, path.join(temporaryRoot, 'package-source.json'), commonEnvironment);
     await checkInstalledSigningTrust(repositoryRoot, temporaryRoot, installed.run);
     await checkInstalledCliWorkflows(repositoryRoot, temporaryRoot, installed.run);
     await checkInstalledCaseFiles(temporaryRoot, installed.run);
@@ -565,6 +572,7 @@ async function verifyInstalledCli(tarball: string, input: CliInstalledInput) {
     const installedChecks = Object.freeze([
       'installed-transitive-dependency-identities',
       'domain-control-deep-imports',
+      'installed-read-only-mcp-exchange',
       ...installedHandlerChecks,
       ...installed.completed(),
     ]);

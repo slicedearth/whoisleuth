@@ -33,7 +33,8 @@ function formatTerminalRegistrySupport(document: TerminalRecord): string {
   const documentation = Array.isArray(verification.documentationUrls) ? verification.documentationUrls : [];
   const standards = terminalRecord(document.standardsCoverage);
   const genericCoverage = terminalRecord(standards.genericAndRestricted);
-  const supportLabel = (value: unknown) => titleCase(safeTerminalValue(value, 'unknown').replaceAll('-', '_'));
+  // Encoding names keep their standard spelling; other tokens are title-cased.
+  const supportLabel = (value: unknown) => value === 'utf-8' ? 'UTF-8' : titleCase(safeTerminalValue(value, 'unknown').replaceAll('-', '_'));
   const lines = [
     `Input          ${safeTerminalValue(document.requestedInput)}`,
     `Suffix         .${safeTerminalValue(document.suffix)}`,
@@ -55,9 +56,9 @@ function formatTerminalRegistrySupport(document: TerminalRecord): string {
     ...(typeof profile.officialLookupUrl === 'string' && profile.officialLookupUrl
       ? [`Official lookup ${safeTerminalValue(profile.officialLookupUrl)}`]
       : []),
-    `Fixture states ${fixtures.length ? fixtures.map((value: unknown) => supportLabel(value)).join(', ') : 'None documented'}`,
+    `Test scenarios ${fixtures.length ? fixtures.map((value: unknown) => supportLabel(value)).join(', ') : 'None documented'}`,
   ];
-  for (const file of files) lines.push(`Verified by    ${safeTerminalValue(file)}`);
+  for (const file of files) lines.push(`Test file      ${safeTerminalValue(file)}`);
   for (const url of documentation) lines.push(`Documentation  ${safeTerminalValue(url)}`);
   lines.push(
     `Limitation     ${safeTerminalValue(document.limitation)}`,
@@ -118,6 +119,11 @@ function formatTerminalCtSearch(document: TerminalRecord): string {
       lines.push(`  Certificates ${safeTerminalValue(match.certificateCount, '0')}`);
       lines.push(`  Hostnames     ${shownHosts.join(', ')}${omitted > 0 ? ` (+${omitted} more)` : ''}`);
       lines.push(`  Observed      ${safeTerminalValue(match.firstObservedAt)} → ${safeTerminalValue(match.lastObservedAt)}`);
+      // Validity starts of certificates without a published log time stay
+      // separate from the log observation dates above.
+      if (match.firstValidFrom && match.lastValidFrom) {
+        lines.push(`  Valid from    ${safeTerminalValue(match.firstValidFrom)} → ${safeTerminalValue(match.lastValidFrom)} (no log time published; context only)`);
+      }
     }
   }
   if (matches.length > visible.length) {
@@ -131,6 +137,11 @@ function formatTerminalDiscover(document: TerminalRecord, mutationLabels: Mutati
   const visible = candidates.slice(0, MAX_DISCOVER_TERMINAL_CANDIDATES);
   const advanced = terminalRecord(document.advancedConfusable);
   const snapshot = terminalRecord(document.snapshot);
+  const popularity = terminalRecord(document.popularity);
+  const ranks = new Map((Array.isArray(popularity.ranked) ? popularity.ranked : []).map((value: unknown) => {
+    const item = terminalRecord(value);
+    return [String(item.domain), Number(item.rank)] as const;
+  }));
   const lines = [
     `Seed           ${safeTerminalValue(document.seed)}`,
     `Preset         ${safeTerminalValue(document.preset)}`,
@@ -149,6 +160,9 @@ function formatTerminalDiscover(document: TerminalRecord, mutationLabels: Mutati
       `Snapshot       ${snapshot.baselineCreated ? 'Baseline created' : `${safeTerminalValue(Array.isArray(snapshot.added) ? snapshot.added.length : 0, '0')} added · ${safeTerminalValue(Array.isArray(snapshot.removed) ? snapshot.removed.length : 0, '0')} removed`}`,
     );
   }
+  if (Object.keys(popularity).length) {
+    lines.push(`Popularity     ${ranks.size} of ${safeTerminalValue(candidates.length, '0')} candidates ranked in the selected list (${safeTerminalValue(popularity.entries, '0')} entries)`);
+  }
   lines.push('');
   for (const value of visible) {
     const candidate = terminalRecord(value);
@@ -162,8 +176,10 @@ function formatTerminalDiscover(document: TerminalRecord, mutationLabels: Mutati
     const unicodeDetail = unicodeDomain && unicodeDomain !== candidateDomain
       ? ` [Unicode: ${safeTerminalValue(unicodeDomain)}]`
       : '';
-    lines.push(`${safeTerminalValue(candidateDomain)}${unicodeDetail}: ${labels.join(', ') || 'Generated variant'}`);
+    const rank = ranks.get(candidateDomain);
+    lines.push(`${safeTerminalValue(candidateDomain)}${unicodeDetail}: ${labels.join(', ') || 'Generated variant'}${rank ? ` · ranked #${rank}` : ''}`);
   }
+  if (Object.keys(popularity).length) lines.push('', safeTerminalValue(popularity.limitation));
   if (!visible.length) lines.push('No candidates were generated.');
   if (candidates.length > visible.length) {
     lines.push('', `Showing ${visible.length} of ${candidates.length} candidates in terminal output; use --json or --jsonl for the complete bounded result.`);

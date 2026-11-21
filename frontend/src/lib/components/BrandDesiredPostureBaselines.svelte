@@ -380,7 +380,7 @@
           <label><span>Expiry with timezone</span><input value={suppression.expiresAt ?? ''} maxlength="64" placeholder="2026-10-01T00:00:00Z" oninput={(event) => updateSuppression(index, 'expiresAt', event.currentTarget.value || null)}></label>
           <label class="row-summary"><span>Reviewed rationale</span><input id={`suppression-reason-${index}`} value={suppression.reason} maxlength="2000" oninput={(event) => updateSuppression(index, 'reason', event.currentTarget.value)}></label>
           <button class="btn small" type="button" onclick={() => void removeSuppression(index)} aria-label={`Remove suppression ${index + 1}`}>Remove</button>
-          {#if !suppression.expiresAt}<small class="row-warning">No expiry is retained. This exception remains a review concern and does not silently resolve a difference.</small>{/if}
+          {#if !suppression.expiresAt}<small class="row-warning">No expiry is set, so this exception stays open for review.</small>{/if}
         </div>
       {/each}
       <button id="add-suppression" class="btn small add-row" type="button" onclick={addSuppression} disabled={suppressions.length >= MAX_DESIRED_POSTURE_SUPPRESSIONS || suppressions.length >= DESIRED_POSTURE_SUPPRESSION_FIELDS.length}>Add suppression</button>

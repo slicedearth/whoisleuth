@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tokenLabel } from '../../../../packages/analysis/display-label.mts';
   import { describeBulkSourceCoverage } from '#lib/analysis/bulk-source-coverage.ts';
   import { officialRegistryLookupFor } from '#lib/analysis/registry-support.ts';
   import BulkRiskSummary from '#lib/components/BulkRiskSummary.svelte';
@@ -123,7 +124,7 @@
       <ol class="result-queue">
         {#each queueRows as row (row.resultIndex)}
           <li class:inspected={inspectionOpen && current?.resultIndex === row.resultIndex}>
-            <strong>{row.domain}</strong><span>{row.availability} · {reviewAvailable ? row.reviewState : 'Review state unavailable'}</span>
+            <strong>{row.domain}</strong><span>{tokenLabel(row.availability)} · {reviewAvailable ? tokenLabel(row.reviewState) : 'Review state unavailable'}</span>
             <button class="btn" type="button" aria-label={`Inspect retained ${row.domain}`} aria-pressed={inspectionOpen && current?.resultIndex === row.resultIndex} aria-keyshortcuts="P" title="Preview retained evidence: P while this button is focused" onclick={() => { focusedDomain = row.domain; inspectionOpen = true; }} onkeydown={event => openRetainedPeek(event, () => { focusedDomain = row.domain; inspectionOpen = true; })}>Inspect</button>
           </li>
         {/each}

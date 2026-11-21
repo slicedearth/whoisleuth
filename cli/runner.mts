@@ -32,6 +32,7 @@ import { createTerminalProgress, type TerminalProgress } from './progress.mts';
 import type { CliProgressEvents } from './progress-events.mts';
 import type { CliWorkflowContext, CliDependencies, WritableLike } from './runner-types.mts';
 import {
+  neutralizeTerminalText,
   presentTerminalOutput,
   terminalPresentation,
   type TerminalEnvironment,
@@ -68,7 +69,7 @@ function formatForTerminal(
   environment: TerminalEnvironment,
   palette: TerminalPalette,
 ): string {
-  return presentTerminalOutput(value, terminalPresentation(stream, color, environment, palette));
+  return presentTerminalOutput(neutralizeTerminalText(value), terminalPresentation(stream, color, environment, palette));
 }
 
 function isCancellation(error: unknown, signal?: AbortSignal): boolean {

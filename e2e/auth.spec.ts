@@ -274,3 +274,21 @@ test('the Dashboard and every protected destination require sign-in and unsafe r
   await expect(page).toHaveURL('/dashboard');
   await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
 });
+
+test.describe('rejected sign-in', () => {
+  test.use({ allowExpectedLogin401Noise: true });
+
+  test('returns focus to the password and links the announced error', async ({ page }) => {
+    await page.goto('/login');
+    const passwordField = page.getByLabel('Password');
+    await expect(passwordField).toBeEnabled();
+    await passwordField.fill('not-the-test-password');
+    await passwordField.press('Enter');
+    const error = page.getByRole('alert').filter({ hasText: 'Incorrect password' });
+    await expect(error).toBeVisible();
+    await expect(passwordField).toBeFocused();
+    await expect(passwordField).toHaveAttribute('aria-invalid', 'true');
+    await expect(passwordField).toHaveAttribute('aria-describedby', await error.getAttribute('id') ?? 'missing-error-id');
+    await expect(page).toHaveURL(/\/login/u);
+  });
+});

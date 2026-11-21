@@ -82,6 +82,7 @@ type IntakeArguments = {
   reportedActions: readonly import('../packages/contracts/message-intake.mts').IdentityAction[];
   trustedAuthHeaders?: readonly string[];
   intakeContextSource?: string;
+  pageOrigin?: string;
   source: string | null;
   output: 'terminal' | 'json';
   strictExit: boolean;
@@ -91,6 +92,7 @@ type ReviewEvidenceArguments = {
   action: 'review-evidence';
   source: string | null;
   mmdbSource: string | null;
+  assistProof?: 'ct' | 'timestamp';
   output: 'terminal' | 'json';
   strictExit: boolean;
 } & TerminalOptions;
@@ -224,6 +226,7 @@ export const REVIEW_ARGUMENT_PARSERS = Object.freeze({
       '--reported-action',
     ) as readonly import('../packages/contracts/message-intake.mts').IdentityAction[],
     ...(parsed.hasOption('--intake-context') ? { intakeContextSource: parsed.optionValue('--intake-context')! } : {}),
+    ...(parsed.hasOption('--page-origin') ? { pageOrigin: parsed.optionValue('--page-origin')! } : {}),
     ...(parsed.hasOption('--trusted-auth-header')
       ? { trustedAuthHeaders: parsed.optionValues('--trusted-auth-header') }
       : {}),
@@ -236,6 +239,7 @@ export const REVIEW_ARGUMENT_PARSERS = Object.freeze({
     action: 'review-evidence',
     source: parsed.positionalValue('source'),
     mmdbSource: parsed.optionValue('--mmdb'),
+    ...(parsed.hasOption('--assist-proof') ? { assistProof: parsed.optionValue('--assist-proof') as 'ct' | 'timestamp' } : {}),
     output: jsonOutput(parsed),
     strictExit: parsed.hasOption('--strict-exit'),
     ...terminalOptions(parsed),

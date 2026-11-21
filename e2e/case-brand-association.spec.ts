@@ -749,8 +749,8 @@ test('propagates unavailable active-profile context across Lookup, Bulk and Disc
   await page.locator('#console-navigation').getByRole('link',{name:/^Bulk/u}).click();
   await expect(page.locator('.local-context-status')).toContainText('(profile)');
   await page.locator('#console-navigation').getByRole('link',{name:/^Discover/u}).click();
-  await expect(page.locator('.local-context-status')).toContainText('(profile)');
   await page.getByLabel('Brand or domain').fill('example.invalid');
+  await expect(page.locator('.local-context-status')).toContainText('(profile)');
   await page.getByRole('button',{name:'Generate candidates'}).click();
   const generationStatus = page.getByRole('status').filter({ hasText: /^Generated \d+/u });
   await expect(generationStatus).toContainText('Brand Profile context is unavailable');

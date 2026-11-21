@@ -5,6 +5,61 @@ import { readBoundedRegularFileWithin } from '../lib/bounded-file.mts';
 import { requireJsonRecord as record } from './maintainer-tool-helpers.mts';
 import type { RunInstalledCli } from './installed-cli-check.mts';
 import { buildInvestigationPackage } from '../packages/investigation/investigation-package.mts';
+import { spawn } from 'node:child_process';
+import { CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS } from './installed-cli-check.mts';
+
+/** Exercise the installed protocol and lazy SDK, not just static command help. */
+export async function checkInstalledReadOnlyMcp(executable: string, source: string, environment: NodeJS.ProcessEnv): Promise<void> {
+  const env: NodeJS.ProcessEnv = { ...environment, NO_COLOR: '1' };
+  delete env.NODE_OPTIONS; delete env.NODE_PATH;
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(process.execPath, [executable, 'mcp', '--stdio', '--allow-model-disclosure', source], { env, stdio: ['pipe', 'pipe', 'pipe'] });
+    let pending = '', diagnostics = '', received = 0, verified = false, settled = false;
+    const fail = (error: Error) => {
+      if (settled) return;
+      settled = true; clearTimeout(timer); child.kill('SIGTERM'); reject(error);
+    };
+    const timer = setTimeout(() => fail(new Error('Installed read-only MCP exchange did not complete.')), CLI_PACKAGE_INSTALLED_CHECK_TIMEOUT_MS);
+    const send = (value: unknown) => child.stdin.write(`${JSON.stringify(value)}\n`);
+    child.on('error', fail);
+    child.stdin.on('error', fail);
+    child.stderr.on('data', (chunk: Buffer) => {
+      if (Buffer.byteLength(diagnostics) + chunk.byteLength > 4_096) return fail(new Error('Installed MCP diagnostics exceeded their bound.'));
+      diagnostics += chunk.toString('utf8');
+    });
+    child.stdout.on('data', (chunk: Buffer) => {
+      if ((received += chunk.byteLength) > 128 * 1024) return fail(new Error('Installed MCP protocol output exceeded its bound.'));
+      pending += chunk.toString('utf8');
+      try {
+        let end: number;
+        while ((end = pending.indexOf('\n')) >= 0) {
+          const message = record(JSON.parse(pending.slice(0, end)), 'Installed MCP response'); pending = pending.slice(end + 1);
+          const result = record(message.result, 'Installed MCP result');
+          if (message.id === 1) {
+            if (record(result.serverInfo, 'Installed MCP identity').name !== 'whoisleuth-evidence') throw new Error('Installed MCP identity is invalid.');
+            send({ jsonrpc: '2.0', method: 'notifications/initialized' });
+            send({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'verify_evidence', arguments: { id: 'evidence-1' } } });
+          } else if (message.id === 2) {
+            const content = Array.isArray(result.content) ? record(result.content[0], 'Installed MCP content') : {};
+            const report = typeof content.text === 'string' ? record(JSON.parse(content.text), 'Installed MCP verification') : {};
+            if (result.isError === true || report.state !== 'structure_valid'
+              || record(report.artifact, 'Installed MCP artefact').kind !== 'saved_lookup') throw new Error('Installed MCP did not verify selected evidence.');
+            verified = true; child.stdin.end();
+          } else throw new Error('Installed MCP returned an unexpected protocol message.');
+        }
+      } catch { fail(new Error('Installed MCP exchange did not retain its bounded read-only protocol contract.')); }
+    });
+    child.on('close', code => {
+      if (settled) return;
+      settled = true; clearTimeout(timer);
+      if (code !== 0 || !verified || pending.trim() || !/model provider/iu.test(diagnostics)) reject(new Error('Installed MCP exchange did not close successfully with its privacy disclosure.'));
+      else resolve();
+    });
+    send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {
+      protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'offline-package-check', version: '1' },
+    } });
+  });
+}
 
 /** Exact-byte package, folder and encrypted-container round trips. */
 export async function checkInstalledCliEvidence(repositoryRoot: string, temporaryRoot: string, run: RunInstalledCli): Promise<void> {

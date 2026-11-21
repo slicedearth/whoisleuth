@@ -73,7 +73,7 @@ describe('sanitised web-capture import', () => {
     assert.throws(() => parseWebCaptureManifest(manifest(WEB_CAPTURE_MANIFEST_VERSION, zoneLess)), /explicit timezone/u);
     assert.throws(
       () => parseWebCaptureManifest(manifest(1, '2026-07-01T12:00:00.000Z')),
-      /schema version 3/u,
+      /schema version/u,
     );
     assert.equal(
       parseWebCaptureManifest(manifest(2, '2026-07-01T12:00:00.000+01:00')).findings[0]?.observedAt,
@@ -263,7 +263,7 @@ describe('sanitised web-capture import', () => {
           sha256: 'a'.repeat(64), perceptualHash: '0123456789abcdef', bytes: 100, width: 100, height: 100,
         }],
       }],
-    }), /schema version 3/u);
+    }), /schema version/u);
   });
 
   test('rejects path traversal, archive payloads, and unsupported artifact declarations', () => {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { addressValue, ipv6Groups } from '../packages/contracts/ip-address.mts';
+import { addressValue, compileCidr, inCompiledCidr, ipv6Groups } from '../packages/contracts/ip-address.mts';
 import { isPrivateAddress } from '../lib/safe-fetch.mts';
 import { canonicalPublicIpAddress } from '../packages/evidence/public-address-policy.mts';
 
@@ -17,6 +17,26 @@ test('invalid, scoped and oversized addresses fail without interpreting URLs or 
   for (const value of [null, {}, '256.0.0.1', '127.1', '0x7f000001', '2001:db8::1%eth0',
     'https://192.0.2.10/', '[2001:db8::1]', '2001:::1', '2001:db8:1', '1:2:3:4:5:6:7:8:9',
     '192.0.2.10\n', '192.0.2.10:443', ':'.repeat(97)]) assert.equal(addressValue(value), null);
+});
+
+test('CIDR membership preserves exact family, network and full-width boundaries', () => {
+  for (const [cidr, inside, outside] of [
+    ['192.0.2.0/24', '192.0.2.255', '192.0.3.0'],
+    ['192.0.2.255/32', '192.0.2.255', '192.0.2.254'],
+    ['2001:db8::/32', '2001:db8:ffff::1', '2001:db9::1'],
+    ['2001:db8::1/128', '2001:db8::1', '2001:db8::2'],
+  ]) {
+    const range = compileCidr(cidr);
+    assert.ok(range);
+    assert.equal(inCompiledCidr(addressValue(inside)!, range), true);
+    assert.equal(inCompiledCidr(addressValue(outside)!, range), false);
+  }
+  assert.equal(inCompiledCidr(addressValue('192.0.2.1')!, compileCidr('0.0.0.0/0')!), true);
+  assert.equal(inCompiledCidr(addressValue('2001:db8::1')!, compileCidr('::/0')!), true);
+  assert.equal(inCompiledCidr(addressValue('192.0.2.1')!, compileCidr('::/0')!), false);
+  for (const value of [null, '192.0.2.0/33', '2001:db8::/129', '192.0.2.0/-1', '192.0.2.0/24/1', 'not a range']) {
+    assert.equal(compileCidr(value), null);
+  }
 });
 
 test('address facts share expansion while transport and evidence retain different admission policies', () => {

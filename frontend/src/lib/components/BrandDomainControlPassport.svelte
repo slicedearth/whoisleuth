@@ -212,7 +212,7 @@
   </div>
 
   {#if imported}
-    <div class="preview" aria-live="polite">
+    <div class="preview">
       <header><div><p class="eyebrow">Format and digest checked</p><h3>Import preview</h3></div><p>Expires {formatEvidenceDate(imported.expiresAt)}</p></header>
       {#each imported.entries as entry}
         {@const isOfficial = active.officialDomains.includes(entry.domain)}

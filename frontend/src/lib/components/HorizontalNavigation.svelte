@@ -7,6 +7,9 @@
   let overflow = $state(false);
   let hiddenLeft = $state(false);
   let hiddenRight = $state(false);
+  // Resizes keep the selection in view only until the analyst scrolls the
+  // strip; a new selection resumes following it.
+  let followSelection = true;
 
   function measure() {
     if (!viewport || !content) return;
@@ -30,6 +33,7 @@
 
   $effect(() => {
     activeKey;
+    followSelection = true;
     let current = true;
     void tick().then(() => { if (current) revealSelection(); });
     return () => { current = false; };
@@ -40,19 +44,23 @@
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(() => { frame = 0; measure(); });
     };
-    const observer = new ResizeObserver(revealSelection);
+    const observer = new ResizeObserver(() => { if (followSelection) revealSelection(); else measure(); });
+    const manualScroll = () => { followSelection = false; };
     observer.observe(viewport);
     observer.observe(content);
     viewport.addEventListener('scroll', schedule, { passive: true });
+    for (const type of ['wheel', 'touchmove', 'pointerdown'] as const) viewport.addEventListener(type, manualScroll, { passive: true });
     revealSelection();
     return () => {
       observer.disconnect();
       viewport.removeEventListener('scroll', schedule);
+      for (const type of ['wheel', 'touchmove', 'pointerdown'] as const) viewport.removeEventListener(type, manualScroll);
       if (frame) cancelAnimationFrame(frame);
     };
   });
 
   function scroll(direction: -1 | 1) {
+    followSelection = false;
     viewport.scrollBy({ left: direction * viewport.clientWidth * .8, behavior: 'instant' });
     measure();
   }

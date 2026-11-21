@@ -212,9 +212,9 @@ test.describe('evidence timeline', () => {
     ]);
 
     await expect(page.locator('.timeline-header small')).toHaveText('1 snapshot');
-    await expect(page.locator('.timeline-entry time').first()).toContainText('Last observed');
-    await expect(page.locator('.timeline-badge.timeline-repeat')).toBeVisible();
-    await expect(page.locator('.timeline-badge.timeline-repeat')).toContainText('First observed');
+    const lastObserved = page.getByRole('button', { name: /Last observed/u });
+    await expect(lastObserved.locator('time')).toHaveAttribute('datetime', '2026-07-01T00:00:00.000Z');
+    await expect(page.getByText(/^First observed\b/u)).toBeVisible();
   });
 
   test('changed-only retains the baseline and reliable changes', async ({ page }) => {

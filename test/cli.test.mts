@@ -775,6 +775,45 @@ test('machine document metadata cannot be replaced by upstream result fields', (
   assert.equal(document.type, 'domain');
 });
 
+test('terminal lookup states redirects and the page scope of cross-domain website evidence', () => {
+  const build = (finalUrl: string, hops: readonly string[] = [finalUrl], response: Record<string, unknown> = { status: 200, bodyInspected: true, capturedBodyBytes: 2048 }) => {
+    const chain = ['https://example.com/', ...hops];
+    const http = {
+      version: 1, status: 'success', observedAt: '2026-07-14T00:00:00.000Z', scanMode: 'deep', source: 'http',
+      durationMs: 10, complete: true, truncated: false, limitations: [],
+      requestUrl: 'https://example.com/', finalUrl, transportSecurity: 'https',
+      redirectCount: hops.length, redirectLimitReached: false, crossOriginRedirect: true, httpsDowngrade: false,
+      redirects: hops.map((to, index) => ({ from: chain[index]!, to, status: 301, durationMs: 5, queryOmitted: false })),
+      response,
+    };
+    const document = buildCliLookupDocument('example.com', classifiedDomain('example.com'), lookupResult({
+      availability: { applicable: true, domain: 'example.com', state: 'registered', confidence: 'high', http },
+    }), '2026-07-14T00:00:00.000Z', 'deep');
+    return formatTerminalLookup(document);
+  };
+  const crossDomain = build('https://www.example.net/landing?campaign=private');
+  assert.match(crossDomain, /^Redirects\s+1 · to another domain$/mu);
+  assert.match(crossDomain, /^Page scope\s+Page evidence describes https:\/\/www\.example\.net$/mu);
+  assert.doesNotMatch(crossDomain, /landing|campaign/u);
+  const sameDomain = build('https://www.example.com/');
+  assert.match(sameDomain, /^Redirects\s+1 · to another origin on the same domain$/mu);
+  assert.doesNotMatch(sameDomain, /Page scope/u);
+  // A chain that leaves through another domain and returns ends at the starting origin.
+  const returned = build('https://example.com/welcome?session=private', ['https://login.example.net/check?token=private', 'https://example.com/welcome?session=private']);
+  assert.match(returned, /^Redirects\s+2 · returned to the starting origin$/mu);
+  assert.doesNotMatch(returned, /Page scope|to another (?:origin|domain)/u);
+  assert.doesNotMatch(returned, /login\.example\.net|welcome|session|token/u);
+  // A cross-domain final response whose body was not inspected names only the final origin.
+  const blocked = build('https://www.example.net/denied?reason=private', undefined, { status: 403, bodyInspected: false });
+  assert.match(blocked, /^Final response https:\/\/www\.example\.net · page content not inspected$/mu);
+  assert.doesNotMatch(blocked, /Page scope|Page evidence/u);
+  assert.doesNotMatch(blocked, /denied|reason/u);
+  // A 204 marks its empty body inspected, but zero captured bytes is not a page observation.
+  const empty = build('https://www.example.net/ping', undefined, { status: 204, bodyInspected: true, capturedBodyBytes: 0 });
+  assert.match(empty, /^Final response https:\/\/www\.example\.net · page content not inspected$/mu);
+  assert.doesNotMatch(empty, /Page scope|Page evidence/u);
+});
+
 test('terminal lookup groups evidence and supports concise and diagnostic detail levels', () => {
   const document = buildCliLookupDocument(
     'example.test',
@@ -967,7 +1006,7 @@ test('terminal lookup presents bounded observed network registration context', (
   assert.match(terminal, /Network\s+Example edge network/);
   assert.match(terminal, /Network handle NET-EXAMPLE/);
   assert.match(terminal, /CIDR prefixes\s+.*\+1 more/);
-  assert.match(terminal, /Published routes 2 retained \(email 1 · phone 1\); values omitted/);
+  assert.match(terminal, /Abuse contacts 2 retained \(email 1 · phone 1\); values omitted/);
   assert.match(verbose, /Registry date\s+2026-08-01T00:00:00\.000Z/);
   assert.match(verbose, /Limitation\s+\+1 more retained limitation/);
   assert.doesNotMatch(`${terminal}${verbose}`, /must-not-render|secret\.invalid|\+61 3 0000 0000/);
@@ -1000,7 +1039,7 @@ test('terminal lookup bounds retained arrays before access and keeps omission co
     isSubdomain: false,
   });
   assert.match(output, /CIDR prefixes\s+.*\+9995 more retained entries/u);
-  assert.match(output, /Published routes 6 retained · \+994 more entries \(email 3 · phone 3\); values omitted/u);
+  assert.match(output, /Abuse contacts 6 retained · \+994 more entries \(email 3 · phone 3\); values omitted/u);
   assert.doesNotMatch(output, /private-/u);
 });
 

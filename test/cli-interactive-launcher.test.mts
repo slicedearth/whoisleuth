@@ -40,6 +40,16 @@ function questionAnswers(values: readonly string[]) {
 }
 
 describe('interactive CLI launcher', () => {
+  test('routes offline saved review and comparison to the existing browser without a collection confirmation', async () => {
+    for (const [answers, expected] of [
+      [['5', '-retained.json'], ['view', '--browse', '--', '-retained.json']],
+      [['6', 'left.json', 'right.json'], ['diff', '--browse', '--', 'left.json', 'right.json']],
+      [['7'], ['review-evidence', '--assist-proof', 'ct']],
+      [['8'], ['review-evidence', '--assist-proof', 'timestamp']],
+    ]) {
+      assert.deepEqual(await launchInteractiveCli({ ...launcherFixture(), question: questionAnswers(answers!), environment: { TERM: 'xterm' } }), expected);
+    }
+  });
   test('bounded line prompts do not inherit full-screen browser dimensions', () => {
     const { input, output } = launcherFixture();
     output.columns = 20;
@@ -128,7 +138,7 @@ describe('interactive CLI launcher', () => {
       ...invalid,
       environment: { TERM: 'xterm' },
       question: questionAnswers(['9']),
-    }), /Choose 1, 2, 3, 4, or q/u);
+    }), { name: 'CliUsageError' });
 
     assert.throws(() => boundedInteractiveAnswer('safe\u202eunsafe'), /bounded text/u);
     assert.throws(() => boundedInteractiveAnswer('safe\u009bunsafe'), /bounded text/u);

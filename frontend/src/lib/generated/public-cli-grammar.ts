@@ -234,6 +234,21 @@ const SHARED_OPTIONS = [
     "metaAction": null
   },
   {
+    "option": "--input-format",
+    "scope": "command",
+    "arity": 1,
+    "valueKind": "enum",
+    "values": [
+      "mapping",
+      "dnsx-jsonl",
+      "httpx-jsonl"
+    ],
+    "integerRanges": [],
+    "occurrence": "once",
+    "acceptsOptionLikeValue": false,
+    "metaAction": null
+  },
+  {
     "option": "--junit",
     "scope": "command",
     "arity": 0,
@@ -676,6 +691,17 @@ const SHARED_OPTIONS = [
     "metaAction": null
   },
   {
+    "option": "--popularity-list",
+    "scope": "command",
+    "arity": 1,
+    "valueKind": "file",
+    "values": [],
+    "integerRanges": [],
+    "occurrence": "once",
+    "acceptsOptionLikeValue": false,
+    "metaAction": null
+  },
+  {
     "option": "--scan-limit",
     "scope": "command",
     "arity": 1,
@@ -830,6 +856,28 @@ const SHARED_OPTIONS = [
   },
   {
     "option": "--owned-domain",
+    "scope": "command",
+    "arity": 0,
+    "valueKind": "flag",
+    "values": [],
+    "integerRanges": [],
+    "occurrence": "once",
+    "acceptsOptionLikeValue": false,
+    "metaAction": null
+  },
+  {
+    "option": "--resolvers",
+    "scope": "command",
+    "arity": 1,
+    "valueKind": "text",
+    "values": [],
+    "integerRanges": [],
+    "occurrence": "once",
+    "acceptsOptionLikeValue": true,
+    "metaAction": null
+  },
+  {
+    "option": "--permitted-use",
     "scope": "command",
     "arity": 0,
     "valueKind": "flag",
@@ -1179,6 +1227,31 @@ const SHARED_OPTIONS = [
     "metaAction": null
   },
   {
+    "option": "--page-origin",
+    "scope": "command",
+    "arity": 1,
+    "valueKind": "text",
+    "values": [],
+    "integerRanges": [],
+    "occurrence": "once",
+    "acceptsOptionLikeValue": false,
+    "metaAction": null
+  },
+  {
+    "option": "--assist-proof",
+    "scope": "command",
+    "arity": 1,
+    "valueKind": "enum",
+    "values": [
+      "ct",
+      "timestamp"
+    ],
+    "integerRanges": [],
+    "occurrence": "once",
+    "acceptsOptionLikeValue": false,
+    "metaAction": null
+  },
+  {
     "option": "--mmdb",
     "scope": "command",
     "arity": 1,
@@ -1364,6 +1437,28 @@ const SHARED_OPTIONS = [
     "metaAction": null
   },
   {
+    "option": "--state",
+    "scope": "command",
+    "arity": 1,
+    "valueKind": "file",
+    "values": [],
+    "integerRanges": [],
+    "occurrence": "once",
+    "acceptsOptionLikeValue": false,
+    "metaAction": null
+  },
+  {
+    "option": "--approve-network",
+    "scope": "command",
+    "arity": 0,
+    "valueKind": "flag",
+    "values": [],
+    "integerRanges": [],
+    "occurrence": "once",
+    "acceptsOptionLikeValue": false,
+    "metaAction": null
+  },
+  {
     "option": "--marking",
     "scope": "command",
     "arity": 1,
@@ -1507,17 +1602,6 @@ const SHARED_OPTIONS = [
     "metaAction": null
   },
   {
-    "option": "--approve-network",
-    "scope": "command",
-    "arity": 0,
-    "valueKind": "flag",
-    "values": [],
-    "integerRanges": [],
-    "occurrence": "once",
-    "acceptsOptionLikeValue": false,
-    "metaAction": null
-  },
-  {
     "option": "--resume",
     "scope": "command",
     "arity": 1,
@@ -1570,6 +1654,50 @@ const SHARED_OPTIONS = [
     "integerRanges": [],
     "occurrence": "once",
     "acceptsOptionLikeValue": true,
+    "metaAction": null
+  },
+  {
+    "option": "--stdio",
+    "scope": "command",
+    "arity": 0,
+    "valueKind": "flag",
+    "values": [],
+    "integerRanges": [],
+    "occurrence": "once",
+    "acceptsOptionLikeValue": false,
+    "metaAction": null
+  },
+  {
+    "option": "--allow-model-disclosure",
+    "scope": "command",
+    "arity": 0,
+    "valueKind": "flag",
+    "values": [],
+    "integerRanges": [],
+    "occurrence": "once",
+    "acceptsOptionLikeValue": false,
+    "metaAction": null
+  },
+  {
+    "option": "--ct-results",
+    "scope": "command",
+    "arity": 1,
+    "valueKind": "file",
+    "values": [],
+    "integerRanges": [],
+    "occurrence": "once",
+    "acceptsOptionLikeValue": false,
+    "metaAction": null
+  },
+  {
+    "option": "--archive-history",
+    "scope": "command",
+    "arity": 1,
+    "valueKind": "file",
+    "values": [],
+    "integerRanges": [],
+    "occurrence": "once",
+    "acceptsOptionLikeValue": false,
     "metaAction": null
   },
   {
@@ -1804,7 +1932,7 @@ export const PUBLIC_CLI_GRAMMAR = {
 "map-observations": {
   "parserKey": "map-observations",
   "bootstrapProfile": "allowed",
-  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[20], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
   "positionals": [
     {
       "name": "source",
@@ -1888,7 +2016,7 @@ export const PUBLIC_CLI_GRAMMAR = {
 "lookup": {
   "parserKey": "lookup",
   "bootstrapProfile": "allowed",
-  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[7], SHARED_OPTIONS[20], SHARED_OPTIONS[21], SHARED_OPTIONS[22], SHARED_OPTIONS[23], SHARED_OPTIONS[24], SHARED_OPTIONS[25], SHARED_OPTIONS[26], SHARED_OPTIONS[27], SHARED_OPTIONS[28], SHARED_OPTIONS[29], SHARED_OPTIONS[30], SHARED_OPTIONS[31], SHARED_OPTIONS[32], SHARED_OPTIONS[33], SHARED_OPTIONS[34], SHARED_OPTIONS[35], SHARED_OPTIONS[36], SHARED_OPTIONS[37], SHARED_OPTIONS[38], SHARED_OPTIONS[39], SHARED_OPTIONS[40], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[7], SHARED_OPTIONS[21], SHARED_OPTIONS[22], SHARED_OPTIONS[23], SHARED_OPTIONS[24], SHARED_OPTIONS[25], SHARED_OPTIONS[26], SHARED_OPTIONS[27], SHARED_OPTIONS[28], SHARED_OPTIONS[29], SHARED_OPTIONS[30], SHARED_OPTIONS[31], SHARED_OPTIONS[32], SHARED_OPTIONS[33], SHARED_OPTIONS[34], SHARED_OPTIONS[35], SHARED_OPTIONS[36], SHARED_OPTIONS[37], SHARED_OPTIONS[38], SHARED_OPTIONS[39], SHARED_OPTIONS[40], SHARED_OPTIONS[41], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
   "positionals": [
     {
       "name": "target",
@@ -2067,7 +2195,7 @@ export const PUBLIC_CLI_GRAMMAR = {
 "bulk": {
   "parserKey": "bulk",
   "bootstrapProfile": "allowed",
-  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[7], SHARED_OPTIONS[41], SHARED_OPTIONS[20], SHARED_OPTIONS[42], SHARED_OPTIONS[43], SHARED_OPTIONS[44], SHARED_OPTIONS[45], SHARED_OPTIONS[46], SHARED_OPTIONS[47], SHARED_OPTIONS[48], SHARED_OPTIONS[24], SHARED_OPTIONS[25], SHARED_OPTIONS[49], SHARED_OPTIONS[50], SHARED_OPTIONS[51], SHARED_OPTIONS[40], SHARED_OPTIONS[29], SHARED_OPTIONS[35], SHARED_OPTIONS[36], SHARED_OPTIONS[37], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[7], SHARED_OPTIONS[42], SHARED_OPTIONS[21], SHARED_OPTIONS[43], SHARED_OPTIONS[44], SHARED_OPTIONS[45], SHARED_OPTIONS[46], SHARED_OPTIONS[47], SHARED_OPTIONS[48], SHARED_OPTIONS[49], SHARED_OPTIONS[25], SHARED_OPTIONS[26], SHARED_OPTIONS[50], SHARED_OPTIONS[51], SHARED_OPTIONS[52], SHARED_OPTIONS[41], SHARED_OPTIONS[30], SHARED_OPTIONS[36], SHARED_OPTIONS[37], SHARED_OPTIONS[38], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
   "positionals": [
     {
       "name": "source",
@@ -2264,7 +2392,7 @@ export const PUBLIC_CLI_GRAMMAR = {
 "discover": {
   "parserKey": "discover",
   "bootstrapProfile": "allowed",
-  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[52], SHARED_OPTIONS[53], SHARED_OPTIONS[54], SHARED_OPTIONS[55], SHARED_OPTIONS[56], SHARED_OPTIONS[57], SHARED_OPTIONS[7], SHARED_OPTIONS[41], SHARED_OPTIONS[44], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[53], SHARED_OPTIONS[54], SHARED_OPTIONS[55], SHARED_OPTIONS[56], SHARED_OPTIONS[57], SHARED_OPTIONS[58], SHARED_OPTIONS[59], SHARED_OPTIONS[7], SHARED_OPTIONS[42], SHARED_OPTIONS[45], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
   "positionals": [
     {
       "name": "subject",
@@ -2331,7 +2459,7 @@ export const PUBLIC_CLI_GRAMMAR = {
 "discover-scan": {
   "parserKey": "discover-scan",
   "bootstrapProfile": "allowed",
-  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[52], SHARED_OPTIONS[53], SHARED_OPTIONS[54], SHARED_OPTIONS[55], SHARED_OPTIONS[56], SHARED_OPTIONS[24], SHARED_OPTIONS[25], SHARED_OPTIONS[58], SHARED_OPTIONS[59], SHARED_OPTIONS[49], SHARED_OPTIONS[60], SHARED_OPTIONS[61], SHARED_OPTIONS[50], SHARED_OPTIONS[51], SHARED_OPTIONS[62], SHARED_OPTIONS[46], SHARED_OPTIONS[47], SHARED_OPTIONS[63], SHARED_OPTIONS[64], SHARED_OPTIONS[40], SHARED_OPTIONS[29], SHARED_OPTIONS[35], SHARED_OPTIONS[36], SHARED_OPTIONS[37], SHARED_OPTIONS[7], SHARED_OPTIONS[41], SHARED_OPTIONS[42], SHARED_OPTIONS[43], SHARED_OPTIONS[44], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[53], SHARED_OPTIONS[54], SHARED_OPTIONS[55], SHARED_OPTIONS[56], SHARED_OPTIONS[57], SHARED_OPTIONS[25], SHARED_OPTIONS[26], SHARED_OPTIONS[60], SHARED_OPTIONS[61], SHARED_OPTIONS[50], SHARED_OPTIONS[62], SHARED_OPTIONS[63], SHARED_OPTIONS[51], SHARED_OPTIONS[52], SHARED_OPTIONS[64], SHARED_OPTIONS[47], SHARED_OPTIONS[48], SHARED_OPTIONS[65], SHARED_OPTIONS[66], SHARED_OPTIONS[41], SHARED_OPTIONS[30], SHARED_OPTIONS[36], SHARED_OPTIONS[37], SHARED_OPTIONS[38], SHARED_OPTIONS[7], SHARED_OPTIONS[42], SHARED_OPTIONS[43], SHARED_OPTIONS[44], SHARED_OPTIONS[45], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
   "positionals": [
     {
       "name": "subject",
@@ -2455,7 +2583,7 @@ export const PUBLIC_CLI_GRAMMAR = {
 "posture": {
   "parserKey": "posture",
   "bootstrapProfile": "allowed",
-  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[65], SHARED_OPTIONS[66], SHARED_OPTIONS[67], SHARED_OPTIONS[68], SHARED_OPTIONS[7], SHARED_OPTIONS[69], SHARED_OPTIONS[70], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[67], SHARED_OPTIONS[68], SHARED_OPTIONS[69], SHARED_OPTIONS[70], SHARED_OPTIONS[7], SHARED_OPTIONS[71], SHARED_OPTIONS[72], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
   "positionals": [
     {
       "name": "domain",
@@ -2502,6 +2630,123 @@ export const PUBLIC_CLI_GRAMMAR = {
       "option": "--sarif",
       "requiredOptions": [
         "--owned-domain"
+      ]
+    }
+  ],
+  "metaActions": [
+    "help"
+  ]
+},
+"resolver-compare": {
+  "parserKey": "resolver-compare",
+  "bootstrapProfile": "allowed",
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[73], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
+  "positionals": [
+    {
+      "name": "hostname",
+      "valueKind": "text",
+      "minimum": 1,
+      "maximum": 1,
+      "values": [],
+      "inputSource": "argv",
+      "requiredWhenOptions": []
+    }
+  ],
+  "constraints": [
+    {
+      "kind": "requires_all",
+      "option": "--force",
+      "requiredOptions": [
+        "--output"
+      ]
+    },
+    {
+      "kind": "mutually_exclusive",
+      "options": [
+        "--quiet",
+        "--output"
+      ]
+    },
+    {
+      "kind": "excludes_all",
+      "option": "--quiet",
+      "excludedOptions": [
+        "--json"
+      ]
+    },
+    {
+      "kind": "required",
+      "options": [
+        "--resolvers"
+      ]
+    }
+  ],
+  "metaActions": [
+    "help"
+  ]
+},
+"peeringdb-context": {
+  "parserKey": "peeringdb-context",
+  "bootstrapProfile": "allowed",
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[74], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
+  "positionals": [
+    {
+      "name": "asn",
+      "valueKind": "text",
+      "minimum": 1,
+      "maximum": 1,
+      "values": [],
+      "inputSource": "argv",
+      "requiredWhenOptions": []
+    }
+  ],
+  "constraints": [
+    {
+      "kind": "required",
+      "options": [
+        "--permitted-use"
+      ]
+    }
+  ],
+  "metaActions": [
+    "help"
+  ]
+},
+"archive-history": {
+  "parserKey": "archive-history",
+  "bootstrapProfile": "allowed",
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
+  "positionals": [
+    {
+      "name": "domain",
+      "valueKind": "text",
+      "minimum": 1,
+      "maximum": 1,
+      "values": [],
+      "inputSource": "argv",
+      "requiredWhenOptions": []
+    }
+  ],
+  "constraints": [
+    {
+      "kind": "requires_all",
+      "option": "--force",
+      "requiredOptions": [
+        "--output"
+      ]
+    },
+    {
+      "kind": "mutually_exclusive",
+      "options": [
+        "--quiet",
+        "--output"
+      ]
+    },
+    {
+      "kind": "excludes_all",
+      "option": "--quiet",
+      "excludedOptions": [
+        "--json"
       ]
     }
   ],
@@ -2596,7 +2841,7 @@ export const PUBLIC_CLI_GRAMMAR = {
 "dnssec-validate": {
   "parserKey": "dnssec-validate",
   "bootstrapProfile": "allowed",
-  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[60], SHARED_OPTIONS[71], SHARED_OPTIONS[72], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[62], SHARED_OPTIONS[75], SHARED_OPTIONS[76], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
   "positionals": [
     {
       "name": "domain",
@@ -2646,7 +2891,7 @@ export const PUBLIC_CLI_GRAMMAR = {
 "mail-transport": {
   "parserKey": "mail-transport",
   "bootstrapProfile": "allowed",
-  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[60], SHARED_OPTIONS[71], SHARED_OPTIONS[72], SHARED_OPTIONS[73], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[62], SHARED_OPTIONS[75], SHARED_OPTIONS[76], SHARED_OPTIONS[77], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
   "positionals": [
     {
       "name": "source",
@@ -2823,7 +3068,7 @@ export const PUBLIC_CLI_GRAMMAR = {
 "registry-scaffold": {
   "parserKey": "registry-scaffold",
   "bootstrapProfile": "command_owned",
-  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[5], SHARED_OPTIONS[74], SHARED_OPTIONS[75], SHARED_OPTIONS[76]],
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[5], SHARED_OPTIONS[78], SHARED_OPTIONS[79], SHARED_OPTIONS[80]],
   "positionals": [],
   "constraints": [
     {
@@ -2941,7 +3186,7 @@ export const PUBLIC_CLI_GRAMMAR = {
 "verify-artifact": {
   "parserKey": "verify-artifact",
   "bootstrapProfile": "allowed",
-  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[18], SHARED_OPTIONS[77], SHARED_OPTIONS[78], SHARED_OPTIONS[16], SHARED_OPTIONS[17], SHARED_OPTIONS[19], SHARED_OPTIONS[7], SHARED_OPTIONS[34], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[18], SHARED_OPTIONS[81], SHARED_OPTIONS[82], SHARED_OPTIONS[16], SHARED_OPTIONS[17], SHARED_OPTIONS[19], SHARED_OPTIONS[7], SHARED_OPTIONS[35], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
   "positionals": [
     {
       "name": "source",
@@ -3076,7 +3321,7 @@ export const PUBLIC_CLI_GRAMMAR = {
 "inspect-archive": {
   "parserKey": "inspect-archive",
   "bootstrapProfile": "allowed",
-  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[18], SHARED_OPTIONS[79], SHARED_OPTIONS[80], SHARED_OPTIONS[81], SHARED_OPTIONS[82], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[18], SHARED_OPTIONS[83], SHARED_OPTIONS[84], SHARED_OPTIONS[85], SHARED_OPTIONS[86], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
   "positionals": [
     {
       "name": "source",
@@ -3132,7 +3377,7 @@ export const PUBLIC_CLI_GRAMMAR = {
 "sign-artifact": {
   "parserKey": "sign-artifact",
   "bootstrapProfile": "allowed",
-  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[83]],
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[87]],
   "positionals": [
     {
       "name": "source",
@@ -3166,7 +3411,7 @@ export const PUBLIC_CLI_GRAMMAR = {
 "verify-signature": {
   "parserKey": "verify-signature",
   "bootstrapProfile": "allowed",
-  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[84], SHARED_OPTIONS[85], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[88], SHARED_OPTIONS[89], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
   "positionals": [
     {
       "name": "source",
@@ -3376,7 +3621,7 @@ export const PUBLIC_CLI_GRAMMAR = {
 "mail-headers": {
   "parserKey": "mail-headers",
   "bootstrapProfile": "allowed",
-  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[86], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[90], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
   "positionals": [
     {
       "name": "source",
@@ -3418,7 +3663,7 @@ export const PUBLIC_CLI_GRAMMAR = {
 "intake": {
   "parserKey": "intake",
   "bootstrapProfile": "allowed",
-  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[7], SHARED_OPTIONS[87], SHARED_OPTIONS[86], SHARED_OPTIONS[88], SHARED_OPTIONS[34], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[7], SHARED_OPTIONS[91], SHARED_OPTIONS[90], SHARED_OPTIONS[92], SHARED_OPTIONS[93], SHARED_OPTIONS[35], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
   "positionals": [
     {
       "name": "kind",
@@ -3478,7 +3723,7 @@ export const PUBLIC_CLI_GRAMMAR = {
 "review-evidence": {
   "parserKey": "review-evidence",
   "bootstrapProfile": "allowed",
-  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[89], SHARED_OPTIONS[7], SHARED_OPTIONS[34], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[94], SHARED_OPTIONS[95], SHARED_OPTIONS[7], SHARED_OPTIONS[35], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
   "positionals": [
     {
       "name": "source",
@@ -3562,7 +3807,7 @@ export const PUBLIC_CLI_GRAMMAR = {
 "case": {
   "parserKey": "case",
   "bootstrapProfile": "allowed",
-  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[90], SHARED_OPTIONS[91], SHARED_OPTIONS[92], SHARED_OPTIONS[93], SHARED_OPTIONS[94], SHARED_OPTIONS[95], SHARED_OPTIONS[96], SHARED_OPTIONS[97], SHARED_OPTIONS[7], SHARED_OPTIONS[10]],
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[96], SHARED_OPTIONS[97], SHARED_OPTIONS[98], SHARED_OPTIONS[99], SHARED_OPTIONS[100], SHARED_OPTIONS[101], SHARED_OPTIONS[102], SHARED_OPTIONS[103], SHARED_OPTIONS[7], SHARED_OPTIONS[10]],
   "positionals": [
     {
       "name": "operation",
@@ -3676,7 +3921,7 @@ export const PUBLIC_CLI_GRAMMAR = {
 "case-pack": {
   "parserKey": "case-pack",
   "bootstrapProfile": "allowed",
-  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[98], SHARED_OPTIONS[99], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[104], SHARED_OPTIONS[105], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
   "positionals": [
     {
       "name": "source",
@@ -3767,7 +4012,7 @@ export const PUBLIC_CLI_GRAMMAR = {
 "monitor-once": {
   "parserKey": "monitor-once",
   "bootstrapProfile": "allowed",
-  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[100], SHARED_OPTIONS[101], SHARED_OPTIONS[102], SHARED_OPTIONS[103], SHARED_OPTIONS[7], SHARED_OPTIONS[20], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[106], SHARED_OPTIONS[107], SHARED_OPTIONS[108], SHARED_OPTIONS[109], SHARED_OPTIONS[7], SHARED_OPTIONS[21], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
   "positionals": [
     {
       "name": "source",
@@ -3807,6 +4052,55 @@ export const PUBLIC_CLI_GRAMMAR = {
       "options": [
         "--json",
         "--junit"
+      ]
+    }
+  ],
+  "metaActions": [
+    "help"
+  ]
+},
+"monitor-tick": {
+  "parserKey": "monitor-tick",
+  "bootstrapProfile": "allowed",
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[110], SHARED_OPTIONS[111], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
+  "positionals": [
+    {
+      "name": "source",
+      "valueKind": "file",
+      "minimum": 1,
+      "maximum": 1,
+      "values": [],
+      "inputSource": "argv",
+      "requiredWhenOptions": []
+    }
+  ],
+  "constraints": [
+    {
+      "kind": "requires_all",
+      "option": "--force",
+      "requiredOptions": [
+        "--output"
+      ]
+    },
+    {
+      "kind": "mutually_exclusive",
+      "options": [
+        "--quiet",
+        "--output"
+      ]
+    },
+    {
+      "kind": "excludes_all",
+      "option": "--quiet",
+      "excludedOptions": [
+        "--json"
+      ]
+    },
+    {
+      "kind": "requires_all",
+      "option": "--approve-network",
+      "requiredOptions": [
+        "--state"
       ]
     }
   ],
@@ -3901,7 +4195,7 @@ export const PUBLIC_CLI_GRAMMAR = {
 "sharing-review": {
   "parserKey": "sharing-review",
   "bootstrapProfile": "allowed",
-  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[104], SHARED_OPTIONS[105], SHARED_OPTIONS[106], SHARED_OPTIONS[107], SHARED_OPTIONS[108], SHARED_OPTIONS[109], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[112], SHARED_OPTIONS[113], SHARED_OPTIONS[114], SHARED_OPTIONS[115], SHARED_OPTIONS[116], SHARED_OPTIONS[117], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
   "positionals": [
     {
       "name": "source",
@@ -3951,7 +4245,7 @@ export const PUBLIC_CLI_GRAMMAR = {
 "workflow-plan": {
   "parserKey": "workflow-plan",
   "bootstrapProfile": "allowed",
-  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[110], SHARED_OPTIONS[111], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[118], SHARED_OPTIONS[119], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
   "positionals": [
     {
       "name": "recipe",
@@ -4074,7 +4368,7 @@ export const PUBLIC_CLI_GRAMMAR = {
 "domain-feed": {
   "parserKey": "domain-feed",
   "bootstrapProfile": "allowed",
-  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[112], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[120], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
   "positionals": [
     {
       "name": "operation",
@@ -4164,7 +4458,7 @@ export const PUBLIC_CLI_GRAMMAR = {
 "workflow-run": {
   "parserKey": "workflow-run",
   "bootstrapProfile": "allowed",
-  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[112], SHARED_OPTIONS[113], SHARED_OPTIONS[114], SHARED_OPTIONS[115], SHARED_OPTIONS[116], SHARED_OPTIONS[117], SHARED_OPTIONS[118], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[120], SHARED_OPTIONS[121], SHARED_OPTIONS[122], SHARED_OPTIONS[111], SHARED_OPTIONS[123], SHARED_OPTIONS[124], SHARED_OPTIONS[125], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
   "positionals": [
     {
       "name": "recipe",
@@ -4238,7 +4532,7 @@ export const PUBLIC_CLI_GRAMMAR = {
 "diff": {
   "parserKey": "diff",
   "bootstrapProfile": "allowed",
-  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[119], SHARED_OPTIONS[120], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[126], SHARED_OPTIONS[127], SHARED_OPTIONS[33], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
   "positionals": [
     {
       "name": "sources",
@@ -4270,6 +4564,108 @@ export const PUBLIC_CLI_GRAMMAR = {
       "option": "--quiet",
       "excludedOptions": [
         "--json"
+      ]
+    },
+    {
+      "kind": "mutually_exclusive",
+      "options": [
+        "--browse",
+        "--output"
+      ]
+    },
+    {
+      "kind": "excludes_all",
+      "option": "--browse",
+      "excludedOptions": [
+        "--json",
+        "--quiet",
+        "--left-session",
+        "--right-session"
+      ]
+    }
+  ],
+  "metaActions": [
+    "help"
+  ]
+},
+"view": {
+  "parserKey": "view",
+  "bootstrapProfile": "allowed",
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[33], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
+  "positionals": [
+    {
+      "name": "source",
+      "valueKind": "file",
+      "minimum": 0,
+      "maximum": 1,
+      "values": [],
+      "inputSource": "argv_or_stdin",
+      "requiredWhenOptions": []
+    }
+  ],
+  "constraints": [
+    {
+      "kind": "requires_all",
+      "option": "--force",
+      "requiredOptions": [
+        "--output"
+      ]
+    },
+    {
+      "kind": "mutually_exclusive",
+      "options": [
+        "--quiet",
+        "--output"
+      ]
+    },
+    {
+      "kind": "excludes_all",
+      "option": "--quiet",
+      "excludedOptions": [
+        "--json"
+      ]
+    },
+    {
+      "kind": "mutually_exclusive",
+      "options": [
+        "--browse",
+        "--output"
+      ]
+    },
+    {
+      "kind": "excludes_all",
+      "option": "--browse",
+      "excludedOptions": [
+        "--json",
+        "--quiet"
+      ]
+    }
+  ],
+  "metaActions": [
+    "help"
+  ]
+},
+"mcp": {
+  "parserKey": "mcp",
+  "bootstrapProfile": "allowed",
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[128], SHARED_OPTIONS[129]],
+  "positionals": [
+    {
+      "name": "sources",
+      "valueKind": "file",
+      "minimum": 1,
+      "maximum": 8,
+      "values": [],
+      "inputSource": "argv",
+      "requiredWhenOptions": []
+    }
+  ],
+  "constraints": [
+    {
+      "kind": "required",
+      "options": [
+        "--stdio",
+        "--allow-model-disclosure"
       ]
     }
   ],
@@ -4361,10 +4757,52 @@ export const PUBLIC_CLI_GRAMMAR = {
     "help"
   ]
 },
+"prior-registration": {
+  "parserKey": "prior-registration",
+  "bootstrapProfile": "allowed",
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[130], SHARED_OPTIONS[131], SHARED_OPTIONS[7], SHARED_OPTIONS[9], SHARED_OPTIONS[10]],
+  "positionals": [
+    {
+      "name": "source",
+      "valueKind": "file",
+      "minimum": 0,
+      "maximum": 1,
+      "values": [],
+      "inputSource": "argv_or_stdin",
+      "requiredWhenOptions": []
+    }
+  ],
+  "constraints": [
+    {
+      "kind": "requires_all",
+      "option": "--force",
+      "requiredOptions": [
+        "--output"
+      ]
+    },
+    {
+      "kind": "mutually_exclusive",
+      "options": [
+        "--quiet",
+        "--output"
+      ]
+    },
+    {
+      "kind": "excludes_all",
+      "option": "--quiet",
+      "excludedOptions": [
+        "--json"
+      ]
+    }
+  ],
+  "metaActions": [
+    "help"
+  ]
+},
 "export": {
   "parserKey": "export",
   "bootstrapProfile": "allowed",
-  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[21], SHARED_OPTIONS[22], SHARED_OPTIONS[121], SHARED_OPTIONS[23]],
+  "options": [SHARED_OPTIONS[0], SHARED_OPTIONS[1], SHARED_OPTIONS[2], SHARED_OPTIONS[3], SHARED_OPTIONS[4], SHARED_OPTIONS[5], SHARED_OPTIONS[22], SHARED_OPTIONS[23], SHARED_OPTIONS[132], SHARED_OPTIONS[24]],
   "positionals": [
     {
       "name": "source",

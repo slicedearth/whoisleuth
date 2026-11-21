@@ -207,6 +207,8 @@ export function projectTrendPoints(rawPoints: readonly TrendPointInput[]) {
       milliseconds: Math.max(0, latestMilliseconds - firstMilliseconds),
     },
     ticks: y.ticks(4).map((value) => ({ value, y: y(value) })),
+    // Zero-value line for area fills under measured segments only.
+    baselineY: y(0),
     points: projectedPoints,
     segments,
     summary: {

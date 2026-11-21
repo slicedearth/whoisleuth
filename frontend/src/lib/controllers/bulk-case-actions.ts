@@ -39,7 +39,10 @@ export function bulkCaseInput(row: ScanResult) {
     pageBaselineMatch: saved.pageBaselineMatch, hasActiveBrandProfile: saved.hasActiveBrandProfile,
     profileContextState: saved.profileContext.sourceState === 'ready' ? 'ready' : 'unavailable',
     profileContextLimitation: saved.profileContext.limitation || null, mutationTypes: saved.mutationTypes,
-  } } satisfies CaseInput;
+  },
+  // A rank from the list selected in Discover is analyst context, kept beside the evidence.
+  ...(row.popularity ? { popularityRank: { rank: row.popularity.rank, listSha256: row.popularity.listSha256 } } : {}),
+  } satisfies CaseInput;
 }
 
 /** Owns action state; all writes still pass through the existing Case service. */
@@ -47,6 +50,7 @@ export class BulkCaseActions {
   state: BulkCaseActionState = { busy: false, status: '' };
   #refreshFailed = false;
   #pruned = 0;
+  #omittedRanks = 0;
   private readonly dependencies: Dependencies;
   constructor(dependencies: Dependencies) { this.dependencies = dependencies; }
 
@@ -59,6 +63,7 @@ export class BulkCaseActions {
     if (this.state.busy) return;
     this.#refreshFailed = false;
     this.#pruned = 0;
+    this.#omittedRanks = 0;
     this.#set('', true);
     try {
       const context = await this.dependencies.context();
@@ -67,7 +72,9 @@ export class BulkCaseActions {
     } catch (cause) {
       this.#set(cause instanceof Error ? cause.message : 'Could not update the selected cases.');
     } finally {
-      this.#set(this.state.status + casePruningNotice(this.#pruned) + (this.#refreshFailed ? REFRESH_WARNING : ''), false);
+      const rankNotice = this.#omittedRanks === 1 ? ' One list rank was not saved because the Case already held its maximum number of ranks.'
+        : this.#omittedRanks ? ` ${this.#omittedRanks} list ranks were not saved because the Cases already held their maximum number of ranks.` : '';
+      this.#set(this.state.status + rankNotice + casePruningNotice(this.#pruned) + (this.#refreshFailed ? REFRESH_WARNING : ''), false);
     }
   }
 
@@ -83,7 +90,12 @@ export class BulkCaseActions {
       const selected = context.selected.get(row.domain);
       const input = bulkCaseInput(row);
       const opened = await context.api.openCase(input, selected ? { caseId: selected.id } : {});
-      const committed = opened.created ? opened : await context.api.editCase(opened.record.id, { source: 'bulk', evidence: input.evidence });
+      const rank = input.popularityRank;
+      const committed = opened.created ? opened : await context.api.editCase(opened.record.id, {
+        source: 'bulk', evidence: input.evidence, ...(rank ? { popularityRank: rank, omitPopularityRankAtCapacity: true } : {}),
+      });
+      // Inspect the committed record, not a preflight read that could be stale by the time the transaction runs.
+      if (rank && !committed.record.analystContext?.some(item => item.listSha256 === rank.listSha256)) this.#omittedRanks += 1;
       this.#pruned += committed.pruned;
       await this.#reconcile(context.api, committed);
       this.#set(opened.created ? `Opened a case for ${committed.record.domain}.` : `Refreshed the retained case evidence for ${committed.record.domain}.`);

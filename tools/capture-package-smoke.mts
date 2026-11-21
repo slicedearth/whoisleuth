@@ -95,6 +95,25 @@ try {
   }
   checks.push('synthetic capture with compiled anchored writer', 'credential exclusion and private artefacts');
 
+  const selectedUrls = ['https://example.test/next?private=selected'];
+  assert.deepEqual(capture.parseCaptureNavigationPlan(JSON.stringify({ schema: 'whoisleuth.capture-navigation-plan', version: 1, urls: selectedUrls })), selectedUrls);
+  assert.throws(() => capture.parseCaptureNavigationPlan(JSON.stringify({ schema: 'whoisleuth.capture-navigation-plan', version: 1, urls: ['https://192.0.2.1/'] })));
+  const sequenceDirectory = path.join(temporary, 'sequence');
+  const sequence = await capture.captureRenderedPage({ targetUrl: 'https://example.test/', navigationTargets: selectedUrls,
+    outputDirectory: sequenceDirectory, timeoutMs: 10_000 }, {
+    launchBrowser: async () => fixtureBrowser(), resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
+    fetchResource: async () => new Response('<!doctype html><title>Example</title>', { headers: { 'content-type': 'text/html' } }),
+    now: () => '2026-08-01T00:00:00.000Z',
+  });
+  assert.deepEqual(sequence.navigation?.steps.map(step => step.afterCapture), [0, 1]);
+  assert.doesNotMatch(JSON.stringify(sequence), /private=selected/u);
+  const sequencePath = path.join(sequenceDirectory, 'manifest.json');
+  const selectedCommand = JSON.parse(execFileSync(process.execPath, [...process.execArgv, executable, 'compare', sequencePath, sequencePath,
+    '--left-capture', '1', '--right-capture', '2', '--json'], { encoding: 'utf8', timeout: 15_000, maxBuffer: 1024 * 1024 }));
+  assert.equal(selectedCommand.left.captureIndex, 0); assert.equal(selectedCommand.right.captureIndex, 1);
+  assert.equal(selectedCommand.left.sequenceState, 'complete'); assert.equal(selectedCommand.partial, false);
+  checks.push('bounded selected navigation and explicit installed capture comparison');
+
   const otherDirectory = path.join(temporary, 'other');
   await cp(output, otherDirectory, { recursive: true, errorOnExist: true });
   const otherManifest = path.join(otherDirectory, 'manifest.json');

@@ -38,7 +38,7 @@
         {/each}
       </ul>
       <Pagination {currentPage} {pageCount} setPage={value => page = value} ariaLabel="Pattern contributor pages" pageInputLabel="Pattern contributor page" />
-      <p>Inspection opens retained evidence only. It does not check a domain, change its disposition or authorise a group action.</p>
+      <p>Inspection opens retained evidence only.</p>
     </section>
   {/if}
 </details>

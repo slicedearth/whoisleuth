@@ -140,13 +140,13 @@
         {/if}
         {#if !formAttribution.complete}<p class="card-note">Form attribution is incomplete.</p>{/if}
       {:else}
-        <p class="card-note">This observation does not include per-form attribution. Page-wide input and action counts do not establish which form handles a password.</p>
+        <p class="card-note">This observation has no per-form detail, so it is unclear which form handles a password.</p>
       {/if}
       <p class="card-note">Destinations come from captured HTML, including submit-button overrides—not observed submissions.</p>
     </section>
     <details class="profile-notes">
       <summary>Collection scope and interpretation</summary>
-      <p class="card-note">External destinations can be legitimate identity, payment or form providers. An external password-form destination contributes to the Risk heuristic; it is not a phishing verdict. Cleartext HTTP overlaps origin counts.</p>
+      <p class="card-note">External destinations can be legitimate identity, payment or form providers. An external password-form destination raises Risk but is not a phishing verdict. Cleartext HTTP overlaps origin counts.</p>
       {#if limitations.length}<ul>{#each limitations as limitation}<li>{limitation}</li>{/each}</ul>{/if}
     </details>
   </div>

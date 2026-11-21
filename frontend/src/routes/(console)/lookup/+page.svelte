@@ -4,6 +4,12 @@
   import { page } from '$app/state';
   import LocalSectionNav from '#lib/components/LocalSectionNav.svelte';
   import LookupAtAGlance from '#lib/components/LookupAtAGlance.svelte';
+  import LookupKeyFacts from '#lib/components/LookupKeyFacts.svelte';
+  import DisclosureToggleIcon from '#lib/components/DisclosureToggleIcon.svelte';
+  import { availabilityStatusDisplay } from '#lib/analysis/availability-status-display.ts';
+  import { buildLookupKeyFacts, lookupRegistrationCreatedObservations } from '../../../../../lib/lookup-key-facts.mts';
+  import { selectRegistrationCreation } from '../../../../../packages/evidence/prior-registration.mts';
+  import LookupResultSkeleton from '#lib/components/LookupResultSkeleton.svelte';
   import LookupAssessment from '#lib/components/LookupAssessment.svelte';
   import LookupFamilySummary from '#lib/components/LookupFamilySummary.svelte';
   import LookupEvidenceReplay from '#lib/components/LookupEvidenceReplay.svelte';
@@ -305,6 +311,14 @@
   const lookupEvidenceDocument = $derived(lookupEvidenceProjection.document);
   const caseEvidence = $derived(lookupAnalysis.caseEvidence);
   const checkpointFacts = $derived(lookupAnalysis.checkpointFacts);
+  const keyFacts = $derived(session.observation.response ? buildLookupKeyFacts(session.observation.response) : []);
+  // Key facts are a display summary; registration history and the archive
+  // comparison use only a creation date from a successful, complete source.
+  const registrationObservations = $derived(session.observation.response
+    ? lookupRegistrationCreatedObservations(session.observation.response) : []);
+  const registrationCreation = $derived(selectRegistrationCreation(registrationObservations.map((item) => ({
+    source: item.source, value: item.value, sourceState: item.sourceState, complete: item.complete,
+  }))));
   const profileContextLimitation = $derived(lookupAnalysis.profileContextLimitation);
 
   async function refreshProfileContext() {
@@ -624,6 +638,10 @@
 
 <LookupEvidenceReplay />
 
+{#if session.loading && !session.observation.response}
+  <LookupResultSkeleton />
+{/if}
+
 {#if session.observation.response}
   <section class="result-root" id="result" use:evidenceLinkNavigation>
     <LookupResultHeader
@@ -678,6 +696,8 @@
 
     {#snippet overviewSection()}
       <LookupEvidenceSection id="overview" title="Overview" family="overview">
+        <LookupKeyFacts facts={keyFacts} />
+
         <LookupAtAGlance
           reviewActions={lookupReviewActionModel}
           {lookupDecisionFacts}
@@ -688,7 +708,7 @@
 
         {#if availability.applicable !== false}
           <LookupAssessment
-            detail={show(availability.detail || availability.state)}
+            detail={show(availability.detail || availabilityStatusDisplay(availability.state).label)}
             confidence={show(availability.confidence)}
             {risk}
             {riskSensitivity}
@@ -701,15 +721,15 @@
 
         <details class="detailed-assessment card" bind:open={session.observation.assessmentOpen}>
           <summary>
-            <span
+            <span class="assessment-summary-copy"
               ><strong>Assessment detail</strong><small
                 >Evidence Readiness and portable hand-off{session.task === 'acquisition'
                   ? ', with acquisition review'
                   : ''}</small
               ></span
             >
-            <span
-              >{session.observation.assessmentOpen ? 'Close assessment' : 'Open assessment'}</span
+            <span class="assessment-toggle"
+              ><DisclosureToggleIcon expanded={session.observation.assessmentOpen} />{session.observation.assessmentOpen ? 'Close assessment' : 'Open assessment'}</span
             >
           </summary>
           <div class="detailed-assessment-body">
@@ -821,6 +841,9 @@
         surfaces={sectionSurfaces['relationships-history']}
         controls={sectionNavigation.controls('relationships-history')}
         resultType={session.observation.response?.type ?? ''}
+        registrationHistory={session.observation.response?.type === 'domain' && session.observation.response.registrableDomain
+          ? { domain: session.observation.response.registrableDomain, creation: registrationCreation, observations: registrationObservations }
+          : null}
         bind:visualView={session.visualView}
       />
     {/snippet}
@@ -1023,7 +1046,7 @@
   .detailed-assessment > summary::-webkit-details-marker {
     display: none;
   }
-  .detailed-assessment > summary span:first-child {
+  .assessment-summary-copy {
     display: grid;
     gap: 4px;
     min-width: 0;
@@ -1037,23 +1060,22 @@
     font-size: var(--text-xs);
     line-height: 1.45;
   }
-  .detailed-assessment > summary span:last-child {
+  /* Matches the evidence family toggles below. */
+  .assessment-toggle {
+    display: inline-flex;
     flex: 0 0 auto;
-    color: var(--accent);
+    align-items: center;
+    gap: 7px;
+    color: var(--text);
     font: 700 var(--text-2xs) var(--mono);
-    text-transform: uppercase;
+    white-space: nowrap;
   }
-  .detailed-assessment > summary span:last-child::before {
-    content: '+';
-    display: inline-block;
-    width: 1.2em;
+  .detailed-assessment > summary:hover .assessment-toggle {
+    color: var(--accent);
   }
   .detailed-assessment[open] > summary {
     border-bottom: 1px solid var(--border);
     background: var(--panel-raised);
-  }
-  .detailed-assessment[open] > summary span:last-child::before {
-    content: '−';
   }
   .detailed-assessment-body {
     padding: 0 14px 14px;

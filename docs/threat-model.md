@@ -1,4 +1,4 @@
-# Threat Model
+# Threat model
 
 This threat model covers the [current product boundaries](product-boundary.md).
 It supplements the
@@ -187,7 +187,10 @@ encrypted projection and does not imply general server-side case storage.
 ### Terminal and local-file safety
 
 CLI input and output strip terminal control and bidirectional formatting
-characters where they could affect rendering, bound UTF-8 before accumulation,
+characters where they could affect rendering. Every command's human-readable
+terminal output also passes one final runner-level pass that neutralises C0/C1
+controls and default-ignorable characters, so a formatter that misses a value
+cannot emit terminal sequences. CLI processing bounds UTF-8 before accumulation,
 and restore terminal state on success, cancellation, EOF, resize, and failure.
 Private output refuses unsafe paths and unintended overwrite. Offline commands
 remain request-free, and networked commands disclose the plan before execution

@@ -116,7 +116,7 @@
         {/each}
       </div>
     {:else}
-      <p class="empty-result">{noTechnologyMatches ? 'No curated technology signature matched the captured response.' : 'The retained analysis does not establish a technology match.'} This does not mean that no framework, service, or delivery platform is present.</p>
+      <p class="empty-result">{noTechnologyMatches ? 'No curated technology signature matched the captured response.' : 'The retained analysis does not establish a technology match.'}</p>
     {/if}
 
     <details class="source-details">

@@ -33,12 +33,12 @@ export const PUBLIC_COVERAGE_SUMMARY = {
     }
   ],
   "summary": {
-    "capabilityFamilies": 33,
-    "cliOperations": 53,
+    "capabilityFamilies": 36,
+    "cliOperations": 60,
     "registrySnapshot": {
       "schema": "whoisleuth\u002eregistry-standards-coverage",
       "version": 1,
-      "verifiedAt": "2026-10-30",
+      "verifiedAt": "2026-11-21",
       "counts": {
         "activeTlds": 1436,
         "countryCode": 309,

@@ -154,7 +154,7 @@
     <span>Press Ctrl+Enter or ⌘+Enter to run.</span>
   </p>
   {#if task === 'incident'}
-    <p class="incident-input-note">By default, only the URL's hostname is sent into Lookup. The original URL stays in this tab unless you retain it in a Case or explicitly select URL collection below.</p>
+    <p class="incident-input-note">By default, only the URL's hostname is sent into Lookup. The full URL stays in this tab unless you keep it in a Case or select URL collection below.</p>
   {/if}
   {@render guidance?.()}
 
@@ -192,7 +192,7 @@
       <div class="loading-copy">
         <p role="status">{loadingDetail}</p>
         <p class="loading-meta"><strong>{elapsedLabel}</strong><span>{deadlineLabel}</span></p>
-        <p class="loading-caveat">Only the final validated response can be retained. Cancelling stops this browser from waiting; requests already admitted by the server may finish within their existing bounds.</p>
+        <p class="loading-caveat">Only the final validated response can be retained. Cancelling stops waiting here; requests the server has already started may still finish.</p>
       </div>
       <button type="button" class="btn cancel-lookup" onclick={oncancel}>Cancel lookup</button>
     </div>
@@ -213,7 +213,7 @@
   {#if intelligenceOptionCount}
     <fieldset class="intelligence-options">
       <legend>Optional third-party intelligence</legend>
-      <p class="intelligence-hint">Each selected source receives only the registrable domain for a deep single-domain lookup. Nothing is submitted for scanning or reporting, and provider verdicts do not decide availability.</p>
+      <p class="intelligence-hint">Each selected source receives only the registrable domain for a deep single-domain lookup. Nothing is submitted for scanning or reporting.</p>
       {#if externalIntelligenceSupported}
         <label class="intelligence-option choice"><input type="checkbox" bind:checked={includeExternalIntelligence} disabled={!deepMode || !domainEligible}> <span><strong>Search archived URLscan verdicts</strong> Searches archived domain verdicts.</span></label>
       {/if}

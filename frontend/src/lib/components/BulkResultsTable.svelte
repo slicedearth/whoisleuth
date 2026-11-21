@@ -1,4 +1,10 @@
 <script lang="ts">
+  import { onDestroy, tick } from 'svelte';
+  import { LOOKUP_INVALID_QUERY_MESSAGE } from '#lib/analysis/lookup-response.ts';
+  import type { PriorRegistrationReview } from '../../../../packages/evidence/prior-registration.mts';
+  import { CT_DATE_LABELS } from '../../../../packages/investigation/ct-results.mts';
+  import { EVIDENCE_INELIGIBLE_LABELS } from '../../../../packages/evidence/evidence-eligibility.mts';
+  import { tokenLabel } from '../../../../packages/analysis/display-label.mts';
   import Pagination from '#lib/components/Pagination.svelte';
   import BulkRiskSummary from '#lib/components/BulkRiskSummary.svelte';
   import CasePicker from './CasePicker.svelte';
@@ -12,7 +18,7 @@
 
   type CaseOption = Readonly<{ value: string; label: string }>;
   type DraftAction = { mailto: string; body: string };
-  type CtEvidence = { lastObservedAt: string | null; hostnameCount: number; certificateCount: number };
+  type CtEvidence = { firstObservedAt: string | null; lastObservedAt: string | null; hostnameCount: number; certificateCount: number; chronologyContradicted: boolean; validityRange: { first: string; last: string } | null; priorRegistration: PriorRegistrationReview };
   type ResultRow = {
     resultIndex: number;
     domain: string;
@@ -29,6 +35,7 @@
     hasPasswordField: boolean;
     phishingLanguageMatch: string;
     ct: CtEvidence | null;
+    popularity: { rank: number; listSha256: string } | null;
     errorRow: boolean;
     error: string;
     availability: string;
@@ -80,7 +87,7 @@
     toggleSaved: (resultIndex: number) => void;
     caseOptions: readonly CaseOption[];
     setDisposition: (resultIndex: number, value: string) => void;
-    trackCase: (resultIndex: number) => void;
+    trackCase: (resultIndex: number) => void | Promise<unknown>;
     inspectDomain: (resultIndex: number) => void | Promise<void>;
     copyDraft: (text: string, label: string) => void | Promise<void>;
     currentPage: number;
@@ -96,6 +103,63 @@
 
   let expandedRows = $state<Set<number>>(new Set());
   let tableRoot: HTMLDivElement;
+
+  // Only the server's own invalid-query rejection removes Case creation; a
+  // valid target whose collection failed keeps the action.
+
+  // Creating a Case replaces its button with the disposition control. The save
+  // is asynchronous, so focus moves when that control renders, and only while
+  // the initiating action still owns focus: the button itself, or the page body
+  // after the button was removed. Focus the analyst moved elsewhere is kept.
+  // Raw state keeps the original object, so identity checks below compare the
+  // same value rather than a reactive proxy of it.
+  type PendingCaseFocus = Readonly<{ domain: string; initiator: HTMLElement | null; release: (event: FocusEvent) => void }>;
+  let pendingCaseFocus = $state.raw<PendingCaseFocus | null>(null);
+  // Every way a pending action ends (focus restored, focus moved away, a
+  // failed or finished save, a newer action or unmounting) removes its listener.
+  function endPendingCaseFocus(pending: PendingCaseFocus | null) {
+    if (!pending) return;
+    document.removeEventListener('focusin', pending.release, true);
+    if (pendingCaseFocus === pending) pendingCaseFocus = null;
+  }
+  async function createCase(resultIndex: number, domain: string, initiator: HTMLElement | null) {
+    // Repeating the same activation cannot start a new write. Keep the
+    // original save's focus recovery until the action actually ends.
+    if (pendingCaseFocus && pendingCaseFocus.domain === domain && pendingCaseFocus.initiator === initiator) return;
+    endPendingCaseFocus(pendingCaseFocus);
+    // Any focus the analyst moves elsewhere during the save cancels the restore.
+    const release = (event: FocusEvent) => {
+      if (event.target !== initiator) endPendingCaseFocus(pending);
+    };
+    const pending: PendingCaseFocus = { domain, initiator, release };
+    pendingCaseFocus = pending;
+    document.addEventListener('focusin', release, true);
+    try {
+      await trackCase(resultIndex);
+    } finally {
+      // A failed or unchanged save never renders the control; give a
+      // successful one its update before deciding.
+      await tick();
+      if (pendingCaseFocus === pending && !rows.some((row) => row.domain === domain && row.caseRecord)) endPendingCaseFocus(pending);
+    }
+  }
+  onDestroy(() => endPendingCaseFocus(pendingCaseFocus));
+  function caseActionOwnsFocus(initiator: HTMLElement | null): boolean {
+    const active = document.activeElement;
+    return !active || active === document.body || active === document.documentElement || active === initiator;
+  }
+  $effect(() => {
+    const pending = pendingCaseFocus;
+    if (!pending || !rows.some((row) => row.domain === pending.domain && row.caseRecord)) return;
+    void tick().then(() => {
+      if (pendingCaseFocus !== pending) return;
+      endPendingCaseFocus(pending);
+      if (!caseActionOwnsFocus(pending.initiator)) return;
+      const disposition = [...(tableRoot?.querySelectorAll<HTMLSelectElement>('select.case-disp') ?? [])]
+        .find((control) => control.getAttribute('aria-label') === `Disposition for ${pending.domain}`);
+      disposition?.focus();
+    });
+  });
   const shortlistAvailable = $derived(shortlistSourceState === 'ready');
   const caseAvailable = $derived(caseSourceState === 'ready');
   const reviewAvailable = $derived(reviewSourceState === 'ready');
@@ -156,8 +220,8 @@
       {#each rows as row}
         {@const incidents=casesForDomain(caseRecords,row.domain)}
         <tr id={`bulk-result-${row.resultIndex}`} class:error-row={row.errorRow} class:trusted-row={Boolean(row.trusted)} class:mobile-expanded={expandedRows.has(row.resultIndex)}>
-          <td data-label="Domain"><div class="domain"><button class="star" class:unavailable={!shortlistAvailable} disabled={!shortlistAvailable} aria-label={shortlistAvailable?`${row.shortlisted ? 'Remove' : 'Add'} ${row.domain} ${row.shortlisted ? 'from' : 'to'} shortlist`:shortlistSourceState==='loading'?`Shortlist state loading for ${row.domain}`:shortlistSourceState==='idle'?`Shortlist state not loaded for ${row.domain}`:`Shortlist state unavailable for ${row.domain}`} aria-pressed={shortlistAvailable?row.shortlisted:undefined} onclick={() => toggleSaved(row.resultIndex)}><IntelligenceIcon name={shortlistAvailable ? (row.shortlisted ? 'star-filled' : 'star') : shortlistSourceState === 'loading' ? 'ellipsis' : 'minus'} size={16} /></button><div class="domain-content"><strong>{row.domain}</strong>{#if shortlistSourceState === 'loading'}<small class="source-unavailable">Shortlist loading</small>{:else if shortlistSourceState === 'idle'}<small class="source-unavailable">Shortlist not loaded</small>{:else if !shortlistAvailable}<small class="source-unavailable">Shortlist unavailable</small>{/if}{#if row.unicodeDomain}<small class="idn-label">Unicode: {row.unicodeDomain}</small>{/if}{#if row.mixedScript}<small class="warn-label">Mixed writing scripts</small>{/if}{#if row.referenceMatch}<small class="warn-label">Official-domain skeleton match</small>{/if}{#if row.trusted}<small class="trusted-label">{row.trusted}</small>{/if}{#if !row.profileContextReady}<small class="warn-label">Brand Profile context unevaluated{row.profileContextLimitation ? ` — ${row.profileContextLimitation}` : ''}</small>{/if}{#if row.faviconMatch}<small class="danger-label">Favicon match</small>{:else if row.faviconNearMatch}<small class="warn-label">Favicon near-match</small>{/if}{#if row.reusesOfficialAssets}<small class="warn-label">Observed official-asset relationship</small>{/if}{#if row.hasPasswordField}<small class="warn-label">Password field</small>{/if}{#if row.phishingLanguageMatch}<small class="danger-label">Matched phishing-language pattern</small>{/if}{#if row.ct}<details class="ct-source"><summary>Certificate Transparency</summary><div class="ct-source-detail">{#if row.ct.lastObservedAt}<span>Latest CT observation <time datetime={row.ct.lastObservedAt}>{row.ct.lastObservedAt.slice(0, 10)}</time></span>{/if}<span>{row.ct.hostnameCount} observed hostname{row.ct.hostnameCount === 1 ? '' : 's'}</span><span>{row.ct.certificateCount} distinct certificate{row.ct.certificateCount === 1 ? '' : 's'}</span></div></details>{/if}{#if row.error}<small>{row.error}</small>{/if}</div></div><button class="mobile-row-toggle" type="button" aria-expanded={expandedRows.has(row.resultIndex)} aria-label={`${expandedRows.has(row.resultIndex) ? 'Hide' : 'Show'} details for ${row.domain}`} onclick={() => toggleRowDetails(row.resultIndex)}>{expandedRows.has(row.resultIndex) ? 'Hide details' : 'Show details'}</button></td>
-          {#if columns.includes('registration')}<td data-label="Registration"><span class="state" data-registration-state={row.availability}>{row.availability.replace('_', ' ')}</span><small class="confidence">{row.confidence} confidence</small></td>{/if}
+          <td data-label="Domain"><div class="domain"><button class="star" class:unavailable={!shortlistAvailable} disabled={!shortlistAvailable} aria-label={shortlistAvailable?`${row.shortlisted ? 'Remove' : 'Add'} ${row.domain} ${row.shortlisted ? 'from' : 'to'} shortlist`:shortlistSourceState==='loading'?`Shortlist state loading for ${row.domain}`:shortlistSourceState==='idle'?`Shortlist state not loaded for ${row.domain}`:`Shortlist state unavailable for ${row.domain}`} aria-pressed={shortlistAvailable?row.shortlisted:undefined} onclick={() => toggleSaved(row.resultIndex)}><IntelligenceIcon name={shortlistAvailable ? (row.shortlisted ? 'star-filled' : 'star') : shortlistSourceState === 'loading' ? 'ellipsis' : 'minus'} size={16} /></button><div class="domain-content"><strong>{row.domain}</strong>{#if shortlistSourceState === 'loading'}<small class="source-unavailable">Shortlist loading</small>{:else if shortlistSourceState === 'idle'}<small class="source-unavailable">Shortlist not loaded</small>{:else if !shortlistAvailable}<small class="source-unavailable">Shortlist unavailable</small>{/if}{#if row.unicodeDomain}<small class="idn-label">Unicode: {row.unicodeDomain}</small>{/if}{#if row.mixedScript}<small class="warn-label">Mixed writing scripts</small>{/if}{#if row.referenceMatch}<small class="warn-label">Official-domain skeleton match</small>{/if}{#if row.trusted}<small class="trusted-label">{row.trusted}</small>{/if}{#if !row.profileContextReady}<small class="warn-label">Brand Profile context unevaluated{row.profileContextLimitation ? ` — ${row.profileContextLimitation}` : ''}</small>{/if}{#if row.faviconMatch}<small class="danger-label">Favicon match</small>{:else if row.faviconNearMatch}<small class="warn-label">Favicon near-match</small>{/if}{#if row.reusesOfficialAssets}<small class="warn-label">Observed official-asset relationship</small>{/if}{#if row.hasPasswordField}<small class="warn-label">Password field</small>{/if}{#if row.phishingLanguageMatch}<small class="danger-label">Matched phishing-language pattern</small>{/if}{#if row.ct?.priorRegistration.state === 'earlier_observation'}<small class="warn-label">Certificate logged before current registration</small>{/if}{#if row.popularity}<small class="popularity-label">Ranked #{row.popularity.rank.toLocaleString()} in selected list · <span class="list-digest">sha256:{row.popularity.listSha256.slice(0, 12)}</span></small>{/if}{#if row.ct}<details class="ct-source"><summary>Certificate Transparency</summary><div class="ct-source-detail">{#if row.ct.firstObservedAt}<span>{CT_DATE_LABELS.firstObserved} <time datetime={row.ct.firstObservedAt}>{row.ct.firstObservedAt.slice(0, 10)}</time></span>{/if}{#if row.ct.lastObservedAt}<span>{CT_DATE_LABELS.lastObserved} <time datetime={row.ct.lastObservedAt}>{row.ct.lastObservedAt.slice(0, 10)}</time></span>{/if}{#if row.ct.validityRange}<span>{CT_DATE_LABELS.validityRange} <time datetime={row.ct.validityRange.first}>{row.ct.validityRange.first.slice(0, 10)}</time>{#if row.ct.validityRange.last !== row.ct.validityRange.first} to <time datetime={row.ct.validityRange.last}>{row.ct.validityRange.last.slice(0, 10)}</time>{/if} (context only)</span>{/if}<span>{row.ct.hostnameCount} observed hostname{row.ct.hostnameCount === 1 ? '' : 's'}</span><span>{row.ct.certificateCount} distinct certificate{row.ct.certificateCount === 1 ? '' : 's'}</span>{#if row.ct.chronologyContradicted}<span>Not compared with the registration date: {EVIDENCE_INELIGIBLE_LABELS.chronology_contradictory}.</span>{/if}{#each row.ct.priorRegistration.observations as observation (observation.source)}{#if observation.daysBeforeRegistration !== null}<span>{observation.label}: {observation.daysBeforeRegistration} days before the current registration was created{observation.context ? ' (context only)' : ''}</span>{/if}{/each}{#if row.ct.priorRegistration.state !== 'not_comparable'}<span>{row.ct.priorRegistration.limitations[0]}</span>{/if}</div></details>{/if}{#if row.error}<small>{row.error}</small>{/if}</div></div><button class="mobile-row-toggle" type="button" aria-expanded={expandedRows.has(row.resultIndex)} aria-label={`${expandedRows.has(row.resultIndex) ? 'Hide' : 'Show'} details for ${row.domain}`} onclick={() => toggleRowDetails(row.resultIndex)}>{expandedRows.has(row.resultIndex) ? 'Hide details' : 'Show details'}</button></td>
+          {#if columns.includes('registration')}<td data-label="Registration"><span class="state" data-registration-state={row.availability}>{tokenLabel(row.availability)}</span><small class="confidence">{tokenLabel(row.confidence)} confidence</small></td>{/if}
           {#if columns.includes('risk')}<td data-label="Risk" class:high={row.highRisk}><BulkRiskSummary risk={row.risk} domain={row.domain} /></td>{/if}
           {#if columns.includes('website')}<td class="mobile-secondary" data-label="Website">{row.activity}</td>{/if}
           {#if columns.includes('registrar')}<td class="mobile-secondary" data-label="Registrar">{row.registrar}</td>{/if}
@@ -169,11 +233,12 @@
             {:else if !caseAvailable}<span class="source-unavailable">Case unavailable</span>
             {:else}
               {#if incidents.length>1}<CasePicker id={`bulk-incident-${row.resultIndex}`} records={incidents} selectedId={row.caseRecord?.id??''} select={(id)=>selectIncident(row.domain,id)} />{/if}
-              {#if row.caseRecord}<div class="case-cell"><select class="case-disp" aria-label={`Disposition for ${row.domain}`} value={row.caseRecord.disposition} onchange={(event) => setDisposition(row.resultIndex, event.currentTarget.value)}>{#each caseOptions as option}<option value={option.value}>{option.label}</option>{/each}</select><a class="case-open" href={`/monitor?case=${encodeURIComponent(row.caseRecord.id)}`}>Open</a></div>
-              {:else if !incidents.length}<button class="btn small case-track" onclick={() => trackCase(row.resultIndex)}>＋ Create case</button>{/if}
+              {#if row.caseRecord}<div class="case-cell"><select class="case-disp" aria-label={`Disposition for ${row.domain}`} value={row.caseRecord.disposition} onchange={(event) => setDisposition(row.resultIndex, event.currentTarget.value)}>{#each caseOptions as option}<option value={option.value}>{option.label}</option>{/each}</select><a class="case-open" href={`/monitor?case=${encodeURIComponent(row.caseRecord.id)}`} aria-label={`Open case for ${row.domain}`}>Open</a></div>
+              {:else if row.errorRow && row.error === LOOKUP_INVALID_QUERY_MESSAGE}<span class="source-unavailable">Rejected as not a lookup target</span>
+              {:else if !incidents.length}<button class="btn small case-track" aria-label={`Create case for ${row.domain}`} onclick={(event) => void createCase(row.resultIndex, row.domain, event.currentTarget)}>＋ Create case</button>{/if}
             {/if}
           </td>{/if}
-          <td class="mobile-secondary" data-label="Actions"><div class="draft-actions"><button class="inspect" onclick={() => inspectDomain(row.resultIndex)}>Inspect</button>{#if row.outreach}<a href={row.outreach.mailto}>Outreach</a><button onclick={() => copyDraft(row.outreach?.body ?? '', `${row.domain} outreach draft`)}>Copy</button>{/if}{#if row.responseHref}<a href={row.responseHref}>Prepare reviewed report</a>{/if}</div></td>
+          <td class="mobile-secondary" data-label="Actions"><div class="draft-actions"><button class="inspect" aria-label={`Inspect ${row.domain}`} onclick={() => inspectDomain(row.resultIndex)}>Inspect</button>{#if row.outreach}<a href={row.outreach.mailto} aria-label={`Outreach email for ${row.domain}`}>Outreach</a><button aria-label={`Copy outreach draft for ${row.domain}`} onclick={() => copyDraft(row.outreach?.body ?? '', `${row.domain} outreach draft`)}>Copy</button>{/if}{#if row.responseHref}<a href={row.responseHref} aria-label={`Prepare reviewed report for ${row.domain}`}>Prepare reviewed report</a>{/if}</div></td>
         </tr>
       {/each}
     </tbody>
@@ -197,6 +262,7 @@
   td .idn-label{color:var(--muted)}
   td .trusted-label{color:var(--accent2);text-transform:capitalize}
   td .warn-label{color:var(--amber)}
+  td .popularity-label{color:var(--muted)}td .popularity-label .list-digest{font-family:var(--mono);overflow-wrap:anywhere}
   td .danger-label{color:var(--danger)}
   td .source-unavailable{color:var(--muted)}
   .ct-source{margin-top:4px}
@@ -204,10 +270,10 @@
   .ct-source-detail{display:flex;flex-direction:column;gap:2px;margin-top:4px}
   .ct-source-detail span{color:var(--muted);font-size:var(--text-2xs);overflow-wrap:anywhere}
   .ct-source-detail time{color:var(--text)}
-  .state{color:var(--text);text-transform:capitalize}
+  .state{color:var(--text)}
   .state[data-registration-state='error'],.state[data-registration-state='failed']{color:var(--danger)}
   .state[data-registration-state='unknown'],.state[data-registration-state='unavailable'],.state[data-registration-state='not_collected']{color:var(--muted)}
-  td .confidence{color:var(--muted);text-transform:capitalize}
+  td .confidence{color:var(--muted)}
   .high{color:var(--danger);font-weight:800}
   .error-row{background:rgb(var(--danger-rgb) / .03)}
   .trusted-row{background:rgb(var(--accent2-rgb) / .03)}

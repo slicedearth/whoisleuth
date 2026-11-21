@@ -24,5 +24,11 @@
   .copyable-command :global(.copy-control){min-width:72px;border-left:1px solid var(--border)}
   .copyable-command :global(.copy-control button){height:100%;border:0;border-radius:0;background:var(--panel-raised)}
   .compact code{padding:10px 11px;font-size:var(--text-2xs)}
-  @media(max-width:460px){.copyable-command{grid-template-columns:1fr}.copyable-command :global(.copy-control){border-top:1px solid var(--border);border-left:0}}
+  /* Narrow screens give the command the full width and keep the copy action
+     as a right-aligned footer across the whole block. */
+  @media(max-width:460px){
+    .copyable-command{grid-template-columns:1fr}
+    .copyable-command :global(.copy-control){justify-self:stretch;border-top:1px solid var(--border);border-left:0;background:var(--panel-raised)}
+    .copyable-command :global(.copy-control button){justify-self:end;padding-inline:14px}
+  }
 </style>

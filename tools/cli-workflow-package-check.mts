@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { Byte, Encoder } from '@nuintun/qrcode';
 import { encode } from 'fast-png';
 import { readBoundedRegularFileWithin } from '../lib/bounded-file.mts';
@@ -8,6 +8,10 @@ import { requireJsonRecord as record } from './maintainer-tool-helpers.mts';
 import type { RunInstalledCli } from './installed-cli-check.mts';
 import { CLI_INVESTIGATION_RUN_SCHEMA, CLI_INVESTIGATION_RUN_VERSION, MAX_INVESTIGATION_RUN_BYTES } from '../packages/contracts/investigation-run.mts';
 import { checkInstalledDomainFeed } from './cli-domain-feed-package-check.mts';
+import { bimiCertificateFixture } from '../fixtures/bimi-certificate.mts';
+import { ctInclusionFixture, timestampTokenFixture } from '../fixtures/cryptographic-proofs.mts';
+import { MONITORING_PLAN_INPUT_SCHEMA, MONITORING_PLAN_VERSION } from '../packages/contracts/monitoring-plan.mts';
+import { SELECTED_SERVICE_CONTEXT_INPUT_SCHEMA, SELECTED_SERVICE_CONTEXT_VERSION } from '../packages/contracts/selected-service-context.mts';
 
 /** Offline resumption, retained artefact reuse and independent review approval. */
 export async function checkInstalledCliWorkflows(repositoryRoot: string, temporaryRoot: string, run: RunInstalledCli): Promise<void> {
@@ -135,6 +139,84 @@ export async function checkInstalledLocalMmdb(repositoryRoot: string, temporaryR
 }
 
 async function checkInstalledIntakeAndContext(repositoryRoot: string, temporaryRoot: string, run: RunInstalledCli): Promise<void> {
+  const markInput = await bimiCertificateFixture({ reviewedAt: new Date().toISOString() });
+  const markFile = path.join(temporaryRoot, 'selected-mark-certificate.json');
+  await writeFile(markFile, JSON.stringify(markInput), { flag: 'wx', mode: 0o600 });
+  const markOutput = await run(['review-evidence', markFile, '--json', '--strict-exit'], 'offline mark-certificate and logo review');
+  const markReview = record(record(JSON.parse(markOutput), 'Installed mark review').result, 'Mark result');
+  if (markReview.state !== 'checks_passed' || markReview.domain !== 'example.test'
+    || /BEGIN CERTIFICATE|data:image|<svg|Example Mark Root/u.test(markOutput)) {
+    throw new TypeError('Installed mark-certificate review lost its cryptographic or privacy boundary.');
+  }
+  await writeFile(markFile, JSON.stringify({ ...markInput, domain: 'other.example.test' }));
+  const mismatch = record(record(JSON.parse(await run(['review-evidence', markFile, '--json', '--strict-exit'],
+    'offline mark-certificate hostname mismatch', 4)), 'Installed mark mismatch').result, 'Mark mismatch result');
+  if (mismatch.state !== 'review_required') throw new TypeError('Installed mark review admitted a different hostname.');
+
+  for (const [name, input] of [['certificate-log', await ctInclusionFixture()], ['timestamp', await timestampTokenFixture()]] as const) {
+    const selected = path.join(temporaryRoot, `selected-${name}.json`);
+    await writeFile(selected, JSON.stringify(input), { flag: 'wx', mode: 0o600 });
+    const output = await run(['review-evidence', selected, '--json', '--strict-exit'], `offline ${name} verification`);
+    const report = record(record(JSON.parse(output), 'Installed proof review').result, 'Installed proof result');
+    if (report.state !== 'checks_passed' || report.networkRequestsMade !== false || /BEGIN CERTIFICATE|artifactBase64|leafInputBase64|tokenDerBase64/u.test(output)) {
+      throw new TypeError('Installed proof verification lost its check or minimisation boundary.');
+    }
+    const incomplete = name === 'certificate-log' ? { ...input, auditPath: [] } : { ...input, crlsDerBase64: [] };
+    await writeFile(selected, JSON.stringify(incomplete));
+    await run(['review-evidence', selected, '--quiet', '--strict-exit'], `offline incomplete ${name} exit`, 4);
+  }
+  const planFile = path.join(temporaryRoot, 'selected-monitoring-plan.json');
+  const now = new Date().toISOString();
+  await writeFile(planFile, JSON.stringify({ schema: MONITORING_PLAN_INPUT_SCHEMA, version: MONITORING_PLAN_VERSION,
+    watchlists: { Example: { updatedAt: now, results: [{ domain: 'example.test', availability: 'registered' }], baseline: [], history: [] } },
+    purpose: 'configuration', intervalHours: 24 }), { flag: 'wx', mode: 0o600 });
+  const plan = record(record(JSON.parse(await run(['review-evidence', planFile, '--json'], 'offline monitoring workload preview')), 'Installed plan').result, 'Plan result');
+  if (plan.mode !== 'deep' || record(plan.counts, 'Plan counts').plannedLookupsPerWeek !== 7 || plan.changesSchedules !== false) throw new TypeError('Installed monitoring plan changed workload or execution boundaries.');
+  const localPlan = record(JSON.parse(await run(['monitor-tick', planFile, '--json'], 'offline local monitoring preview')), 'Installed local monitoring preview');
+  if (localPlan.mode !== 'deep' || localPlan.networkRequestsMade !== false || localPlan.changesSchedules !== false) throw new TypeError('Installed local monitoring preview changed its no-request boundary.');
+  const contextFile = path.join(temporaryRoot, 'selected-service-context.json');
+  await writeFile(contextFile, JSON.stringify({ schema: SELECTED_SERVICE_CONTEXT_INPUT_SCHEMA, version: SELECTED_SERVICE_CONTEXT_VERSION,
+    role: 'research_scanner', targets: ['192.0.2.1'], provenance: {}, warningListJson: JSON.stringify({ name: 'Synthetic scanner range',
+      version: Number(now.slice(0, 10).replaceAll('-', '')), type: 'cidr', list: ['192.0.2.0/24'] }) }), { flag: 'wx', mode: 0o600 });
+  const context = record(record(JSON.parse(await run(['review-evidence', contextFile, '--json', '--strict-exit'], 'offline selected service context')), 'Installed selected context').result, 'Context result');
+  if (record(context.counts, 'Context counts').matchedTargets !== 1 || context.networkRequestsMade !== false) throw new TypeError('Installed selected context did not preserve its exact offline match.');
+
+  const reconFile = path.join(temporaryRoot, 'selected-recon.jsonl');
+  await writeFile(reconFile, JSON.stringify({ host: 'child.example.test', timestamp: '2026-10-01T00:00:00.000Z', a: ['192.0.2.10'] }) + '\n', { flag: 'wx', mode: 0o600 });
+  const recon = record(JSON.parse(await run(['map-observations', reconFile, '--input-format', 'dnsx-jsonl', '--json'],
+    'offline reconnaissance JSONL import', 0, /^Imported preview: [^\r\n]+\r?\n$/u)), 'Installed recon conversion');
+  if (!Array.isArray(recon.findings) || recon.findings.length !== 1
+    || record(recon.findings[0], 'Recon finding').domain !== 'child.example.test') {
+    throw new TypeError('Installed reconnaissance conversion lost its exact hostname.');
+  }
+  const savedLookup = path.join(temporaryRoot, 'diff-lookup.json');
+  await writeFile(savedLookup, await readBoundedRegularFileWithin(repositoryRoot, 'test/fixtures/cli-lookup-v1.json', {
+    maximumBytes: MAX_INVESTIGATION_RUN_BYTES, minimumBytes: 1, label: 'Public saved Lookup fixture',
+  }), { mode: 0o600, flag: 'wx' });
+  // Two exports of one observation compare as unchanged in either order.
+  const firstEvidence = path.join(temporaryRoot, 'first-evidence.json'), secondEvidence = path.join(temporaryRoot, 'second-evidence.json');
+  await writeFile(firstEvidence, await run(['export', savedLookup], 'offline evidence export for diff'), { flag: 'wx', mode: 0o600 });
+  await writeFile(secondEvidence, await run(['export', savedLookup], 'offline second evidence export for diff'), { flag: 'wx', mode: 0o600 });
+  const evidenceDiff = record(JSON.parse(await run(['diff', secondEvidence, firstEvidence, '--json'], 'offline evidence export diff')), 'Installed evidence diff');
+  const evidenceCounts = record(record(evidenceDiff.comparison, 'Evidence diff comparison').counts, 'Evidence diff counts');
+  if (evidenceDiff.schema !== 'whoisleuth.cli.lookup-evidence-diff' || evidenceCounts.observedChanges !== 0 || evidenceCounts.interpretationDifferences !== 0) {
+    throw new TypeError('Installed evidence diff did not compare two exports of one observation as unchanged.');
+  }
+  const evidenceView = record(JSON.parse(await run(['view', firstEvidence, '--json'], 'offline evidence export view')), 'Installed evidence view');
+  if (evidenceView.schema !== 'whoisleuth.cli.lookup-evidence-view' || record(evidenceView.replay, 'Evidence view replay').target !== 'example.test') {
+    throw new TypeError('Installed evidence view did not read the exported target.');
+  }
+  const datedLookup = path.join(temporaryRoot, 'dated-lookup.json'), ctResults = path.join(temporaryRoot, 'ct-results.json');
+  const dated = record(JSON.parse(await readFile(savedLookup, 'utf8')), 'Saved Lookup fixture');
+  record(record(dated.rdap, 'Saved Lookup RDAP').parsed, 'Saved Lookup RDAP publication').lifecycle = { createdDateIso: '2024-03-01T00:00:00.000Z' };
+  await writeFile(datedLookup, JSON.stringify(dated), { flag: 'wx', mode: 0o600 });
+  await writeFile(ctResults, JSON.stringify({ schema: 'whoisleuth.cli.ct-search', version: 1, keyword: 'example', certCount: 1, truncated: false, matches: [
+    { domain: 'example.test', hostnames: ['example.test'], firstObservedAt: '2019-06-10T12:00:00.000Z', lastObservedAt: null, certificateCount: 1 },
+  ] }), { flag: 'wx', mode: 0o600 });
+  const prior = record(JSON.parse(await run(['prior-registration', datedLookup, '--ct-results', ctResults, '--json'], 'offline prior registration review')), 'Installed prior registration review');
+  if (prior.schema !== 'whoisleuth.cli.prior-registration' || record(prior.review, 'Prior registration result').state !== 'earlier_observation') {
+    throw new TypeError('Installed prior registration review did not compare the certificate observation with the creation date.');
+  }
   const emailFile = path.join(temporaryRoot, 'selected-message.eml');
   await writeFile(emailFile, 'From: private-local-part@sender.example\r\nContent-Type: text/html\r\n\r\n<a href="https://destination.example/private?token=excluded-value">https://sender.example</a>', { flag: 'wx', mode: 0o600 });
   const intake = record(JSON.parse(await run(['intake', 'email', emailFile, '--reported-action', 'entered_password', '--json'], 'offline message and identity intake')), 'Installed intake');

@@ -69,7 +69,7 @@
 
 <section id={`case-brand-associations-region-${record.id}`} class="associations" aria-labelledby={`case-brand-associations-${record.id}`} tabindex="-1">
   <div class="association-heading">
-    <div><h3 id={`case-brand-associations-${record.id}`}>Brand Profile associations</h3><p>Analyst-selected references only. WHOISleuth does not infer an association from names, domains, tags, certificates, or evidence.</p></div>
+    <div><h3 id={`case-brand-associations-${record.id}`}>Brand Profile associations</h3><p>Only associations you select are recorded.</p></div>
     <span>{record.brandProfileIds.length}/{MAX_CASE_BRAND_PROFILE_IDS}</span>
   </div>
 

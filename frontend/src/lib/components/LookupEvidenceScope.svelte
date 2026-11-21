@@ -8,7 +8,7 @@
 {#if scope.sources.length}
   <details class="scope-disclosure">
     <summary>What each source describes</summary>
-    <p>Identities and times from this completed result. Changing the query field does not change this evidence.</p>
+    <p>Identities and times from this completed result.</p>
     <div class="scope-context">
       <h5>Request context</h5>
       <dl>{#each scope.context as row}<div><dt>{row.label}</dt><dd>{row.value}</dd></div>{/each}</dl>

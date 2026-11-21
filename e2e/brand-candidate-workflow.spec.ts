@@ -483,7 +483,7 @@ test('scoped candidate exceptions expose exact scope and retained reversible rev
   await workspace.getByText('Preview an exact scoped exception', { exact: true }).click();
   await workspace.getByLabel('Exact candidate domain').selectOption(candidate.domain);
   await workspace.getByLabel('Exact matching rule').selectOption('keyword:example');
-  await expect(workspace).toContainText('only candidate.example, only Example Brand');
+  await expect(workspace).toContainText('applies only to candidate.example, Example Brand and this exact rule');
   if (captureVisualEvidenceEnabled()) {
     for (const theme of ['light', 'dark'] as const) {
       await useTheme(page, theme);

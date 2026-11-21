@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import * as display from '../frontend/src/lib/analysis/evidence-display.ts';
 import type { CaseEvidenceSnapshot } from '../frontend/src/lib/analysis/case-model.ts';
 import { requiredValue } from './value-assertions.mts';
+import { capturedWebCollectionQuality } from '../packages/evidence/collection-quality.mts';
 
 const ISO = '2026-05-01T00:00:00.000Z';
 const LATER = '2026-06-01T00:00:00.000Z';
@@ -165,6 +166,24 @@ describe('formatSnapshotValue', () => {
 });
 
 describe('snapshotFieldGroups', () => {
+  test('keeps retained web flags qualified when collection cannot establish an absence', () => {
+    for (const quality of [undefined, ...(['unavailable', 'partial', 'unknown'] as const)
+      .map(state => capturedWebCollectionQuality(state, 'complete'))]) {
+      const snapshot = deepSnapshot({ hasPasswordField: false, hasMx: false,
+        ...(quality ? { webCollectionQuality: quality } : {}),
+      });
+      if (!quality) delete snapshot.webCollectionQuality;
+      const rows = display.snapshotFieldGroups(snapshot).flatMap(group => group.rows);
+      const page = requiredValue(rows.find(row => row.field === 'hasPasswordField'));
+      assert.equal(page.value, false);
+      assert.equal(page.collectionLimited, true);
+      assert.equal(rows.find(row => row.field === 'hasMx')?.collectionLimited, undefined);
+    }
+    const complete = display.snapshotFieldGroups(deepSnapshot({ hasPasswordField: false }))
+      .flatMap(group => group.rows).find(row => row.field === 'hasPasswordField');
+    assert.equal(requiredValue(complete).collectionLimited, undefined);
+  });
+
   test('groups fields into sections and excludes empty groups', () => {
     const snap = deepSnapshot({
       availability: 'registered',

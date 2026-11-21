@@ -43,8 +43,16 @@ import type { DomainPostureOptions } from '../lib/domain-posture.mts';
 import type { UnknownRecord } from './saved-lookup.mts';
 import EXIT_CODES from './exit-codes.mts';
 import { buildPostureSarif } from './ci-report.mts';
+import { collectResolverComparison, formatResolverComparison } from '../lib/resolver-comparison.mts';
+import { normaliseResolverComparisonRequest } from '../packages/evidence/resolver-comparison.mts';
+import { collectWebArchiveHistory, formatWebArchiveHistory } from '../lib/web-archive-history.mts';
+import { normaliseWebArchiveRequest } from '../packages/evidence/web-archive-history.mts';
+import { collectPeeringDirectory, formatPeeringDirectory, normaliseDirectoryAsn } from '../lib/peering-directory.mts';
 
 export type NetworkCommandDependencies = {
+  collectPeeringDirectory?: typeof collectPeeringDirectory;
+  collectResolverComparison?: typeof collectResolverComparison;
+  collectWebArchiveHistory?: typeof collectWebArchiveHistory;
   signal?: AbortSignal;
   searchCertificateTransparency?: (keyword: unknown) => unknown | Promise<unknown>;
   normalizeAuditDomain?: (raw: unknown) => string | null;
@@ -65,6 +73,42 @@ export type NetworkCommandDependencies = {
 type NetworkCommandArguments = Extract<CliArguments, { action: CliCommandFor<'network'> }>;
 
 const networkCommandHandlers = {
+  'peeringdb-context': async (args, dependencies, context) => {
+    context.setFailureLabel('Network directory context');
+    let asn;
+    try { asn = normaliseDirectoryAsn(args.asn); }
+    catch { throw new CliUsageError('peeringdb-context requires one valid ASN.'); }
+    const result = await context.withProgress('Reading selected directory context', () =>
+      (dependencies.collectPeeringDirectory ?? collectPeeringDirectory)(asn, {
+        permittedUse: args.permittedUse, ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+      }));
+    if (!args.quiet) context.writeStdout(context.terminal(formatPeeringDirectory(result), args.color));
+    return result.state === 'unavailable' ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;
+  },
+  'resolver-compare': async (args, dependencies, context) => {
+    context.setFailureLabel('Resolver comparison');
+    let request;
+    try { request = normaliseResolverComparisonRequest(args.hostname, args.resolvers); }
+    catch (error) { throw new CliUsageError(error instanceof Error ? error.message : 'Invalid resolver selection.'); }
+    const report = await context.withProgress('Comparing selected DNS resolvers', () =>
+      (dependencies.collectResolverComparison ?? collectResolverComparison)(request.hostname, request.resolvers,
+        dependencies.signal ? { signal: dependencies.signal } : {}));
+    if (!args.quiet) context.writeStdout(args.output === 'json' ? formatJsonDocument(report)
+      : context.terminal(formatResolverComparison(report), args.color));
+    return report.queries.every(query => query.comparisonState === 'observed') ? EXIT_CODES.SUCCESS : EXIT_CODES.PARTIAL_FAILURE;
+  },
+  'archive-history': async (args, dependencies, context) => {
+    context.setFailureLabel('Web archive history');
+    let request;
+    try { request = normaliseWebArchiveRequest(args.domain); }
+    catch (error) { throw new CliUsageError(error instanceof Error ? error.message : 'Invalid domain.'); }
+    const report = await context.withProgress('Reading web archive capture history', () =>
+      (dependencies.collectWebArchiveHistory ?? collectWebArchiveHistory)(request.domain,
+        dependencies.signal ? { signal: dependencies.signal } : {}));
+    if (!args.quiet) context.writeStdout(args.output === 'json' ? formatJsonDocument(report)
+      : context.terminal(formatWebArchiveHistory(report), args.color));
+    return report.queries.every(query => query.outcome === 'capture' || query.outcome === 'no_capture') ? EXIT_CODES.SUCCESS : EXIT_CODES.PARTIAL_FAILURE;
+  },
   'ct-search': async (args, dependencies, context) => {
     context.setFailureLabel('Certificate Transparency search');
     const keyword = args.keyword || (await context.readSingleInput());

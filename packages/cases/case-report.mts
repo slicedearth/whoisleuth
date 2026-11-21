@@ -16,6 +16,7 @@ import { webCollectionScoreLimitation } from '../evidence/collection-quality.mts
 import { analystInteroperabilityTags } from '../analysis/analyst-taxonomy.mts';
 import { caseEvidenceLinkIssues } from './case-evidence-links.mts';
 import { caseTypeSummary } from './case-type-presentation.mts';
+import { withoutSightingContext } from './case-sighting-context.mts';
 import { caseClosureHistoryQualification } from './case-response-outcomes.mts';
 import {
   buildPortableGeneratorMetadata,
@@ -336,7 +337,7 @@ export function buildCaseReport(
         } : {}),
       })),
       manualTrail: caseRecord.manualTrail.map((item) => ({ ...item })),
-      sightings: caseRecord.sightings.map((item) => ({ ...item, limitations: [...item.limitations] })),
+      sightings: caseRecord.sightings.map((item) => ({ ...withoutSightingContext(item), limitations: [...item.limitations] })),
       observedEffects: {
         reviews: observedEffects.reviews.map((item) => ({ ...item, limitations: [...item.limitations] })),
         omitted: observedEffects.omitted,

@@ -180,7 +180,7 @@ for (const width of [1280, 390]) for (const intent of ['unchanged', 'guide', 'wh
     const resultHeading = page.getByRole('heading', { name: 'portal.test', exact: true });
     let retainedResultTop = 0;
     try {
-      await expect(page.getByRole('heading', { name: 'registered', exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Registered', exact: true })).toBeVisible();
       await expect.poll(() => release !== null).toBe(true);
       await expect(page.getByRole('button', { name: 'Looking up…', exact: true })).toBeDisabled();
       if (intent === 'guide') {

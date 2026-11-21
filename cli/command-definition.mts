@@ -8,6 +8,7 @@ import { CLI_FAIL_POLICIES_BY_COMMAND, type CliFailPolicyCommand } from './fail-
 import { MAX_INVESTIGATION_MANIFEST_ARTIFACTS } from '../packages/investigation/investigation-manifest.mts';
 import { IDENTITY_ACTIONS } from '../packages/contracts/message-intake.mts';
 import { bulkQueryLimit, bulkConcurrencyLimit } from '../lib/bulk-limits.mts';
+import { RECON_JSONL_FORMATS } from '../packages/contracts/external-observation-interchange.mts';
 
 const LEGACY_WORKSPACE_ARCHIVE_VERSIONS = SUPPORTED_WORKSPACE_ARCHIVE_VERSIONS
   .filter((version) => version !== WORKSPACE_ARCHIVE_VERSION);
@@ -150,8 +151,8 @@ const REGISTRY_SCAFFOLD_COMMON_OPTIONS = Object.freeze(
   COMMON_OPTIONS.filter((option) => option !== '--config' && option !== '--profile'),
 );
 
-function commonOptionsForSeed(seed: Pick<CliCommandSeed, 'bootstrapProfile'>): readonly CliOption[] {
-  return seed.bootstrapProfile === 'command_owned' ? REGISTRY_SCAFFOLD_COMMON_OPTIONS : COMMON_OPTIONS;
+function commonOptionsForSeed(seed: Pick<CliCommandSeed, 'bootstrapProfile' | 'commonOptions'>): readonly CliOption[] {
+  return seed.commonOptions ?? (seed.bootstrapProfile === 'command_owned' ? REGISTRY_SCAFFOLD_COMMON_OPTIONS : COMMON_OPTIONS);
 }
 
 function positional(
@@ -234,6 +235,9 @@ const integer = (description: string, ranges: (command: CliCommand) => readonly 
 );
 
 const CLI_OPTION_DEFINITIONS = Object.freeze({
+  '--input-format': enumeration('Select the local observation input format.', ['mapping', ...RECON_JSONL_FORMATS], 'mapping'),
+  '--stdio': flag('Serve the optional local read-only MCP protocol on stdin/stdout.'),
+  '--allow-model-disclosure': flag('Acknowledge that the connected client may send selected evidence to its model provider.'),
   '--help': optionDefinition('flag', 'Show command usage, options and an example without executing it.', { metaAction: 'help' }),
   '--output': file('Write output atomically to this local file.'),
   '--force': flag('Allow replacement of the selected output file.'),
@@ -244,6 +248,7 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--json': flag('Write structured JSON to stdout or the selected output file.'),
   '--reported-action': optionDefinition('enum', 'Record an analyst-reported identity action; repeat for separate actions.', { values: IDENTITY_ACTIONS.map(action => action.id), occurrence: 'repeatable' }),
   '--trusted-auth-header': optionDefinition('text', 'Select a recognised receiver header by part:header-index. This records analyst trust, not independent authentication; repeat for separate headers.', { occurrence: 'repeatable' }),
+  '--page-origin': optionDefinition('text', 'For HAR intake without a recorded document request, select which recorded origin was the page. The terminal summary labels it as your selection.'),
   '--intake-context': optionDefinition('file', 'Read one selected version-1 distribution declaration or version-2 digest-bound phone/destination selection file. Declarations remain attributed claims.'),
   '--package': flag('Verify a portable evidence ZIP or encrypted package rather than a single report.'),
   '--folder': file('Verify the evidence package within this selected folder.'),
@@ -294,18 +299,21 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
     ]), (_command, deep) => Math.min(deep ? 2 : 4, bulkConcurrencyLimit(deep ? 'deep' : 'fast'))),
   '--checkpoint': file('Save resumable collection state to this local file.'),
   '--resume': flag('Resume collection from the selected checkpoint.'),
-  '--tlds': text('Use this comma-separated set of domain endings.', true),
+  '--tlds': text('Use this comma-separated set of domain endings. The TLD typo family separately adds delegated typing variants of the seed\'s ending; leave it out with --families.', true),
   '--preset': enumeration('Choose candidate-generation families; explicit families select a custom set instead.', ['common', 'impersonation', 'all'], 'all'),
   '--families': text('Select the candidate-generation families explicitly.'),
   '--keyboard': enumeration('Choose keyboard layouts for adjacent-key candidates.', ['qwerty', 'azerty', 'qwertz', 'all'], 'qwerty'),
   '--dictionary': file('Read candidate words from this local dictionary.'),
   '--snapshot': file('Use this retained observation snapshot.'),
+  '--popularity-list': file('Mark candidates found in this ranked domain list, such as a downloaded Tranco CSV.'),
   '--scan-limit': integer('Limit the number of generated candidates to collect.', () => Object.freeze([
     BASE_INTEGER_RANGE(1, bulkQueryLimit('fast')),
     DEEP_INTEGER_RANGE(1, bulkQueryLimit('deep')),
   ]), (_command, deep) => Math.min(deep ? 50 : 100, bulkQueryLimit(deep ? 'deep' : 'fast'))),
   '--chunk-size': integer('Set the number of candidates processed per checkpoint chunk.', () => Object.freeze([BASE_INTEGER_RANGE(1, 100)]), () => 25),
   '--resolver': text('Choose the supported DNS resolver for collection.'),
+  '--resolvers': text('Explicitly select two HTTPS DNS resolvers: cloudflare,google.', true),
+  '--permitted-use': flag('Acknowledge permitted operational use or existing permission under the selected directory’s terms.'),
   '--allowlist': file('Read reviewed domains whose priority should be suppressed, without changing their evidence.'),
   '--observation-snapshot': file('Compare with this retained observation snapshot.'),
   '--acquisition-only': flag('Present only acquisition candidates.'),
@@ -334,9 +342,13 @@ const CLI_OPTION_DEFINITIONS = Object.freeze({
   '--public-key-file': file('Read the public verification key from this local file.'),
   '--trust-store-file': file('Read the analyst-selected signer trust store.'),
   '--mmdb': file('Read one selected local MMDB (up to 512 MiB); version-2 queries require a justified freshness policy.'),
+  '--assist-proof': enumeration('Select bounded local proof files interactively; prompts use stderr and no request is made.', ['ct', 'timestamp']),
   '--audience': enumeration('Choose the export audience and its field-disclosure policy.', ['internal', 'trusted', 'public']),
   '--reviewed': flag('Confirm the required human review of the exported material.'),
   '--previous': file('Compare against this earlier retained report.'),
+  '--ct-results': file('Read certificate-log search JSON written by ct-search --json.'),
+  '--archive-history': file('Read web archive history JSON written by archive-history --json.'),
+  '--state': file('Retain bounded local monitoring progress and attempt accounting in this private file.'),
   '--limit': integer('Limit the number of watchlist targets checked in this run.', () => Object.freeze([BASE_INTEGER_RANGE(1, 20)]), () => 20),
   '--marking': enumeration('Declare the information-sharing marking.', ['clear', 'green', 'amber', 'amber-strict', 'red']),
   '--recipient-scope': enumeration('Declare the intended recipient scope.', ['public', 'community', 'organization', 'named-recipients']),
@@ -418,18 +430,19 @@ function optionSpec(command: CliCommand, option: CliOption, scope: CliOptionScop
 function grammarConstraints(
   commandOptions: readonly CliOption[],
   commandConstraints: readonly CliGrammarConstraint[],
+  commonOptions: readonly CliOption[] = COMMON_OPTIONS,
 ): readonly CliGrammarConstraint[] {
   const machineOutputOptions = commandOptions.filter((option) => MACHINE_OUTPUT_OPTIONS.includes(option));
   return Object.freeze([
-    ...FILE_OUTPUT_CONSTRAINTS,
-    ...(commandOptions.includes('--quiet') ? [QUIET_OUTPUT_CONSTRAINT] : []),
+    ...(commonOptions.includes('--output') ? FILE_OUTPUT_CONSTRAINTS : []),
+    ...(commandOptions.includes('--quiet') && commonOptions.includes('--output') ? [QUIET_OUTPUT_CONSTRAINT] : []),
     ...(commandOptions.includes('--quiet') && machineOutputOptions.length > 0
       ? [constraint({ kind: 'excludes_all', option: '--quiet', excludedOptions: machineOutputOptions })]
       : []),
-    ...(commandOptions.includes('--events')
+    ...(commandOptions.includes('--events') && commonOptions.includes('--output')
       ? [constraint({ kind: 'mutually_exclusive', options: ['--events', '--output'] })]
       : []),
-    ...(commandOptions.includes('--browse')
+    ...(commandOptions.includes('--browse') && commonOptions.includes('--output')
       ? [constraint({ kind: 'mutually_exclusive', options: ['--browse', '--output'] })]
       : []),
     ...commandConstraints,
@@ -447,6 +460,7 @@ type CliCommandSeed = Readonly<{
   handlerOwner: CliExecutionOwner;
   networkEffect: CliNetworkEffect;
   common: boolean;
+  commonOptions?: readonly typeof COMMON_OPTIONS[number][];
   schemaIdentifiers: readonly string[];
   primaryArtefacts: readonly string[];
   planSupport: boolean;
@@ -474,6 +488,7 @@ function commandSeed<const Owner extends CliExecutionOwner, const Options extend
       scope: seed.collection.scope,
     }),
     options: Object.freeze([...seed.options]),
+    ...(seed.commonOptions ? { commonOptions: Object.freeze([...seed.commonOptions]) } : {}),
     ...(seed.optionOverrides ? { optionOverrides: Object.freeze({ ...seed.optionOverrides }) } : {}),
     positionals: Object.freeze([...seed.positionals]),
     constraints: Object.freeze([...seed.constraints]),

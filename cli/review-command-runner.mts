@@ -26,7 +26,6 @@ import { LOCAL_MMDB_REVIEW_SCHEMA, LOCAL_MMDB_REVIEW_VERSION } from './local-mmd
 import EXIT_CODES from './exit-codes.mts';
 import {
   MAX_OFFLINE_EVIDENCE_INPUT_BYTES,
-  buildOfflineEvidenceReview,
   buildOfflineEvidenceReviewWithLocalResources,
   formatOfflineEvidenceReview,
 } from './offline-evidence-review.mts';
@@ -63,10 +62,12 @@ import type { IntakeCommandDependencies } from './intake-command.mts';
 import type { IndicatorSetCommandDependencies } from './indicator-set-command.mts';
 import { MAX_SAVED_LOOKUP_INPUT_BYTES } from './saved-lookup.mts';
 import { REVIEW_INLINE_COMMANDS } from './inline-command-families.mts';
+import { readAssistedProofInput } from './selected-proof-input.mts';
 
 import { runDiscriminatedCommandHandler, type DiscriminatedCommandHandlerMap } from './discriminated-command-handlers.mts';
 
 export type ReviewCommandDependencies = CaseCommandDependencies & IntakeCommandDependencies & IndicatorSetCommandDependencies & {
+  proofQuestion?: (prompt: string) => Promise<string>;
   readArtifactInput?: (source?: string | null) => string | Promise<string>;
   readBinaryArtifactInput?: (source: string) => Uint8Array | Promise<Uint8Array>;
   readSourceReliabilityInput?: (source?: string | null) => string | Promise<string>;
@@ -305,16 +306,21 @@ async function runOfflineEvidenceReviewCommand(
   context: CliCommandContext,
 ): Promise<number> {
   context.setFailureLabel('Offline evidence review');
-  const input = await readReviewInput(
+  if (args.assistProof && (args.source || args.mmdbSource)) throw new CliUsageError('Assisted proof review cannot be combined with a JSON input or MMDB file.');
+  const input = args.assistProof ? JSON.stringify(await readAssistedProofInput(args.assistProof, {
+    output: context.stderr, ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+    ...(dependencies.proofQuestion ? { question: dependencies.proofQuestion } : {}),
+    ...(dependencies.readBinaryArtifactInput ? { readFile: dependencies.readBinaryArtifactInput } : {}),
+  })) : await readReviewInput(
     async () => dependencies.readArtifactInput
       ? await dependencies.readArtifactInput(args.source)
       : await context.readInput(args.source, MAX_OFFLINE_EVIDENCE_INPUT_BYTES, 'Offline evidence input'),
     'offline evidence input',
     'review-evidence requires one JSON file or a document on stdin.',
   );
-  const document = args.mmdbSource
-    ? await buildOfflineEvidenceReviewWithLocalResources(input, context.now(), { mmdbPath: args.mmdbSource, ...(dependencies.signal ? { signal: dependencies.signal } : {}) })
-    : buildOfflineEvidenceReview(input, context.now());
+  const document = await buildOfflineEvidenceReviewWithLocalResources(input, context.now(), {
+    ...(args.mmdbSource ? { mmdbPath: args.mmdbSource } : {}), ...(dependencies.signal ? { signal: dependencies.signal } : {}),
+  });
   dependencies.signal?.throwIfAborted();
   writeReviewReport(context, args, document, formatOfflineEvidenceReview);
   if (args.strictExit) {
@@ -333,7 +339,9 @@ async function runOfflineEvidenceReviewCommand(
     const mmdbIncomplete = result.schema === LOCAL_MMDB_REVIEW_SCHEMA && result.version === LOCAL_MMDB_REVIEW_VERSION && result.completeness !== 'complete';
     const infrastructureIncomplete = document.kind === 'infrastructure' ? result.state !== 'complete'
       : document.kind === 'infrastructure_comparison' && result.state !== 'compared';
-    if (gate?.pass === false || zoneMismatch || contextPartial || mmdbIncomplete || infrastructureIncomplete) return EXIT_CODES.PARTIAL_FAILURE;
+    const cryptographicIncomplete = (document.kind === 'bimi_certificate' || document.kind === 'ct_inclusion' || document.kind === 'timestamp_token') && result.state !== 'checks_passed';
+    const selectedContextIncomplete = document.kind === 'selected_service_context' && result.state === 'partial';
+    if (gate?.pass === false || zoneMismatch || contextPartial || mmdbIncomplete || infrastructureIncomplete || cryptographicIncomplete || selectedContextIncomplete) return EXIT_CODES.PARTIAL_FAILURE;
   }
   return EXIT_CODES.SUCCESS;
 }

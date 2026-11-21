@@ -164,7 +164,7 @@ test('draft inventory reads saved copies without restoring forms and recovers fr
   await expect(disclosure).not.toHaveAttribute('open', '');
   const toggle = disclosure.locator(':scope > summary');
   await toggle.focus(); await page.keyboard.press('Enter');
-  const inventory = page.getByRole('region', { name: 'Draft inventory', exact: true });
+  const inventory = disclosure.getByRole('region', { name: 'Draft inventory', exact: true, includeHidden: true });
   await expect(inventory.getByRole('button', { name: 'Read saved drafts', exact: true })).toBeVisible();
   await expect(inventory.locator('.draft-list')).toHaveCount(0);
   await inventory.getByRole('button', { name: 'Read saved drafts', exact: true }).focus();
@@ -199,6 +199,7 @@ test('draft inventory reads saved copies without restoring forms and recovers fr
   await expect(form.getByText('1 saved draft for this form', { exact: true })).toBeVisible();
   expect(await readBrowserLocalCollection(page, 'case_drafts')).toEqual(before);
   await toggle.focus(); await page.keyboard.press('Enter');
+  // The native disclosure hides the inventory before the queued toggle removes it.
   await expect(inventory).toHaveCount(0);
   await page.keyboard.press('Enter');
   await expect(inventory.getByRole('button', { name: 'Read saved drafts', exact: true })).toBeVisible();

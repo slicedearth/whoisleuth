@@ -7,6 +7,12 @@
 
   let { events }: { events: readonly LifecycleEventInput[] } = $props();
   const timeline = $derived(projectLifecycleEvents(events));
+  // Only the most recent Lookup observation is marked as current.
+  const latestObservationId = $derived(timeline.events
+    .filter((event) => event.kind === 'observation')
+    .reduce<(typeof timeline.events)[number] | null>((latest, event) => (
+      !latest || event.milliseconds > latest.milliseconds ? event : latest
+    ), null)?.id ?? null);
   const lifecycleLegend = [
     { colour: 'registration' as const, label: 'Registry event', shape: 'circle' as const },
     { colour: 'certificate' as const, label: 'Certificate event', shape: 'diamond' as const },
@@ -46,13 +52,14 @@
         </defs>
         <rect width={timeline.width} height={timeline.height} class="timeline-background" />
         <rect width={timeline.width} height={timeline.height} fill="url(#lifecycle-grid)" />
-        <line x1="54" x2="846" y1={timeline.axisY} y2={timeline.axisY} class="timeline-axis" />
-        {#each timeline.events as event (event.id)}
-          <g class={`event event-${event.kind}`} data-kind={event.kind}>
+        <line x1="54" x2="846" y1={timeline.axisY} y2={timeline.axisY} class="timeline-axis chart-draw" pathLength="1" />
+        {#each timeline.events as event, eventIndex (event.id)}
+          <g class={`event event-${event.kind} chart-fade`} style={`--chart-index:${eventIndex + 3}`} data-kind={event.kind}>
             <line x1={event.x} x2={event.x} y1={timeline.axisY} y2={event.labelY < timeline.axisY ? event.labelY + 14 : event.labelY - 12} />
             {#if event.kind === 'certificate'}
               <rect x={event.x - 5} y={timeline.axisY - 5} width="10" height="10" class="event-shape certificate-shape" transform={`rotate(45 ${event.x} ${timeline.axisY})`} />
             {:else if event.kind === 'observation'}
+              {#if event.id === latestObservationId}<rect x={event.x - 5} y={timeline.axisY - 5} width="10" height="10" rx="2" class="latest-ping chart-ping" />{/if}
               <rect x={event.x - 5} y={timeline.axisY - 5} width="10" height="10" rx="2" class="event-shape observation-shape" />
             {:else}
               <circle cx={event.x} cy={timeline.axisY} r="6" class="event-shape registry-shape" />
@@ -86,6 +93,7 @@
   .event-observation{--event-color:var(--visual-observation-stroke)}
   .event line{stroke:color-mix(in srgb,var(--event-color) 48%,var(--border-strong));stroke-width:1}
   .event-shape{fill:var(--panel);stroke:var(--event-color);stroke-width:3}
+  .latest-ping{fill:none;stroke:var(--event-color);stroke-width:2}
   .event-label,.event-date{font-family:var(--mono)}
   .event-label{fill:var(--text);font-size:13px;font-weight:750}
   .event-date{fill:var(--muted);font-size:12px}

@@ -5,7 +5,8 @@
 
 import snapshotValue from './common-infrastructure-snapshot.json' with { type: 'json' };
 import { COMMON_INFRASTRUCTURE_SCHEMA, COMMON_INFRASTRUCTURE_VERSION, MAX_SNAPSHOT_ENTRIES, OFFICIAL_CLOUD_RANGE_URLS } from '../contracts/common-infrastructure.mts';
-import { addressValue, type AddressValue } from '../contracts/ip-address.mts';
+import { addressValue, compileCidr, inCompiledCidr, type CompiledCidr } from '../contracts/ip-address.mts';
+export { compileCidr, inCompiledCidr } from '../contracts/ip-address.mts';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -50,10 +51,6 @@ type Snapshot = Readonly<{
 }>;
 export type CommonInfrastructureSnapshot = Snapshot;
 
-type CompiledCidr = Readonly<{ cidr: string } & (
-  { family: 4; mask: number; network: number }
-  | { family: 6; mask: bigint; network: bigint }
-)>;
 type CompiledSource = readonly CompiledCidr[];
 
 // Only snapshots admitted and frozen here are cached. Mutable caller-supplied
@@ -74,27 +71,6 @@ function record(value: unknown): JsonRecord | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as JsonRecord
     : null;
-}
-
-function compileCidr(value: unknown): CompiledCidr | null {
-  if (typeof value !== 'string' || value.length > 96) return null;
-  const [rangeText, prefixText, ...rest] = value.split('/');
-  if (rest.length || !rangeText || !prefixText || !/^\d{1,3}$/u.test(prefixText)) return null;
-  const prefix = Number(prefixText);
-  const range = addressValue(rangeText);
-  if (range?.family === 4 && prefix <= 32) {
-    const mask = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0;
-    return { cidr: value, family: 4, mask, network: (range.value & mask) >>> 0 };
-  }
-  if (range?.family !== 6 || prefix > 128) return null;
-  const full = (1n << 128n) - 1n;
-  const mask = prefix === 0 ? 0n : (full << BigInt(128 - prefix)) & full;
-  return { cidr: value, family: 6, mask, network: range.value & mask };
-}
-
-function inCompiledCidr(address: AddressValue, range: CompiledCidr): boolean {
-  if (address.family === 4 && range.family === 4) return ((address.value & range.mask) >>> 0) === range.network;
-  return address.family === 6 && range.family === 6 && (address.value & range.mask) === range.network;
 }
 
 function validDate(value: unknown): value is string {

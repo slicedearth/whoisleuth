@@ -50,6 +50,17 @@ describe('entityDisplayName', () => {
   });
 });
 
+describe('looksLikeLookupToken', () => {
+  test('accepts domains, URLs, IP addresses and ASNs but not free text or single labels', () => {
+    for (const value of ['one.example', 'https://one.example/path', 'AS64496', '192.0.2.1', '2001:db8::1', 'пример.example']) {
+      assert.equal(utils.looksLikeLookupToken(value), true, value);
+    }
+    for (const value of ['not a domain', 'localhost', '', '   ']) {
+      assert.equal(utils.looksLikeLookupToken(value), false, value);
+    }
+  });
+});
+
 describe('parseDomainInput', () => {
   test('accepts newline, comma, semicolon, and tab-separated query lists', () => {
     assert.deepEqual(utils.parseDomainInput('one.example\ntwo.example').entries, ['one.example', 'two.example']);

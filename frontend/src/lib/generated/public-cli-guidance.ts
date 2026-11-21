@@ -99,6 +99,14 @@ export const PUBLIC_CLI_GUIDANCE = {
       "command": "whoisleuth review-evidence evidence.json --json"
     },
     {
+      "label": "Browse a saved Lookup offline",
+      "command": "whoisleuth view lookup.json --browse"
+    },
+    {
+      "label": "Explore a retained comparison",
+      "command": "whoisleuth diff earlier.json later.json --browse"
+    },
+    {
       "label": "Compare retained observations",
       "command": "whoisleuth diff earlier.json later.json --json"
     },
@@ -172,12 +180,10 @@ export const PUBLIC_CLI_GUIDANCE = {
       "id": "lookup-replay",
       "label": "Continue a CLI Lookup in the browser",
       "commands": [
-        "whoisleuth lookup example.test --deep --browse --save-lookup lookup.json",
-        "whoisleuth verify-artifact lookup.json --json",
-        "whoisleuth export lookup.json --output evidence.json",
-        "whoisleuth verify-artifact evidence.json --json"
+        "whoisleuth lookup example.test --deep --json --output lookup.json",
+        "whoisleuth export lookup.json --output evidence.json"
       ],
-      "result": "Keep lookup.json as the private CLI original. Replay evidence.json from Lookup in the console, inspect its source states and then choose whether to retain it in a case."
+      "result": "Keep lookup.json as the private CLI original for offline browsing and comparisons. The export command validates it and creates privacy-minimised evidence.json for Replay exported evidence in the console. Replay validates that separate file before showing it; saving to a Case remains your choice."
     },
     {
       "id": "case-handoff",

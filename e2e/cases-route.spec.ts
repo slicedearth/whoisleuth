@@ -114,6 +114,26 @@ test('direct Cases do not offer empty-state mutations when local storage is unre
   await expect(page.locator('input[type="file"]')).toHaveCount(0);
 });
 
+test('the Case toolbar keeps its domain action on one line and fills narrow screens', async ({ page }) => {
+  await page.goto('/cases');
+  const domain = page.getByRole('textbox', { name: 'Open a Case for a domain' });
+  const open = page.getByRole('button', { name: 'Open or create Case' });
+  for (const width of [1440, 1100]) {
+    await page.setViewportSize({ width, height: 900 });
+    const [field, action] = await Promise.all([domain.boundingBox(), open.boundingBox()]);
+    expect(field).not.toBeNull(); expect(action).not.toBeNull();
+    expect(Math.abs(action!.height - field!.height)).toBeLessThanOrEqual(2);
+    expect(Math.abs(action!.y - field!.y)).toBeLessThanOrEqual(2);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  const actions = page.locator('.case-toolbar .top-actions > *');
+  const [toolbar, first, last] = await Promise.all([page.locator('.case-toolbar form').boundingBox(), actions.first().boundingBox(), actions.last().boundingBox()]);
+  expect(toolbar).not.toBeNull(); expect(first).not.toBeNull(); expect(last).not.toBeNull();
+  expect(Math.abs(first!.x - toolbar!.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(last!.x + last!.width - (toolbar!.x + toolbar!.width))).toBeLessThanOrEqual(1);
+  await expectNoHorizontalOverflow(page);
+});
+
 test('Case creation preserves a later domain draft and opens records hidden by filters', async ({ page }) => {
   await page.goto('/cases');
   await createCase(page, 'existing-draft.example');

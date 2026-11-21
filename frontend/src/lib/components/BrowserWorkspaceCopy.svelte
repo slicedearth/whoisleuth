@@ -53,7 +53,7 @@
 
 <details class="workspace-copy">
   <summary>Create an encrypted replacement</summary>
-  <p>Copy this workspace’s saved collections, recovery drafts and original files into a new encrypted workspace. Use this to change a passphrase or protect unencrypted saved work. The original remains unchanged and its old passphrase, if any, still works. This is a point-in-time copy, not synchronisation or an independent backup.</p>
+  <p>Copy this workspace’s saved collections, recovery drafts and original files into a new encrypted workspace, for example to change a passphrase or protect unencrypted work. The original and its passphrase stay unchanged. The copy is a one-off snapshot, not a sync or a backup.</p>
   {#if !copy}<form onsubmit={event => { event.preventDefault(); void start(); }}>
     <label>Replacement workspace name<input bind:value={name} maxlength={MAX_BROWSER_WORKSPACE_NAME} required disabled={disabled || busy}></label>
     <div class="passwords">

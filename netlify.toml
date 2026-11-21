@@ -119,6 +119,18 @@
   force = true
 
 [[redirects]]
+  from = "/api/resolver-compare"
+  to = "/.netlify/functions/resolver-compare"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/web-archive-history"
+  to = "/.netlify/functions/web-archive-history"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/domain-posture"
   to = "/.netlify/functions/domain-posture"
   status = 200

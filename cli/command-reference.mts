@@ -181,7 +181,7 @@ const CLI_COMMAND_REGISTRY: readonly CliCommandDefinition[] = Object.freeze(
       ...commonOptions.map((option) => optionSpec(command, option, 'common', commandOptionDefinition(command, option))),
       ...commandOptions.map((option) => optionSpec(command, option, 'command', commandOptionDefinition(command, option))),
     ]);
-    const constraints = grammarConstraints(commandOptions, seed.constraints);
+    const constraints = grammarConstraints(commandOptions, seed.constraints, commonOptions);
     return Object.freeze({
       command,
       order,
@@ -347,7 +347,7 @@ function cliInvocationNetworkEffect(
   if (command === 'lookup' || command === 'bulk' || command === 'discover-scan') {
     return invocationHasFlag(command, args, '--plan') ? 'offline' : 'network';
   }
-  if (command === 'workflow-run') {
+  if (command === 'workflow-run' || command === 'monitor-tick') {
     return invocationHasFlag(command, args, '--approve-network') ? 'network' : 'offline';
   }
   throw new Error(`Conditional network effect is not implemented for ${command}.`);

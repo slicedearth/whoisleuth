@@ -77,6 +77,9 @@ test('the registry-support catalogue filters locally and retains explicit interp
   await page.locator('#registry-sort-direction').selectOption('asc');
 
   const search = page.getByLabel('Suffix or capability');
+  await search.fill('.pr');
+  await expect(page.locator('.catalogue-section tbody td[data-label="Suffix"] > code')).toHaveText(['.pr']);
+
   await search.fill('punktum domain');
   await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(1);
   await expect(page.locator('.catalogue-section tbody tr')).toContainText('.dk');
@@ -263,9 +266,10 @@ test('the local inspector explains explicit and generic suffix support without a
   await inspectButton.click();
   await expect(result).toContainText('Explicit suffix profile');
   await expect(result).toContainText('.uk');
+  await expect(page.getByRole('status').filter({ hasText: 'Inspected .uk' })).toHaveText(/^Inspected \.uk: .+\.$/u);
   await page.getByRole('link', { name: 'Show in catalogue' }).click();
   await expect(page).toHaveURL(/#registry-catalogue$/u);
-  await expect(page.getByLabel('Suffix or capability')).toHaveValue('uk');
+  await expect(page.getByLabel('Suffix or capability')).toHaveValue('.uk');
   await expect(page.locator('.catalogue-section tbody tr')).toHaveCount(1);
   await expect(page.locator('.catalogue-section tbody tr')).toContainText('.uk');
   await expect(page.getByText('1 refinement active')).toBeVisible();
@@ -273,8 +277,11 @@ test('the local inspector explains explicit and generic suffix support without a
   await input.fill('https://example.invalid/path');
   await inspectButton.click();
   await expect(page.getByRole('heading', { name: 'Unsupported input format' })).toBeVisible();
+  const outcome = page.getByRole('status').filter({ hasText: 'Unsupported input format.' });
+  await expect(outcome).toHaveText('Unsupported input format.');
   await page.getByRole('button', { name: 'Clear' }).click();
   await expect(page.locator('.inspection-output')).toHaveCount(0);
+  await expect(outcome).toHaveCount(0);
   await expect(input).toHaveValue('');
   expect(unexpectedApiRequests).toEqual([]);
 });

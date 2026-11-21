@@ -182,18 +182,16 @@
 <details class="keyword-campaigns" bind:this={owner}>
   <summary>Time-bounded keyword campaigns ({campaigns.length})</summary>
   <p
-    >Save local matching intent for launches or other review windows. Campaigns never query a feed,
-    run a scan, retain candidates or enable monitoring by themselves.</p
+    >Save matching rules for launches or other review windows. A campaign only matches candidates;
+    it does not search, scan or start monitoring.</p
   >
   <p
-    >Any positive literal can nominate an exact hostname; any negative literal vetoes only this
-    campaign. Matching uses lowercased ASCII/punycode hostname text, without regular expressions or
-    parent-domain expansion.</p
+    >A positive term nominates any hostname that contains it; a negative term excludes it from this
+    campaign. Matching uses lowercase ASCII or punycode hostnames, with no regular expressions.</p
   >
   <p
-    >Literal matching has no token boundaries: “launch” matches “prelaunch.example”, but not the
-    typo “launc-h.example”. Unicode lookalikes and IDNs are not expanded from a term. Discover’s
-    separate typo and confusable generators are unchanged.</p
+    >Terms match anywhere in the name: “launch” matches “prelaunch.example”, but not the typo
+    “launc-h.example”. Use Discover to generate typo and lookalike variants.</p
   >
   {#if message}<p
       bind:this={status}
@@ -236,8 +234,7 @@
             >{/each}</ul
         >
         <p
-          >{campaign.historyOmitted} older revisions omitted by the eight-revision bound. Existing candidate
-          attribution is not rewritten.</p
+          >{campaign.historyOmitted} older revisions are no longer kept (eight revisions maximum).</p
         >
       </details>
     </section>
@@ -293,9 +290,8 @@
         ></label
       >
       <p
-        >Dates control this review window, not a domain’s registration date. Pause and expiry
-        preserve existing nominations and manual Watchlist priorities. Priority is analyst urgency,
-        not Risk or a collection schedule.</p
+        >Dates set the review window. Pausing or expiring a campaign keeps existing nominations and
+        Watchlist priorities.</p
       >
       <label
         >Example hostnames to preview (optional)<textarea
@@ -305,8 +301,7 @@
           placeholder="launch.example&#10;prelaunch.example&#10;launc-h.example"></textarea></label
       >
       <p
-        >Up to 20 exact hostnames, one per line. This local preview shows canonical hostname text
-        and existing exact Brand declarations; it does not generate variants or save these examples.</p
+        >Up to 20 exact hostnames, one per line, to check against this campaign. Examples are not saved.</p
       >
       <label><input type="checkbox" bind:checked={compareRetained} />
         Compare this Brand’s retained candidates ({active.candidateObservations.length})</label>
@@ -333,7 +328,7 @@
                       : `no literal match; positive literals not found: ${row.missingTerms.join(', ')}`}; {row.active
                     ? 'review window active'
                     : 'new nominations disabled by the review window or pause'}. {row.declaration
-                    ? `${row.declaration.reason}; declaration remains separate, not a safety verdict.`
+                    ? `${row.declaration.reason}.`
                     : 'No exact Brand declaration.'}</li
                 >{/each}</ul
             >

@@ -1,12 +1,13 @@
 import snapshot from './common-infrastructure-snapshot.json' with { type: 'json' };
 import { parseCommonInfrastructureSnapshot } from './common-infrastructure.mts';
 import { sha256IdentityHex } from '../evidence/record-identity.mts';
+import { FRESHNESS_DAYS } from '../contracts/common-infrastructure.mts';
+export { FRESHNESS_DAYS } from '../contracts/common-infrastructure.mts';
 
 export const CLOUDFLARE_RANGE_URLS = Object.freeze([
   'https://www.cloudflare.com/ips-v4',
   'https://www.cloudflare.com/ips-v6',
 ]);
-export const FRESHNESS_DAYS = 30;
 const SHA256 = /^[a-f0-9]{64}$/u;
 
 function record(value: unknown): Record<string, unknown> | undefined {

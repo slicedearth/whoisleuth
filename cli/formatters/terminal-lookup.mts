@@ -5,6 +5,7 @@ import { lookupCollectionReceiptReview } from '../../packages/evidence/lookup-co
 import { appendTechnologyLines } from './terminal-technology.mts';
 import { appendDeliveryMetadataLines, appendPublicationMetadataLines } from './terminal-metadata.mts';
 import { securityPostureReview, summarizeSecurityPostureReview } from '../../lib/website-security-posture.mts';
+import { buildLookupKeyFacts, lookupKeyFactProvenance, lookupKeyFactValueText } from '../../lib/lookup-key-facts.mts';
 import {
   appendSection,
   boundedTerminalComponent,
@@ -502,6 +503,41 @@ function formatTerminalLookup(
         http.transportSecurity ? safeTerminalValue(http.transportSecurity).toUpperCase() : null,
       ].filter(Boolean).join(' · ');
       if (detail !== 'summary' && responseDetail) websiteLines.push(`HTTP response  ${responseDetail}`);
+      // Page, form and technology evidence describe the final page, so a
+      // redirect to another origin is stated beside the response. Only the
+      // destination origin is shown; retained paths stay in the JSON evidence.
+      const redirectCount = Number.isSafeInteger(http.redirectCount) ? Number(http.redirectCount) : 0;
+      if (detail !== 'summary' && redirectCount > 0) {
+        // Compare where the request started with where it ended; the
+        // cross-origin flag only says that some hop left the starting origin.
+        const originOf = (value: unknown): { origin: string; host: string } | null => {
+          try {
+            if (typeof value !== 'string') return null;
+            const url = new URL(value);
+            return { origin: url.origin, host: url.hostname.toLowerCase() };
+          } catch { return null; }
+        };
+        const requested = originOf(http.requestUrl);
+        const final = originOf(http.finalUrl);
+        const domain = typeof availability.domain === 'string' ? availability.domain.toLowerCase() : '';
+        const sameDomain = Boolean(domain && final && (final.host === domain || final.host.endsWith(`.${domain}`)));
+        const returned = Boolean(requested && final && requested.origin === final.origin);
+        const scope = !final ? ' · final destination not retained'
+          : returned ? (http.crossOriginRedirect === true ? ' · returned to the starting origin' : ' · same origin')
+            : sameDomain ? ' · to another origin on the same domain' : ' · to another domain';
+        websiteLines.push(`Redirects      ${redirectCount}${scope}${
+          http.httpsDowngrade === true ? ' · HTTPS downgrade' : ''}${http.redirectLimitReached === true ? ' · limit reached' : ''}`);
+        if (final && !returned && !sameDomain) {
+          // Claim page evidence only when bytes of the final response body were
+          // inspected; a 204 or other empty body is not a page observation, so
+          // name the final HTTP origin instead.
+          const pageInspected = httpResponse.bodyInspected === true
+            && Number.isSafeInteger(httpResponse.capturedBodyBytes) && Number(httpResponse.capturedBodyBytes) > 0;
+          websiteLines.push(pageInspected
+            ? `Page scope     Page evidence describes ${safeTerminalValue(final.origin)}`
+            : `Final response ${safeTerminalValue(final.origin)} · page content not inspected`);
+        }
+      }
       if (detail !== 'summary') appendDeliveryMetadataLines(websiteLines, httpResponse.deliveryMetadata, detail === 'verbose');
     }
     if (pageIdentity.status || pageIdentity.source === 'html') {
@@ -668,7 +704,7 @@ function formatTerminalLookup(
         const summary = [...channelCounts].map(([channel, count]) => `${channel} ${count}`).join(' · ');
         const omittedRoutes = Math.max(0, allAbuseRoutes.length - inspectedRoutes);
         networkLines.push(
-          `Published routes ${abuseRoutes.length} retained${omittedRoutes ? ` · +${omittedRoutes} more entries` : ''} (${summary}); values omitted`,
+          `Abuse contacts ${abuseRoutes.length} retained${omittedRoutes ? ` · +${omittedRoutes} more entries` : ''} (${summary}); values omitted`,
         );
       }
       if (detail === 'verbose' && networkRecord.databaseUpdatedAt) networkLines.push(`Registry date  ${safeTerminalValue(networkRecord.databaseUpdatedAt)}`);
@@ -712,8 +748,13 @@ function formatTerminalLookup(
     }
   }
 
+  // The same key facts open browser Lookup's Overview.
+  const keyFactLines = detail === 'summary' ? [] : buildLookupKeyFacts(document).map((item) =>
+    `${item.label.padEnd(15)}${safeTerminalValue(lookupKeyFactValueText(item))} (${safeTerminalValue(lookupKeyFactProvenance(item))})`);
+
   const lines: string[] = [];
   appendSection(lines, 'Target', targetLines);
+  appendSection(lines, 'Key facts', keyFactLines);
   appendSection(lines, 'Registration', registrationLines);
   appendSection(lines, 'DNS', dnsLines);
   appendSection(lines, 'Mail', mailLines);

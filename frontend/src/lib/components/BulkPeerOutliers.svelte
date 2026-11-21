@@ -111,7 +111,7 @@
         <p class="empty">No uncommon row matches the current filters. Reset the view to review the complete local comparison.</p>
       {/if}
     {:else}
-      <p class="empty">No value met the conservative low-frequency threshold in this view. This does not mean the domains are equivalent or complete.</p>
+      <p class="empty">No value met the low-frequency threshold in this view.</p>
     {/if}
 
     <details>

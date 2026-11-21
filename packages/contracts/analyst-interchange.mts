@@ -39,8 +39,8 @@ export const MAX_STATIC_PAGE_PATTERN_PACK_BYTES = 256 * 1024;
 export const WEB_CAPTURE_SUMMARY_SCHEMA = 'whoisleuth.web-capture-summary';
 export const WEB_CAPTURE_SUMMARY_VERSION = 1;
 export const WEB_CAPTURE_MANIFEST_SCHEMA = 'whoisleuth.web-capture-manifest';
-export const WEB_CAPTURE_MANIFEST_VERSION = 3;
-export const WEB_CAPTURE_MANIFEST_SUPPORTED_VERSIONS: readonly number[] = [2, WEB_CAPTURE_MANIFEST_VERSION];
+export const WEB_CAPTURE_MANIFEST_VERSION = 4;
+export const WEB_CAPTURE_MANIFEST_SUPPORTED_VERSIONS: readonly number[] = [2, 3, WEB_CAPTURE_MANIFEST_VERSION];
 export const MAX_WEB_CAPTURE_MANIFEST_BYTES = 1024 * 1024;
 
 const CACAO_COMPATIBILITY = defineSchemaCompatibility({
@@ -200,11 +200,12 @@ export const ANALYST_INTERCHANGE_LIFECYCLE_FAMILY = defineSchemaLifecycleFamily(
       hook: { module: 'packages/interchange/web-capture-import.mts', exportName: 'parseWebCaptureSummary', role: 'normaliser', runtime: 'shared' },
       fixtures: [{ id: 'web-capture-summary-v1', path: `${F}web-capture-summary-v1.json`, bytes: 341, sha256: '70fba8a784f61f473ba6cde71a7d9dd915cfca46fbb3469e3bb57767adf973d9', version: WEB_CAPTURE_SUMMARY_VERSION }] },
     { descriptor: WEB_CAPTURE_MANIFEST_COMPATIBILITY, lifecycleSchema: WEB_CAPTURE_MANIFEST_SCHEMA,
-      requiredKeys: ['schema', 'schemaVersion', 'source', 'captures'], optionalKeys: [],
+      requiredKeys: ['schema', 'schemaVersion', 'source', 'captures'], optionalKeys: ['navigation'],
       hook: { module: 'packages/interchange/web-capture-import.mts', exportName: 'parseWebCaptureManifest', role: 'normaliser', runtime: 'shared' },
       fixtures: [
         { id: 'web-capture-manifest-v2', path: `${F}web-capture-manifest-v2.json`, bytes: 494, sha256: 'a2208dc956a832d70e37cd9a5929db81d29148856c485e4fd6ce5b123de5b8e6', version: 2 },
-        { id: 'web-capture-manifest-v3', path: `${F}web-capture-manifest-v3.json`, bytes: 868, sha256: 'bca4e8cb539ac6035dd44586fa7e27774766a14dadbc4fc73cad2b71dace2ac8', version: WEB_CAPTURE_MANIFEST_VERSION },
+        { id: 'web-capture-manifest-v3', path: `${F}web-capture-manifest-v3.json`, bytes: 868, sha256: 'bca4e8cb539ac6035dd44586fa7e27774766a14dadbc4fc73cad2b71dace2ac8', version: 3 },
+        { id: 'web-capture-manifest-v4', path: `${F}web-capture-manifest-v4.json`, bytes: 1151, sha256: '846a749ec8f9fd76dccd66ddc3f26a7d1b101fcb29feb81b507c9e2a373c1599', version: WEB_CAPTURE_MANIFEST_VERSION },
       ] },
     { descriptor: DEFENSIVE_MANIFEST_COMPATIBILITY, lifecycleSchema: DEFENSIVE_INDICATOR_MANIFEST_SCHEMA,
       requiredKeys: ['schema', 'version', 'generatedAt'], optionalKeys: ['expiresAt', 'reviewRequired', 'explicitSelection', 'includeWildcards', 'entries', 'indicators', 'exclusions', 'limitations'],

@@ -19,6 +19,7 @@ import { extractHtmlSignals } from '../lib/html-signals.mts';
 import { LEGACY_WEBSITE_SNAPSHOTS_KEY } from '../frontend/src/lib/browser-local-data-contract.ts';
 import { brandPostureObservationContext, normalizeBrandProfile } from '../packages/workspace/brand-profile-model.mts';
 import type { DomainPostureHttpResponse } from '../frontend/src/lib/analysis/client-response-contracts';
+import { bimiCertificateFixture, BIMI_REVIEW_TIME } from '../fixtures/bimi-certificate.mts';
 
 const PROFILES_KEY = 'whois-rdap-brand-profiles-v1';
 const ACTIVE_KEY = 'whois-rdap-active-brand-profile-v1';
@@ -50,6 +51,43 @@ function profileFixture() {
     updatedAt: ISO,
   };
 }
+
+test('selected mark certificates are reviewed offline without retaining original files in a Brand', async ({ page }, testInfo) => {
+  await page.clock.setFixedTime(new Date(BIMI_REVIEW_TIME));
+  const input = await bimiCertificateFixture();
+  await migrateLegacyBrowserData(page, { [PROFILES_KEY]: currentBrandProfileBrowserStore([
+    profileFixture(), { ...profileFixture(), id: 'profile-2', name: 'Other Brand' },
+  ]), [ACTIVE_KEY]: 'profile-1' }, { destination: '/brands' });
+  await openBrandWorkbench(page, 'posture');
+  const requests: string[] = [];
+  page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/')) requests.push(request.url()); });
+  const panel = page.locator('.bimi-review');
+  await panel.locator(':scope > summary').click();
+  const form = panel.getByRole('form', { name: 'Offline BIMI certificate review' });
+  await form.getByLabel('Exact domain', { exact: true }).fill('example.test');
+  await form.getByLabel(/^Certificate PEM/u).setInputFiles({ name: 'mark.pem', mimeType: 'text/plain', buffer: Buffer.from(input.certificatePem) });
+  await form.getByLabel(/^Trusted CA anchors PEM/u).setInputFiles({ name: 'anchors.pem', mimeType: 'text/plain', buffer: Buffer.from(input.trustAnchorsPem) });
+  await form.getByLabel(/^Logo SVG/u).setInputFiles({ name: 'mark.svg', mimeType: 'image/svg+xml', buffer: Buffer.from(input.logoSvg) });
+  await form.getByRole('button', { name: 'Review selected files offline', exact: true }).click();
+  const report = panel.getByRole('region', { name: 'example.test', exact: true });
+  await expect(report).toContainText('The supported checks passed.');
+  await expect(report.locator('dl > div').filter({ hasText: 'Embedded logo digest' }).locator('dd > strong')).toHaveText(/^matched$/iu);
+  for (const width of [390, 1280]) for (const theme of ['light', 'dark'] as const) {
+    await page.setViewportSize({ width, height: 900 }); await useTheme(page, theme);
+    await expectNoHorizontalOverflow(page);
+    if (captureVisualEvidenceEnabled()) {
+      await page.evaluate(() => window.scrollTo(0, 0));
+      const clip = await panel.boundingBox(); expect(clip).not.toBeNull();
+      await testInfo.attach(`bimi-review-${width}-${theme}`, { body: await page.screenshot({ fullPage: true, clip: clip! }), contentType: 'image/png' });
+    }
+  }
+  const brands = await readBrowserLocalCollection(page, 'brand_profiles');
+  expect(JSON.stringify(brands.records)).not.toMatch(/BEGIN CERTIFICATE|<svg|bimi-certificate/u);
+  expect(requests).toEqual([]);
+  await openBrandProfileList(page); await page.getByRole('radio', { name: 'Set Other Brand active', exact: true }).check();
+  await expect(panel.getByRole('region', { name: 'example.test', exact: true })).toHaveCount(0);
+  await expect(panel.getByLabel('Exact domain', { exact: true })).toHaveValue('');
+});
 
 test('temporary Brand references preserve original attribution and clear across source and view changes', async ({ page }, testInfo) => {
   const linked = { ...makeCase({ domain: 'reference.example' }, ISO), brandProfileIds: ['profile-1'] };
@@ -1896,7 +1934,7 @@ test('Brand Profile v6 change windows migrate to stable v7 identities and round-
   const existingWindow = baseline.locator('.change-window-row').first();
   await expect(existingWindow.getByLabel('Reviewed summary')).toHaveValue('Existing reviewed maintenance');
   await expect(baseline.locator('.suppression-row').first().getByLabel('Reviewed rationale')).toHaveValue('Existing reviewed exception');
-  await expect(baseline.getByText(/No expiry is retained/iu)).toBeVisible();
+  await expect(baseline.getByText(/No expiry is set/iu)).toBeVisible();
 
   await baseline.getByRole('button', { name: 'Add change window' }).click();
   const addedWindow = baseline.locator('.change-window-row').nth(1);

@@ -48,6 +48,9 @@ with `npm run cli:package:check`.
 Rendered-page collection uses the separate [optional capture companion](https://github.com/slicedearth/whoisleuth/tree/main/packages/web-capture#install-a-local-candidate),
 not the main CLI. It can be installed from a verified local archive; browser
 installation and each authorised capture remain explicit actions.
+An optional local navigation plan selects up to four subsequent URLs within the
+same total collection limits. The companion records each step separately and
+supports explicit capture selection for offline comparison.
 
 ## First commands
 
@@ -70,6 +73,19 @@ whoisleuth lookup example.test --deep --browse
 whoisleuth lookup example.test --deep --markdown --output lookup.md
 ```
 
+Reopen a private saved Lookup without collecting again, or browse a retained
+comparison interactively:
+
+```bash
+whoisleuth view lookup.json --browse
+whoisleuth diff earlier.json later.json --browse
+```
+
+The launcher offers both offline actions. In the terminal browser, use the arrow
+keys to change panels, `/` to search, `?` for help and `q` to close. Omit
+`--browse` for ordinary output or add `--json` for scripts. Comparison panels
+retain source uncertainty; an unavailable value is not an observed absence.
+
 Pasted URLs normally select only their hostname. To collect one particular
 page, use `whoisleuth lookup 'https://portal.example.test/review' --deep --exact-url`.
 This sends the path and query to the website, without the fragment. Review
@@ -80,15 +96,18 @@ Pass `--source-edition FILE --source-digest sha256:…` with the independently
 recorded digest. An invalid or stale edition stops before collection. This
 does not add requests or automatically download a newer catalogue.
 
-To continue a reviewed terminal Lookup in the browser, save the completed
-private document from the interactive view:
+To continue a CLI Lookup in the browser, save the private original and create
+its separate replay file:
 
 ```bash
-whoisleuth lookup example.test --deep --browse --save-lookup lookup.json
-whoisleuth verify-artifact lookup.json --json
+whoisleuth lookup example.test --deep --json --output lookup.json
 whoisleuth export lookup.json --output evidence.json
-whoisleuth verify-artifact evidence.json --json
 ```
+
+Export validates the original; browser replay validates the exported file.
+Use `verify-artifact` separately when you need its structured verification
+report or a trusted checksum comparison. Interactive collection can instead
+save the same private format with `--browse --save-lookup lookup.json`.
 
 Keep `lookup.json` as the private CLI original. In Lookup in the console, open **Replay
 exported evidence**, select `evidence.json`, check its digest and source states,
@@ -97,6 +116,22 @@ browser replay format; the separate evidence export excludes raw registration
 payloads and expanded contacts. Neither file is uploaded. Case classification, exact incident links and response
 actions remain deliberate analyst steps. Ordinary case files also support the
 offline CLI workflow below.
+
+The reverse also works. `view` reads one Lookup evidence export and `diff`
+compares two for the same target, whether they came from `export` or from
+**Export evidence JSON** in browser Lookup. Both use the same validation as
+browser replay; `diff` keeps observed changes separate from collection and
+interpretation differences. The two exports are compared as left and right in
+the order given, because an export time does not show when each source was
+observed:
+
+```bash
+whoisleuth view evidence.json
+whoisleuth diff first-evidence.json second-evidence.json
+```
+
+To compare a saved Lookup with an evidence export, run `export` on the saved
+Lookup first.
 When several incident cases share a domain, select the intended case before
 retaining replay evidence. Case packs preserve each current case ID separately;
 trusted and public packs exclude analyst-entered incident titles.
@@ -105,6 +140,143 @@ evidence and case, pin and decision IDs. Public does not mean anonymous.
 Browser Lookup evidence can be verified or packaged in the CLI. `brief`,
 `export`, `compare`, `registry-doctor` and `source-report` instead require a
 saved CLI Lookup; they do not reconstruct it from a browser export.
+
+### Local read-only tool adapter
+
+A compatible MCP client can inspect deliberately selected evidence over local
+stdio. Configure it to launch the installed executable with these arguments:
+
+```bash
+whoisleuth mcp --stdio --allow-model-disclosure lookup.json evidence.json
+```
+
+The five tools list selected file identities, inspect minimised Lookup facts,
+verify artefacts, compare retained domain observations and prepare collection
+plans. They cannot collect, write, run commands, select new files or open a
+network listener. Selection is frozen at startup; restart to select changed
+bytes. Each file is limited to 8 MiB, with eight files and 16 MiB combined.
+Protocol messages are capped at 32 KiB; tool output is capped at 64 KiB and
+comparison rows are paginated. Stop the client session to release the evidence.
+
+**Local does not mean private from the connected assistant.** Its client can
+send returned evidence to its model provider. Select only files you intend to
+share. Raw registry publications, contacts, free-text page data and Case notes
+are excluded from the tool view, but target names and selected evidence remain
+sensitive. Tool read-only annotations describe behaviour; the restricted
+handlers and fixed file selection enforce it. Local stdio support depends on
+the client; this is not a hosted connector or a sandbox for the client itself.
+
+### Offline BIMI certificate and logo checks
+
+```bash
+whoisleuth review-evidence bimi-input.json --json --strict-exit
+```
+
+The version-1 `whoisleuth.bimi-certificate.input` document contains `domain`,
+`certificatePem` (leaf first, then intermediates), `trustAnchorsPem` (your
+explicit CA trust basis) and optional `logoSvg`. Keep the selected originals.
+PEM inputs are limited to 256 KiB each, SVG to 32 KiB and the complete input to
+512 KiB. The chain contains at most six certificates and three trust anchors.
+
+The review separately checks path validation, validity time, exact DNS name,
+BIMI purpose, general mark-policy declaration, signature/key strength, embedded
+logo digests and an optional selected-logo match. Compressed embedded logos are
+bounded before accumulation. Core passive SVG Tiny PS checks do not claim full
+Relax NG conformance. No AIA, CRL, OCSP, logo or certificate URL is fetched and
+no ambient trust store is used; mailbox display and revocation remain unchecked.
+Exit 4 under `--strict-exit` means at least one requested check did not pass.
+The same local file review is available in Brands → Tools → Review current
+settings, without running the networked settings review.
+
+### Offline certificate-log and timestamp proofs
+
+`review-evidence proof.json --json --strict-exit` also accepts these version-1
+inputs. Keep the original material separately; reports contain digests and
+independent check outcomes, not the original bytes.
+
+For guided file selection, run `review-evidence --assist-proof ct` or
+`review-evidence --assist-proof timestamp` (also available in the interactive
+launcher). Prompts go to stderr; JSON output remains separate. CT review takes
+base64 leaf/key/log-ID files and the original proof/STH JSON. The declared log
+ID must be selected independently; it is not invented from the key. Timestamp
+review takes the original artefact, CMS token DER, selected anchor PEM, optional
+CRL DER files, expected policy and optional nonce. No input file is rewritten.
+The browser offers the same selected-file workflow under Lookup’s offline
+evidence section, with cancellation and a digest-only review download.
+
+- `whoisleuth.ct-inclusion-proof.input`: `protocol: "rfc6962-v1"`,
+  `leafInputBase64`, `leafIndex`, `auditPath` (base64 SHA-256 nodes),
+  `signedTreeHead` with `tree_size`, `timestamp`, `sha256_root_hash` and
+  `tree_head_signature`, plus deliberately selected `logKeySpkiBase64` and
+  `logIdBase64`. Unsigned 64-bit values may be canonical decimal strings.
+  Inclusion, key identity, the signed tree-head signature and time ordering are
+  separate checks. Input is limited to 512 KiB, a 256 KiB leaf and 64 proof nodes.
+  This supports RFC 6962 v1, not RFC 9162 v2, log qualification or consistency.
+- `whoisleuth.timestamp-token.input`: non-empty `artifactBase64`,
+  `tokenDerBase64` (the CMS token, not a timestamp-response envelope),
+  `expectedPolicyOid`, `trustAnchorsPem`, optional `expectedNonceHex` and
+  `crlsDerBase64`. The complete input is limited to 12 MiB, artefact to 8 MiB,
+  token to 256 KiB, certificate/CRL to 128 KiB, six CMS certificates, three
+  anchors and six CRLs. SHA-256/384/512 imprint, RSA PKCS#1 or supported ECDSA
+  signatures (RSA keys from 2048 to 8192 bits), critical sole timestamping
+  purpose and one ESSCertIDv2 reference are checked. The selected CA path and
+  supplied CRLs are evaluated at the
+  signed time, including declared accuracy. Missing revocation stays incomplete;
+  OCSP, delta/indirect CRLs, legacy-only ESS binding and other unsupported
+  critical profiles do not pass.
+
+No log, issuer, CRL, OCSP or timestamp-authority request is made, and no ambient
+trust store is consulted. A passed review means the supported checks matched
+the selected trust material, not evidence truth, current platform trust or a
+legal assurance. Incomplete or mismatching checks return 4 with `--strict-exit`.
+
+### Monitoring workload and selected warning data
+
+`whoisleuth.monitoring-plan.input` version 2 contains `watchlists` in the
+existing watchlist-store or export format, `purpose` (`registration` for Fast
+or `configuration` for Deep) and `intervalHours` (6, 12, 24 or 168).
+`review-evidence plan.json --json` previews distinct targets, overlapping
+memberships and planned Lookups per week. Optional `targetPolicies` entries
+contain an exact active `domain`, `purpose`, `intervalHours` and `priority`
+(`p1`–`p4` or `unassigned`); `maxLookupsPerDay` bounds local attempts. Version 1 remains readable
+with its global settings. Request counts, storage and cost remain unestimated.
+The browser’s Watchlist History view offers the same settings and a plan download.
+
+`whoisleuth monitor-tick plan.json` is an offline preview. To execute one local
+cycle, use `monitor-tick plan.json --state monitor-state.json --approve-network
+--json --output observations.json`. Each invocation starts at most two serial
+Lookups within the existing 24-second deadline. Invoke it again with the same
+plan/state to resume; it does not install a daemon or operating-system schedule.
+At most 100 distinct registrable domains are admitted. The daily attempt quota
+must cover at least one attempt per selected target and counts attempts before
+collection, including cancellation. Priority orders equal-due groups and targets
+within a group; older due work remains first. It never chooses a deeper mode or
+shorter cadence. Collection uses no optional paid provider or Brand-based score.
+
+The private state file contains compact evidence, cursor/lease ownership, quota
+counts and a configuration digest. Changes to purpose, cadence, priority or
+membership require a deliberately new file; keep the original evidence. Do not
+run copied state files concurrently. An interrupted lease expires after 75
+seconds; a local run idle for 48 hours expires with the existing failure backoff.
+Completion times describe the monitoring group, not independent source clocks.
+The first actual cycle establishes its own baseline. Output is an ordinary
+Watchlist export that can be imported in the browser; no hosted setting changes.
+
+`whoisleuth.selected-service-context.input` version 1 contains `targets` (up to
+2,000 plain hostnames/IPs), `role` (`research_scanner`, `dynamic_dns` or
+`shared_service`), `warningListJson` (the original MISP-compatible JSON text)
+and `provenance` (optional `sourceUrl`, `revision`, `licence`). Only `hostname`
+and `cidr` lists are supported: at most 50,000 entries and 6 MiB. CIDR reviews
+also have a one-million-comparison processing budget. Plain hostname entries
+match the exact name and descendants; leading-dot entries match descendants
+only. Matching uses DNS boundaries, never substrings or regexes.
+
+The report retains the original-list digest, selected provenance and publisher
+version/date. Undated and over-30-day lists remain historical context and return
+4 under `--strict-exit`. A match never suppresses evidence or changes Risk.
+Source/licence declarations are not authentication. Browser relationship and
+campaign views offer the same explicitly selected local-file review; nothing
+is uploaded or saved. No additional warning lists are bundled automatically.
 
 Registration source states are independent: `unsupported` means no RDAP or
 WHOIS service is published for the target, while `skipped` means no query was
@@ -124,6 +296,12 @@ whoisleuth compare lookup.json --json
 whoisleuth mail-headers message.eml --json
 whoisleuth brief lookup.json
 ```
+
+`discover --popularity-list tranco.csv` marks candidates found in a ranked list
+you have downloaded, adding a `popularity` section with each rank and the SHA-256 of the list file to
+`--json` output; browser Discover reports the same digest for the same file. The
+`entries` count is the number of valid ranked rows; `rejectedLines` includes oversized rows.
+The list is read locally, never fetched, and not copied into output; a rank is context, not a safety verdict.
 
 One strict domain, IP address or ASN can occupy command position as Lookup
 shorthand. URL-like or ambiguous input requires the explicit `lookup` command.
@@ -196,6 +374,74 @@ anything, and it has the same success/partial exit behaviour as the detailed rep
 Deep Lookup reports IPv4 and IPv6 results separately, including empty answers,
 NODATA, resolver-reported missing names and query failures. These outcomes remain
 distinct in evidence exports; none alone establishes domain removal.
+
+For a separate resolver comparison, explicitly select both supported providers:
+
+```sh
+whoisleuth resolver-compare host.example.test --resolvers cloudflare,google --json
+```
+
+This sends A and AAAA questions over HTTPS to the selected resolvers, with four
+requests maximum, no retries and a ten-second deadline. It does not contact the
+target or run automatically in Lookup, Bulk or monitoring. Each question retains
+its outcome. A single unbranched CNAME chain of up to eight names is followed
+within each resolver's own answer and reported per resolver, so answers for an
+aliased hostname remain comparable. DNAME, branching, looping or other-name
+answers, truncation, missing negative proof and failed queries do not become
+empty agreement. Exit `4` means some comparison evidence is incomplete;
+different complete answers still exit `0`. Agreement is not authoritative truth,
+local DNSSEC validation or a safety verdict. Provider privacy policies apply.
+
+To see when the Internet Archive first and last recorded a domain's homepage:
+
+```sh
+whoisleuth archive-history example.test --json
+```
+
+This sends the domain in two requests, with no retries and a twelve-second
+deadline, and keeps capture times and recorded HTTP statuses, not page content.
+Exit `4` means a query failed or timed out; no capture is a complete answer. A
+capture does not establish ownership or continuous operation.
+
+To check whether a name was observed before its current registration, compare a
+saved Lookup or evidence export with either or both results, offline:
+
+```sh
+whoisleuth prior-registration lookup.json --ct-results ct.json --archive-history archive.json
+```
+
+`ct.json` is written by `ct-search --json` and `archive.json` by
+`archive-history --json`. An observation more than 48 hours before the registry
+creation date suggests an earlier registration of the name; it does not identify
+a previous or current owner, a transfer or intent, and no earlier observation
+does not show that the current registration is the first. Browser Bulk review
+and Lookup's web archive panel use the same comparison. `firstObservedAt` and
+`lastObservedAt` in `ct-search` output are always log observation times. When
+some certificates have no published log time, a match also carries
+`firstValidFrom` and `lastValidFrom`; terminal output shows them as `Valid from`.
+The comparison reports a validity start only as context, because it dates a
+certificate rather than a public observation of the name, so it never shows an
+earlier registration on its own.
+
+### Selected network-directory context
+
+```sh
+whoisleuth peeringdb-context AS64496 --permitted-use
+```
+
+This optional local command sends one ASN to PeeringDB and displays minimal
+community-maintained network, scope, peering-policy and source-update context.
+It makes one request, without contact expansion, retries, a cache or export file.
+No directory entry means only that no matching entry was returned; a failed
+request exits `4`, not a registration or reachability verdict. Directory text
+with control, invisible or bidirectional formatting characters is reported as an
+invalid response rather than displayed. Quiet mode retains that exit behaviour.
+Normal lookups do not invoke it.
+
+Before using it, confirm your operational purpose is permitted or you already
+have the provider’s permission under its [acceptable-use policy](https://www.peeringdb.com/aup).
+The acknowledgement grants no rights. The website retains its direct-source
+pivot; this client does not enable hosted redistribution or bulk acquisition.
 
 Plans are target-specific: Fast IP and ASN plans contain RDAP only; Deep IP
 adds WHOIS and eligible reverse DNS, while Deep ASN adds WHOIS. Domain-only web,
@@ -340,8 +586,11 @@ validating it or extending trust to matching service names or nested messages.
 use the same offline review as the browser. Document results include part hashes,
 page references and extraction coverage. Encrypted documents require a separately
 decrypted copy; no password is requested. HAR results preserve file order and
-reported timings, with unavailable values distinct from zero. Neither document
-resources nor recorded requests are fetched. Add `--strict-exit` for exit 4 when
+reported timings, with unavailable values distinct from zero, and list the hosts
+contacted, grouped by registrable domain with the page's domain separated from
+other domains. When the archive records no document request, `--page-origin`
+selects one recorded origin as the page for the terminal summary, labelled as
+your selection. Neither document resources nor recorded requests are fetched. Add `--strict-exit` for exit 4 when
 coverage is partial, and `--json` for the minimised report.
 
 `intake identity events.json --json` reads an Entra sign-in `value` array or an
@@ -371,6 +620,12 @@ selected file, including an envelope when supplied. No provider API is contacted
 ## Output and automation
 
 ### Local case files
+
+Case backups can also retain typed per-sighting encounter/capture declarations:
+channel, device class, declared country code, whether a reviewed path was
+supplied, and a local capture-file reference. Missing historical declarations
+stay unknown. These private fields survive ordinary Case and workspace backups
+and internal Case packs; reports and trusted/public packs omit them.
 
 Manual response scope is explicit and offline. `case incident-link` takes
 `{"url":"https://example.test/reported-page"}`; use its retained ID to bind
@@ -435,7 +690,9 @@ whoisleuth case recheck cases.json --input recheck.json --output cases.json --fo
 For `link`, use `fromPinId`, `toPinId`, `kind` (`derived_from` or
 `shared_source`) and `basis`. `withdraw-link` takes the relationship `id` and
 `reason`; its original declaration remains in the file. `case show` lists the
-identities and `--json` includes the full history.
+identities and `--json` includes the full history. A popularity rank recorded
+from browser Bulk appears as analyst context with the list's SHA-256; it is not
+evidence, and public `case-pack` output leaves it out.
 
 A pin describes the supplied observation, not a new collection. For example:
 

@@ -52,15 +52,18 @@ inputs, request boundaries, output formats and exit policy.
 
 ## Save, verify and continue in the browser
 
-Save a private Lookup by closing the interactive evidence browser normally,
-verify it offline, then create the separate browser-compatible export:
+Save the private Lookup, then create its separate browser replay:
 
 ```bash
-whoisleuth lookup example.test --deep --browse --save-lookup lookup.json
-whoisleuth verify-artifact lookup.json --json
+whoisleuth lookup example.test --deep --json --output lookup.json
 whoisleuth export lookup.json --output evidence.json
-whoisleuth verify-artifact evidence.json --json
 ```
+
+Export validates the original; browser replay validates the exported file.
+Use `verify-artifact` separately for its structured verification report or a
+trusted checksum comparison. Reopen the private file with
+`whoisleuth view lookup.json --browse`, or compare two retained observations
+with `whoisleuth diff earlier.json later.json --browse`.
 
 In the console's Lookup page, open **Replay exported evidence** and select
 `evidence.json`. Review its digest and source states before retaining evidence
@@ -70,6 +73,12 @@ export excludes raw registration payloads and expanded contacts; replay does
 not upload either file.
 
 ## Work with selected files
+
+`review-evidence` also reviews supplied certificate-log inclusion proofs,
+timestamp tokens, shared-service warning lists and watchlist workload plans
+offline. Use the [CLI guide](https://github.com/slicedearth/whoisleuth/blob/main/docs/cli.md) for their versioned input formats;
+`--strict-exit` returns 4 for incomplete proof or source checks. Planning does
+not schedule collection.
 
 ```bash
 whoisleuth bulk domains.txt --csv-with-metadata
@@ -81,6 +90,23 @@ whoisleuth compare lookup.json --json
 select for local review. `lookup.json` is the saved CLI document from the
 example above. Bulk performs collection; the mail-header and comparison
 commands in this example are offline.
+
+Existing dnsx/httpx JSONL results can be converted without collecting again:
+
+```bash
+whoisleuth map-observations dns-results.jsonl --input-format dnsx-jsonl --json --output findings.json
+```
+
+Choose the corresponding producer in the console’s external-findings importer,
+or import the converted file after reviewing its preview. Hostname, source time,
+original-row digest and unknown collection quality remain attributed.
+
+Optional read-only MCP access serves only explicitly selected local files over
+stdio and requires disclosure acknowledgement. Offline BIMI checks use selected
+certificates, explicit CA anchors and an optional logo. Resolver comparisons and
+single-ASN directory context are separate opt-in network commands, not additions
+to normal Lookup. The [CLI guide](https://github.com/slicedearth/whoisleuth/blob/main/docs/cli.md#local-read-only-tool-adapter)
+covers their inputs, privacy and evidence limits.
 
 Use `whoisleuth commands --group respond --mode offline` to find local case,
 packet and handoff tools. The [case-file guide](https://github.com/slicedearth/whoisleuth/blob/main/docs/cli.md#local-case-files)

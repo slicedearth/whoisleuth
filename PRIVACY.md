@@ -1,6 +1,6 @@
 # Privacy notice
 
-Last updated: 16 October 2026.
+Last updated: 19 November 2026.
 
 This notice describes the public WHOISleuth deployment. A self-hosted operator
 must adapt it when hosting, authentication, enabled providers, retention or
@@ -320,6 +320,42 @@ review times. Pins and sightings with unknown observation times retain null;
 saving them does not create a source observation time.
 Selected DNS pins can retain separate IPv4 and IPv6 resolver outcomes and their
 source observation times, without additional queries.
+
+The separate resolver-comparison action is available only where the deployment
+operator enables it; its panel in DNS evidence states whether it is available.
+When enabled and deliberately started, it sends the selected hostname and A/AAAA
+questions to two explicitly selected HTTPS resolvers. It makes at most four
+requests, without retries, target connections or automatic retention, and does
+not replace the original Lookup. Each provider can observe the runtime's source
+address and apply its own retention policy. Google queries explicitly suppress
+EDNS Client Subnet forwarding. Provider-reported DNSSEC flags are not local
+cryptographic validation; negative answers and failed queries remain distinct.
+
+**Read certificate history** in Lookup's Registration history sends the
+registrable domain to the certificate-search service as one search term, only
+when selected, through the same bounded endpoint and deployment control as
+Discover's certificate search. It keeps the domain's earliest and latest logged
+dates and certificate count in page memory, does not record certificate-search
+history and does not change the Lookup.
+
+The separate web archive history action is likewise available only where the
+deployment operator enables it; its panel in Relationships and history states
+whether it is available. When deliberately started, it sends the registrable
+domain to the Internet Archive's Wayback Machine capture index in two requests,
+for the earliest and latest homepage captures, without retries or automatic
+retention, and does not replace the original Lookup. It returns capture times and
+the HTTP status the archive recorded, never archived page content. The archive can
+observe the runtime's source address; its terms of use and privacy policy apply.
+The local CLI `archive-history` command sends the same two requests from this
+machine. Opening a capture link visits the archive directly from your browser.
+
+The optional local `peeringdb-context` command sends one explicitly selected ASN
+to PeeringDB after a permitted-use acknowledgement. It requests only minimal
+network and policy fields, not contacts, and creates no cache or export file.
+The provider receives the ASN and this machine's source address. Its terms and
+privacy policy apply; the command does not authorise redistribution. Ordinary
+Lookup, Bulk, monitoring and the hosted application do not invoke the client.
+
 Saved recheck questions retain an analyst-entered hostname, comparison conditions
 and optional baseline reference. Answers retain the question context as reviewed.
 These remain browser-local until exported and are excluded from public Case
@@ -351,11 +387,19 @@ expiry and withdrawal records. Previewing or revising them makes no requests;
 only deliberate downloads create output files. STIX and MISP exports are not
 submitted or applied automatically. Content digests do not authenticate authors.
 
-Current Case schema 20 is written for new saves. Exact public v1 Case schema 12
-and earlier v2 schemas 13–19 remain readable and migrate directly; migrated
+Current Case schema 22 is written for new saves. Exact public v1 Case schema 12
+and earlier v2 schemas 13–21 remain readable and migrate directly; migrated
 fields can remain null, unknown or blank because WHOISleuth does not reconstruct
 them from weaker evidence.
 Case report v15 JSON and Markdown do not add the snapshot hostname.
+Optional per-sighting encounter/capture context records a fixed channel and
+device class, a declared two-letter country code, whether a reviewed path was
+supplied, and an optional local capture-file reference. These are declarations,
+not verified location or distribution; they contain no exact link or precise
+location. Missing historical context stays unknown. Full private Case exports
+and workspace backups retain it; ordinary reports and trusted/public Case packs
+exclude it. Removing a capture file leaves an explicitly unavailable reference,
+not an invented replacement or proof that its bytes remain available.
 Explicitly selected evidence pins can include their own observation hostname
 in response packets; this remains distinct from the Case's registration domain.
 
@@ -612,6 +656,60 @@ deliberately selects a local file. Existing files are refused unless replacement
 is explicit. CLI files are not uploaded to WHOISleuth and remain under the
 operator's retention and deletion control.
 
+The optional `mcp --stdio --allow-model-disclosure` adapter exposes only
+explicitly selected, immutable local file snapshots to a compatible connected
+client. Tools can list identities, inspect minimised facts, verify artefacts,
+compare observations and prepare no-request plans. They cannot write, collect,
+run commands or read another path. Raw registry publications, contacts,
+free-text page data and Case notes are excluded. Selected snapshots stay in
+process memory until the session ends; no index, background access or public
+listener is created. The connected client may send returned evidence to its
+model provider. Local transport and read-only annotations do not prevent that
+disclosure or sandbox the client; startup acknowledgement and deliberate file
+selection are required.
+
+The offline BIMI certificate review reads only deliberately selected certificate
+PEM, CA-anchor PEM and optional SVG material. Parsing, decompression, path and
+logo checks are bounded and run locally. It uses no ambient trust store and
+fetches no AIA, CRL, OCSP, logo or certificate URL. Files and results stay in
+memory until changed, the Brand context changes or the page closes; a deliberate
+download retains only check results and file digests, not original material.
+The same review is available through the CLI’s offline evidence command.
+
+Offline certificate-log and timestamp-token review reads only deliberately
+selected proof/token, artefact, key, policy, certificate and revocation material.
+No log, issuer, authority, CRL or OCSP request occurs and no ambient trust store
+is used. Reports contain file digests and separate check outcomes, not original
+material. Browser file review uses one cancellable worker and retains material
+only in the current view until cleared or closed; downloads contain the review,
+not original files. Assisted CLI prompts remain on stderr and do not rewrite
+inputs. The operator controls retention of CLI input and output files.
+
+Monitoring workload previews read existing watchlists without scheduling or
+collecting. A deliberate plan download retains the selected watchlist and
+per-domain purpose/cadence/priority configuration. The optional local
+`monitor-tick --approve-network` invocation sends normal Fast/Deep requests for
+explicitly selected registrable domains. It retains only the existing compact
+monitor projection, daily attempt counts, configuration digest and dispatcher
+cursor/lease in a selected private plaintext file. File locks and atomic writes
+protect local progress; no hosted store, paid provider, daemon or operating-system
+schedule is enabled. Raw responses, exact page URLs, private watchlist context
+and Brand-based scoring are excluded from monitor state. Input/output and state
+file retention remain under the operator’s control.
+
+Selected shared-service/scanner context compares
+identifiers already in the view with one local warning-list file and optional
+declared provenance. Warning data and provenance stay in page memory until
+replaced or the view closes; reports clear when the selected target context
+changes. Nothing is uploaded, saved, suppressed or rescored; the CLI reads only
+its selected input.
+
+Selected dnsx/httpx JSONL imports are processed locally through the existing
+findings preview. They preserve exact hostnames, explicit timestamps and a
+digest of each complete source row, with unknown collection completeness.
+Raw bodies, headers, sensitive URL paths/queries and local paths are excluded.
+No collection is repeated and no Case is changed before deliberate import.
+
 Explicit `--brand-profile` on Lookup, Bulk or Discover scan reads one bounded
 local Brand Profile export for Risk failure-policy comparisons. Only its
 normalised domain declarations and favicon references are used in memory; the
@@ -682,6 +780,16 @@ result, source digest and file-local actor labels. Usernames, raw actor identifi
 IP addresses, tokens, session identifiers and provider error text are excluded.
 Optional comparisons retain the analyst-selected field and time scope; matching
 does not establish account compromise. No provider API is contacted.
+
+A popularity list selected in Discover, or passed to `discover --popularity-list`,
+is read locally to mark ranked candidates. The browser keeps it in page memory
+only; neither surface uploads, saves or copies the list. When ranked candidates
+continue to Bulk, each carries only its rank and the list's SHA-256 in the
+tab's session storage, and Bulk keeps them in page memory, not in a saved
+session. Creating or refreshing a Case from a ranked Bulk row can record that
+rank and digest as analyst context, separate from its evidence. If there is
+no room for a new rank, existing ranks stay and the evidence refresh still runs.
+Private backups and internal and trusted packs keep retained ranks; public packs leave them out.
 
 Message intake processes selected text, email, calendar, still PNG, PDF, DOCX and HAR files
 locally, without opening links or executing attachments. Exact URLs remain in
@@ -924,6 +1032,14 @@ The optional capture companion is an explicit authorised-capture action outside
 the hosted application and main CLI. It executes remote page JavaScript in a
 disposable network-bounded browser. Each admitted resource operator receives the
 exact requested URL, including its path and query.
+
+An optional private local plan can select up to four subsequent exact URLs.
+All selected pages share the existing collection limits and disposable browser
+context, with a fresh page per step and no clicks or form submission. The
+manifest retains selected origins, capture references, step outcomes and shared
+request accounting, not the plan's paths or queries. Earlier captures survive a
+later blocked step; cancellation publishes no sequence. Import previews expose
+these declarations separately from observed requests and redirects.
 
 Only the pinned collector may contact resource operators. A browser-lifetime
 deny-only proxy refuses direct connections, including teardown attempts, without

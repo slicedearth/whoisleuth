@@ -98,7 +98,7 @@
           {#if baseline}<PostureObservationHistory {baseline} />{/if}
         </details>
       {/each}
-      {#if matrix.observationCount === 0}<p class="empty">No settings observation has been saved. This gap is not treated as alignment.</p>{/if}
+      {#if matrix.observationCount === 0}<p class="empty">No settings observation has been saved yet.</p>{/if}
     </div>
   {:else}
     <p class="empty">Add an official domain before comparing expected and observed settings.</p>

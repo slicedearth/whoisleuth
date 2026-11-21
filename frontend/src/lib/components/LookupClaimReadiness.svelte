@@ -79,7 +79,7 @@
       <div>
         <p class="eyebrow">Evidence Readiness</p>
         <h4 id="claim-readiness-title">What the current evidence can support</h4>
-        <p>Each row checks the evidence needed for one narrow statement. It does not add a score or convert an incomplete source into a negative conclusion.</p>
+        <p>Each row checks the evidence needed for one narrow statement.</p>
       </div>
       <div class="counts" role="group" aria-label="Evidence Readiness summary">
         <span><strong>{readiness.counts.ready}</strong> ready</span>
@@ -218,7 +218,7 @@
             </li>
           {/each}
         </ul>
-        <p class="note">These are possible explanations derived from source type, field class, and collection time. They are not findings about why a source differs.</p>
+        <p class="note">These are possible explanations based on source type, field and collection time.</p>
       </details>
     {/if}
     <p class="limit">{readiness.limitation}</p>

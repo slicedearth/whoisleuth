@@ -1,4 +1,5 @@
 import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
+import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { readFile } from 'node:fs/promises';
 import { expandLookupFamilies, expectNoHorizontalOverflow, failNextBrowserLocalManifestWrite, holdBrowserLocalReads, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
@@ -16,6 +17,7 @@ import { buildHttpObservation, failedHttpObservation } from '../lib/http-intelli
 import { createLookupViewModel, parseLookupHttpResponse } from '../lib/lookup-response-contract.mts';
 import { buildTlsObservation } from '../lib/tls-intelligence.mts';
 import { MAX_WHOIS_QUERY_HOPS } from '../lib/whois-contracts.mts';
+import { collectResolverComparison } from '../lib/resolver-comparison.mts';
 
 // Lookup fixtures use injected protocol responses or locally rejected inputs. The shared
 // browser and server guards prevent live collection.
@@ -29,6 +31,114 @@ test.beforeEach(async ({ page }) => {
     }));
   });
   await page.goto('/lookup');
+});
+
+async function openResolverPanel(page: Page, hostname: string) {
+  await page.locator('#query').fill(hostname);
+  await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
+  await expandLookupFamilies(page);
+  const dns = page.locator('details').filter({ has: page.locator(':scope > summary', { hasText: 'DNS evidence' }) });
+  await expect(dns).toHaveCount(1);
+  if (await dns.getAttribute('open') === null) await dns.locator(':scope > summary').click();
+  const panel = dns.locator('details').filter({ has: page.locator(':scope > summary', { hasText: 'Compare selected resolvers' }) });
+  await panel.locator(':scope > summary').click();
+  return { dns, panel };
+}
+
+test('selected resolver comparison stays unavailable until the deployment opts in', async ({ page }) => {
+  const hostname = 'portal.example.test';
+  const base = sectionedLookupFixture('example.test');
+  await page.route('**/api/lookup?*', route => route.fulfill({ json: { ...base, query: hostname, inputHostname: hostname, isSubdomain: true,
+    availability: { ...base.availability, observationHostname: hostname } } }));
+  let requests = 0;
+  await page.route('**/api/resolver-compare?*', route => { requests++; return route.abort(); });
+  const { panel } = await openResolverPanel(page, hostname);
+  await expect(panel.getByText('Selected resolver comparison is not enabled for this deployment.', { exact: true })).toBeVisible();
+  const cloudflare = panel.getByRole('checkbox', { name: 'Cloudflare', exact: true });
+  await expect(cloudflare).toHaveCount(1);
+  await expect(cloudflare).toBeDisabled();
+  await expect(panel.getByRole('button', { name: 'Compare resolvers', exact: true })).toBeDisabled();
+  expect(requests).toBe(0);
+});
+
+test('selected resolver review uses the observed child hostname and leaves the original Lookup unchanged', async ({ page }, testInfo) => {
+  const hostname = 'portal.example.test';
+  const base = sectionedLookupFixture('example.test');
+  const lookup = { ...base, query: hostname, inputHostname: hostname, isSubdomain: true,
+    availability: { ...base.availability, observationHostname: hostname } };
+  // The real server keeps this feature off by default; enable only its capability entry here.
+  await page.route('**/api/capabilities', async route => {
+    const response = await route.fetch();
+    const report = await response.json() as { features: Array<{ id: string; status: string; reason?: string }> };
+    const resolver = report.features.find(feature => feature.id === 'resolver_comparison');
+    expect(resolver?.status).toBe('disabled');
+    report.features = report.features.map(feature => {
+      if (feature.id !== 'resolver_comparison') return feature;
+      const { reason: _reason, ...enabled } = feature;
+      return { ...enabled, status: 'supported' };
+    });
+    await route.fulfill({ response, json: report });
+  });
+  await page.goto('/lookup');
+  await page.route('**/api/lookup?*', route => route.fulfill({ json: lookup }));
+  const report = await collectResolverComparison(hostname, 'cloudflare,google', {}, {
+    now: () => '2026-10-01T00:00:00.000Z',
+    fetch: async url => {
+      const type = new URL(url).searchParams.get('type') === 'A' ? 1 : 28;
+      return Response.json({ Status: type === 1 ? 2 : 0, RA: true, TC: false, AD: false,
+        Question: [{ name: `${hostname}.`, type }],
+        Answer: type === 1 ? [] : [{ name: `${hostname}.`, type, TTL: 300, data: '2001:db8::1' }] });
+    },
+  });
+  let requests = 0;
+  await page.route('**/api/resolver-compare?*', async route => {
+    requests++;
+    const url = new URL(route.request().url());
+    expect(url.searchParams.get('q')).toBe(hostname);
+    expect(url.searchParams.get('resolvers')).toBe('cloudflare,google');
+    await route.fulfill({ json: report });
+  });
+  const { dns, panel } = await openResolverPanel(page, hostname);
+  const action = panel.getByRole('button', { name: 'Compare resolvers', exact: true });
+  await expect(action).toBeDisabled();
+  expect(requests).toBe(0);
+  await panel.getByRole('checkbox', { name: 'Cloudflare', exact: true }).check();
+  await panel.getByRole('checkbox', { name: 'Google Public DNS', exact: true }).check();
+  await action.click();
+  const results = panel.getByRole('region', { name: 'Resolver comparison results' });
+  await expect(results).toBeVisible();
+  await expect(panel.getByRole('status').filter({ hasText: 'Resolver comparison finished' }))
+    .toHaveText('Resolver comparison finished: A Incomplete, AAAA Converged.');
+  await expect(results.getByRole('heading', { name: /^A incomplete$/iu })).toBeVisible();
+  await expect(results.getByRole('heading', { name: /^AAAA converged$/iu })).toBeVisible();
+  await expect(results).toContainText('2001:db8::1');
+  await expect(dns).toContainText('192.0.2.10');
+  expect(requests).toBe(1);
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) {
+        await page.evaluate(() => window.scrollTo(0, 0));
+        const clip = await panel.boundingBox(); expect(clip).not.toBeNull();
+        await page.screenshot({ path: testInfo.outputPath(`resolver-${width}-${theme}.png`), fullPage: true, clip: clip! });
+      }
+    }
+  }
+  const replacement = { ...base, query: 'sibling.example.test', inputHostname: 'sibling.example.test', isSubdomain: true,
+    availability: { ...base.availability, observationHostname: 'sibling.example.test' } };
+  await page.route('**/api/lookup?*', route => route.fulfill({ json: replacement }));
+  await page.locator('#query').fill('sibling.example.test');
+  await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
+  await expandLookupFamilies(page);
+  if (await dns.getAttribute('open') === null) await dns.locator(':scope > summary').click();
+  if (await panel.getAttribute('open') === null) await panel.locator(':scope > summary').click();
+  await expect(panel).toContainText('sibling.example.test');
+  await expect(panel.getByRole('region', { name: 'Resolver comparison results' })).toHaveCount(0);
+  await expect(panel.getByRole('status').filter({ hasText: 'Resolver comparison finished' })).toHaveCount(0);
+  await expect(panel.getByRole('checkbox', { name: 'Cloudflare', exact: true })).not.toBeChecked();
+  expect(requests).toBe(1);
 });
 
 test('source scope keeps completed identities separate from query drafts and replacement results', async ({ page }, testInfo) => {
@@ -393,6 +503,8 @@ test('deep DNS evidence distinguishes observed records from partial resolver fai
   await card.getByLabel(/Proposed authorities already serve/).check();
   await card.getByRole('button', { name: 'Evaluate rehearsal' }).click();
   await expect(card.getByText('Plan has unresolved gates', { exact: true })).toBeVisible();
+  await expect(card.getByRole('status').filter({ hasText: 'Rehearsal evaluated' }))
+    .toHaveText('Rehearsal evaluated: plan has unresolved gates.');
   await expect(card.getByText('Current evidence is incomplete', { exact: true })).toBeVisible();
   await expect(card.getByText(/does not change DNS/i)).toBeVisible();
 
@@ -855,7 +967,10 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   await expect(delivery).toContainText('ETag Syntactically valid');
   await expect(delivery).not.toContainText('fixture-private-etag');
   await expect(card).not.toContainText('secret');
-  await expect(card.getByText(/missing security headers do not establish maliciousness/i)).toBeVisible();
+  const httpScope = card.locator('details.evidence-scope-notes');
+  await expect(httpScope).not.toHaveAttribute('open', '');
+  await httpScope.locator(':scope > summary').click();
+  await expect(httpScope.getByText('URL query strings were omitted from retained provenance.', { exact: true })).toBeVisible();
 
   const pageCard = page.locator('.page-card');
   await expect(pageCard).not.toHaveAttribute('open', '');
@@ -887,7 +1002,6 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   await expect(pageCard.getByText('c'.repeat(16), { exact: true })).toBeVisible();
   await expect(pageCard.getByText(/visible-text SimHash is fuzzy comparison data/i)).toBeVisible();
   await expect(pageCard).not.toContainText('secret');
-  await expect(pageCard.getByText(/normalised markup, and visible text are not retained/i)).toBeVisible();
   const publication = pageCard.locator('details.metadata-disclosure');
   await expect(publication.locator(':scope > summary')).toContainText('Publisher-declared publication metadata');
   await expect(publication.locator(':scope > summary')).toContainText('Partial');
@@ -916,7 +1030,6 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   await expect(structuredCard.getByText('Organization, WebSite', { exact: true })).toBeVisible();
   await expect(structuredCard.getByText('https://login.example.test/', { exact: true })).toBeVisible();
   await expect(structuredCard.getByText('social.example.test', { exact: true })).toBeVisible();
-  await expect(structuredCard.getByText(/does not use this evidence for availability or Risk scoring/i)).toBeVisible();
 
   const credentialCard = page.locator('.credential-card');
   await expect(credentialCard).not.toHaveAttribute('open', '');
@@ -1016,7 +1129,6 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   await expect(missingCsp.getByText('Needs review', { exact: true })).toBeVisible();
   await expect(postureCard.getByText('No cleartext resource origin observed', { exact: true })).toBeVisible();
   await expect(postureCard.locator('.state')).toHaveText(['Needs review']);
-  await expect(postureCard.getByText(/review signals, not confirmed vulnerabilities/i)).toBeVisible();
 
   const pageComparison = page.locator('.page-comparison');
   await expect(pageComparison.getByRole('heading', { name: 'Official-site comparison' })).toBeVisible();
@@ -1027,8 +1139,8 @@ test('HTTP evidence presents bounded redirect provenance and response metadata',
   await expect(pageComparison.locator('article').filter({ hasText: 'External resource hosts' }).getByText('1 host shared', { exact: true })).toBeVisible();
   await expect(pageComparison.getByText('Shared: assets.example', { exact: true })).toBeVisible();
   await expect(pageComparison.getByText(/there is no overall page-similarity score/i)).toBeVisible();
-  await expect(pageComparison.getByText(/page-identity matches remain review context and do not add Risk points/i)).toBeVisible();
-  await expect(pageComparison.getByText(/separately reviewed favicon and official-asset observations may contribute/i)).toBeVisible();
+  await expect(pageComparison.getByText(/Matches do not add Risk points/i)).toBeVisible();
+  await expect(pageComparison.getByText(/favicon and official-asset checks are scored separately/i)).toBeVisible();
 
   await expect(snapshots.getByRole('heading', { name: 'Website profile snapshots' })).toBeVisible();
   await expect(snapshots.getByText(/Differences are review cues/)).toBeVisible();
@@ -1210,7 +1322,7 @@ test('completed technology analysis distinguishes an unmatched catalogue from so
   await expect(technologyCard.locator(':scope > summary .evidence-status')).toHaveText('No recognised matches');
   await expect(technologyCard.getByText(/Analysis complete; no curated signatures matched/u)).toBeVisible();
   await technologyCard.locator(':scope > summary').click();
-  await expect(technologyCard.getByText(/does not mean that no framework, service, or delivery platform is present/i)).toBeVisible();
+  await expect(technologyCard.getByText(/No curated technology signature matched the captured response/i)).toBeVisible();
   await expect(technologyCard.locator('.library-profile .evidence-status')).toHaveText('No catalogue matches');
   await expect(technologyCard.getByText('success', { exact: true })).toHaveCount(0);
 
@@ -1292,7 +1404,10 @@ test('TLS evidence presents one-connection certificate evidence without narrow-w
   await expect(card.getByText('*.example.test', { exact: true })).toBeVisible();
   await card.locator('.tls-detail').last().locator('summary').click();
   await expect(card.getByText('UNABLE_TO_VERIFY_LEAF_SIGNATURE', { exact: true })).toBeVisible();
-  await expect(card.getByText(/one connection to one validated public address/i)).toBeVisible();
+  const tlsScope = card.locator('details.evidence-scope-notes');
+  await expect(tlsScope).not.toHaveAttribute('open', '');
+  await tlsScope.locator(':scope > summary').click();
+  await expect(tlsScope.getByText('This is a point-in-time TLS handshake to one validated public address.', { exact: true })).toBeVisible();
 
   const policyCard = page.locator('#evidence-certificate-policy');
   await expect(policyCard).not.toHaveAttribute('open', '');

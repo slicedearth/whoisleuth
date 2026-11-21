@@ -35,7 +35,7 @@
       </div>
       {#if truncated}<span class="partial">Partial grouping</span>{/if}
     </div>
-    <p>Groups summarise compact observations already present in this scan. Shared registrars or nameservers are common and do not establish common ownership, control, coordination, intent, or abuse.</p>
+    <p>Groups summarise observations already in this scan. Shared registrars or nameservers are common and do not by themselves link domains.</p>
     {#if overlapping}<p>Mutation groups overlap because one candidate can retain more than one generation family.</p>{/if}
     {#if excluded}<p>{excluded} row{excluded === 1 ? '' : 's'} had no value for this grouping and remain in the result table.</p>{/if}
     {#if groups.length}

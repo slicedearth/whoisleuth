@@ -194,6 +194,8 @@ export function ctCsvFields(
   ct: CertificateTransparencyCsvInput | null | undefined,
 ): CertificateTransparencyCsvFields {
   if (!ct) return ['', '', '', ''];
+  // The observed columns hold log observation times only; validity starts are
+  // carried separately and never enter them.
   return [
     ct.firstObservedAt || '',
     ct.lastObservedAt || '',

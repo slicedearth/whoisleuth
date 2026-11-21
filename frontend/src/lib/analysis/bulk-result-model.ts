@@ -1,4 +1,4 @@
-import type { CertificateTransparencyProvenance } from '../candidate-handoff-core.ts';
+import type { CertificateTransparencyProvenance, PopularityRankProvenance } from '../candidate-handoff-core.ts';
 import type { WatchlistComparableRecord } from './watchlist-history.ts';
 import { analyzeDomainIdn } from './idn-confusables.ts';
 import type { CompactLookupHttpResponse } from './lookup-response.ts';
@@ -94,6 +94,10 @@ export interface ScanResult {
   registrant: BulkContact | null;
   abuseEvidence: BulkAbuseEvidence | null;
   ct: CertificateTransparencyProvenance | null;
+  /** Rank from a popularity list selected in Discover; page memory only, never saved with a session. */
+  popularity?: PopularityRankProvenance | null;
+  /** Creation date from a successful, complete registration source; page memory only. */
+  registrationCreation?: Readonly<{ createdAt: string; source: string }> | null;
   idn: IdnAnalysis | null;
   dns: BulkDnsEvidence | null;
   dnssec: string | null;

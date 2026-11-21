@@ -683,7 +683,7 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   await expect(section.getByText(/Published by the sponsoring registrar's RDAP service, not the registry/)).toBeVisible();
   const comparison = section.locator('.publication-comparison');
   await expect(comparison.getByText(/1 conflicts · 0 source-only · 0 redacted · 0 unavailable\/incomplete · 7 equivalent/)).toBeVisible();
-  await expect(comparison.getByText(/difference can reflect update timing or disclosure policy/)).toBeVisible();
+  await expect(comparison.getByText(/Differences often reflect update timing or disclosure policy/)).toBeVisible();
   await expect(comparison.getByRole('row', { name: /Expires/ })).toContainText('2030-01-01T00:00:00Z');
   await expect(comparison.getByRole('row', { name: /Expires/ })).toContainText('2031-01-01');
   await expect(comparison.getByRole('row', { name: /Expires/ })).toContainText('Conflict');
@@ -727,6 +727,8 @@ test('deep Lookup presents registrar and observed network RDAP as separate sourc
   const responseRoutes = page.locator('.response');
   await expect(responseRoutes.locator('.response-actions').getByText('Observed endpoint network-registration contact', { exact: true })).toBeVisible();
   await expect(responseRoutes.getByText('abuse@network.example', { exact: true })).toBeVisible();
+  const networkRoute = responseRoutes.locator('.response-actions article').filter({ hasText: 'abuse@network.example' });
+  await networkRoute.locator('.route-notes > summary').click();
   await expect(responseRoutes.getByText(/does not prove hosting responsibility/i)).toBeVisible();
   await expect(responseRoutes.getByRole('button', { name: 'Record in case' })).toBeDisabled();
 
@@ -1516,7 +1518,7 @@ test('published response routes can be recorded in a local case with their prove
   const recordRoute = response.getByRole('button', { name: 'Record in case' });
   await expect(recordRoute).toBeEnabled();
   await recordRoute.click();
-  await expect(page.locator('.case-status')).toContainText('Recorded the registrar contact');
+  await expect(page.locator('.case-status')).toHaveText(/^Recorded\b/iu);
 
   const stored = (await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 })).records[0]?.value;
   expect(stored?.actions).toEqual([

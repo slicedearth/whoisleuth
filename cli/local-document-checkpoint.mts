@@ -29,6 +29,13 @@ async function canonicalPath(value: string, allowMissing: boolean, label: string
   }
 }
 
+/** Compare selected document paths through the same link-safe file boundary. */
+export async function localDocumentPathsCoincide(destination: string, sources: readonly string[]): Promise<boolean> {
+  const selected = await canonicalPath(destination, true, 'Local document');
+  for (const source of sources) if (selected === await canonicalPath(source, true, 'Local document')) return true;
+  return false;
+}
+
 async function snapshot(path: string, maximumBytes: number, label: string, signal?: AbortSignal): Promise<Snapshot | null> {
   let before;
   try { before = await lstat(path); } catch (error) { if (missing(error)) return null; throw error; }
@@ -62,7 +69,7 @@ export async function prepareLocalDocumentWrite(options: Readonly<{
   force: boolean;
   maximumInputBytes: number;
   maximumOutputBytes: number;
-  label: 'Workflow state' | 'Case' | 'Indicator revision';
+  label: 'Workflow state' | 'Case' | 'Indicator revision' | 'Monitor state';
   allowSourceReplacement?: boolean;
   signal?: AbortSignal;
 }>) {
@@ -111,6 +118,7 @@ export async function prepareLocalDocumentWrite(options: Readonly<{
     }
     const snapshots = new Map<string, FileIdentity | null>();
     let sourceInput: string | null = null;
+    let destinationInput: string | null = null;
     for (const path of paths) {
       const value = await snapshot(path, options.maximumInputBytes, label, options.signal);
       if (path === source) {
@@ -120,6 +128,7 @@ export async function prepareLocalDocumentWrite(options: Readonly<{
       if (path === destination && value && !options.force) {
         throw new CliUsageError(`${label} output already exists; use --force to replace it or choose another path.`);
       }
+      if (path === destination) destinationInput = value?.text ?? null;
       snapshots.set(path, value?.identity ?? null);
     }
     async function assertUnchanged(): Promise<void> {
@@ -135,16 +144,26 @@ export async function prepareLocalDocumentWrite(options: Readonly<{
         }
       }
     }
+    async function write(content: string, settle: boolean): Promise<void> {
+      if (published || released) throw new CliUsageError(`${label} file publication has already settled.`);
+      if (Buffer.byteLength(content, 'utf8') > options.maximumOutputBytes) throw new CliUsageError(`${label} output is limited to ${options.maximumOutputBytes} bytes.`);
+      await writePrivateFile(destination, content, { force: options.force, beforePublish: assertUnchanged });
+      if (settle) { published = true; return; }
+      // A checkpoint is an owned, durable write. Subsequent updates compare
+      // against these exact bytes, never the originally opened file.
+      try {
+        const committed = await snapshot(destination, options.maximumOutputBytes, label);
+        if (!committed || committed.text !== content) throw new Error('Unconfirmed checkpoint identity');
+        snapshots.set(destination, committed.identity);
+      } catch {
+        throw new CliUsageError(`${label} was written but its committed identity could not be confirmed. Reopen it before continuing.`);
+      }
+    }
     return Object.freeze({
       sourceInput,
-      async publish(content: string): Promise<void> {
-        if (published || released) throw new CliUsageError(`${label} file publication has already settled.`);
-        if (Buffer.byteLength(content, 'utf8') > options.maximumOutputBytes) {
-          throw new CliUsageError(`${label} output is limited to ${options.maximumOutputBytes} bytes.`);
-        }
-        await writePrivateFile(destination, content, { force: options.force, beforePublish: assertUnchanged });
-        published = true;
-      },
+      destinationInput,
+      publish: (content: string) => write(content, true),
+      checkpoint: (content: string) => write(content, false),
       release,
     });
   } catch (error) {

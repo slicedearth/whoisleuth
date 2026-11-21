@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tokenLabel } from '../../../../packages/analysis/display-label.mts';
   import { evidenceStatusTone } from '#lib/analysis/evidence-status-tone.ts';
 
   let {
@@ -51,8 +52,8 @@
   </summary>
   <div class="evidence-body">
     <div class="stat-grid">
-      <article><small>Comparison state</small><strong>{status}</strong></article>
-      <article><small>Exact result</small><strong class:listed>{verdict.replaceAll('_', ' ')}</strong></article>
+      <article><small>Comparison state</small><strong>{tokenLabel(status)}</strong></article>
+      <article><small>Exact result</small><strong class:listed>{tokenLabel(verdict)}</strong></article>
       <article><small>Snapshot updated</small><strong>{sourceUpdatedAt || 'Unavailable'}</strong></article>
       <article><small>Snapshot entries</small><strong>{entryCount === null ? 'Unavailable' : entryCount.toLocaleString()}</strong></article>
     </div>
@@ -63,13 +64,12 @@
         <dt>Snapshot digest</dt><dd class="hash">{digest || 'Unavailable'}</dd>
       </dl>
     {/if}
-    <p class:list-warning={listed} class="callout">{detail}</p>
     <p class="source-note">
       Source: <a href="https://sslbl.abuse.ch/blacklist/" target="_blank" rel="noopener noreferrer">SSLBL certificate blacklist<span class="sr-only"> (opens in a new tab)</span></a>.
       {#if safeReferenceUrl}<a href={safeReferenceUrl} target="_blank" rel="noopener noreferrer">Review the matching provider record<span class="sr-only"> (opens in a new tab)</span></a>.{/if}
     </p>
     {#if limitations.length}<p class="callout warn">{limitations.join(' ')}</p>{/if}
-    <p class="card-note">This exact local comparison makes no provider request and does not change availability or Risk scoring.</p>
+    <p class="card-note">This comparison uses the local snapshot only and does not change availability or Risk.</p>
   </div>
 </details>
 
@@ -81,7 +81,6 @@
   .detail-grid dd{min-width:0;margin:0;overflow-wrap:anywhere}
   .hash{font-family:var(--mono)}
   .callout{margin:12px 0 0}
-  .list-warning{border-color:color-mix(in srgb,var(--danger) 45%,var(--border));color:var(--danger)}
   .source-note,.card-note{margin:10px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
   .source-note a+a{margin-left:10px}
   @media(max-width:650px){

@@ -67,7 +67,7 @@ for (const width of [320, 390, 1024, 1280, 2560]) for (const theme of ['light', 
     await progress.scrollIntoViewIfNeeded();
     if (captureVisualEvidenceEnabled()) { await page.screenshot({ path: testInfo.outputPath(`lookup-progress-${width}-${theme}.png`) }); }
     await page.evaluate(() => window.lookupProgressFixture.finish());
-    await expect(page.getByRole('heading', { name: 'registered', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Registered', exact: true })).toBeVisible();
     await expect(progress).toHaveCount(0);
     expect((await readBrowserLocalCollection(page, 'cases')).records).toHaveLength(0);
     const requests = await page.evaluate(() => window.lookupProgressFixture.requests);
@@ -85,7 +85,7 @@ test('cancellation discards partial sources and the next request is independent'
   await page.getByRole('button', { name: 'Run lookup', exact: true }).click();
   await expect(progress.getByRole('status')).toContainText('1 of 5');
   await page.evaluate(() => window.lookupProgressFixture.finish(1));
-  await expect(page.getByRole('heading', { name: 'registered', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Registered', exact: true })).toBeVisible();
   expect((await page.evaluate(() => window.lookupProgressFixture.requests))[0]!.cancelled).toBe(true);
   expect((await readBrowserLocalCollection(page, 'cases')).records).toHaveLength(0);
 });
@@ -104,6 +104,6 @@ test('buffered delivery is explicit and does not trigger a replacement request',
   await expect(progress.getByRole('status')).toHaveText('This connection returns sources together in the final response.');
   await expect(progress.getByRole('listitem')).toHaveCount(0);
   await page.evaluate(() => window.lookupProgressFixture.finish());
-  await expect(page.getByRole('heading', { name: 'registered', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Registered', exact: true })).toBeVisible();
   expect(await page.evaluate(() => window.lookupProgressFixture.requests.length)).toBe(1);
 });

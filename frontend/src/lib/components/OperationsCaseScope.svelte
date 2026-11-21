@@ -49,7 +49,7 @@
       </table></div>
       {#if pages > 1}<nav aria-label="Case outcome scope pages"><button class="btn" type="button" disabled={currentPage <= 1} onclick={() => page = currentPage - 1}>Previous Case scope</button><span>Page {currentPage} of {pages}</span><button class="btn" type="button" disabled={currentPage >= pages} onclick={() => page = currentPage + 1}>Next Case scope</button></nav>{/if}
     {:else}<p>No Cases in this inspected population; no resolution conclusion follows.</p>{/if}
-    <details><summary>Dispute, restoration and recurrence coverage</summary><p>Explicit object event snapshots and independent reviews can retain dispute and restoration outcomes. Historical missing bindings remain unknown. A restored page, later change, review expiry or return to review does not establish malicious recurrence. Recurrence assessment remains unavailable without a comparable baseline for the same condition and object; procedural context stays separate.</p></details>
+    <details><summary>Dispute, restoration and recurrence coverage</summary><p>Object event snapshots and independent reviews can record dispute and restoration outcomes; older events without those bindings stay unknown. A restored page, later change, review expiry or return to review is not counted as recurrence, which needs a comparable baseline for the same condition and object.</p></details>
     <p>Provider assertions, independently stated object outcomes, non-reproduction under stated conditions and unavailable reviews are distinct. None establishes permanent removal, report causation or common ownership. These details stay in page memory and are excluded from aggregate JSON.</p>
   {/if}
 </details>

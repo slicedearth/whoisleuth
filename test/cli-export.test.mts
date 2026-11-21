@@ -337,6 +337,23 @@ describe('lookup evidence export conversion', () => {
     assert.equal(verification.state, 'structure_valid');
   });
 
+  test('exports and verifies a Deep lookup that retains web collection quality', async () => {
+    const source = savedLookup();
+    const quality = { version: 1, page: 'complete', favicon: 'partial', combined: 'partial' };
+    recordValue(source.availability).webCollectionQuality = quality;
+    const exported = buildCliEvidenceExport(JSON.stringify(source), await evidenceModule(), '2026-07-14T09:00:00.000Z');
+    assert.deepEqual(recordValue(recordValue(exported.analysis).availability).webCollectionQuality, quality);
+    assert.doesNotThrow(() => validateLookupEvidenceArtifactStructure(exported));
+    const verification = await verifyOfflineArtifact(JSON.stringify(exported));
+    assert.equal(verification.state, 'structure_valid');
+    const markdown = formatLookupEvidenceMarkdown(exported, { includeAttribution: false });
+    assert.match(markdown, /^# Lookup evidence report: example\\\.test$/mu);
+    // A malformed summary is still refused rather than copied into the report.
+    const malformed = structuredClone(exported);
+    recordValue(recordValue(malformed.analysis).availability).webCollectionQuality = { ...quality, page: 'everything' };
+    assert.throws(() => validateLookupEvidenceArtifactStructure(malformed), /web collection quality|availability analysis/u);
+  });
+
   test('converts current saved Lookup metadata while keeping version 1 readable', async () => {
     const shared = await evidenceModule();
     const legacy = savedLookup();

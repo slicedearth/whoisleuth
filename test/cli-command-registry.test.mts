@@ -536,7 +536,7 @@ describe('canonical CLI command registry', () => {
     assert.deepEqual(Object.entries(owners).filter(([, owner]) => owner === 'discovery').map(([command]) => command), ['discover']);
     assert.deepEqual(Object.entries(owners).filter(([, owner]) => owner === 'discovery_scan').map(([command]) => command), ['discover-scan']);
     assert.deepEqual(Object.entries(owners).filter(([, owner]) => owner === 'evidence').map(([command]) => command), ['inspect-archive', 'sign-artifact', 'verify-signature']);
-    assert.deepEqual(Object.entries(owners).filter(([, owner]) => owner === 'network').map(([command]) => command), ['ct-search', 'posture', 'http', 'tls', 'dnssec-validate', 'mail-transport']);
+    assert.deepEqual(Object.entries(owners).filter(([, owner]) => owner === 'network').map(([command]) => command), ['ct-search', 'posture', 'resolver-compare', 'peeringdb-context', 'archive-history', 'http', 'tls', 'dnssec-validate', 'mail-transport']);
     assert.deepEqual(
       INLINE_CLI_COMMANDS,
       CLI_COMMAND_REGISTRY.filter((definition) => definition.execution.handlerOwner === 'inline')
@@ -572,10 +572,10 @@ describe('canonical CLI command registry', () => {
       definition.execution.networkEffect,
     ])) as Record<CliCommand, CliNetworkEffect>;
     assert.deepEqual(Object.entries(effects).filter(([, effect]) => effect === 'conditional_network').map(([command]) => command), [
-      'doctor', 'lookup', 'bulk', 'discover-scan', 'workflow-run',
+      'doctor', 'lookup', 'bulk', 'discover-scan', 'monitor-tick', 'workflow-run',
     ]);
     assert.deepEqual(Object.entries(effects).filter(([, effect]) => effect === 'always_network').map(([command]) => command), [
-      'ct-search', 'posture', 'http', 'tls', 'dnssec-validate', 'mail-transport', 'monitor-once',
+      'ct-search', 'posture', 'resolver-compare', 'peeringdb-context', 'archive-history', 'http', 'tls', 'dnssec-validate', 'mail-transport', 'monitor-once',
     ]);
 
     const catalogue = buildCliCommandCatalogue({
@@ -651,7 +651,7 @@ describe('canonical CLI command registry', () => {
       CLI_COMMAND_REGISTRY
         .filter((definition) => definition.documentation.supportedSchemaIdentifiers.length === 0)
         .map((definition) => definition.command),
-      ['completion', 'manual', 'registry-scaffold'],
+      ['completion', 'manual', 'peeringdb-context', 'registry-scaffold', 'mcp'],
     );
   });
 

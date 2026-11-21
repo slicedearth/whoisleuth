@@ -96,6 +96,21 @@ Set a switch to `1`, `true`, `yes`, or `on` to disable that hosted feature:
 | `WHOISLEUTH_DISABLE_TLS_INTELLIGENCE` | Stops the one-connection TLS profile. |
 | `WHOISLEUTH_DISABLE_CERTIFICATE_TRANSPARENCY` | Blocks Certificate Transparency search. |
 | `WHOISLEUTH_DISABLE_DOMAIN_POSTURE` | Blocks official-domain posture audits. |
+| `WHOISLEUTH_DISABLE_RESOLVER_COMPARISON` | Blocks the separate selected-resolver action even when it is enabled; disabling DNS intelligence also blocks it. |
+| `WHOISLEUTH_DISABLE_WEB_ARCHIVE_HISTORY` | Blocks the separate web archive history action even when it is enabled. |
+
+Selected resolver comparison sends the observed hostname to Cloudflare and
+Google public DNS, so it is off unless the operator sets
+`WHOISLEUTH_RESOLVER_COMPARISON_ENABLED=1` (exactly `1`). Until then the browser
+shows it as not enabled for the deployment and the endpoint refuses before
+validation or collection. The local CLI `resolver-compare` command is unaffected.
+Review the privacy notice before enabling it on a public deployment.
+
+Web archive history sends the registrable domain to the Internet Archive's
+Wayback Machine capture index, so it is also off unless the operator sets
+`WHOISLEUTH_WEB_ARCHIVE_HISTORY_ENABLED=1` (exactly `1`). The archive grants
+access for scholarship and research; review its terms before enabling the action
+on a public deployment. The local CLI `archive-history` command is unaffected.
 
 The authenticated capability report comes from the same policy enforced by
 Express and direct functions. A disabled endpoint returns HTTP 503 with
@@ -197,8 +212,8 @@ Network-heavy authenticated operations also acquire an immediate lease:
 | --- | --- | ---: | ---: |
 | `registry_light` | Fast Lookup, RDAP, registry-scoped nameserver search, Fast availability | 12 | 36 |
 | `registry_deep` | Deep Lookup, WHOIS, Deep availability | 4 | 12 |
-| `certificate_search` | Certificate Transparency | 2 | 4 |
-| `posture_audit` | Official-domain settings review | 3 | 8 |
+| `certificate_search` | Certificate Transparency or web archive history | 2 | 4 |
+| `posture_audit` | Official-domain settings review or explicitly selected resolver comparison | 3 | 8 |
 
 Closing an Express collection request cancels its active transports and stops
 further retries, referrals and enrichment. Its lease remains held until the

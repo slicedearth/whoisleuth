@@ -38,9 +38,8 @@ test('campaign domain scope keeps incident IDs and unresolved objects separate w
   await expect(scope.locator('details.coverage').first().getByRole('cell', { name: /Unknown action binding/u })).toHaveCount(2);
   await expect(scope).toContainText('https://distribution.example/ad-two');
   await scope.getByText('Dispute, restoration and recurrence coverage', { exact: true }).click();
-  await expect(scope).toContainText('Historical missing bindings remain unknown');
-  await expect(scope).toContainText('does not establish malicious recurrence');
-  await expect(scope).toContainText('Recurrence assessment remains unavailable without a comparable baseline for the same condition and object');
+  await expect(scope).toContainText('older events without those bindings stay unknown');
+  await expect(scope).toContainText('is not counted as recurrence, which needs a comparable baseline for the same condition and object');
   for (const theme of ['light', 'dark'] as const) {
     await useTheme(page, theme);
     for (const width of [320, 390, 1024, 1280, 1920]) {

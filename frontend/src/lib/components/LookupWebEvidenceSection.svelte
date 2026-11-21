@@ -166,18 +166,6 @@
       </aside>
     {/if}
 
-    {#if result?.type === 'domain'}
-      <WebsiteSnapshotManager
-        domain={observationHostname}
-        canSave={!loading &&
-          lookupEvidenceDepth === 'deep' &&
-          Boolean(caseDomain) &&
-          technologyProfile.source === 'derived' &&
-          securityPosture.source === 'derived'}
-        {buildSnapshot}
-      />
-    {/if}
-
     {#if surfaces.reverseDns.visible}
       <div class="evidence-component" id="evidence-reverse-dns"
         ><DeferredSurface
@@ -217,6 +205,7 @@
             delegation: networkDisplay.dnsDelegation,
             rehearsalEvidence: dnsRehearsalEvidence,
             domain: caseDomain,
+            observationHostname: lookupObservationHostname(availability) ?? '',
             allowRehearsal: result?.type === 'domain',
             note: `Point-in-time resolver evidence for ${observationHostname}. Registration-delegation checks retain their separately named domain. Service-binding targets and address hints are displayed but not followed. Verify shared infrastructure independently.`,
           }}
@@ -520,6 +509,19 @@
           props={{ review: brandMimicryReview }}
         /></div
       >
+    {/if}
+
+    <!-- Saved snapshots compare against the evidence above, so they follow it. -->
+    {#if result?.type === 'domain'}
+      <WebsiteSnapshotManager
+        domain={observationHostname}
+        canSave={!loading &&
+          lookupEvidenceDepth === 'deep' &&
+          Boolean(caseDomain) &&
+          technologyProfile.source === 'derived' &&
+          securityPosture.source === 'derived'}
+        {buildSnapshot}
+      />
     {/if}
   {/if}
 </LookupEvidenceSection>

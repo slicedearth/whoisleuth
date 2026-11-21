@@ -99,8 +99,8 @@
           <text x="8" y={group.y + 13}>{group.label}</text>
           <text x="8" y={group.y + 29} class="profile-listed-label">Profile-listed: {group.profileListed}</text>
           <rect x="193" y={group.y + 19} width="8" height="8" rx="1" class="profile-listing-marker"><title>{group.label}: {group.profileListed} profile-listed, overlapping the registration outcomes</title></rect>
-          {#each group.segments as segment}
-            <rect x={segment.x} y={group.y} width={segment.width} height="18" rx="2" class={`state-${segment.state}`}>
+          {#each group.segments as segment, segmentIndex}
+            <rect x={segment.x} y={group.y} width={segment.width} height="18" rx="2" class={`state-${segment.state} chart-grow`} style={`--chart-index:${segmentIndex}`}>
               <title>{group.label}: {segment.value} {segment.state}</title>
             </rect>
           {/each}

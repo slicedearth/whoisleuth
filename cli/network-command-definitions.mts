@@ -2,6 +2,51 @@
 import { positional, OPTIONAL_FILE_POSITIONAL, constraint, EMPTY_CONSTRAINTS, commandSeed } from './command-definition.mts';
 
 export const NETWORK_COMMAND_DEFINITIONS = Object.freeze({
+  'peeringdb-context': commandSeed({
+    reference: {
+      description: 'Read one ASN’s minimal community-maintained network-directory context for permitted operational use.',
+      example: 'whoisleuth peeringdb-context AS64496 --permitted-use',
+      boundary: 'One fixed HTTPS request, no authentication, retries, contact expansion, cache, hosted redistribution or export file. --permitted-use acknowledges an allowed operational purpose or existing provider permission; it does not grant rights. Directory membership is not authority, reachability, ownership or reputation.',
+    },
+    collection: { scope: 'Sends one explicit ASN to PeeringDB, depth zero, minimal fields, two-row ambiguity detection, 32 KiB response and eight-second deadline.' },
+    summary: 'Read selected network-directory context',
+    options: ['--permitted-use', '--quiet', '--no-color'], commonOptions: ['--help'],
+    positionals: Object.freeze([positional('asn', 'text', 1, 1)]),
+    constraints: Object.freeze([constraint({ kind: 'required', options: ['--permitted-use'] })]),
+    handlerOwner: 'network', networkEffect: 'always_network', common: false,
+    schemaIdentifiers: Object.freeze([]), primaryArtefacts: Object.freeze([]),
+    planSupport: false, additionalOutputFormats: Object.freeze([]), bootstrapProfile: 'allowed',
+  }),
+  'resolver-compare': commandSeed({
+    reference: {
+      description: 'Compare explicitly selected public resolvers for one hostname, keeping A and AAAA outcomes separate.',
+      example: 'whoisleuth resolver-compare host.example.test --resolvers cloudflare,google --json',
+      boundary: 'The two selected HTTPS resolvers receive the hostname and A/AAAA questions. Four requests maximum, no retries or target connections; agreement is not authoritative truth, local DNSSEC validation or a safety verdict.',
+    },
+    collection: { scope: 'Two fixed HTTPS resolver APIs; at most four A/AAAA requests, two concurrent providers, 64 KiB per response and ten seconds total.' },
+    summary: 'Compare selected DNS resolvers',
+    options: ['--resolvers', '--json', '--quiet', '--no-color'],
+    positionals: Object.freeze([positional('hostname', 'text', 1, 1)]),
+    constraints: Object.freeze([constraint({ kind: 'required', options: ['--resolvers'] })]),
+    handlerOwner: 'network', networkEffect: 'always_network', common: false,
+    schemaIdentifiers: Object.freeze(['whoisleuth.resolver-comparison']), primaryArtefacts: Object.freeze([]),
+    planSupport: false, additionalOutputFormats: Object.freeze([]), bootstrapProfile: 'allowed',
+  }),
+  'archive-history': commandSeed({
+    reference: {
+      description: 'Read the earliest and latest web archive captures of one domain\u2019s homepage.',
+      example: 'whoisleuth archive-history example.test --json',
+      boundary: 'The Internet Archive receives the domain in two requests, with no retries and no page content retained. A capture records when the archive saw the homepage; it does not establish ownership, continuous operation or an earlier registration on its own.',
+    },
+    collection: { scope: 'The fixed Internet Archive capture index; two requests, 16 KiB per response and twelve seconds total.' },
+    summary: 'Read web archive capture history',
+    options: ['--json', '--quiet', '--no-color'],
+    positionals: Object.freeze([positional('domain', 'text', 1, 1)]),
+    constraints: EMPTY_CONSTRAINTS,
+    handlerOwner: 'network', networkEffect: 'always_network', common: false,
+    schemaIdentifiers: Object.freeze(['whoisleuth.web-archive-history']), primaryArtefacts: Object.freeze([]),
+    planSupport: false, additionalOutputFormats: Object.freeze([]), bootstrapProfile: 'allowed',
+  }),
   "ct-search": commandSeed({
     reference: {
       description: 'Search certificate-transparency observations for one bounded keyword.',

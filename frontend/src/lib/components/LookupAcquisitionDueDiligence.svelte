@@ -168,7 +168,7 @@
     <section class="decision-workspace" aria-labelledby={`${id}-decision-title`}>
       <div>
         <h5 id={`${id}-decision-title`}>Analyst decision workspace</h5>
-        <p>Record a bounded local review artefact. This does not reserve, value, purchase, submit, or transfer the domain.{synthetic ? ' The download remains explicitly marked as synthetic.' : ''}</p>
+        <p>Record your review locally. This does not buy, reserve or transfer the domain.{synthetic ? ' The download remains explicitly marked as synthetic.' : ''}</p>
       </div>
       <label class="field">Current decision
         <select bind:value={decision}>
@@ -197,7 +197,7 @@
           <p>Target {historical.target} · generated {historical.generatedAt} · historical evidence observed {historical.evidenceObservedAt ?? 'unknown'} · {historical.synthetic ? 'synthetic demonstration' : 'manual review'} · {historical.analystReview.state}</p>
           <p>Decision: {historical.analystReview.decision.replaceAll('_', ' ')}. Checked: {historical.analystReview.reviewedChecks.join(', ') || 'none'}.</p>
           <p>{historical.analystReview.rationale || 'No rationale recorded.'}</p>
-          <p>Accept replaces only the current decision, rationale and selected checklist fields. Historical evidence is not loaded into the current Lookup. Keep the original packet unchanged for its original times and provenance.</p>
+          <p>Accept replaces the current decision, rationale and selected checklist fields. Keep the original file for its original dates and sources.</p>
           <button class="btn" type="button" disabled={busy} onclick={acceptHistorical}>Accept historical manual fields</button>
           <button class="btn" type="button" onclick={() => { workspace.cancel(); historical = null; exportStatus = 'Reopen cancelled. Current manual edits and Lookup evidence are unchanged.'; }}>Cancel reopen</button>
         </section>

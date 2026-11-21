@@ -88,6 +88,14 @@
     { id: 'sources', label: 'Evidence' },
     { id: 'timeline', label: 'Timeline' },
   ];
+  // Follow the evidence into the assessment, then out to the next review action.
+  const evidencePath = [
+    'M142 44 C210 44 216 95 278 104',
+    'M142 102 C210 102 218 110 278 112',
+    'M142 160 C210 160 216 127 278 120',
+    'M478 70 C430 70 420 101 374 108',
+    'M374 118 C420 126 430 150 478 150',
+  ].join(' ');
   const topologyNodes = $derived([
     { id: 'registry', label: 'Registry', detail: selected.evidence.registry.status, status: sourceState(selected.evidence.registry.status), side: 'left' as const, glyph: 'R', family: 'registry' as const },
     { id: 'dns', label: 'DNS', detail: selected.evidence.dns.status, status: sourceState(selected.evidence.dns.status), side: 'left' as const, glyph: 'D', family: 'network' as const },
@@ -136,6 +144,8 @@
   }
 </script>
 
+<div class="preview-frame">
+<div class="frame-bar" aria-hidden="true"><span class="frame-path">console <i>/</i> lookup</span><span class="frame-chip">Synthetic</span></div>
 <section class="product-preview" aria-label="Synthetic WHOISleuth console preview">
   <article class="preview-panel discover-panel">
     <header><span>Candidates</span></header>
@@ -205,7 +215,8 @@
           <svg viewBox="0 0 620 230" role="img" aria-labelledby="homepage-evidence-svg-title homepage-evidence-svg-description">
             <title id="homepage-evidence-svg-title">Separately attributed evidence flow</title>
             <desc id="homepage-evidence-svg-description">Registry, DNS, website, and certificate observations remain separate. They feed an assessment layer, which suggests review or another bounded collection step.</desc>
-            <path class="evidence-edge" d="M142 44 C210 44 216 95 278 104 M142 102 C210 102 218 110 278 112 M142 160 C210 160 216 127 278 120 M478 70 C430 70 420 101 342 108 M478 150 C430 150 420 126 342 118 M342 114 C420 114 430 114 492 114" />
+            <path class="evidence-edge" d={evidencePath} />
+            <path class="evidence-flow chart-flow" aria-hidden="true" d={evidencePath} />
             <g class={`map-node state-${topologyNodes[0]?.status}`} transform="translate(18 22)"><rect width="124" height="44" rx="9"/><text x="12" y="18">Registry</text><text class="node-state" x="12" y="34">{topologyNodes[0]?.status}</text></g>
             <g class={`map-node state-${topologyNodes[1]?.status}`} transform="translate(18 80)"><rect width="124" height="44" rx="9"/><text x="12" y="18">DNS</text><text class="node-state" x="12" y="34">{topologyNodes[1]?.status}</text></g>
             <g class={`map-node state-${topologyNodes[2]?.status}`} transform="translate(18 138)"><rect width="124" height="44" rx="9"/><text x="12" y="18">Website</text><text class="node-state" x="12" y="34">{topologyNodes[2]?.status}</text></g>
@@ -246,14 +257,21 @@
     </div>
   </article>
 </section>
+</div>
 
 <p class="preview-note">Example investigation · fictional data</p>
 
 <style>
   .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap;border:0}
-  .product-preview{display:grid;grid-template-columns:.85fr 1.25fr;grid-template-rows:auto auto;gap:10px;align-items:start}
+  /* One framed surface carries the depth; panels inside stay quieter. */
+  .preview-frame{position:relative;isolation:isolate;min-width:0;padding:10px;border:1px solid color-mix(in srgb,var(--interface-accent) 26%,var(--border));border-radius:calc(var(--radius-lg) + 4px);background:linear-gradient(180deg,rgb(var(--panel-rgb) / .55),rgb(var(--bg-rgb) / .4));box-shadow:var(--elevation-frame)}
+  .preview-frame::before{content:"";position:absolute;z-index:-1;inset:10% 8%;border-radius:inherit;background:radial-gradient(closest-side,rgb(var(--interface-accent-rgb) / var(--frame-glow-alpha)),transparent);filter:blur(40px);pointer-events:none}
+  .frame-bar{display:flex;min-width:0;align-items:center;justify-content:space-between;gap:10px;padding:0 4px 9px;color:var(--muted);font:650 var(--text-2xs) var(--mono)}
+  .frame-path{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.frame-path::before{display:inline-block;width:6px;height:6px;margin-right:8px;border-radius:2px;background:var(--interface-accent);content:"";vertical-align:1px}.frame-path i{color:var(--muted-subtle);font-style:normal}
+  .frame-chip{flex:0 0 auto;padding:2px 8px;border:1px solid var(--border);border-radius:999px;font-size:.6rem;letter-spacing:.08em;text-transform:uppercase}
+  .product-preview{display:grid;grid-template-columns:.88fr 1.22fr;grid-template-rows:auto auto;gap:10px;align-items:start}
   .discover-panel{grid-column:1;grid-row:1}.monitor-panel{grid-column:1;grid-row:2}.lookup-panel{grid-column:2;grid-row:1 / 3}
-  .preview-panel{min-width:0;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel);box-shadow:0 18px 48px rgb(var(--shadow-rgb) / .12)}
+  .preview-panel{min-width:0;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel);box-shadow:var(--elevation-1)}
   .preview-panel header{display:flex;min-width:0;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);background:rgb(var(--overlay-rgb) / .025);font-family:var(--mono)}
   .preview-panel header span{color:var(--accent);font-size:var(--text-xs);font-weight:750}
   .preview-panel header small{min-width:0;overflow:hidden;color:var(--muted);font-size:var(--text-2xs);text-overflow:ellipsis;white-space:nowrap}
@@ -280,6 +298,7 @@
   .preview-evidence-map{min-width:0;padding:10px 12px 7px;background:linear-gradient(145deg,var(--panel),color-mix(in srgb,var(--panel-raised) 84%,var(--accent) 3%))}
   .preview-evidence-map svg{display:block;width:100%;height:auto;max-height:238px;overflow:visible}
   .evidence-edge{fill:none;stroke:var(--border-strong);stroke-width:1.6;stroke-linecap:round}
+  .evidence-flow{stroke:var(--accent);stroke-width:1.8;stroke-linecap:round;opacity:.8}
   .map-node rect{fill:var(--panel-raised);stroke:var(--border-strong);stroke-width:1.5}
   .map-node text{fill:var(--text);font:700 11px var(--mono)}.map-node .node-state{fill:var(--muted);font-size:9px;text-transform:uppercase}
   .map-node.state-success rect{stroke:var(--accent2)}.map-node.state-partial rect,.map-node.state-inconclusive rect{stroke:var(--amber)}.map-node.state-unavailable rect{stroke:var(--muted);stroke-dasharray:4 3}
@@ -294,14 +313,19 @@
     .preview-tab-panel{flex:1 1 auto}
     .preview-tab-panel.source-view{display:flex}
     .preview-tab-panel.source-view .preview-evidence-map{display:flex;width:100%;flex:1 1 auto;align-items:center}
+    /* The three-column summary narrows between the stacked and wide layouts;
+       scale its values and padding so single-word states are never clipped. */
+    .assessment div{padding-inline:clamp(9px,1vw,13px)}
+    .assessment strong{font-size:clamp(.88rem,1.3vw,1.05rem)}
   }
   @media(max-width:820px){.product-preview{grid-template-columns:1fr 1fr;grid-template-rows:auto auto}.lookup-panel{grid-column:1 / -1;grid-row:1}.discover-panel{grid-column:1;grid-row:2}.monitor-panel{grid-column:2;grid-row:2}}
   @media(max-width:560px){
+    .preview-frame{padding:6px}.frame-bar{padding-bottom:6px}
     .product-preview{grid-template-columns:1fr}
     .lookup-panel{grid-column:auto;grid-row:auto}
     .discover-panel,.monitor-panel{display:none}
     .mobile-domain-picker{display:grid;grid-template-columns:auto minmax(0,1fr);gap:9px;align-items:center;padding:8px 9px;border-bottom:1px solid var(--border);color:var(--muted);font:650 var(--text-2xs) var(--mono)}
-    .mobile-domain-picker select{width:100%;min-width:0;min-height:34px;padding:5px 28px 5px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);color:var(--text);font:650 .62rem var(--mono)}
+    .mobile-domain-picker select{width:100%;min-width:0;min-height:34px;padding-block:5px;border:1px solid var(--border);border-radius:var(--radius-sm);background-color:var(--panel-raised);color:var(--text);font:650 .62rem var(--mono)}
     .preview-evidence-map{display:none}
     .assessment{grid-template-columns:repeat(2,minmax(0,1fr))}.assessment div:last-child{grid-column:1 / -1}
     .mobile-source-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;margin:0;padding:1px;background:var(--border);list-style:none}

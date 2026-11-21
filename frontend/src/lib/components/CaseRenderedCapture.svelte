@@ -221,6 +221,25 @@
           </label>
           {#if checking}<button class="btn" type="button" onclick={cancelAttachments}>Cancel attachment check</button>{/if}
           {#if attachments}
+            {#if attachments.navigation}
+              {@const navigation = attachments.navigation}
+              <details class="capture-navigation">
+                <summary>Selected navigation steps</summary>
+                <div class="navigation-body">
+                  <p>Each selected URL opened in a fresh page. These are declared destinations, not clicks, form submissions or a verified redirect chain.</p>
+                  <ol aria-label="Selected navigation sequence">
+                    {#each navigation.steps as step, index}
+                      <li><strong>Step {index + 1} · {step.state === 'captured' ? 'Capture retained' : step.state === 'blocked' ? 'Blocked or unavailable' : 'Not attempted'}</strong>
+                        <p>{step.selectedOrigin}</p>
+                        <small>{step.beforeCapture === null ? 'Start' : `After capture ${step.beforeCapture + 1}`}{step.afterCapture === null ? ' · No new capture' : ` · Capture ${step.afterCapture + 1}`}</small>
+                      </li>
+                    {/each}
+                  </ol>
+                  <p>Shared collection totals: {navigation.totals.requestAttempts} request attempts · {navigation.totals.responseBytesCharged.toLocaleString()} response bytes charged · {navigation.totals.publicRequestHosts} public request hosts.</p>
+                  {#if navigation.directConnectionRefusals}<p>{navigation.directConnectionRefusals} direct connection attempts were refused across the sequence; they cannot be attributed to an individual step.</p>{/if}
+                </div>
+              </details>
+            {/if}
             {#each attachments.captures as capture}<PageBehaviourReview value={capture.pageBehaviour} />{/each}
             <section aria-label="Selected capture attachment checks">
               <h4>Attachment bytes</h4>
@@ -261,5 +280,6 @@
   dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;margin:0;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--border)}dl>div{min-width:0;padding:8px;background:var(--panel)}dt{color:var(--muted);font:650 var(--text-2xs) var(--mono)}dd{margin:3px 0 0;overflow-wrap:anywhere;font-size:var(--text-xs)}
   ol{display:grid;gap:7px;margin:0;padding:0;list-style:none}li{min-width:0;padding:9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}li strong,li small{display:block}li p{margin:5px 0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:var(--text-xs)}li small{color:var(--muted);font-size:var(--text-2xs);overflow-wrap:anywhere}.capture-preview>p{margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
   .actions{display:flex;flex-wrap:wrap;gap:8px}.notice{padding:9px 10px;border-left:3px solid var(--amber);background:rgb(var(--amber-rgb) / .06)}
+  .capture-navigation{min-width:0;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.navigation-body{display:grid;gap:10px;padding:12px}.navigation-body>p{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.5;overflow-wrap:anywhere}
   @media(max-width:620px){dl{grid-template-columns:1fr}.file-btn,.actions button{width:100%}}
 </style>

@@ -20,6 +20,29 @@ export const LOOKUP_CHOICE_SOURCES = Object.freeze({
   malwareHostIntelligence: 'malware_host_intelligence', malwareIocIntelligence: 'malware_ioc_intelligence',
 } as const satisfies Record<typeof LOOKUP_CHOICE_KEYS[number], LookupSourceId>);
 export type LookupCollectionChoices = Readonly<Record<typeof LOOKUP_CHOICE_KEYS[number], boolean>>;
+
+/** The existing Lookup recipe, shared by progress and offline planning.
+ * Families are admitted possibilities, not provider health or request counts. */
+export function plannedLookupSources(
+  targetType: 'domain' | 'ipv4' | 'ipv6' | 'asn',
+  mode: 'fast' | 'deep',
+  options: Readonly<Partial<LookupCollectionChoices>> = {},
+): readonly LookupSourceId[] {
+  const sources: LookupSourceId[] = ['rdap'];
+  if (mode === 'fast') {
+    if (targetType === 'domain') sources.push('domain_evidence');
+    return Object.freeze(sources);
+  }
+  sources.push('whois');
+  if (targetType === 'domain') {
+    sources.push('domain_evidence', 'registrar_rdap', 'network_context');
+    if (options.securityTxt) sources.push('security_txt');
+    if (options.externalIntelligence) sources.push('external_intelligence');
+    if (options.malwareHostIntelligence) sources.push('malware_host_intelligence');
+    if (options.malwareIocIntelligence) sources.push('malware_ioc_intelligence');
+  } else if (targetType === 'ipv4' || targetType === 'ipv6') sources.push('reverse_dns');
+  return Object.freeze(sources);
+}
 export type LookupCollectionIntent = Readonly<{
   requestedDepth: 'fast' | 'deep';
   targetClass: 'domain' | 'ipv4' | 'ipv6' | 'asn';

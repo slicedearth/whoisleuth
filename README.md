@@ -51,6 +51,10 @@ the [application guide](docs/application-guide.md) covers tools and saved work.
 Collection and sharing are deliberate actions. WHOISleuth prepares response
 material; it does not submit reports.
 
+Monitoring plans show the workload a watchlist would create. The CLI can run an
+approved local monitoring cycle with per-domain purposes and cadences, bounded
+requests and resumable private state; see the [CLI guide](docs/cli.md).
+
 The separate [local application](packages/local-application/README.md) can be
 assembled locally as an installable archive; it is not a published npm package.
 It runs the console on loopback, keeping records, drafts and original files in
@@ -106,6 +110,11 @@ npm exec --yes --ignore-scripts --package=@slicedearth/whoisleuth-cli -- whoisle
 `--plan` describes a Lookup without collecting. Use
 [Getting started](docs/getting-started.md) for local development and browser
 tests, or the [CLI guide](docs/cli.md) for installed commands.
+
+Saved Lookups can be browsed in the terminal, and saved Lookups and evidence
+exports can be read and compared offline. The CLI also offers selected-file assistant access, reconnaissance
+imports, certificate and logo checks, and deliberate resolver or
+network-directory reviews; see [first commands](docs/cli.md#first-commands).
 
 For changes to the project, see [Contributing](CONTRIBUTING.md) and the
 [Code of Conduct](CODE_OF_CONDUCT.md).

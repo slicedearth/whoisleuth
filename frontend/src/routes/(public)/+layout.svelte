@@ -155,7 +155,7 @@
   .site-menu nav a:hover,.site-menu nav a:focus-visible,.site-menu nav a.active,.site-menu nav button:hover,.site-menu nav button:focus-visible{border-color:var(--border);color:var(--text);background:rgb(var(--accent-rgb) / .07)}
   .site-menu nav button{width:100%}
   .session-error{flex:1 0 100%;max-width:100%;margin:0;padding:8px 10px;border:1px dotted var(--danger);border-radius:var(--radius-sm);color:var(--danger);font:700 var(--text-2xs) var(--mono);line-height:1.45;overflow-wrap:anywhere}
-  .public-content{width:100%;margin:0;padding:clamp(44px,7vw,82px) 0 72px}
+  .public-content{width:100%;margin:0;padding:clamp(44px,7vw,82px) 0 0}
   .public-content.reference-page{padding-top:30px}
   @container public-header (max-width:940px){
     .console-label-full{display:none}

@@ -438,7 +438,7 @@ export function buildCliRetainedArtifactDiff(
     if (options.leftSessionId || options.rightSessionId) throw new CliUsageError('Saved-session selectors apply only to Bulk session exports.');
     return buildPortfolioLedger(leftRaw, rightRaw, left, right, generatedAt);
   }
-  throw new CliUsageError('diff supports saved Lookups, Bulk session exports, or retained domain portfolio reviews.');
+  throw new CliUsageError('diff supports saved Lookups, Lookup evidence exports, Bulk session exports, or retained domain portfolio reviews.');
 }
 
 export function formatCliRetainedArtifactDiff(document: CliRetainedArtifactDiffDocument): string {

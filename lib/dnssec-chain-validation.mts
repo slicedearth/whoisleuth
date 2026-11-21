@@ -336,6 +336,21 @@ function encodeDnsName(value: string): Buffer {
   }), Buffer.from([0])]);
 }
 
+// DNS labels may hold any octet. Compact denial responses, for example, use an
+// NSEC next name whose first label is a single zero octet. Render labels in
+// RFC 4343 presentation form: ASCII letters fold to lower case, and dots,
+// backslashes and non-printable octets become \DDD escapes, so a decoded name
+// stays unambiguous text. Signature checks keep using the exact wire bytes.
+function presentationLabel(bytes: Uint8Array): string {
+  let label = '';
+  for (const byte of bytes) {
+    if (byte >= 0x41 && byte <= 0x5a) label += String.fromCharCode(byte + 0x20);
+    else if (byte > 0x20 && byte < 0x7f && byte !== 0x2e && byte !== 0x5c) label += String.fromCharCode(byte);
+    else label += `\\${String(byte).padStart(3, '0')}`;
+  }
+  return label;
+}
+
 function readDnsName(message: Buffer, startOffset: number, boundary = message.length): { name: string; nextOffset: number; wireName: Buffer } {
   const labels: string[] = [];
   const wireLabels: Buffer[] = [];
@@ -365,8 +380,7 @@ function readDnsName(message: Buffer, startOffset: number, boundary = message.le
     wireLength += length + 1;
     if (wireLength > 254) throw new DnssecWireError('DNS name exceeds the wire-length limit.');
     const bytes = message.subarray(offset, offset + length);
-    if ([...bytes].some((byte) => byte < 0x21 || byte > 0x7e)) throw new DnssecWireError('DNS name contains an unsafe label byte.');
-    labels.push(bytes.toString('ascii').toLowerCase());
+    labels.push(presentationLabel(bytes));
     wireLabels.push(Buffer.concat([Buffer.from([length]), Buffer.from(bytes)]));
     offset += length;
   }

@@ -316,16 +316,15 @@
       </article>
       <article data-state={registrarTraceState}>
         <div><strong>Registrar RDAP</strong><span class="trace-state">{traceStateLabel(registrarTraceState)}</span></div>
-        <p><b>Authority:</b> separately attributed sponsoring-registrar publication. It cannot decide domain existence.</p>
+        <p><b>Authority:</b> the sponsoring registrar's own publication. It cannot decide domain existence.</p>
         <small>Useful for comparing registrar-maintained lifecycle, status, contact, and disclosure fields where advertised.</small>
       </article>
       <article data-state={whoisTraceState}>
         <div><strong>WHOIS</strong><span class="trace-state">{traceStateLabel(whoisTraceState)}</span></div>
-        <p><b>Authority:</b> compatibility publication used as corroborating registration context. It cannot override an authoritative existence result.</p>
+        <p><b>Authority:</b> supporting registration context. It cannot override the registry's existence result.</p>
         <small>Useful for source comparison, registry or registrar identifiers, lifecycle, status, delegation, and published contacts.</small>
       </article>
     </div>
-    <p class="trace-limit">These roles describe how WHOISleuth interprets the named publications. Partial, unavailable, or conflicting fields remain visible and are never converted into absence.</p>
   </section>
 {/if}
 
@@ -335,7 +334,7 @@
       <div>
         <p class="eyebrow">Publication comparison</p>
         <h4 id="registration-agreement-title">Pairwise registration source agreement</h4>
-        <p>Each lane represents one actual source comparison. Repeated fields therefore remain separate across Registry RDAP ↔ WHOIS and Registry RDAP ↔ Registrar RDAP instead of being merged. Marker styling summarises the comparison; the exact source state and value remain in the table following the plot.</p>
+        <p>Each lane compares two sources. Markers summarise agreement; exact values are in the table below.</p>
       </div>
       {#if comparisonMatrix.truncated}<span class="partial">Partial visual</span>{/if}
     </header>
@@ -442,7 +441,7 @@
         <span class="evidence-summary-copy">
           <span class="eyebrow">Derived registration context</span>
           <span class="evidence-summary-title" id="registry-interpretation-title" role="heading" aria-level="4">Registry interpretation</span>
-          <span class="evidence-summary-detail">Lifecycle, lock, disclosure, publication, and capability context kept separate from source evidence</span>
+          <span class="evidence-summary-detail">Lifecycle, locks, disclosure and capabilities interpreted from the sources</span>
         </span>
         <span class="evidence-status neutral">{display(lifecycle.label)}</span>
       </span>
@@ -456,12 +455,12 @@
       <article>
         <span>Registration locks</span>
         <strong>{lifecycleLockLabel(lifecycleLocks.client, 'Client')} · {lifecycleLockLabel(lifecycleLocks.server, 'Server')}</strong>
-        <small>These point-in-time statuses do not prove protection remains enabled.</small>
+        <small>As published at the time of this lookup.</small>
       </article>
       <article>
         <span>Contact disclosure</span>
         <strong>RDAP: {display(registryDisclosure.state)} · WHOIS: {display(whoisDisclosure.state)}</strong>
-        <small>Missing, redacted, withheld, proxy, public, and unavailable states remain distinct.</small>
+        <small>As published by each source.</small>
       </article>
       <article>
         <span>Reconciliation</span>
@@ -521,7 +520,7 @@
           {/if}
         </article>
       </div>
-      <p class="capability-limit">Declarations are response metadata, not proof that an operation is authorised, anonymous, complete, or correctly implemented. A preview reveals the exact public identifier that a later confirmed request would disclose, but does not issue a help or reverse-search request.</p>
+      <p class="capability-limit">Declarations describe what the service advertises, not that an operation is authorised or works. A preview shows the exact identifier a confirmed request would send, without sending it.</p>
     </details>
     {#if abuseRouting.length}
       <details class="routing">
@@ -597,7 +596,7 @@
       {#if registrar.comparisonRows?.length}
         <section class="publication-comparison" aria-labelledby="registrar-publication-comparison-title">
           <h4 id="registrar-publication-comparison-title">{registrar.comparisonSummary}</h4>
-          <p>These remain separate publications. A difference can reflect update timing or disclosure policy and does not by itself establish that either source is incorrect.</p>
+          <p>Differences often reflect update timing or disclosure policy rather than an error.</p>
           <div class="table-wrap"><table><thead><tr><th>Field</th><th>Registry RDAP</th><th>Registrar RDAP</th><th>Assessment</th></tr></thead><tbody>{#each registrar.comparisonRows || [] as row}<tr class:conflict={row.status === 'conflict'}><th scope="row" data-label="Field">{row.label}</th><td data-label="Registry RDAP">{row.registryValue}</td><td data-label="Registrar RDAP">{row.registrarValue}</td><td data-label="Assessment"><span class={`chip ${row.tone}`}>{row.assessment}</span></td></tr>{/each}</tbody></table></div>
         </section>
       {/if}
@@ -690,11 +689,10 @@
   .trace-state{flex:none;color:var(--muted);font:700 var(--text-2xs) var(--mono);text-transform:uppercase}
   [data-state='complete'] .trace-state{color:var(--text)}
   [data-state='partial'] .trace-state{color:var(--amber)}
-  .trace-sources p,.trace-sources small,.trace-limit{color:var(--muted);font-size:var(--text-2xs);line-height:1.48}
+  .trace-sources p,.trace-sources small{color:var(--muted);font-size:var(--text-2xs);line-height:1.48}
   .trace-sources p{margin:8px 0 0}
   .trace-sources p b{color:var(--text)}
   .trace-sources small{display:block;margin-top:6px}
-  .trace-limit{margin:10px 0 0}
   .registry-insights>summary{border-bottom:1px solid transparent}
   .registry-insights[open]>summary{border-bottom-color:var(--border)}
   .insight-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;margin:var(--card-pad);overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--border)}

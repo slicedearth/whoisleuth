@@ -100,10 +100,11 @@ function detectDelimiter(line: string): string | null {
   return best;
 }
 
-// Used only to distinguish a pasted delimiter-separated query list from a
-// headerless multi-column CSV. Server-side classifyQuery remains the
-// authoritative validator when the scan runs.
-function looksLikeLookupToken(value: unknown): boolean {
+// Distinguishes a pasted delimiter-separated query list from a headerless
+// multi-column CSV, and lets Bulk skip free text that cannot be a domain, IP
+// address or ASN. Server-side classifyQuery remains the authoritative
+// validator when the scan runs.
+export function looksLikeLookupToken(value: unknown): boolean {
   const token = String(value || '').trim();
   if (!token || /\s/.test(token)) return false;
   if (/^AS\d+$/i.test(token) || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(token) || token.includes(':')) return true;

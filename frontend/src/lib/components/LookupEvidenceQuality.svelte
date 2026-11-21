@@ -2,6 +2,7 @@
   import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import { untrack } from 'svelte';
   import type { DecisionFact } from '../../../../packages/evidence/decision-fact.mts';
+  import { tokenLabel } from '../../../../packages/analysis/display-label.mts';
   import { buildLookupEvidenceQualityModel, buildLookupCollectionOutcomeReview } from '#lib/analysis/lookup-evidence-quality-model.ts';
   import { buildLookupEvidenceScope } from '#lib/analysis/lookup-evidence-scope.ts';
   import type { LookupEvidenceQualityMatrix } from '#lib/analysis/lookup-decision-support.ts';
@@ -80,7 +81,7 @@
 
 {#if model.entries.length}
   <section class="quality card" id="evidence-quality" aria-label="Evidence coverage">
-    <header>
+    <header class="quality-heading">
       <div>
         <p class="eyebrow">Evidence reliability</p>
         <h4 id="evidence-quality-title">Source quality and freshness</h4>
@@ -97,29 +98,32 @@
 
     {#if collectionReview.groups.length}
     <details class="collection-outcomes">
-      <summary>Compare the completed plan and source outcomes</summary>
-      <p>{collectionReview.mode === 'deep' ? 'Deep' : 'Fast'} Lookup for {collectionReview.target}, using the choices and results from that run.</p>
+      <summary>Compare source outcomes</summary>
+      <div class="outcomes-body">
+      <p class="outcomes-intro">{collectionReview.mode === 'deep' ? 'Deep' : 'Fast'} Lookup for <strong>{collectionReview.target}</strong></p>
       {#if original.collectionReceipt}
         <CollectionReceiptReview receipt={original.collectionReceipt} />
       {:else}
         <p>No original collection receipt was retained. Optional selections and collector starts are unknown.</p>
       {/if}
-      <p>The recipe below describes source eligibility, not proof that a request ran. Each source keeps its own state and time.</p>
+      <p class="note">Included, conditional and optional describe the collection plan. The results below show what was retained; each source has its own state and observation time.</p>
       <ul class="outcome-groups" aria-label="Completed collection source outcomes">
         {#each collectionReview.groups as group (group.id)}
           <li data-planned-source={group.id}>
-            <strong>{group.label}</strong>
-            <p>Recipe: {group.expectation === 'optional' ? (original.collectionReceipt ? 'optional; see the original choices above' : 'optional; original selection unknown') : group.expectation}.{group.diagnosticState ? ` Completed diagnostic: ${group.diagnosticState.replaceAll('_', ' ')}.` : ' Completed diagnostic unavailable.'}</p>
+            <div class="outcome-heading"><strong>{group.label}</strong><span>{tokenLabel(group.expectation)}</span></div>
+            <p class="outcome-diagnostic">{group.diagnosticState ? `Collection diagnostic: ${group.diagnosticState.replaceAll('_', ' ')}.` : 'No collection diagnostic retained.'}{group.expectation === 'optional' ? (original.collectionReceipt ? ' Selection recorded above.' : ' Original selection unknown.') : ''}</p>
             {#if !original.collectionReceipt}<p>{group.explanation}</p>{/if}
-            {#if group.id === 'domain_evidence'}<p>The domain diagnostic describes the availability branch; DNS, HTTP and TLS outcomes remain separate below.</p>{/if}
+            {#if group.id === 'domain_evidence'}<p>This diagnostic covers the availability check; DNS, HTTP and TLS results are listed below.</p>{/if}
             {#if group.records.length}
-              <ul>{#each group.records as entry (entry.id)}<li>
-                <strong>{entry.label}</strong>: {entry.statePresentation.label}{entry.sourceState ? ` · Provider result: ${entry.sourceState.replaceAll('_', ' ')}` : ''} · {entry.freshnessPresentation.label} · {observed(entry.observedAt)}{entry.truncated ? ' · Truncated' : ''}
+              <ul class="outcome-records">{#each group.records as entry (entry.id)}<li>
+                <div><strong>{entry.label}</strong><span>{entry.statePresentation.label}{entry.sourceState ? ` · Provider result: ${entry.sourceState.replaceAll('_', ' ')}` : ''}{entry.truncated ? ' · Truncated' : ''}</span></div>
+                <small>{observed(entry.observedAt)} · {entry.freshnessPresentation.label}</small>
               </li>{/each}</ul>
             {:else}<p>No separately attributed source record is available in this result.</p>{/if}
           </li>
         {/each}
       </ul>
+      </div>
     </details>
     {/if}
     <details class="records-disclosure">
@@ -158,7 +162,7 @@
               <span class="description">{entry.description}</span>
               {#if entry.refreshAvailable}<span class="refresh">Refresh available</span>{/if}
             </div>
-            <div role="cell">
+            <div class="source-state" role="cell">
               <span class="mobile-column-label" aria-hidden="true">State</span>
               <span
                 class="state tone-{entry.statePresentation.tone}"
@@ -176,7 +180,7 @@
                     data-provenance={contributor.provenance}
                   >
                     <span class="presentation-icon" data-icon={contributor.provenancePresentation.icon} aria-hidden="true"></span>
-                    <span><strong>{contributor.label}</strong><small>{contributor.provenancePresentation.label}</small></span>
+                    <span class="contributor-copy"><strong>{contributor.label}</strong><small>{contributor.provenancePresentation.label}</small></span>
                     <span class="sr-only">{contributor.provenancePresentation.assistiveText}</span>
                   </li>
                 {/each}
@@ -200,7 +204,7 @@
             <div class="timing" role="cell">
               <span class="mobile-column-label" aria-hidden="true">Timing</span>
               <span class:rejected={entry.timingOutcome === 'rejected'}>{formatCollectionDuration(entry.durationMs)}</span>
-              {#if entry.timingOutcome}<small>{entry.timingOutcome === 'rejected' ? 'Request error' : 'Settled branch'}</small>{/if}
+              {#if entry.timingOutcome}<small>{entry.timingOutcome === 'rejected' ? 'Request error' : 'Collector returned'}</small>{/if}
             </div>
             <div class="supports" role="cell">
               <span class="mobile-column-label" aria-hidden="true">Supports</span>
@@ -210,7 +214,8 @@
           {#if entry.limitationCount > 0}
             <div class="limitations-row" role="row">
               <div class="limitations" role="cell" aria-colspan="5" aria-label={`Limitations for ${entry.label}`}>
-                <strong>Limitations</strong>
+                <details class="record-notes">
+                <summary>Limitations and scope ({entry.limitationCount})</summary>
                 <div class="limitation-groups">
                   {#each entry.contributors.filter((contributor) => contributor.limitations.length > 0) as contributor (contributor.id)}
                     <section aria-label={`Limitations from ${contributor.label}`}>
@@ -220,18 +225,19 @@
                   {/each}
                   {#if entry.unattributedLimitations.length}
                     <section aria-label={`Fact limitations for ${entry.label}`}>
-                      <h5>Canonical fact</h5>
+                      <h5>Combined assessment</h5>
                       <ul>{#each entry.unattributedLimitations as limitation}<li>{limitation}</li>{/each}</ul>
                     </section>
                   {/if}
                 </div>
+                </details>
               </div>
             </div>
           {/if}
           </div>
         {/each}
       </div>
-      <p class="note">Source branches may overlap, so their durations do not add up to total request time. Missing, failed, stale, unsupported, and not-found evidence remains distinct and is never treated as proof of absence or safety.</p>
+      <p class="note">Source branches may overlap, so their durations do not add up to the total request time. A missing or failed source is not evidence that something is absent.</p>
       <details class="freshness-policy">
         <summary>Freshness policy · {refreshPlan.freshnessPolicy.id === 'analyst-custom' ? 'analyst-defined' : `${refreshPlan.freshnessPolicy.task} task default`}</summary>
         <div class="policy-form">
@@ -244,7 +250,7 @@
             <p>Registration {refreshPlan.freshnessPolicy.thresholdsDays.registration} days · network {refreshPlan.freshnessPolicy.thresholdsDays.network} days · web {refreshPlan.freshnessPolicy.thresholdsDays.web} days.</p>
           {/if}
         </div>
-        <p class="note">Thresholds organise source-refresh suggestions for results in this open Lookup page. They are not retained in workspace storage. A deliberately downloaded investigation brief records the policy used. Thresholds do not make older evidence false or newer evidence complete.</p>
+        <p class="note">Thresholds decide when this page suggests refreshing a source. They apply to this page only; a downloaded investigation brief records the policy used.</p>
       </details>
       <LookupSourceRefresh plan={refreshPlan} {original} {depth} ledger={refreshLedger} onledgerchange={onrefreshchange} {caseTarget} />
     </details>
@@ -260,24 +266,38 @@
 
 <style>
   .mobile-column-label{display:none}
-  .quality{min-width:0;padding:var(--card-pad);scroll-margin-top:calc(var(--local-nav-anchor-offset, 72px) + 12px)}
-  header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}
-  header h4{margin:2px 0 0;font:700 var(--text-lg) var(--mono)}
-  header p:not(.eyebrow){max-width:720px;margin:6px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
+  .quality{container-type:inline-size;min-width:0;padding:var(--card-pad);scroll-margin-top:calc(var(--local-nav-anchor-offset, 72px) + 12px)}
+  .quality-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}
+  .quality-heading h4{margin:2px 0 0;font:700 var(--text-lg) var(--mono)}
+  .quality-heading p:not(.eyebrow){max-width:720px;margin:6px 0 0;color:var(--muted);font-size:var(--text-xs);line-height:1.5}
   .metrics{display:flex;flex:0 0 auto;gap:7px;flex-wrap:wrap;justify-content:flex-end}
   .metrics span{padding:7px 9px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);color:var(--muted);font:var(--text-2xs) var(--mono)}
   .metrics strong{color:var(--text);font-size:var(--text-sm)}
   .metrics .attention strong{color:var(--amber)}
   details{margin-top:12px;border-top:1px solid var(--border)}
-  .outcome-groups{display:grid;gap:12px;margin:12px 0;padding-left:20px}.outcome-groups li{min-width:0;overflow-wrap:anywhere}.outcome-groups p{margin:4px 0}.outcome-groups ul{padding-left:20px}
+  .outcomes-body{font-size:var(--text-xs);line-height:1.55;overflow-wrap:anywhere}
+  .outcomes-intro{margin:0 0 12px;color:var(--muted)}
+  .outcomes-intro strong{color:var(--text)}
+  .outcome-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:12px;margin:14px 0 0;padding:0;list-style:none}
+  .outcome-groups>li{min-width:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm)}
+  .outcome-heading{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+  .outcome-heading>span{color:var(--muted);font:var(--text-2xs) var(--mono)}
+  .outcome-groups p{margin:7px 0;color:var(--muted);font-size:var(--text-2xs)}
+  .outcome-records{display:grid;gap:9px;margin:12px 0 0;padding:0;list-style:none}
+  .outcome-records>li{padding-top:9px;border-top:1px solid var(--border)}
+  .outcome-records>li>div{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:3px 10px;font-size:var(--text-2xs)}
+  .outcome-records>li>div>span{margin-left:auto;text-align:right}
+  .outcome-records span,.outcome-records small{color:var(--muted);font-size:var(--text-2xs)}
+  .outcome-records small{display:block;margin-top:3px}
   summary{padding:12px 0;color:var(--text);font:680 var(--text-xs) var(--mono);cursor:pointer}
   summary:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
-  .matrix{display:grid;gap:7px}
-  .matrix-head,.quality-row{display:grid;grid-template-columns:minmax(150px,1.25fr) minmax(92px,.65fr) minmax(155px,1fr) minmax(120px,.8fr) minmax(180px,1.25fr);gap:9px;align-items:start}
+  .matrix{display:grid;gap:12px}
+  .matrix-head,.quality-row{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr) minmax(0,1fr) minmax(0,.65fr) minmax(0,1fr);gap:14px;align-items:start}
   .matrix-head{padding:0 10px;color:var(--muted);font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
   .quality-record{min-width:0;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);overflow:hidden}
-  .quality-row{min-width:0;padding:10px}
-  .quality-record.limited{border-color:color-mix(in srgb,var(--amber) 38%,var(--border))}
+  .quality-row{min-width:0;padding:14px}
+  .quality-row>div{min-width:0}
+  .source-state{display:flex;flex-direction:column;align-items:flex-start;gap:4px}
   .source,.observed,.timing{display:grid;gap:2px;min-width:0}
   .source small,.observed small,.timing small{color:var(--muted);font:var(--text-2xs) var(--mono)}
   .source small{text-transform:uppercase}
@@ -304,19 +324,21 @@
   .presentation-icon[data-icon='evidence-derived']::before{content:'ƒ'}
   .contributors{display:grid;gap:4px;margin:7px 0 0;padding:0;list-style:none}
   .contributors li{display:grid;grid-template-columns:14px minmax(0,1fr);align-items:start;gap:5px;min-width:0;color:var(--muted)}
-  .contributors li>span:last-child{display:grid;gap:1px;min-width:0}
+  .contributor-copy{display:grid;gap:3px;min-width:0}
   .contributors strong,.contributors small{overflow-wrap:anywhere}
   .contributors strong{color:var(--text);font-size:var(--text-2xs)}
   .contributors small{color:var(--muted);font:var(--text-2xs) var(--font-sans)}
   .contributors .presentation-icon{margin-top:1px}
+  .contributors .presentation-icon::before{transform:translateY(.5px)}
   .truncated{display:block;width:max-content;margin-top:5px;color:var(--amber);font:650 var(--text-2xs) var(--mono)}
-  .observed>span:first-child,.timing span,.supports{color:var(--text);font-size:var(--text-2xs);line-height:1.45;overflow-wrap:anywhere}
+  .observation-time,.timing span,.supports{color:var(--text);font-size:var(--text-2xs);line-height:1.45;overflow-wrap:anywhere}
   .observed .freshness{margin-top:4px}
   .observed .freshness.tone-caution{color:var(--amber)}
   .timing span.rejected{color:var(--danger)}
-  .limitations{padding:8px 10px;border-top:1px solid var(--border);color:var(--muted);font-size:var(--text-2xs)}
-  .limitations strong{font:650 var(--text-2xs) var(--mono);text-transform:uppercase}
-  .limitation-groups{display:grid;gap:7px;margin-top:5px}
+  .limitations{padding:0 14px;border-top:1px solid var(--border);color:var(--muted);font-size:var(--text-2xs)}
+  .record-notes{margin:0;border:0}
+  .record-notes>summary{padding:10px 0;color:var(--muted);font-size:var(--text-2xs)}
+  .limitation-groups{display:grid;gap:10px;padding:0 0 12px}
   .limitation-groups section{min-width:0}
   .limitation-groups h5{margin:0;color:var(--text);font:650 var(--text-2xs) var(--mono);overflow-wrap:anywhere}
   .limitations ul{margin:3px 0 0;padding-left:17px;line-height:1.45}
@@ -326,20 +348,20 @@
   .policy-form{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised)}
   .policy-form label{display:grid;gap:4px;color:var(--muted);font:650 var(--text-2xs) var(--mono)}
   .policy-form p{grid-column:2/-1;align-self:center;margin:0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
-  @media(max-width:920px){
+  @container(max-width:800px){
     .matrix-head{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
     .mobile-column-label{display:block;color:var(--muted);font:650 var(--text-2xs) var(--mono);margin-bottom:4px}
-    .quality-row{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .quality-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
     .supports{grid-column:1/-1}
   }
-  @media(max-width:720px){
-    header{display:grid}
+  @container(max-width:620px){
+    .quality-heading{display:grid}
     .metrics{width:100%;justify-content:flex-start}
     .metrics span{flex:1}
+    .outcome-groups{grid-template-columns:minmax(0,1fr)}
   }
-  @media(max-width:480px){
-    .quality-row{grid-template-columns:minmax(0,1fr)}
-    .supports{grid-column:1}
+  @container(max-width:420px){
+    .source,.source-state{grid-column:1/-1}
     .policy-form{grid-template-columns:minmax(0,1fr)}
     .policy-form p{grid-column:1}
   }

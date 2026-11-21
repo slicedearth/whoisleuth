@@ -54,6 +54,11 @@
   const firstVisibleRow = $derived(sortedRows.length ? (currentPage - 1) * PAGE_SIZE + 1 : 0);
   const lastVisibleRow = $derived((currentPage - 1) * PAGE_SIZE + visibleRows.length);
   const inspection = $derived(inspectRegistrySupport(inspectedValue));
+  // Announce a one-line outcome; the full inspection card stays readable on demand.
+  const inspectionOutcome = $derived(!inspectionActive ? ''
+    : inspection.state === 'empty' ? 'Enter a domain or suffix.'
+      : inspection.state === 'invalid' || !inspection.profile ? 'Unsupported input format.'
+        : `Inspected .${inspection.profile.suffixes[0]}: ${registryCoverageLabel(inspection.profile.coverageState)}.`);
   const capabilityRows = $derived(lookupCapabilityRows(capabilityTarget));
 
   onMount(() => {
@@ -87,7 +92,7 @@
 
   function showInspectedProfile(suffix: string | undefined) {
     resetCatalogueView();
-    query = suffix ?? '';
+    query = suffix ? `.${suffix}` : '';
   }
 
   function capabilityStateClass(state: LookupCapabilityState): string {
@@ -212,8 +217,9 @@
     </div>
   </form>
 
+  <p class="sr-only" role="status">{inspectionOutcome}</p>
   {#if inspectionActive}
-    <div class="inspection-output" aria-live="polite">
+    <div class="inspection-output">
       {#if inspection.state === 'empty'}
         <section class="empty-state card"><h3>Enter a domain or suffix</h3><p>The inspector accepts one DNS hostname or suffix at a time.</p></section>
       {:else if inspection.state === 'invalid' || !inspection.profile}
@@ -240,7 +246,7 @@
           {#if profile.explicitSuffixProfile && profile.suffixes[0]}
             <div class="inspection-handoff">
               <a class="btn" href="#registry-catalogue" onclick={() => showInspectedProfile(profile.suffixes[0])}>Show in catalogue</a>
-              <span>Apply the exact suffix filter and review its fixture and documentation references.</span>
+              <span>Jump to this suffix’s profile in the catalogue.</span>
             </div>
           {/if}
           {#if officialLookupUrl}
@@ -261,13 +267,13 @@
   <header class="section-intro">
     <p class="eyebrow">Compatibility catalogue</p>
     <h2 id="catalogue-title">Implemented registry profiles</h2>
-    <p>Filter the explicit suffix profiles below. A suffix not listed here still uses normal IANA bootstrap and referral discovery, but has no suffix-specific fixture-backed behaviour.</p>
+    <p>Start with a dot for an exact suffix, such as <code>.pr</code>, or search by capability. Unlisted suffixes still use standard IANA discovery, without suffix-specific test coverage.</p>
   </header>
 
   <fieldset class="filters card">
     <legend>Filter registry profiles</legend>
     <label class="search" for="registry-filter">Suffix or capability
-      <input id="registry-filter" type="search" maxlength="100" placeholder="For example: uk, access, bracketed" value={query} oninput={(event) => { query = event.currentTarget.value; page = 1; }}>
+      <input id="registry-filter" type="search" maxlength="100" placeholder="For example: .pr, access, bracketed" value={query} oninput={(event) => { query = event.currentTarget.value; page = 1; }}>
     </label>
     <label for="coverage-filter">Coverage
       <select id="coverage-filter" value={coverage} onchange={(event) => { coverage = event.currentTarget.value; page = 1; }}>
@@ -337,12 +343,17 @@
                       <div><dt>Profile ID</dt><dd><code>{row.id}</code></dd></div>
                       <div><dt>Discovery</dt><dd>RDAP: {registryAccessLabel(row.rdapDiscovery)} · WHOIS: {registryAccessLabel(row.whoisDiscovery)}</dd></div>
                       <div><dt>Query scope</dt><dd>{registrySupportLabel(row.whoisQueryScope)} · {registrySupportLabel(row.whoisEncodingProfile)}</dd></div>
-                      <div><dt>Fixture states</dt><dd>{row.fixtureScenarios.length ? row.fixtureScenarios.map(registrySupportLabel).join(', ') : 'None documented'}</dd></div>
+                      <div><dt>Test scenarios</dt><dd>{row.fixtureScenarios.length ? row.fixtureScenarios.map(registrySupportLabel).join(', ') : 'None documented'}</dd></div>
                     </dl>
-                    {#if row.verificationFiles.length}<div><h3>Verified by</h3>{#each row.verificationFiles as file}<code class="reference">{file}</code>{/each}</div>{/if}
                     {#if officialLookupUrl}<div><h3>Manual lookup</h3><a href={officialLookupUrl} target="_blank" rel="noopener noreferrer">Open the official registry lookup<span class="sr-only"> (opens in a new tab)</span></a></div>{/if}
                     {#if row.documentationUrls.length}<div><h3>Documentation</h3><ul>{#each row.documentationUrls as url}<li><a href={url} target="_blank" rel="noopener noreferrer">{new URL(url).hostname}<span class="sr-only"> (opens in a new tab)</span></a></li>{/each}</ul></div>{/if}
                     <p class="limitation"><strong>Limitation:</strong> {row.limitation}</p>
+                    {#if row.verificationFiles.length}
+                      <details class="verification-files">
+                        <summary>Repository test files</summary>
+                        <ul>{#each row.verificationFiles as file}<li><code class="reference">{file}</code></li>{/each}</ul>
+                      </details>
+                    {/if}
                   </div>
                 </details>
               </td>
@@ -353,7 +364,7 @@
     </div>
     <Pagination {currentPage} {pageCount} {setPage} ariaLabel="Registry support pages" />
   {:else}
-    <section class="empty-state card"><h3>No matching profiles</h3><p>Try a shorter suffix, parser term, or a different coverage state.</p></section>
+    <section class="empty-state card"><h3>No matching profiles</h3><p>Check the suffix, try a different keyword, or clear a filter.</p></section>
   {/if}
 </section>
 
@@ -391,9 +402,10 @@
   .coverage-badge{display:inline-block!important;width:max-content;margin:0!important;border:1px solid color-mix(in srgb,var(--accent2) 42%,var(--border));border-radius:999px;padding:4px 7px;color:var(--accent2)!important;font:700 var(--text-2xs) var(--mono)}.coverage-badge.documented{border-color:color-mix(in srgb,var(--amber) 48%,var(--border));color:var(--amber)!important}
   summary{color:var(--accent);font:700 var(--text-xs) var(--mono);cursor:pointer}.profile-detail{display:grid;gap:13px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
   .profile-detail dl{display:grid;gap:7px;margin:0}.profile-detail dl>div{display:grid;grid-template-columns:90px minmax(0,1fr);gap:8px}.profile-detail dt{color:var(--muted);font:600 var(--text-2xs) var(--mono)}.profile-detail dd{min-width:0;margin:0;overflow-wrap:anywhere}.profile-detail h3{margin:0 0 5px;font:700 var(--text-2xs) var(--mono);text-transform:uppercase}.profile-detail ul{display:grid;gap:4px;margin:0;padding-left:18px}.profile-detail a{display:inline-flex;min-height:24px;align-items:center;color:var(--accent);overflow-wrap:anywhere}.reference{display:block;max-width:100%;color:var(--text);font-size:var(--text-2xs);overflow-wrap:anywhere}.limitation{margin:0;color:var(--muted);line-height:1.5}.limitation strong{color:var(--text)}
+  .verification-files ul{margin-top:6px}
   .interpretation{display:grid;grid-template-columns:minmax(190px,.7fr) minmax(0,1.3fr);gap:14px 28px;margin-top:24px;padding:18px}.interpretation h2{margin:3px 0 0;font:700 var(--text-md) var(--mono)}.interpretation p{margin:0;color:var(--muted);font-size:var(--text-xs);line-height:1.55}.interpretation p:last-child{grid-column:2}.interpretation code{color:var(--accent)}
   .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
-  @media(max-width:1400px){.table-wrap,.capability-table-wrap{overflow:visible;border:0;background:none}table,tbody,tr,td{display:block;width:100%}thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}tbody{display:grid;gap:10px}tr{overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}td{display:grid;grid-template-columns:minmax(95px,115px) minmax(0,1fr);gap:8px;min-width:0;border-top:1px solid var(--border)}td:first-child{border-top:0}td::before{content:attr(data-label);color:var(--muted);font:600 var(--text-2xs) var(--mono);text-transform:uppercase}td>*{grid-column:2;min-width:0}.capability-table{min-width:0}.capability-table td{max-width:none}.capability-table td:first-child,.capability-table td:last-child{min-width:0}td>strong{margin-top:0}.profile-detail{grid-column:1 / -1}}
+  @media(max-width:1400px){.table-wrap,.capability-table-wrap{overflow:visible;border:0;background:none}table,tbody,tr,td{display:block;width:100%}thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}tbody{display:grid;gap:10px}tr{overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel)}td{display:grid;grid-template-columns:minmax(95px,115px) minmax(0,1fr);gap:8px;min-width:0;border-top:1px solid var(--border)}td:first-child{border-top:0}td::before{content:attr(data-label);color:var(--muted);font:600 var(--text-2xs) var(--mono);text-transform:uppercase}td>*{grid-column:2;min-width:0}.capability-table{min-width:0}.capability-table td{max-width:none}.capability-table td:first-child,.capability-table td:last-child{min-width:0}td>strong{margin-top:0}.profile-detail{grid-column:1 / -1}td[data-label="Profile details"]>details{grid-column:1 / -1}}
   @media(max-width:900px){.summary-grid,.standards-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.standards-notes{grid-template-columns:1fr}.inspection-card dl{grid-template-columns:repeat(2,minmax(0,1fr))}.interpretation{grid-template-columns:1fr}.interpretation p:last-child{grid-column:1}}
   @media(max-width:560px){.summary-grid,.standards-grid{grid-template-columns:1fr}.capability-intro{align-items:start;flex-direction:column}.capability-filter{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}.inspector-form{grid-template-columns:1fr}.inspection-card dl{grid-template-columns:1fr}.filters{display:grid}.filters .search{min-width:0}.filters input,.filters select{width:100%}.filter-actions{min-width:0;justify-content:space-between}.version{justify-self:start}.profile-detail dl>div{grid-template-columns:1fr}.profile-detail dd{margin-top:2px}}
 </style>

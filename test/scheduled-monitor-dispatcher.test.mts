@@ -119,7 +119,7 @@ async function harness({
   const deliveries: DeliveryRecord[] = [];
   const lookupCalls: Array<{
     domain: string;
-    options: { fast: true; compact: true };
+    options: Parameters<ScheduledMonitorDispatcherOptions['lookup']>[1];
   }> = [];
   const dispatcher = new ScheduledMonitorDispatcher({
     repository,
@@ -454,6 +454,17 @@ test('scheduled result projection retains only compact registration evidence wit
       < MAX_SCHEDULED_MONITOR_STORE_BYTES,
   );
   assert.throws(() => scheduledLookupResult({ domain: 'not valid' }, {}), /source is invalid/i);
+});
+
+test('scheduled result projection keeps the established registry date fields in every mode', () => {
+  // A separately normalised date must not replace a retained baseline's source field.
+  const availability = { state: 'registered', createdDate: 'Before 1995', createdDateIso: '1994-01-01T00:00:00.000Z',
+    expiryDate: '2027-02-03T00:00:00Z', expiryDateIso: '2027-02-04T00:00:00.000Z' };
+  for (const mode of ['fast', 'deep'] as const) {
+    const result = scheduledLookupResult({ domain: 'alpha.example' }, { availability }, mode);
+    assert.equal(result.createdDate, null);
+    assert.equal(result.expiryDate, '2027-02-03');
+  }
 });
 
 test('constructor rejects incomplete execution contracts and invalid generated identifiers', async () => {

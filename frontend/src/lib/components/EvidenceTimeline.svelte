@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tokenLabel } from '../../../../packages/analysis/display-label.mts';
   import { getContext } from 'svelte';
   import { CONSOLE_PRESENTATION_CONTEXT, type ConsolePresentationContext } from '../appearance.ts';
   import type { CaseRecord } from '#lib/cases.ts';
@@ -64,11 +65,16 @@
 {#if selection.limitation}<p class="timeline-incomparable-note">{selection.limitation} Review the retained snapshots below.</p>{/if}
 {#if summary}
   <dl class="evidence">
-    <dt>Availability</dt><dd>{summary.availability ?? '—'}</dd>
-    <dt>Risk</dt><dd>{summary.riskScore ?? '—'}{#if summary.riskModelVersion !== null} · model v{summary.riskModelVersion}{/if}{#if summary.riskCollectionLimitation}<small>{summary.riskCollectionLimitation}</small>{/if}</dd>
-    <dt>Profile context</dt><dd>{summary.profileContextState ?? 'Not observed'}{#if summary.profileContextLimitation}<small>{summary.profileContextLimitation}</small>{/if}</dd>
+    <dt>Availability</dt><dd>{tokenLabel(summary.availability ?? '—')}</dd>
+    <dt>Risk</dt><dd>
+      <span class="evidence-risk">
+        <span>{summary.riskScore ?? '—'}</span>{#if summary.riskModelVersion !== null}{' '}<span class="risk-model"><span aria-hidden="true">·</span>{' '}<span>model v{summary.riskModelVersion}</span></span>{/if}
+      </span>
+      {#if summary.riskCollectionLimitation}<small>{summary.riskCollectionLimitation}</small>{/if}
+    </dd>
+    <dt>Profile context</dt><dd>{tokenLabel(summary.profileContextState ?? 'Not observed')}{#if summary.profileContextLimitation}<small>{summary.profileContextLimitation}</small>{/if}</dd>
     <dt>Registrar</dt><dd>{summary.registrar ?? '—'}</dd>
-    <dt>Website</dt><dd>{summary.activityStatus ?? '—'}</dd>
+    <dt>Website</dt><dd>{tokenLabel(summary.activityStatus ?? '—')}{#if summary.activityCollectionLimited}<small>Collection incomplete or unknown</small>{/if}</dd>
     <dt>Captured</dt><dd>{date(summary.capturedAt)}</dd>
   </dl>
 {/if}
@@ -96,11 +102,13 @@
           <div class="timeline-entry-head">
             <button id={snapId} class="timeline-toggle" aria-expanded={isExpanded} aria-controls={isExpanded ? bodyId : undefined} onclick={()=>toggleSnapshot(entry.snapshot.id)}>
               <span class="timeline-index">#{entry.displayIndex}</span>
-              <time datetime={entry.snapshot.capturedAt}>{entry.hasRepeatedObservation?'Last observed ':'Captured '}{date(entry.snapshot.capturedAt)}</time>
+              <span>{entry.hasRepeatedObservation?'Last observed':'Captured'}</span>{' '}<time datetime={entry.snapshot.capturedAt}>{date(entry.snapshot.capturedAt)}</time>
             </button>
             {#if onpincheckpoint}<button type="button" class="btn small" aria-label={`Pin checkpoint ${entry.snapshot.id} for comparison`} onclick={() => onpincheckpoint?.(entry.snapshot.id)}>Pin checkpoint</button>{/if}
+            {#if entry.hasRepeatedObservation}
+              <span class="timeline-repeat">First observed <time datetime={entry.snapshot.firstCapturedAt}>{date(entry.snapshot.firstCapturedAt)}</time></span>
+            {/if}
             <span class="timeline-badges">
-              {#if entry.hasRepeatedObservation}<span class="timeline-badge timeline-repeat">First observed {date(entry.snapshot.firstCapturedAt)}</span>{/if}
               <span class="timeline-badge">{evidenceSourceLabel(entry.snapshot.source)}</span>
               <span class="timeline-badge">{scanDepthLabel(entry.snapshot.scanDepth)}</span>
               {#if entry.isBaseline}
@@ -132,7 +140,12 @@
               {#each snapshotFieldGroups(entry.snapshot) as group}
                 <section class="timeline-group">
                   <h4>{group.name}</h4>
-                  <dl>{#each group.rows as row}<dt>{row.label}</dt><dd>{formatSnapshotValue(row.field,row.value)}</dd>{/each}</dl>
+                  <dl>{#each group.rows as row}<dt>{row.label}</dt><dd>
+                    {#if row.collectionLimited}<small class="collection-limit">Retained value · collection incomplete or unknown</small>{/if}
+                    {#if (row.field === 'riskFactors' || row.field === 'opportunityFactors') && Array.isArray(row.value)}
+                      <ul class="snapshot-factors">{#each row.value as factor}<li>{formatSnapshotValue(row.field,[factor])}</li>{/each}</ul>
+                    {:else}{row.collectionLimited && typeof row.value === 'boolean' ? tokenLabel(String(row.value)) : formatSnapshotValue(row.field,row.value)}{/if}
+                  </dd>{/each}</dl>
                 </section>
               {/each}
             </div>
@@ -149,9 +162,13 @@
 <style>
   .journal .timeline-list{gap:18px}.journal .timeline-entry{padding:clamp(16px,3vw,26px);background:color-mix(in srgb,var(--panel-raised) 94%,#d5ad64);border-radius:var(--radius-sm)}.journal .timeline-changes{gap:10px}.journal .timeline-change{line-height:1.7}.journal .timeline-incomparable-note{line-height:1.7;max-width:75ch}
   .evidence{display:grid;grid-template-columns:auto 1fr;gap:5px 14px;margin:0;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:var(--text-xs)}.evidence dt{color:var(--muted)}.evidence dd{margin:0;overflow-wrap:anywhere}.evidence small{display:block;margin-top:3px;color:var(--amber);line-height:1.45}
+  .evidence-risk,.risk-model{display:flex;align-items:baseline;column-gap:7px}.evidence-risk{flex-wrap:wrap;row-gap:2px}.risk-model{color:var(--muted);font-size:var(--text-2xs)}
   .timeline{margin-top:4px}.timeline-header{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px}.timeline-header h3{margin:0;font:700 var(--text-sm) var(--mono)}.timeline-header small{margin-left:8px;color:var(--muted);font-size:var(--text-2xs);font-weight:400}.timeline-controls{display:flex;flex-wrap:wrap;gap:7px}.timeline-controls button,.timeline-toggle{min-height:32px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-raised);font:600 var(--text-2xs) var(--mono)}.timeline-controls button[aria-pressed="true"]{color:var(--interface-accent);border-color:rgb(var(--interface-accent-rgb) / .55);background:rgb(var(--interface-accent-rgb) / .07)}.timeline-empty,.timeline-filter-note,.timeline-incomparable-note{color:var(--muted);font-size:var(--text-xs)}.timeline-empty{padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}
-  .timeline-list,.timeline-changes{display:grid;gap:10px;margin:0;padding:0;list-style:none}.timeline-entry{padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised)}.timeline-entry-head,.timeline-badges{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.timeline-toggle{display:flex;gap:6px;align-items:center;background:var(--panel);cursor:pointer}.timeline-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:1px}.timeline-toggle time{font-size:var(--text-xs)}.timeline-index{color:var(--muted);font-size:var(--text-2xs);font-weight:700}.timeline-badge{padding:3px 8px;border:1px solid var(--border);border-radius:99px;font:600 var(--text-2xs) var(--mono)}.timeline-baseline{color:var(--accent2)}.timeline-changed{color:var(--danger)}.timeline-incomparable{color:var(--amber)}.timeline-repeat{color:var(--muted)}
+  .timeline-list,.timeline-changes{display:grid;gap:10px;margin:0;padding:0;list-style:none}.timeline-entry{padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel-raised)}.timeline-entry-head,.timeline-badges{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.timeline-toggle{display:flex;gap:8px;align-items:baseline;padding-block:6px;text-align:start;background:var(--panel);cursor:pointer;font-size:var(--text-xs);line-height:1.45}.timeline-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:1px}.timeline-toggle time{min-width:0;overflow-wrap:anywhere}.timeline-index{color:var(--muted);font-size:var(--text-2xs);font-weight:700}.timeline-badge{padding:3px 8px;border:1px solid var(--border);border-radius:99px;font:600 var(--text-2xs) var(--mono)}.timeline-baseline{color:var(--accent2)}.timeline-changed{color:var(--danger)}.timeline-incomparable{color:var(--amber)}.timeline-repeat{display:flex;flex-wrap:wrap;gap:2px 6px;color:var(--muted);font:600 var(--text-2xs)/1.45 var(--mono)}
   .timeline-changes{gap:5px;margin-top:10px}.timeline-change{display:grid;grid-template-columns:minmax(100px,1fr) 80px minmax(0,1fr);gap:8px;padding:7px 9px;border-left:3px solid var(--border);font-size:var(--text-xs)}.timeline-change.tone-danger{border-color:var(--danger)}.timeline-change.tone-warn{border-color:var(--amber)}.timeline-change.tone-good{border-color:var(--accent2)}.change-kind{color:var(--muted);font-size:var(--text-2xs);text-transform:capitalize}.change-values{display:flex;flex-wrap:wrap;gap:4px;min-width:0}.change-values span{overflow-wrap:anywhere;word-break:break-word}.change-arrow{color:var(--muted)}
   .timeline-detail{margin-top:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel)}.timeline-group:not(:last-child){margin-bottom:10px}.timeline-group h4{margin:0 0 6px;color:var(--muted);font:600 var(--text-2xs) var(--mono);letter-spacing:.05em;text-transform:uppercase}.timeline-group dl{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;margin:0;font-size:var(--text-xs)}.timeline-group dt{color:var(--muted)}.timeline-group dd{margin:0;overflow-wrap:anywhere;word-break:break-word}.timeline-filter-note{margin-top:10px}
   @media(max-width:800px){.timeline-change,.timeline-group dl{grid-template-columns:1fr}.timeline-entry-head{align-items:flex-start;flex-direction:column}.timeline-toggle{width:100%;justify-content:flex-start}.change-values{display:grid;grid-template-columns:1fr}}
+  @media(max-width:480px){.timeline-toggle{display:grid;grid-template-columns:auto minmax(0,1fr);row-gap:2px}.timeline-toggle time{grid-column:1 / -1;color:var(--muted);font-size:var(--text-2xs)}}
+  .collection-limit{display:block;color:var(--muted);font-size:var(--text-2xs);line-height:1.45}
+  .snapshot-factors{display:grid;gap:6px;margin:0;padding-left:18px}
 </style>

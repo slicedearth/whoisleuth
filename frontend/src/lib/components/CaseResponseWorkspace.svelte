@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tokenLabel } from '../../../../packages/analysis/display-label.mts';
   import { tick, type ComponentProps, type Snippet } from 'svelte';
   import { caseInvestigationContext } from '../../../../packages/cases/case-incident-context.mts';
   import { caseTypeSummary } from '../../../../packages/cases/case-type-presentation.mts';
@@ -274,7 +275,7 @@
     {#if currentResponseStage}
       <div class="next-action-summary" data-status={currentResponseStage.status} role="status" aria-label="Next Case requirement">
         <strong>{currentResponseStage.label}</strong>
-        <span>{currentResponseStage.status.replaceAll('_', ' ')}</span>
+        <span>{tokenLabel(currentResponseStage.status)}</span>
         <p>{currentResponseStage.nextRequirement}</p>
         <button class="btn" type="button" onclick={() => void openStage(currentResponseStage!.id)}>Open {currentResponseStage.label.toLowerCase()}</button>
       </div>

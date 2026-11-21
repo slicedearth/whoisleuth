@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tokenLabel } from '../../../../packages/analysis/display-label.mts';
   import {
     type OpportunityExplanation,
     type RiskExplanation,
@@ -131,7 +132,7 @@
     <div>
       <p class="eyebrow">Evidence assessment</p>
       <h4 id="lookup-assessment-title">{detail}</h4>
-      <p>{confidence} confidence. Review the source evidence and its limits before using these triage results.</p>
+      <p>{tokenLabel(confidence)} confidence. Review the source evidence and its limits before using these triage results.</p>
     </div>
   </header>
 
@@ -144,7 +145,7 @@
   {/if}
 
   {#if trusted}
-    <p class="callout info">This domain is {trusted} in the active brand profile. Triage remains evidence context and is not treated as an untrusted finding.</p>
+    <p class="callout info">This domain is {trusted} in the active brand profile; its triage is shown for context.</p>
   {/if}
 
   <div class="assessment-bands">
@@ -220,7 +221,7 @@
           </div>
           <span class="model-label">Opportunity model v{opportunity.modelVersion}</span>
         </header>
-        <p class="band-summary">Opportunity is acquisition-readiness context only. It is not availability, value, eligibility, price, or likely purchase success.</p>
+        <p class="band-summary">Opportunity describes acquisition readiness only, not availability, value or price.</p>
         <div class="coverage-state state-{opportunity.evidenceQuality.state}">
           <strong>Evidence coverage: {evidenceStateLabel(opportunity.evidenceQuality.state)}</strong>
           <span>{qualitySummary(opportunity)} · {opportunity.evidenceQuality.scanDepth} scan</span>

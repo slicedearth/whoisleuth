@@ -4,6 +4,7 @@
   import PublicReferenceDocument from '#lib/components/PublicReferenceDocument.svelte';
   import PublicSeo from '#lib/components/PublicSeo.svelte';
   import IntelligenceIcon from '#lib/components/IntelligenceIcon.svelte';
+  import PublicTerminalDemo from '#lib/components/PublicTerminalDemo.svelte';
   import { PUBLIC_CLI_GUIDANCE } from '#lib/generated/public-cli-guidance.ts';
   import { PUBLIC_CLI_INDEX } from '#lib/generated/public-cli-index.ts';
   import { WHOISLEUTH_SOURCE_REPOSITORY_URL } from '../../../../../packages/analysis/project-metadata.mts';
@@ -12,6 +13,7 @@
   const pageSections = [
     { href: '#start', label: 'Get started' },
     { href: '#tasks', label: 'Common tasks' },
+    { href: '#terminal', label: 'Terminal browser' },
     { href: '#commands', label: 'Command reference' },
     { href: '#browser-handoff', label: 'Browser and CLI handoffs' },
     { href: '#choose-mode', label: 'Choose how to run' },
@@ -85,7 +87,7 @@
   <p>Choosing between the browser and terminal? <a href="#choose-mode">Compare ways to run WHOISleuth</a>.</p>
   <div class="start-notes independent-grid">
     <p>Use <code>whoisleuth &lt;command&gt; --help</code> for the exact options installed on your machine.</p>
-    <details class="update-instructions compact-disclosure"><summary>Update an installed package</summary><div>{#each PUBLIC_CLI_GUIDANCE.update as command}<CopyableCommand {command} label="update command" compact />{/each}</div></details>
+    <details class="update-instructions compact-disclosure"><summary>Update an installed package</summary><div>{#each PUBLIC_CLI_GUIDANCE.update as command,step}<CopyableCommand {command} label={PUBLIC_CLI_GUIDANCE.update.length > 1 ? `update step ${step + 1} of ${PUBLIC_CLI_GUIDANCE.update.length} command` : 'update command'} compact />{/each}</div></details>
   </div>
 </section>
 
@@ -102,6 +104,11 @@
   </div>
 </section>
 
+<section class="cli-section" id="terminal" aria-labelledby="terminal-title">
+  <div class="section-intro"><h2 id="terminal-title">Explore evidence in your terminal</h2><p>Open saved Lookups and compare observations offline. Run <code>whoisleuth</code> without arguments for the interactive launcher, or use the commands below.</p></div>
+  <PublicTerminalDemo />
+</section>
+
 <section class="cli-section" id="commands" aria-label="Command reference">
   <PublicCliExplorer />
 </section>
@@ -112,7 +119,7 @@
     {#each PUBLIC_CLI_GUIDANCE.interchangeRecipes as recipe,index}
       <article>
         <header><span>{index + 1}</span><h3>{recipe.label}</h3></header>
-        <div class="recipe-commands">{#each recipe.commands as command}<CopyableCommand {command} label={`${recipe.label} command`} compact />{/each}</div>
+        <div class="recipe-commands">{#each recipe.commands as command,step}<CopyableCommand {command} label={recipe.commands.length > 1 ? `${recipe.label} step ${step + 1} of ${recipe.commands.length} command` : `${recipe.label} command`} compact />{/each}</div>
         <p>{recipe.result}</p>
       </article>
     {/each}

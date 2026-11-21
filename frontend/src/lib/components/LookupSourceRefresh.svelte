@@ -112,7 +112,7 @@
   <section class="source-refresh" aria-labelledby={headingId}>
     <header>
       <h5 id={headingId}>Retry or refresh a source</h5>
-      <p>Compare a source with the original result or its previous refresh. Saving selected facts never rewrites the original Lookup.</p>
+      <p>Compare a source with the original result or its previous refresh. The original Lookup is never changed.</p>
     </header>
     <ul class="refresh-actions">
       {#each plan.items as item}
@@ -131,7 +131,7 @@
     {#if results.length}
       <section class="observation-overview" aria-label="Original and refreshed observations">
         <h6>Original and refreshed observations</h6>
-        <p>The original result stays unchanged. This overview covers only refreshes retained in this review; removed and cancelled requests are not represented. Request times show when you asked; fact times show when each source was observed.</p>
+        <p>This overview covers only refreshes retained in this review; removed and cancelled requests are not represented. Request times show when you asked; fact times show when each source was observed.</p>
         <ul class="observation-summary">
           {#each observationSummary as row (row.id)}
             <li aria-label={row.label}>

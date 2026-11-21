@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { BULK_REVIEW_MANIFEST_VERSION } from '../packages/contracts/investigation-portability.mts';
 import { expect, test } from './fixtures';
-import { boundingBox, currentBrowserLocalDocument, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, failBrowserLocalCollectionReads, failBrowserLocalReads, holdBrowserLocalReads, holdBrowserLocalTransaction, lookupDomainIdentity, migrateLegacyBrowserData, openBulkFilters, openBulkWorkspaceTools, pseudoContent, readBrowserLocalCollection, runBulkScan, selectBulkResultView, useTheme } from './helpers';
+import { boundingBox, currentBrowserLocalDocument, expectNoHorizontalOverflow, expectNoHorizontalScrollContainers, failBrowserLocalCollectionReads, failNextBrowserLocalManifestWrite, failBrowserLocalReads, holdBrowserLocalReads, holdBrowserLocalTransaction, lookupDomainIdentity, migrateLegacyBrowserData, openBulkFilters, openBulkWorkspaceTools, pseudoContent, readBrowserLocalCollection, runBulkScan, selectBulkResultView, useTheme } from './helpers';
 import { createCase } from '../packages/cases/case-model.mts';
 import { captureDownloads, invalidDomains } from './bulk-analysis-fixtures';
 
@@ -171,6 +171,8 @@ test('the scan action is available only when the queue contains a target', async
 
   await page.locator('#domains').fill(invalidDomains(1).join('\n'));
   await expect(scanButton).toBeEnabled();
+  // The server still validates the entry; the queue gives only a neutral hint.
+  await expect(page.locator('.input-help')).toContainText('1 entry may not be a domain, IP address or ASN; the server checks every entry.');
   await page.locator('#domains').fill('');
   await expect(scanButton).toBeDisabled();
 });
@@ -256,7 +258,12 @@ test('keeps the Bulk queue available when browser-local context cannot be loaded
   await expect(page.getByLabel('Session name')).toHaveCount(0);
   await openBulkWorkspaceTools(page, 'review');
   await expect(page.getByText(/Saved views and review state could not be read/u)).toBeVisible();
-  await page.locator('button.mobile-disclosure-toggle', { hasText: 'Shortlist' }).click();
+  // Bulk panel disclosures share the circled toggle icon used across the console.
+  const shortlistToggle = page.locator('button.mobile-disclosure-toggle', { hasText: 'Shortlist' });
+  await expect(shortlistToggle.locator('.toggle-icon')).not.toHaveClass(/expanded/u);
+  await shortlistToggle.click();
+  await expect(shortlistToggle.locator('.toggle-icon')).toHaveClass(/expanded/u);
+  await expect(page.locator('button.mobile-workspace-toggle .toggle-icon')).toHaveClass(/expanded/u);
   await expect(page.getByText(/The shortlist could not be read/u)).toBeVisible();
   await expect(page.getByText(/No shortlisted domains/u)).toHaveCount(0);
 });
@@ -444,11 +451,103 @@ test('a small scan completes and reports the correct error count', async ({ page
 
   await expect(page.locator('.filters button', { hasText: 'all' }).locator('span')).toHaveText(String(domains.length));
   await expect(page.locator('.filters button', { hasText: 'errors' }).locator('span')).toHaveText(String(domains.length));
-  await expect(page.locator('.results-table .confidence')).toHaveText(Array(domains.length).fill('unknown confidence'));
+  await expect(page.locator('.results-table .confidence')).toHaveText(Array(domains.length).fill(/^unknown confidence$/iu));
   const outcomes = page.locator('.outcomes');
   await expect(outcomes).toHaveAttribute('aria-label', 'Settled scan outcomes');
   await expect(outcomes.locator('div', { hasText: 'Failed' })).toContainText(String(domains.length));
   await expect(outcomes.locator('div', { hasText: 'Pending' })).toContainText('0');
+  // Only the server's own invalid-query rejection removes Case creation.
+  await expect(page.locator('td[data-label="Case"]').first()).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Create case for / })).toHaveCount(0);
+  await expect(page.locator('td[data-label="Case"]').getByText('Rejected as not a lookup target')).toHaveCount(domains.length);
+});
+
+test('a valid target the local hint cannot recognise keeps Case creation when its collection fails', async ({ page }) => {
+  // A bare ASN with a leading zero is a valid target, though the local list heuristic cannot recognise it.
+  await page.route('**/api/lookup?*', route => route.fulfill({ status: 400, contentType: 'application/json',
+    body: JSON.stringify({ error: 'Lookup failed', errorCode: 'LOOKUP_FAILED' }) }));
+  await page.locator('#domains').fill('064496');
+  await expect(page.locator('.input-help')).toContainText('1 entry may not be a domain, IP address or ASN; the server checks every entry.');
+  await expect(page.locator('.input-help')).not.toContainText('reported as invalid');
+  await runBulkScan(page, ['064496']);
+  const caseCell = page.locator('td[data-label="Case"]').first();
+  await expect(caseCell.getByRole('button', { name: 'Create case for 064496', exact: true })).toBeVisible();
+  await expect(caseCell.getByText('Rejected as not a lookup target')).toHaveCount(0);
+});
+
+test('a failed Case save removes its pending focus listener', async ({ page }) => {
+  const domain = 'failed-save.example';
+  await page.route('**/api/lookup?*', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+    availability: { applicable: true, domain, state: 'registered', confidence: 'high', registrarName: 'Fixture registrar' },
+    diagnostics: { version: 7, rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+  }) }));
+  await runBulkScan(page, [domain]);
+  const caseCell = page.locator('td[data-label="Case"]').first();
+  const create = caseCell.getByRole('button', { name: `Create case for ${domain}`, exact: true });
+  await expect(create).toBeVisible();
+  // Count focusin capture listeners added and removed from here on.
+  await page.evaluate(() => {
+    const target = window as typeof window & { focusinCaptureListeners?: Set<unknown>; focusinCaptureAdded?: number };
+    const active = new Set<unknown>();
+    target.focusinCaptureListeners = active;
+    target.focusinCaptureAdded = 0;
+    const capture = (options: unknown) => options === true || (typeof options === 'object' && options !== null && Reflect.get(options, 'capture') === true);
+    const add = document.addEventListener.bind(document);
+    const remove = document.removeEventListener.bind(document);
+    document.addEventListener = ((type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions) => {
+      if (type === 'focusin' && capture(options)) { active.add(listener); target.focusinCaptureAdded = (target.focusinCaptureAdded ?? 0) + 1; }
+      add(type, listener, options);
+    }) as typeof document.addEventListener;
+    document.removeEventListener = ((type: string, listener: EventListenerOrEventListenerObject, options?: boolean | EventListenerOptions) => {
+      if (type === 'focusin' && capture(options)) active.delete(listener);
+      remove(type, listener, options);
+    }) as typeof document.removeEventListener;
+  });
+  const listeners = () => page.evaluate(() => (window as typeof window & { focusinCaptureListeners?: Set<unknown> }).focusinCaptureListeners?.size ?? -1);
+  await failNextBrowserLocalManifestWrite(page, 'cases');
+  // The Create case button keeps focus while the save is rejected.
+  await create.focus();
+  await page.keyboard.press('Enter');
+  await expect(caseCell.locator('select.case-disp')).toHaveCount(0);
+  await expect(create).toBeVisible();
+  // The action did register its listener, and the failed save removed it.
+  expect(await page.evaluate(() => (window as typeof window & { focusinCaptureAdded?: number }).focusinCaptureAdded ?? 0)).toBeGreaterThanOrEqual(1);
+  await expect.poll(listeners).toBe(0);
+});
+
+test('a delayed Case save does not take focus the analyst has moved elsewhere', async ({ page }) => {
+  const domain = 'focus-race.example';
+  await page.route('**/api/lookup?*', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+    availability: { applicable: true, domain, state: 'registered', confidence: 'high', registrarName: 'Fixture registrar' },
+    diagnostics: { version: 7, rdap: { status: 'complete' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+  }) }));
+  await runBulkScan(page, [domain]);
+  const caseCell = page.locator('td[data-label="Case"]').first();
+  const create = caseCell.getByRole('button', { name: `Create case for ${domain}`, exact: true });
+  await expect(create).toBeVisible();
+  const release = await holdBrowserLocalTransaction(page);
+  let released = false;
+  try {
+    await create.focus();
+    await page.keyboard.press('Enter');
+    // The analyst moves on, then leaves that control, before the held save completes.
+    const queue = page.locator('#domains');
+    await queue.focus();
+    await expect(queue).toBeFocused();
+    await queue.blur();
+    await expect.poll(() => page.evaluate(() => document.activeElement === document.body)).toBe(true);
+    await expect(caseCell.locator('select.case-disp')).toHaveCount(0);
+    await release();
+    released = true;
+    await expect(caseCell.locator('select.case-disp')).toBeVisible();
+    // Let any deferred focus restoration run before checking where focus is.
+    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    // Moving away cancelled the restore, so focus stays where the analyst left it.
+    await expect(caseCell.locator('select.case-disp')).not.toBeFocused();
+    expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+  } finally {
+    if (!released) await release();
+  }
 });
 
 test('selected Case dispositions commit atomically and ignore a rapid overlapping selection', async ({ page }) => {
@@ -849,14 +948,14 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
   const beforeShortcut = await readBrowserLocalCollection(page, 'bulk_review');
   await page.keyboard.press('Alt+r');
   await expect(inspectRight).toBeFocused();
-  await expect(cockpit.locator('.result-queue li').filter({ hasText: 'left-review.example' })).toContainText('unreviewed');
-  await expect(cockpit.locator('.result-queue li').filter({ hasText: 'right-review.example' })).toContainText('unreviewed');
+  await expect(cockpit.locator('.result-queue li').filter({ hasText: 'left-review.example' })).toContainText(/\bunreviewed\b/iu);
+  await expect(cockpit.locator('.result-queue li').filter({ hasText: 'right-review.example' })).toContainText(/\bunreviewed\b/iu);
   expect(await readBrowserLocalCollection(page, 'bulk_review')).toEqual(beforeShortcut);
   await inspectRight.click();
   await markReviewed.focus();
   await page.keyboard.press('Alt+r');
-  await expect(cockpit.locator('.review-state')).toHaveText('reviewed');
-  await expect(cockpit.locator('.result-queue li').filter({ hasText: 'left-review.example' })).toContainText('unreviewed');
+  await expect(cockpit.locator('.review-state')).toHaveText(/^reviewed$/iu);
+  await expect(cockpit.locator('.result-queue li').filter({ hasText: 'left-review.example' })).toContainText(/\bunreviewed\b/iu);
   const afterShortcut = await readBrowserLocalCollection(page, 'bulk_review', { minimumRecords: 1 });
   expect(afterShortcut.records.map(record => record.value)).toMatchObject([
     { kind: 'row', domain: 'right-review.example', state: 'reviewed' },
@@ -870,7 +969,7 @@ test('supports focused review and an evidence-qualified two-domain comparison', 
     element.querySelector<HTMLButtonElement>('[aria-pressed="true"]')!.dispatchEvent(event);
     return event.defaultPrevented;
   })).toBe(true);
-  await expect(cockpit.locator('.review-state')).toHaveText('reviewed');
+  await expect(cockpit.locator('.review-state')).toHaveText(/^reviewed$/iu);
   await inspectRight.click();
   await expect(cockpit.getByRole('heading', { name: 'right-review.example', exact: true })).toBeVisible();
   await expect(page).toHaveURL(/\/bulk/u);
@@ -1058,7 +1157,7 @@ test('a malformed successful response remains an explicit failure in exports and
   await openBulkFilters(page);
   const row = page.locator('.results-table tbody tr');
   await expect(page.locator('.filters button', { hasText: 'errors' }).locator('span')).toHaveText('1');
-  await expect(row.locator('td[data-label="Registration"]')).toContainText('error');
+  await expect(row.locator('.state')).toHaveText(/^error$/iu);
   expect(await row.locator('.state').evaluate((element) => {
     const probe = document.createElement('span');
     probe.style.color = 'var(--danger)';

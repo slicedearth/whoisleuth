@@ -66,8 +66,13 @@
       <details class="http-detail disclosure"><summary>Selected response metadata</summary><dl>{#each metadata as row}<dt>{row.label}</dt><dd class:http-hash={row.hash}>{row.value}</dd>{/each}</dl></details>
     {/if}
     {#if deliveryMetadata}<LookupMetadataDisclosure label="Observed HTTP delivery metadata" metadata={deliveryMetadata} />{/if}
-    {#if limitations.length}<p class="callout warn">{limitations.join(' ')}</p>{/if}
-    <p class="card-note">Requested and final URLs come from this HTTP collection; query strings are not retained. A requested URL alone does not establish that a page was reached. Redirects and headers provide context; missing security headers do not establish maliciousness.</p>
+    {#if limitations.length}
+      <details class="disclosure evidence-scope-notes" open={!complete || status !== 'success'}>
+        <summary>Collection scope and limits</summary>
+        <ul>{#each limitations as limitation}<li>{limitation}</li>{/each}</ul>
+      </details>
+    {/if}
+    <p class="card-note">Requested and final URLs describe this HTTP collection; URL queries are omitted.</p>
   </div>
 </details>
 

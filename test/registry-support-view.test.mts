@@ -129,6 +129,12 @@ test('returns a defensive inspection profile rather than shared mutable catalogu
 test('filters registry profiles by suffix, capability text, and explicit coverage state', () => {
   const { rows } = registrySupportCatalogue();
 
+  assert.deepEqual(filterRegistrySupportRows(rows, ' .PR ', 'all').map((row) => row.suffixes[0]), ['pr']);
+  assert.deepEqual(filterRegistrySupportRows(rows, '.invalid', 'all'), []);
+  assert.deepEqual(filterRegistrySupportRows(rows, '.xn--p1ai', 'all').map((row) => row.suffixes[0]), ['xn--p1ai']);
+  // A Unicode suffix is matched through its A-label.
+  assert.deepEqual(filterRegistrySupportRows(rows, '.\u0440\u0444', 'all').map((row) => row.suffixes[0]), ['xn--p1ai']);
+  assert.deepEqual(filterRegistrySupportRows(rows, '.\u0080\u0000bad', 'all'), []);
   assert.deepEqual(filterRegistrySupportRows(rows, '.vn', 'all').map((row) => row.suffixes[0]), ['vn']);
   assert.deepEqual(filterRegistrySupportRows(rows, 'bracketed', 'all').map((row) => row.suffixes[0]), ['jp']);
   assert.deepEqual(filterRegistrySupportRows(rows, 'structured underscore', 'all').map((row) => row.suffixes[0]), ['nz']);
@@ -229,6 +235,7 @@ test('renders stable human-readable labels for known and unknown catalogue value
   assert.equal(registryServiceCoverageLabel('unexpected'), 'Unknown');
   assert.equal(registrySupportLabel('jprs-domain-english'), 'Jprs Domain English');
   assert.equal(registrySupportLabel('icann-style-colon'), 'ICANN Style Colon');
+  assert.equal(registrySupportLabel('utf-8'), 'UTF-8');
   assert.equal(registrySupportLabel('iana_rdap-whois_dns_dnssec'), 'IANA RDAP WHOIS DNS DNSSEC');
   assert.equal(registrySupportLabel('ICANN-Iana-rDaP-WHOIS-Dns-DnSsEc'), 'ICANN IANA RDAP WHOIS DNS DNSSEC');
   assert.equal(registrySupportLabel('nonicann rdapish dnssecextra'), 'Nonicann Rdapish Dnssecextra');

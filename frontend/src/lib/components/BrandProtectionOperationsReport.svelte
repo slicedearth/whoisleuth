@@ -57,7 +57,7 @@
     <div>
       <p class="eyebrow">Recorded outcomes</p>
       <h2 id="operations-report-title">Case action summary</h2>
-      <p>Review aggregate counts derived only from explicit Case action states. Packet preparation, provider delivery and outcome success are not inferred.</p>
+      <p>Counts come from the action states recorded in each Case.</p>
     </div>
     <button class="btn" type="button" onclick={downloadReport} disabled={sourceState !== 'ready'}>Export aggregate JSON</button>
   </header>

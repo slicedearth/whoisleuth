@@ -100,7 +100,23 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(activeNavigation).toHaveAttribute('aria-current', 'location');
 
   await expect(page.getByRole('heading', { name: 'Overview', level: 3 })).toBeVisible();
+  // Key facts open the Overview with each value's source and state, using the
+  // same projection as the CLI terminal view.
+  const keyFacts = page.getByRole('region', { name: 'Key facts' });
+  await expect(keyFacts.locator('[data-fact-id="registration.registrar"] dd')).toContainText('Fixture Registrar LLC');
+  await expect(keyFacts.locator('[data-fact-id="registration.registrar"] dd')).toContainText('Registry RDAP · success');
+  await expect(keyFacts.locator('[data-fact-id="dns.addresses"] dd')).toContainText('192.0.2.10');
+  await expect(keyFacts.locator('[data-fact-id="dns.addresses"] dd')).toContainText('DNS · partial');
+  await expect(keyFacts.locator('[data-fact-id="tls.issuer"] dd')).toContainText('Not collected');
+  await expect(keyFacts.locator('[data-fact-id="http.response_status"] small')).toHaveText(/^HTTP · success · \d{2} \w+ 2026, /u);
+  await expect(keyFacts.getByRole('link', { name: 'Registration sources' })).toHaveAttribute('href', '#registry');
   await expect(page.getByRole('heading', { name: 'Web and DNS evidence' })).toBeVisible();
+  // Saved website snapshots compare against the collected evidence, so they follow it.
+  expect(await page.locator('#web-evidence').evaluate((section) => {
+    const http = section.querySelector('#evidence-http'), snapshots = [...section.querySelectorAll('h4, h3')]
+      .find((heading) => heading.textContent?.trim() === 'Website profile snapshots');
+    return Boolean(http && snapshots && http.compareDocumentPosition(snapshots) & Node.DOCUMENT_POSITION_FOLLOWING);
+  })).toBe(true);
   await expect(page.getByRole('heading', { name: /Registration$/ })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Validated lookup response' })).toBeVisible();
   await expect(page.getByLabel('Source diagnostics')).toContainText('rdap');
@@ -364,8 +380,13 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await taskQuestion.selectOption('brand');
   expect(lookupRequests).toHaveLength(1);
   const detailedAssessment = page.locator('details.detailed-assessment');
+  // The assessment disclosure uses the same toggle icon as the evidence families.
+  const assessmentToggle = detailedAssessment.locator(':scope > summary .assessment-toggle');
+  await expect(assessmentToggle).toHaveText('Open assessment');
+  await expect(assessmentToggle.locator('.toggle-icon')).not.toHaveClass(/expanded/u);
   await detailedAssessment.locator(':scope > summary').click();
   await expect(detailedAssessment).toHaveAttribute('open', '');
+  await expect(assessmentToggle.locator('.toggle-icon')).toHaveClass(/expanded/u);
   const impactPlan = detailedAssessment.locator('details.impact-plan');
   await expect(impactPlan).toHaveCount(1);
   const impactStateBefore = await page.evaluate(() => {
@@ -632,7 +653,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await expect(coverage).toContainText('Registry RDAP');
   await expect(coverage).toContainText('WHOIS');
   await expect(coverage).toContainText('DNS');
-  await expect(coverage).toContainText('Missing, failed, stale, unsupported, and not-found evidence remains distinct');
+  await expect(coverage).toContainText('A missing or failed source is not evidence that something is absent');
   const sourceQualityTable = coverage.getByRole('table', { name: 'Source quality and freshness' });
   await expect(sourceQualityTable).toHaveAttribute('aria-colcount', '5');
   await expect(sourceQualityTable.getByRole('row').first().getByRole('columnheader')).toHaveCount(5);
@@ -699,9 +720,14 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
 
   const limitationCell = sourceQualityTable.getByRole('cell', { name: 'Limitations for Reverse DNS' });
   await expect(limitationCell).toHaveAttribute('aria-colspan', '5');
-  await expect(limitationCell).toContainText('PTR context does not prove hosting control.');
+  const recordNotes = limitationCell.locator('details');
+  await expect(recordNotes).not.toHaveAttribute('open', '');
+  await recordNotes.locator(':scope > summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(recordNotes).toHaveAttribute('open', '');
   const reverseDnsLimitations = limitationCell.locator('section[aria-label="Limitations from Reverse DNS"]');
   await expect(reverseDnsLimitations).toHaveCount(1);
+  await expect(reverseDnsLimitations).toBeVisible();
   await expect(reverseDnsLimitations).toContainText('Reverse DNS');
   await expect(reverseDnsLimitations).toContainText('PTR context does not prove hosting control.');
 
@@ -713,7 +739,7 @@ test('a data-heavy Lookup result groups evidence into navigable sections', {
   await coverage.getByLabel('Registration days').fill('10');
   await coverage.getByLabel('Registration days').blur();
   await expect(coverage).toContainText('Freshness policy · analyst-defined');
-  await expect(coverage).toContainText('Thresholds organise source-refresh suggestions');
+  await expect(coverage).toContainText('Thresholds decide when this page suggests refreshing a source');
 
   await page.getByRole('button', { name: 'Collapse details: Source quality evidence' }).click();
   await page.getByRole('button', { name: 'Expand details: Source quality evidence' }).click();

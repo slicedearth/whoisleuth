@@ -74,6 +74,8 @@
     zonePrepublished,
     currentEvidenceComplete: evidenceComplete,
   }));
+  // Announce only the outcome; the result stays readable without re-reading every finding on each edit.
+  const outcome = $derived(evaluated ? `Rehearsal evaluated: ${result.ready ? 'plan is ready for procedural review' : 'plan has unresolved gates'}.` : '');
 
   function downloadReview() {
     const payload = buildDnsChangeRehearsalExport(result, { domain });
@@ -160,8 +162,9 @@
       <button class="btn" type="button" onclick={() => evaluated = true}>Evaluate rehearsal</button>
       {#if evaluated}<button class="btn" type="button" onclick={downloadReview}>Download reviewed checklist</button>{/if}
     </div>
+    <p class="sr-only" role="status">{outcome}</p>
     {#if evaluated}
-      <section class="result" aria-live="polite">
+      <section class="result">
         <div class="result-head">
           <strong>{result.ready ? 'Plan is ready for procedural review' : 'Plan has unresolved gates'}</strong>
           <span class:ready={result.ready}>{result.ready ? 'ready' : 'review'}</span>

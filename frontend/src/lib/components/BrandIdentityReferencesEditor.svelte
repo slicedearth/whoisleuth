@@ -48,7 +48,7 @@
 
 <fieldset class="reference-editor wide" {disabled}>
   <legend>Official channels and rights references</legend>
-  <p>These analyst-maintained records provide comparison and complaint-preparation context. They do not prove account control, ownership or infringement.</p>
+  <p>Records you maintain for comparison and complaint preparation.</p>
 
   <section aria-labelledby="official-channels-title">
     <header><div><h3 id="official-channels-title">Official public channels</h3><span>{officialChannels.length}/{MAX_OFFICIAL_CHANNELS}</span></div><button class="btn small" type="button" onclick={addChannel} disabled={disabled || officialChannels.length >= MAX_OFFICIAL_CHANNELS}>Add channel</button></header>

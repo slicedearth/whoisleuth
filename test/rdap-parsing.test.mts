@@ -5,6 +5,9 @@ import { parseRdap } from '../lib/rdap.mts';
 import type { NormalizedRdapRecordFor } from '../lib/rdap.mts';
 import { requiredValue } from './value-assertions.mts';
 
+// More blank placeholders than the eight-value retention limit, before one real value.
+const MAX_BLANK_PLACEHOLDERS = 8;
+
 function parseFixture<const T extends string>(
   type: T,
   data: unknown,
@@ -169,6 +172,68 @@ describe('structured RDAP metadata', () => {
     assert.equal(parsed.nameserverAddressesTruncated, true);
     assert.equal(parsed.dsDataTruncated, true);
     assert.equal(parsed.entitiesTruncated, true);
+  });
+
+  test('treats an empty required vCard name as unpublished rather than truncated', () => {
+    // Registry role contacts commonly satisfy the required vCard fn property
+    // with an empty value while publishing a telephone and email route.
+    const abuse = {
+      objectClassName: 'entity',
+      roles: ['abuse'],
+      vcardArray: ['vcard', [
+        ['version', {}, 'text', '4.0'],
+        ['fn', {}, 'text', ''],
+        ['tel', { type: 'voice' }, 'uri', 'tel:+1.5555550100'],
+        ['email', {}, 'text', 'abuse@registrar.example'],
+      ]],
+    };
+    const parsed = parseFixture('domain', {
+      objectClassName: 'domain',
+      ldhName: 'EXAMPLE.TEST',
+      entities: [{
+        objectClassName: 'entity', handle: '9999', roles: ['registrar'],
+        publicIds: [{ type: 'IANA Registrar ID', identifier: '9999' }],
+        vcardArray: ['vcard', [['version', {}, 'text', '4.0'], ['fn', {}, 'text', 'Example Registrar']]],
+        entities: [abuse],
+      }],
+    });
+    assert.equal(parsed.entitiesTruncated, false);
+    const route = requiredValue(requiredValue(parsed.entitiesByRole.abuse)[0]);
+    assert.equal(route.name, null);
+    assert.equal(route.email, 'abuse@registrar.example');
+    assert.equal(route.truncated, false);
+
+    // A supplied value that cannot be retained still marks the entity partial.
+    const rejected = {
+      ...abuse,
+      vcardArray: ['vcard', [['version', {}, 'text', '4.0'], ['fn', {}, 'text', 'x'.repeat(301)]]],
+    };
+    const partial = parseFixture('domain', { objectClassName: 'domain', ldhName: 'EXAMPLE.TEST', entities: [rejected] });
+    assert.equal(partial.entitiesTruncated, true);
+  });
+
+  test('contact retention and completeness agree for blank placeholders and overlong blanks', () => {
+    const withVcard = (entries: unknown[]) => parseFixture('domain', {
+      objectClassName: 'domain', ldhName: 'EXAMPLE.TEST',
+      entities: [{ objectClassName: 'entity', handle: 'ABUSE-1', roles: ['abuse'], vcardArray: ['vcard', [['version', {}, 'text', '4.0'], ...entries]] }],
+    });
+    // Blank placeholders do not consume the retention budget: a later email is kept and the contact stays complete.
+    const placeholders = withVcard([['fn', {}, 'text', ''], ['email', {}, 'text', [...Array(MAX_BLANK_PLACEHOLDERS).fill(''), 'abuse@registrar.example']]]);
+    const placeholderRoute = requiredValue(requiredValue(placeholders.entitiesByRole.abuse)[0]);
+    assert.deepEqual(placeholderRoute.emails, ['abuse@registrar.example']);
+    assert.equal(placeholders.entitiesTruncated, false);
+    // An overlong whitespace-only value is supplied input that cannot be retained, so the contact is partial.
+    const overlong = withVcard([['fn', {}, 'text', ' '.repeat(301)], ['email', {}, 'text', 'abuse@registrar.example']]);
+    assert.equal(overlong.entitiesTruncated, true);
+    // A value beyond the per-property walk is dropped and reported, never silently.
+    const beyondWalk = withVcard([['fn', {}, 'text', ''], ['email', {}, 'text', [...Array(40).fill(''), 'late@registrar.example']]]);
+    const beyondRoute = requiredValue(requiredValue(beyondWalk.entitiesByRole.abuse)[0]);
+    assert.equal(beyondRoute.emails.includes('late@registrar.example'), false);
+    assert.equal(beyondWalk.entitiesTruncated, true);
+    // More distinct supplied values than the retention limit are reported as partial.
+    const many = withVcard([['fn', {}, 'text', ''], ['email', {}, 'text', Array.from({ length: 9 }, (_, index) => `route${index}@registrar.example`)]]);
+    assert.equal(requiredValue(requiredValue(many.entitiesByRole.abuse)[0]).emails.length, 8);
+    assert.equal(many.entitiesTruncated, true);
   });
 
   test('marks rejected children inside usable entities, notices, and remarks as partial', () => {

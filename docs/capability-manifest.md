@@ -1,4 +1,4 @@
-# Capability and Data-flow Contract
+# Capability and data-flow contract
 
 > Generated from `packages/contracts/capability-manifest.mts`. Run `npm run capabilities:check` to verify this file.
 
@@ -42,7 +42,10 @@ This catalogue describes existing execution, disclosure, retention and assurance
 | `registrar_rdap` — Eligible registrar RDAP follow-up | investigate | authenticated request | hosted bounded passive | deep | conditional bounded passive | normalised registrable domain<br>registry query | registry service | none | transient | deliberate bounded | none | authenticated request |
 | `network_context` — Observed endpoint network context | investigate | authenticated request | hosted bounded passive | deep | conditional bounded passive | public ip address<br>registry query | registry service | none | transient | deliberate bounded | none | authenticated request |
 | `reverse_dns` — Public-address reverse DNS | investigate | authenticated request | hosted bounded passive | deep | conditional bounded passive | public ip address<br>dns question | dns resolver | none | transient | deliberate bounded | none | authenticated request |
+| `network_directory` — Selected network directory | investigate | explicit cli command | local cli network | None | bounded passive | normalised target | selected network directory | none | transient | none | none | explicit network approval |
 | `domain_posture` — Owned-domain posture review | assure | explicit browser action | hosted bounded passive | deep | bounded passive | normalised target<br>registry query<br>dns question<br>mta sts policy request | registry service<br>dns resolver<br>target public service | none | transient | deliberate bounded | none | authenticated explicit action |
+| `resolver_comparison` — Selected resolver comparison | assure | explicit browser action | hosted bounded passive | deep | bounded passive | normalised target<br>dns question | selected public resolver | none | transient | none | none | authenticated explicit action |
+| `web_archive_history` — Web archive history | investigate | explicit browser action | hosted bounded passive | deep | bounded passive | normalised target | web archive service | none | transient | none | none | authenticated explicit action |
 | `dnssec_validation` — Explicit DNSSEC validation | assure | explicit cli command | local cli authorised active | active | bounded authorised active | normalised target<br>dns question | selected public resolver | required public trust file | local output deliberate | local output | none | owned or authorised acknowledgement |
 | `mail_transport_review` — Explicit mail transport review | assure | explicit cli command | local cli authorised active | active | bounded authorised active | normalised target<br>dns question<br>mail transport commands<br>tls handshake | selected public resolver<br>selected mail endpoint | required public trust file | local output deliberate | local output | none | owned or authorised acknowledgement |
 | `rendered_web_capture` — Explicit local rendered web capture | investigate | explicit local tool | local tool authorised active | active | bounded authorised active | admitted resource request<br>dns question | target public service<br>dns resolver | none | local output deliberate | local output | none | authorised capture acknowledgement |
@@ -59,7 +62,7 @@ This catalogue describes existing execution, disclosure, retention and assurance
 
 ## CLI operation catalogue
 
-The public command catalogue keeps its version 1 offline/network label for all 53 installed CLI operations. These operation records retain the more precise plane, activation, credential, export and scoring contract.
+The public command catalogue keeps its version 1 offline/network label for all 60 installed CLI operations. These operation records retain the more precise plane, activation, credential, export and scoring contract.
 
 | Operation | Capability family | Legacy collection | Trigger | Planes | Network | Disclosure | Recipients | Credentials | Retention | Export | Scoring | Authorisation |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -77,6 +80,9 @@ The public command catalogue keeps its version 1 offline/network label for all 5
 | `command.cli.discover` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
 | `command.cli.discover-scan` | `lookup` | network | explicit cli command | local cli offline<br>local cli network | conditional bounded passive | normalised target<br>registry query<br>dns question<br>whois query<br>homepage request<br>tls handshake | registry service<br>dns resolver<br>target public service | none | local output deliberate | local output | bounded risk and acquisition input | explicit action |
 | `command.cli.posture` | `domain_posture` | network | explicit cli command | local cli network | bounded passive | normalised target<br>registry query<br>dns question<br>mta sts policy request | registry service<br>dns resolver<br>target public service | none | local output deliberate | local output | none | explicit action |
+| `command.cli.resolver-compare` | `resolver_comparison` | network | explicit cli command | local cli network | bounded passive | normalised target<br>dns question | selected public resolver | none | local output deliberate | local output | none | explicit action |
+| `command.cli.peeringdb-context` | `network_directory` | network | explicit cli command | local cli network | bounded passive | normalised target | selected network directory | none | local output deliberate | none | none | explicit network approval |
+| `command.cli.archive-history` | `web_archive_history` | network | explicit cli command | local cli network | bounded passive | normalised target | web archive service | none | local output deliberate | local output | none | explicit action |
 | `command.cli.http` | `website_probe` | network | explicit cli command | local cli network | bounded passive | normalised target<br>dns question<br>homepage request | dns resolver<br>target public service | none | local output deliberate | local output | none | explicit action |
 | `command.cli.tls` | `tls_intelligence` | network | explicit cli command | local cli network | bounded passive | normalised target<br>dns question<br>tls handshake | dns resolver<br>target public service | none | local output deliberate | local output | none | explicit action |
 | `command.cli.dnssec-validate` | `dnssec_validation` | network | explicit cli command | local cli authorised active | bounded authorised active | normalised target<br>dns question | selected public resolver | required public trust file | local output deliberate | local output | none | owned or authorised acknowledgement |
@@ -105,6 +111,7 @@ The public command catalogue keeps its version 1 offline/network label for all 5
 | `command.cli.case-pack` | `portable_evidence` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | deliberate bounded | none | explicit action |
 | `command.cli.domain-control` | `portable_evidence` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | deliberate bounded | none | explicit action |
 | `command.cli.monitor-once` | `lookup` | network | explicit cli command | local cli network | bounded passive | normalised target<br>registry query<br>whois query<br>dns question<br>public ip address<br>homepage request<br>tls handshake | registry service<br>dns resolver<br>target public service | none | local output deliberate | local output | none | explicit action |
+| `command.cli.monitor-tick` | `lookup` | network | explicit cli command | local cli offline<br>local cli network | conditional bounded passive | normalised target<br>registry query<br>whois query<br>dns question<br>homepage request<br>tls handshake | registry service<br>dns resolver<br>target public service | none | local output deliberate | local output | none | explicit network approval |
 | `command.cli.assurance` | `portable_evidence` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | deliberate bounded | none | explicit action |
 | `command.cli.change-packet` | `portable_evidence` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | deliberate bounded | none | explicit action |
 | `command.cli.sharing-review` | `portable_evidence` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | deliberate bounded | none | explicit action |
@@ -113,8 +120,11 @@ The public command catalogue keeps its version 1 offline/network label for all 5
 | `command.cli.domain-feed` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
 | `command.cli.workflow-run` | `workflow_execution` | network | explicit cli command | local cli offline<br>local cli network | conditional bounded passive | normalised target<br>registry query<br>whois query<br>dns question<br>public ip address<br>homepage request<br>tls handshake<br>mta sts policy request<br>certificate search term | registry service<br>dns resolver<br>target public service<br>certificate transparency service | none | local output deliberate | local output | none | explicit network approval |
 | `command.cli.diff` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
+| `command.cli.view` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
+| `command.cli.mcp` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
 | `command.cli.reconcile` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
 | `command.cli.timeline` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
+| `command.cli.prior-registration` | `offline_review` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | local output | none | explicit action |
 | `command.cli.export` | `portable_evidence` | offline | explicit cli command | local cli offline | none | none | none | none | local output deliberate | deliberate bounded | none | explicit action |
 
 ### Conditional CLI variants
@@ -137,6 +147,8 @@ Variant rows override the aggregate operation boundary; no-request variants neve
 | `command.cli.discover-scan` | `plan_deep` | explicit cli command | local cli offline | none | none | none | none | bounded runtime report | none | none | local output deliberate | metadata only | none | explicit action | bounded atomic | all or nothing | complete | None |
 | `command.cli.discover-scan` | `collect_fast` | explicit cli command | local cli network | bounded passive | normalised target<br>registry query<br>dns question | registry service<br>dns resolver | registry light | collector specific | command bounded | none | local output deliberate | local output | bounded risk and acquisition input | explicit action | queue stops admission | explicit per item | complete<br>partial | None |
 | `command.cli.discover-scan` | `collect_deep` | explicit cli command | local cli network | bounded passive | normalised target<br>registry query<br>whois query<br>dns question<br>homepage request<br>tls handshake | registry service<br>dns resolver<br>target public service | registry deep | collector specific | command bounded | none | local output deliberate | local output | bounded risk and acquisition input | explicit action | queue stops admission | explicit per item | complete<br>partial | None |
+| `command.cli.monitor-tick` | `preview` | explicit cli command | local cli offline | none | none | none | none | bounded local input | none | none | local output deliberate | local output | none | explicit action | bounded atomic | explicit document | complete<br>partial | None |
+| `command.cli.monitor-tick` | `approved_cycle` | explicit cli command | local cli network | bounded passive | normalised target<br>registry query<br>whois query<br>dns question<br>homepage request<br>tls handshake | registry service<br>dns resolver<br>target public service | collector specific | collector specific | command bounded | none | local output deliberate | local output | none | explicit network approval | queue stops admission | explicit per item | complete<br>partial | None |
 | `command.cli.workflow-run` | `unapproved_run` | explicit cli command | local cli offline | none | none | none | none | bounded local input | command bounded | none | local output deliberate | local output | none | explicit action | step stops admission | explicit step | complete<br>partial<br>blocked | complete<br>partial<br>awaiting network approval<br>awaiting analyst selection<br>awaiting review confirmation<br>step failed |
 | `command.cli.workflow-run` | `approved_run` | explicit cli command | local cli offline<br>local cli network | conditional bounded passive | normalised target<br>registry query<br>whois query<br>dns question<br>public ip address<br>homepage request<br>tls handshake<br>mta sts policy request<br>certificate search term | registry service<br>dns resolver<br>target public service<br>certificate transparency service | workflow step specific | collector specific | command bounded | none | local output deliberate | local output | none | explicit network approval | step stops admission | explicit step | complete<br>partial<br>blocked | complete<br>partial<br>awaiting analyst selection<br>awaiting review confirmation<br>step failed |
 
@@ -157,6 +169,8 @@ Runtime configuration and admission remain with their existing enforcement owner
 | `certificate_transparency` | `certificate_transparency` | None | `certificate_transparency` → `certificate_search` |
 | `domain_feed_search` | None | None | `domain_feed_search` → `certificate_search` |
 | `domain_posture` | `domain_posture` | `dns_intelligence` | `domain_posture` → `posture_audit` |
+| `resolver_comparison` | `resolver_comparison` | `dns_intelligence` | `resolver_comparison` → `posture_audit` |
+| `web_archive_history` | `web_archive_history` | None | `web_archive_history` → `certificate_search` |
 
 ### Worker-cycle bounds
 
@@ -199,7 +213,10 @@ Runtime configuration and admission remain with their existing enforcement owner
 | `registrar_rdap` | collector specific | collector specific | registry deep | bounded atomic | explicit document | complete<br>partial<br>blocked<br>unsupported<br>unavailable<br>budget exhausted | None |
 | `network_context` | collector specific | collector specific | registry deep | bounded atomic | explicit document | complete<br>partial<br>blocked<br>unsupported<br>unavailable<br>budget exhausted | None |
 | `reverse_dns` | collector specific | collector specific | registry deep | bounded atomic | explicit document | complete<br>partial<br>blocked<br>unsupported<br>unavailable<br>budget exhausted | None |
+| `network_directory` | collector specific | collector specific | command bounded | cooperative | explicit document | complete<br>partial<br>blocked<br>unsupported<br>unavailable<br>budget exhausted | None |
 | `domain_posture` | posture audit | collector specific | posture audit | client stops waiting | explicit per source | complete<br>partial<br>blocked<br>unsupported<br>unavailable<br>budget exhausted | None |
+| `resolver_comparison` | posture audit | collector specific | posture audit | client stops waiting | explicit per source | complete<br>partial<br>blocked<br>unsupported<br>unavailable<br>budget exhausted | None |
+| `web_archive_history` | certificate search | collector specific | certificate search | client stops waiting | explicit per source | complete<br>partial<br>blocked<br>unsupported<br>unavailable<br>budget exhausted | None |
 | `dnssec_validation` | authorised dnssec | collector specific | command bounded | client stops waiting | explicit document | complete<br>partial<br>blocked<br>unsupported<br>unavailable<br>budget exhausted | None |
 | `mail_transport_review` | authorised mail transport | collector specific | command bounded | client stops waiting | explicit per source | complete<br>partial<br>blocked<br>unsupported<br>unavailable<br>budget exhausted | None |
 | `rendered_web_capture` | authorised rendered capture | bounded rendered capture | single capture | cooperative | explicit document | complete<br>partial<br>blocked<br>unavailable<br>budget exhausted | None |
@@ -232,6 +249,9 @@ Runtime configuration and admission remain with their existing enforcement owner
 | `command.cli.discover` | none | bounded local input | none | bounded atomic | explicit per item | complete<br>partial | None |
 | `command.cli.discover-scan` | variant specific | collector specific | command bounded | queue stops admission | explicit per item | complete<br>partial | None |
 | `command.cli.posture` | posture audit | collector specific | command bounded | client stops waiting | explicit per source | complete<br>partial | None |
+| `command.cli.resolver-compare` | collector specific | collector specific | command bounded | client stops waiting | explicit per source | complete<br>partial | None |
+| `command.cli.peeringdb-context` | collector specific | collector specific | command bounded | cooperative | explicit document | complete<br>partial | None |
+| `command.cli.archive-history` | collector specific | collector specific | command bounded | client stops waiting | explicit per source | complete<br>partial | None |
 | `command.cli.http` | collector specific | collector specific | command bounded | client stops waiting | explicit document | complete<br>partial | None |
 | `command.cli.tls` | collector specific | collector specific | command bounded | client stops waiting | explicit document | complete<br>partial | None |
 | `command.cli.dnssec-validate` | authorised dnssec | collector specific | command bounded | client stops waiting | explicit document | complete<br>partial | None |
@@ -260,6 +280,7 @@ Runtime configuration and admission remain with their existing enforcement owner
 | `command.cli.case-pack` | none | bounded portable document | none | bounded atomic | all or nothing | complete | None |
 | `command.cli.domain-control` | none | bounded portable document | none | bounded atomic | explicit per source | complete<br>partial | None |
 | `command.cli.monitor-once` | collector specific | collector specific | command bounded | queue stops admission | explicit per item | complete<br>partial | None |
+| `command.cli.monitor-tick` | collector specific | collector specific | command bounded | queue stops admission | explicit per item | complete<br>partial | None |
 | `command.cli.assurance` | none | bounded portable document | none | bounded atomic | explicit per source | complete<br>partial | None |
 | `command.cli.change-packet` | none | bounded portable document | none | bounded atomic | explicit document | complete<br>partial<br>blocked | None |
 | `command.cli.sharing-review` | none | bounded portable document | none | bounded atomic | explicit document | complete<br>partial<br>blocked | None |
@@ -268,8 +289,11 @@ Runtime configuration and admission remain with their existing enforcement owner
 | `command.cli.domain-feed` | none | bounded local input | none | cooperative | explicit per item | complete<br>partial | None |
 | `command.cli.workflow-run` | variant specific | collector specific | command bounded | step stops admission | explicit step | complete<br>partial<br>blocked | complete<br>partial<br>awaiting network approval<br>awaiting analyst selection<br>awaiting review confirmation<br>step failed |
 | `command.cli.diff` | none | bounded local input | none | bounded atomic | explicit per source | complete<br>partial | None |
+| `command.cli.view` | none | bounded local input | none | bounded atomic | all or nothing | complete | None |
+| `command.cli.mcp` | none | bounded local input | none | bounded atomic | all or nothing | complete | None |
 | `command.cli.reconcile` | none | bounded local input | none | bounded atomic | explicit per source | complete<br>partial | None |
 | `command.cli.timeline` | none | bounded local input | none | bounded atomic | explicit per source | complete<br>partial | None |
+| `command.cli.prior-registration` | none | bounded local input | none | bounded atomic | explicit per source | complete<br>partial | None |
 | `command.cli.export` | none | bounded portable document | none | bounded atomic | all or nothing | complete | None |
 
 ## Privacy limitations
@@ -364,10 +388,27 @@ Runtime configuration and admission remain with their existing enforcement owner
 
 - PTR names are publisher-controlled context and do not prove ownership or service identity.
 
+### Selected network directory
+
+- One explicit ASN and minimal fields are sent to the fixed community-maintained directory. No contacts, bulk fetching, retries, cache, export file or hosted redistribution.
+- The operator must acknowledge permitted operational use or existing provider permission. Membership and missing entries do not establish ownership, reachability or reputation.
+
 ### Owned-domain posture review
 
 - Posture findings describe bounded public registry, DNS and MTA-STS publication evidence and never change configuration.
 - Inherited DMARC and direct parent delegation require a separate opt-in: up to 32 additional TXT questions within ten seconds cover ancestor policies, reporting-destination boundaries and authorisation. One parent NS discovery and A/AAAA discovery for at most two parent servers precede one pinned public-address DNS/TCP question per server. No messages are sent; recursive policy and direct referral observations remain separate.
+
+### Selected resolver comparison
+
+- Explicitly selected HTTPS resolvers receive the hostname and A/AAAA questions. Four requests maximum; normal Lookup, Bulk and monitoring do not invoke this action.
+- Resolver agreement is not authoritative truth or local DNSSEC validation. Provider retention policies apply.
+- Off unless the deployment operator explicitly enables it; the emergency switch still disables it.
+
+### Web archive history
+
+- The Internet Archive receives the registrable domain in two requests for its earliest and latest homepage captures. No page content, retries or automatic invocation by Lookup, Bulk or monitoring.
+- Captures show when the archive recorded the homepage, not ownership or continuous operation. The archive’s own terms and privacy policy apply.
+- Off unless the deployment operator explicitly enables it; the emergency switch still disables it.
 
 ### Explicit DNSSEC validation
 
@@ -384,6 +425,7 @@ Runtime configuration and admission remain with their existing enforcement owner
 - Each admitted resource request discloses its exact URL, including path and query, its GET or HEAD method, and ordinary allowlisted request headers to that public resource endpoint; DNS questions are disclosed to the configured resolver.
 - Structured outputs exclude request paths, queries, headers and bodies, but the control-sanitised page title and screenshot retain page-controlled content that may reproduce a path or query.
 - Rendered capture executes page JavaScript and remains separate from hosted Lookup and the distributable CLI.
+- An optional local plan selects up to four subsequent URLs in fresh pages within the same total collection bounds; declared selection steps do not establish clicks, form submission or a redirect chain.
 
 ### Offline rendered capture comparison
 
@@ -454,6 +496,9 @@ Runtime configuration and admission remain with their existing enforcement owner
 | `command.cli.discover` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.discover-scan` | Only the source families eligible for the selected command and mode receive the bounded target representation.<br>The plan variant is request-free; collection retains the selected command and mode's evidence and persistence contract. |
 | `command.cli.posture` | The posture review performs bounded RDAP, DNS and MTA-STS publication checks without changing configuration. |
+| `command.cli.resolver-compare` | The explicitly selected resolvers receive four bounded A/AAAA questions over HTTPS. No target connection, retry or automatic invocation by other commands. |
+| `command.cli.peeringdb-context` | One ASN is sent to the selected fixed directory for acknowledged permitted operational use or existing provider permission. No contact expansion, cache, output file or automatic invocation. Provider terms still apply. |
+| `command.cli.archive-history` | The Internet Archive receives the registrable domain in two bounded requests for its earliest and latest homepage captures. No page content, retry or automatic invocation by other commands. |
 | `command.cli.http` | The target public service receives one bounded SSRF-guarded homepage workflow. |
 | `command.cli.tls` | The selected public endpoint receives one bounded certificate connection. |
 | `command.cli.dnssec-validate` | The selected resolver receives the bounded questions only after the owned-or-authorised acknowledgement.<br>The local trust anchor is read from the selected file and is never transmitted. |
@@ -482,6 +527,7 @@ Runtime configuration and admission remain with their existing enforcement owner
 | `command.cli.case-pack` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.domain-control` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.monitor-once` | The one-shot monitor reads selected local control state and performs only the bounded scheduled review collection.<br>Its checkpoint and review evidence do not calculate Risk or Opportunity scores. |
+| `command.cli.monitor-tick` | A selected private local file retains compact evidence, quota counters and the existing dispatcher cursor; no hosted schedule is enabled.<br>The plan selects collection purpose and cadence independently from review priority. No Brand-based risk score is calculated. |
 | `command.cli.assurance` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.change-packet` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.sharing-review` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
@@ -490,8 +536,11 @@ Runtime configuration and admission remain with their existing enforcement owner
 | `command.cli.domain-feed` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.workflow-run` | Only fixed installed recipe steps can run, and every network invocation requires explicit approval. |
 | `command.cli.diff` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
+| `command.cli.view` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
+| `command.cli.mcp` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.reconcile` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.timeline` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
+| `command.cli.prior-registration` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 | `command.cli.export` | The command reads only selected bounded local input and makes no network request.<br>Output remains under the operator's local retention and deletion control. |
 
 ## Invariants

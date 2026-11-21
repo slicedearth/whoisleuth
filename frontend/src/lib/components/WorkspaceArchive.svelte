@@ -244,14 +244,14 @@
     </form>
   {/if}
 
-  <p class="privacy-note">Backups can include case notes and other analyst-owned records. Encrypted downloads protect the file while it is locked, but not this browser while the Console is open. Unfinished Case forms, sessions, passwords, API credentials, hosted-monitor keys, raw upstream payloads, tab state, and unrelated browser storage are excluded.</p>
+  <p class="privacy-note">Backups can include Case notes and other analyst records. Encryption protects the downloaded file, not an open Console. Unfinished Case forms, sessions, passwords, API credentials, hosted-monitor keys, raw upstream payloads and tab state are never included.</p>
   {#if !importOnly}<details class="archive-details">
     <summary>How workspace backups work</summary>
-    <p>Each backup uses a versioned manifest and a SHA-256 checksum for every data section. WHOISleuth checks its format, size, supported versions, and integrity before showing a merge preview. Existing work follows each data type's normal merge rules, and records missing from the backup are retained.</p>
-    <p>Encrypted backups use browser-native PBKDF2-HMAC-SHA-256 and AES-256-GCM authenticated encryption. Encryption cannot protect an unlocked Console from software already able to read the page. A forgotten passphrase makes the backup unrecoverable.</p>
+    <p>Each backup has a versioned manifest and a SHA-256 checksum for every section, and its format, size, versions and integrity are checked before the merge preview appears. Existing work merges by each data type's usual rules, and nothing missing from the backup is deleted.</p>
+    <p>Encrypted backups use PBKDF2-HMAC-SHA-256 and AES-256-GCM in the browser. A forgotten passphrase cannot be recovered.</p>
     <button class="btn unencrypted-download" type="button" onclick={downloadUnencrypted} disabled={busy}>Download unencrypted backup</button>
     {#if defaultWorkspace}
-      <p>WHOISleuth keeps the original local-storage documents after its one-time IndexedDB migration. If you intend to return to an older build after making changes here, update those legacy copies first. This does not replace a downloaded backup and can fail when the workspace no longer fits within local-storage limits.</p>
+      <p>The local-storage copies from before the IndexedDB migration are kept. To return to an older build after making changes here, update those copies first. This is not a backup, and it fails if the workspace no longer fits in local storage.</p>
       <button class="btn rollback-copy" type="button" onclick={prepareRollbackCopy} disabled={busy}>Update legacy rollback copy</button>
     {:else if localApplication}<p>This filesystem workspace has no browser-storage rollback copy. Download a portable backup for recovery.</p>
     {:else}<p>Named workspaces have no historical local-storage copy. Download a portable backup for recovery; the default workspace is unchanged.</p>{/if}

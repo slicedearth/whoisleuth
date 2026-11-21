@@ -383,6 +383,19 @@ test('the Dashboard waits for every collection and then presents only genuine fi
   await expect(page.getByRole('link', { name: /Investigate one target/u })).toHaveAttribute('href', '/lookup');
   await expect(page.getByRole('button', { name: /Start a guided investigation/u })).toBeVisible();
   await expect(page.getByRole('button', { name: /Import existing work/u })).toBeVisible();
+  // The four starting points form one row on wide screens and a balanced grid below it.
+  for (const [width, columns] of [[1440, 4], [1000, 2], [390, 1]] as const) {
+    await page.setViewportSize({ width, height: 900 });
+    const boxes = await page.locator('.getting-started-action').evaluateAll((cards) => cards.map((card) => {
+      const box = card.getBoundingClientRect();
+      return { top: Math.round(box.top), height: Math.round(box.height) };
+    }));
+    expect(boxes).toHaveLength(4);
+    expect(boxes.filter((box) => box.top === boxes[0]!.top)).toHaveLength(columns);
+    expect(new Set(boxes.slice(0, columns).map((box) => box.height)).size).toBe(1);
+    await expectNoHorizontalOverflow(page);
+  }
+  await page.setViewportSize({ width: 1280, height: 720 });
   await expect(page.getByRole('region', { name: 'Recent Cases', exact: true })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Continue saved work' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Follow a guided investigation' })).toHaveCount(0);

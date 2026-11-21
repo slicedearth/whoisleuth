@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tokenLabel } from '../../../../packages/analysis/display-label.mts';
   import type { BulkRiskPresentation } from '#lib/analysis/bulk-route-model.ts';
 
   let {
@@ -24,7 +25,7 @@
       <dl>
         <div><dt>Exact retained result</dt><dd>{risk.exactScore === null ? 'Unavailable' : `${risk.exactScore}/100`}</dd></div>
         <div><dt>Model</dt><dd>{risk.modelLabel}</dd></div>
-        <div><dt>Scan depth</dt><dd>{risk.scanDepth}</dd></div>
+        <div><dt>Scan depth</dt><dd>{tokenLabel(risk.scanDepth)}</dd></div>
         <div><dt>Provenance</dt><dd>{risk.provenanceLabel}</dd></div>
         <div class="source-states"><dt>Source states</dt><dd>{risk.coverageLabel}</dd></div>
       </dl>
@@ -65,7 +66,7 @@
   dl div{min-width:0;padding:6px;border:1px solid var(--border);border-radius:var(--radius-sm)}
   dl .source-states{grid-column:1/-1}
   dt{color:var(--muted);font:650 var(--text-2xs) var(--mono)}
-  dd{margin:3px 0 0;color:var(--text);font-size:var(--text-2xs);line-height:1.4;overflow-wrap:anywhere;text-transform:capitalize}
+  dd{margin:3px 0 0;color:var(--text);font-size:var(--text-2xs);line-height:1.4;overflow-wrap:anywhere}
   .factor-title{display:block;font:700 var(--text-2xs) var(--mono)}
   section ul,.limitations{display:grid;gap:5px;margin:5px 0 0;padding:0;list-style:none}
   section li{display:flex;justify-content:space-between;gap:8px;padding:6px;border-left:2px solid var(--border);font-size:var(--text-2xs)}

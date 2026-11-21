@@ -75,6 +75,7 @@ describe('release semantic-version validation', () => {
     assert.deepEqual(commands[0], [npmExecutableName(), 'version', '4.1.1', '--no-git-tag-version', '--ignore-scripts']);
     assert.deepEqual(commands.slice(1), [
       [process.execPath, 'tools/public-product-catalogue.mts', '--write'],
+      [process.execPath, 'tools/evidence-storage-measurement.mts', '--write'],
       [process.execPath, 'tools/release-version-check.mts'],
     ]);
     assert.deepEqual(releasePreparationCommands('4.1.1', '4.1.1'), commands.slice(1));
@@ -87,7 +88,7 @@ describe('release semantic-version validation', () => {
   });
 
   test('stops at a failed preparation phase and resumes an already updated version without another bump', () => {
-    for (const failedPhase of [0, 1, 2]) {
+    for (let failedPhase = 0; failedPhase < releasePreparationCommands('4.1.1', '4.1.0').length; failedPhase++) {
       const stderr = capture();
       let current = '4.1.0';
       const executed: string[][] = [];
@@ -107,8 +108,8 @@ describe('release semantic-version validation', () => {
         return { status: 0 };
       }, stderr.stream), 0);
       assert.equal(resumed.filter(command => command[1] === 'version').length, failedPhase === 0 ? 1 : 0);
-      assert.deepEqual(resumed.slice(-2).map(command => command.slice(1)), [
-        ['tools/public-product-catalogue.mts', '--write'], ['tools/release-version-check.mts'],
+      assert.deepEqual(resumed.slice(-3).map(command => command.slice(1)), [
+        ['tools/public-product-catalogue.mts', '--write'], ['tools/evidence-storage-measurement.mts', '--write'], ['tools/release-version-check.mts'],
       ]);
     }
     const stderr = capture();

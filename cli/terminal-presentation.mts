@@ -190,6 +190,16 @@ function colorizeLine(line: string, palette: TerminalPalette): string {
   return line;
 }
 
+// Command output can carry upstream or imported text. Neutralise controls and
+// invisible formatting before wrapping or colour so no value can emit terminal
+// sequences, rewrite earlier lines or reorder what the analyst reads.
+const UNSAFE_TERMINAL_CONTROL_RE = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/gu;
+const TERMINAL_DEFAULT_IGNORABLE_RE = /\p{Default_Ignorable_Code_Point}/gu;
+
+function neutralizeTerminalText(value: string): string {
+  return value.replace(UNSAFE_TERMINAL_CONTROL_RE, ' ').replace(TERMINAL_DEFAULT_IGNORABLE_RE, '');
+}
+
 function presentTerminalOutput(value: string, presentation: TerminalPresentation): string {
   const wrapped = wrapTerminalOutput(value, presentation.width);
   if (!presentation.color) return wrapped;
@@ -199,6 +209,7 @@ function presentTerminalOutput(value: string, presentation: TerminalPresentation
 }
 
 export {
+  neutralizeTerminalText,
   presentTerminalOutput,
   terminalPresentation,
   tone,

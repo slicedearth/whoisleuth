@@ -21,6 +21,7 @@
   } from '../analysis/external-intelligence-import.ts';
   import { INFRASTRUCTURE_OBSERVATION_SCHEMA } from '../../../../packages/investigation/infrastructure-observation.mts';
   import { convertInfrastructureObservation } from '../../../../packages/interchange/external-findings-converters.mts';
+  import { convertReconJsonl, RECON_JSONL_FORMATS, type ReconJsonlFormat } from '../../../../packages/interchange/recon-jsonl-import.mts';
   import {
     EXTERNAL_FINDING_ROWS_SCHEMA,
     CERTIFICATE_OBSERVATION_ROWS_SCHEMA,
@@ -63,6 +64,7 @@
   let conversionReport = $state<ExternalFindingConversionReport | null>(null);
   let applying = $state(false);
   let parsing = $state(false);
+  let jsonlProducer = $state<ReconJsonlFormat>('dnsx-jsonl');
   let selectionGeneration = 0;
   let fileInput: HTMLInputElement;
 
@@ -138,6 +140,12 @@
       }
       const bytes = await file.arrayBuffer();
       if (!owns()) return;
+      if (/\.(?:jsonl|ndjson)$/iu.test(file.name) || file.type === 'application/x-ndjson') {
+        conversionReport = convertReconJsonl(new TextDecoder('utf-8', { fatal: true }).decode(bytes), jsonlProducer);
+        preview = { kind: 'findings', document: conversionReport.document };
+        onmessage(`Prepared ${conversionReport.accepted} findings from ${conversionReport.inputRows} supplied rows; ${conversionReport.rejected} rejected, ${conversionReport.duplicates} duplicates. Retained limits ${conversionReport.truncated ? 'reached' : 'not reached'}. Review before importing.`);
+        return;
+      }
       const csv = file.name.toLowerCase().endsWith('.csv') || file.type === 'text/csv';
       let value: unknown = null;
       let directDocument = null;
@@ -291,10 +299,15 @@
   <div class="import-body">
     <p>Review local evidence before adding it to Cases. Imports do not collect data, change analyst dispositions or submit reports.</p>
     <details class="formats"><summary>Supported files and limits</summary>
-      <p>Source-qualified infrastructure snapshots: 128 KiB. Findings, sanitised capture manifests, observation rows and fixed-column CSV/JSON: 384 KiB. STIX 2.1 bundles and MISP events: 512 KiB. WARC/WACZ archives: 8 MiB.</p>
+      <p>Source-qualified infrastructure snapshots: 128 KiB. Findings, sanitised capture manifests, observation rows, dnsx/httpx JSONL and fixed-column CSV/JSON: 384 KiB. STIX 2.1 bundles and MISP events: 512 KiB. WARC/WACZ archives: 8 MiB.</p>
       <p>Archive import retains sanitised response evidence, not raw requests, sensitive headers or unsupported content. WACZ resources must pass their declared integrity checks. References are never fetched. See the <a href="/cli">CLI reference</a> for the supported interchange formats.</p>
     </details>
-    <label class="btn file-btn">{parsing ? 'Reading selected file…' : 'Choose JSON, CSV, WARC, or WACZ'}<input bind:this={fileInput} type="file" accept="application/json,text/csv,application/warc,application/wacz,.json,.csv,.warc,.wacz" onchange={selectFile} disabled={parsing || applying}></label>
+    <label class="jsonl-producer">For JSONL files, select the producer
+      <select bind:value={jsonlProducer} onchange={clearPreview} disabled={parsing || applying}>
+        {#each RECON_JSONL_FORMATS as format (format)}<option value={format}>{format === 'dnsx-jsonl' ? 'dnsx' : 'httpx'}</option>{/each}
+      </select>
+    </label>
+    <label class="btn file-btn">{parsing ? 'Reading selected file…' : 'Choose an evidence file'}<input bind:this={fileInput} type="file" accept="application/json,application/x-ndjson,text/csv,application/warc,application/wacz,.json,.jsonl,.ndjson,.csv,.warc,.wacz" onchange={selectFile} disabled={parsing || applying}></label>
     {#if preview && !parsing}
       {#if preview.kind === 'findings'}
         {#each preview.document.findings.filter(finding => finding.infrastructureObservation) as finding, index (index)}
@@ -318,5 +331,6 @@
   .formats summary{padding:4px 0;min-height:30px}
   .formats p{max-width:75ch;color:var(--muted);font-size:var(--text-xs);line-height:1.55}
   .file-btn{justify-self:start}
+  .jsonl-producer{display:grid;gap:6px;justify-self:start;color:var(--muted);font-size:var(--text-xs)}
   .snapshot-preview{min-width:0}.snapshot-preview pre{max-height:30rem;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:var(--text-xs)}
 </style>

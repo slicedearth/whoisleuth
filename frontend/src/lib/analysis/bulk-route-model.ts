@@ -4,6 +4,7 @@ import type { ScanResult } from './bulk-result-model.ts';
 import { RISK_MODEL_VERSION } from './scoring.ts';
 import { outreachAction } from '../drafts.ts';
 import { webCollectionScoreLimitation } from '../../../../packages/evidence/collection-quality.mts';
+import { certificatePriorRegistrationObservations, reviewPriorRegistration, type PriorRegistrationReview } from '../../../../packages/evidence/prior-registration.mts';
 
 export type BulkPrimaryFilter =
   | 'all'
@@ -64,10 +65,19 @@ export type BulkResultDisplayRow = Readonly<{
   hasPasswordField: boolean;
   phishingLanguageMatch: string;
   ct: Readonly<{
+    firstObservedAt: string | null;
     lastObservedAt: string | null;
     hostnameCount: number;
     certificateCount: number;
+    /** The source reported a first observation later than its last, so the dates are not compared. */
+    chronologyContradicted: boolean;
+    /** Validity-start range for certificates without a published log time; context only. */
+    validityRange: Readonly<{ first: string; last: string }> | null;
+    /** Earliest logged certificate compared with the current registration's creation date; validity starts are context. */
+    priorRegistration: PriorRegistrationReview;
   }> | null;
+  /** Rank from the popularity list selected in Discover, with the list's SHA-256 for citation. */
+  popularity: Readonly<{ rank: number; listSha256: string }> | null;
   errorRow: boolean;
   error: string;
   availability: string;
@@ -242,7 +252,6 @@ export function buildBulkRiskPresentation(
       provenanceLabel,
       factors,
       limitations: Object.freeze([
-        reason,
         'The retained exact result remains inspectable when present, but it is excluded from the current Risk sort and high-Risk filter.',
       ]),
     });
@@ -262,9 +271,6 @@ export function buildBulkRiskPresentation(
     factors,
     limitations: Object.freeze([
       'Comparable only within the displayed cohort that shares this model, Brand Profile provenance, scan depth, and exact source states.',
-      ...(band.band === 'lower'
-        ? ['A lower Risk band is not evidence of safety, legitimacy, ownership, or absence of concern.']
-        : ['Risk is explainable triage only and does not establish maliciousness, ownership, control, or intent.']),
     ]),
   });
 }
@@ -375,11 +381,20 @@ export function buildBulkResultDisplayRows(input: {
       phishingLanguageMatch: row.phishingLanguageMatch || '',
       ct: row.ct
         ? {
+            firstObservedAt: row.ct.firstObservedAt,
             lastObservedAt: row.ct.lastObservedAt,
             hostnameCount: row.ct.hostnames.length,
             certificateCount: row.ct.certificateCount,
+            chronologyContradicted: row.ct.chronologyContradicted === true,
+            validityRange: row.ct.firstValidFrom && row.ct.lastValidFrom
+              ? { first: row.ct.firstValidFrom, last: row.ct.lastValidFrom } : null,
+            priorRegistration: reviewPriorRegistration({
+              registrationCreatedAt: row.registrationCreation?.createdAt ?? null,
+              observations: certificatePriorRegistrationObservations(row.ct),
+            }),
           }
         : null,
+      popularity: row.popularity ?? null,
       errorRow: row.status === 'error',
       error: row.error,
       availability: row.availability,

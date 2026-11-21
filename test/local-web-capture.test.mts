@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { EventEmitter } from 'node:events';
-import { mkdir, mkdtemp, open, readFile, rename, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, open, readFile, readdir, rename, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, test } from 'node:test';
@@ -23,6 +23,7 @@ import {
   disableBrowserNetworkIntrinsics,
   installDomProjectionIntrinsics,
   parseCaptureArguments,
+  parseCaptureNavigationPlan,
   sanitizeCaptureText,
   formatCaptureSuccess,
   type CaptureBrowser,
@@ -36,6 +37,7 @@ import {
   parseCaptureCompareArguments,
 } from '../packages/web-capture/compare.mts';
 import { parseWebCaptureManifest } from '../frontend/src/lib/analysis/web-capture-import.ts';
+import { readWebCaptureManifest } from '../packages/interchange/web-capture-import.mts';
 
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 const CAPTURE_ENTRY = fileURLToPath(new URL('../packages/web-capture/bin/whoisleuth-capture.mts', import.meta.url));
@@ -159,12 +161,14 @@ function fakeBrowser(options: {
   stallDomProjection?: boolean;
   networkApisDisabled?: boolean;
   blockedDirectConnections?: number;
+  onNavigate?: (url: string) => void;
 } = {}) {
   let routeHandler: ((route: Route) => Promise<void>) | null = null;
   const page = {
     on: () => {},
     mainFrame: () => MAIN_FRAME,
-    goto: async () => {
+    goto: async (url: string) => {
+      options.onNavigate?.(url);
       if (!routeHandler) return;
       const handleRoute = routeHandler;
       const mainRequest = fakeRoute(`https://${options.hostname ?? 'example.test'}/entry?discard=this`, { navigation: true });
@@ -233,6 +237,104 @@ function fakeBrowser(options: {
 }
 
 describe('optional local rendered capture package', () => {
+  test('selected navigation validates the whole plan before collection or output reservation', async t => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-navigation-admission-'));
+    t.after(() => rm(parent, { recursive: true, force: true }));
+    const input = { schema: 'whoisleuth.capture-navigation-plan', version: 1, urls: ['https://example.test/next?private=selected'] };
+    assert.deepEqual(parseCaptureNavigationPlan(JSON.stringify(input)), input.urls);
+    for (const changed of [{ ...input, actions: ['submit'] }, { ...input, version: 99 }, { ...input, urls: ['javascript:alert(1)'] },
+      { ...input, urls: ['https://user:password@example.test/'] }, { ...input, urls: ['https://192.0.2.1/'] }, { ...input, urls: Array(5).fill('https://example.test/') }]) {
+      assert.throws(() => parseCaptureNavigationPlan(JSON.stringify(changed)));
+    }
+    let launched = 0;
+    await assert.rejects(captureFixturePage({ targetUrl: 'https://example.test/', outputDirectory: path.join(parent, 'capture'), timeoutMs: 5000,
+      navigationTargets: ['https://example.test/next', 'file:///private'] }, { launchBrowser: async () => { launched++; return fakeBrowser(); } }));
+    assert.equal(launched, 0);
+    assert.deepEqual(await readdir(parent), []);
+  });
+
+  test('selected pages retain linked artefacts and distinct request cohorts without multiplying the request budget', async t => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-navigation-capture-'));
+    t.after(() => rm(parent, { recursive: true, force: true }));
+    const destination = path.join(parent, 'capture'), visited: string[] = [];
+    let requests = 0, clock = 0;
+    const manifest = await captureFixturePage({ targetUrl: 'https://example.test/start?private=first', navigationTargets: ['https://example.test/next?private=second'],
+      outputDirectory: destination, timeoutMs: 5000 }, {
+      launchBrowser: async () => fakeBrowser({ onNavigate: url => visited.push(url), subresourceUrls: Array.from({ length: 60 }, (_, index) => `https://example.test/resource-${index}.js`) }),
+      fetchResource: async (...args) => { requests++; return fakeFetchResource(args[0]); },
+      resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }], now: () => new Date(Date.parse('2026-08-01T00:00:00.000Z') + clock++ * 1000).toISOString(),
+    });
+    assert.deepEqual(visited, ['https://example.test/start?private=first', 'https://example.test/next?private=second']);
+    assert.equal(requests, MAX_CAPTURE_REQUESTS);
+    assert.equal(manifest.captures.length, 2);
+    assert.deepEqual(manifest.navigation!.steps.map(({ beforeCapture, afterCapture, state }) => ({ beforeCapture, afterCapture, state })), [
+      { beforeCapture: null, afterCapture: 0, state: 'captured' }, { beforeCapture: 0, afterCapture: 1, state: 'captured' },
+    ]);
+    assert.ok(manifest.navigation!.totals.requestAttempts > requests);
+    assert.equal(manifest.captures[0]!.completeness, 'complete');
+    assert.equal(manifest.captures[1]!.completeness, 'partial');
+    const first = manifest.captures[0]!.pageBehaviour.coverage.attempts, second = manifest.captures[1]!.pageBehaviour.coverage.attempts;
+    assert.ok(first.length && second.length && first.at(-1)!.position < second[0]!.position);
+    assert.deepEqual(manifest.captures.map(capture => capture.artifacts.map(artifact => artifact.fileName)), [
+      ['screenshot.png', 'dom-digest.json'], ['capture-2-screenshot.png', 'capture-2-dom-digest.json'],
+    ]);
+    assert.doesNotMatch(JSON.stringify(manifest), /private=|resource-\d|rendered page text/u);
+    const imported = readWebCaptureManifest(JSON.parse(await readFile(path.join(destination, 'manifest.json'), 'utf8')));
+    assert.equal(imported.navigation!.steps.length, 2);
+    assert.equal(imported.artifacts.length, 4);
+    const file = path.join(destination, 'manifest.json');
+    await assert.rejects(compareRenderedCaptures(file, file, undefined, [], { left: 0 }), /explicit|different/u);
+    const comparison = await compareRenderedCaptures(file, file, '2026-08-01T00:01:00.000Z', [], { left: 0, right: 1 });
+    assert.equal(comparison.left.captureIndex, 0); assert.equal(comparison.right.captureIndex, 1);
+    assert.equal(comparison.partial, true);
+    assert.equal(comparison.integrity.left.screenshot, true);
+    assert.deepEqual(parseCaptureCompareArguments([file, file, '--left-capture', '1', '--right-capture', '2']), {
+      leftManifest: file, rightManifest: file, output: 'terminal', leftCaptureIndex: 0, rightCaptureIndex: 1,
+    });
+  });
+
+  test('a refused selected step preserves its predecessor and leaves later steps explicitly unattempted', async t => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-navigation-refused-'));
+    t.after(() => rm(parent, { recursive: true, force: true }));
+    let selected = 0;
+    const manifest = await captureFixturePage({ targetUrl: 'https://example.test/', navigationTargets: ['https://example.test/refused', 'https://example.test/not-attempted'],
+      outputDirectory: path.join(parent, 'capture'), timeoutMs: 5000 }, {
+      launchBrowser: async () => fakeBrowser({ onNavigate: () => { selected++; } }),
+      fetchResource: fakeFetchResource, resolveAddresses: async () => { if (selected > 1) throw new Error('Selected destination unavailable'); return [{ address: '192.0.2.1', family: 4 }]; },
+      now: () => '2026-08-01T00:00:00.000Z',
+    });
+    assert.equal(selected, 2);
+    assert.equal(manifest.captures.length, 1);
+    assert.deepEqual(manifest.navigation!.steps.map(step => step.state), ['captured', 'blocked', 'not_attempted']);
+    assert.deepEqual((await readdir(path.join(parent, 'capture'))).sort(), ['dom-digest.json', 'manifest.json', 'screenshot.png']);
+    const review = readWebCaptureManifest(manifest);
+    assert.ok(review.document.findings.length);
+    assert.ok(review.document.findings.every(finding => finding.completeness === 'partial'));
+    const secondManifest = path.join(parent, 'capture', 'second-manifest.json');
+    await writeFile(secondManifest, JSON.stringify(manifest));
+    const compared = await compareRenderedCaptures(path.join(parent, 'capture', 'manifest.json'), secondManifest, '2026-08-01T00:01:00.000Z');
+    assert.equal(compared.left.completeness, 'complete');
+    assert.equal(compared.left.sequenceState, 'partial'); assert.equal(compared.partial, true);
+    assert.notEqual(compared.page.requestDomains.state, 'unavailable');
+    const invalid = { ...manifest, navigation: { ...manifest.navigation!, steps: manifest.navigation!.steps.map((step, index) => index === 1 ? { ...step, afterCapture: 0 } : step) } };
+    assert.throws(() => readWebCaptureManifest(invalid));
+    assert.throws(() => readWebCaptureManifest({ ...manifest, schemaVersion: 3 }));
+  });
+
+  test('cancellation during a later selected page publishes no sequence or partial files', async t => {
+    const parent = await mkdtemp(path.join(tmpdir(), 'whoisleuth-navigation-cancel-'));
+    t.after(() => rm(parent, { recursive: true, force: true }));
+    const controller = new AbortController(), visited: string[] = [];
+    await assert.rejects(captureFixturePage({ targetUrl: 'https://example.test/start', navigationTargets: ['https://example.test/next', 'https://example.test/later'],
+      outputDirectory: path.join(parent, 'capture'), timeoutMs: 5000 }, {
+      launchBrowser: async () => fakeBrowser({ onNavigate: url => { visited.push(url); if (visited.length === 2) controller.abort(new Error('Selected navigation cancelled')); } }),
+      fetchResource: fakeFetchResource, resolveAddresses: async () => [{ address: '192.0.2.1', family: 4 }],
+      now: () => '2026-08-01T00:00:00.000Z', signal: controller.signal,
+    }), /Selected navigation cancelled/u);
+    assert.deepEqual(visited, ['https://example.test/start', 'https://example.test/next']);
+    assert.deepEqual(await readdir(parent), []);
+  });
+
   test('keeps the browser sandbox and a bounded launch deadline without fallback', async () => {
     const instance = fakeBrowser();
     const result = await launchCaptureBrowser(5000, { launch: async options => {
@@ -857,7 +959,7 @@ describe('optional local rendered capture package', () => {
       );
       const comparison = await compareRenderedCaptures(leftManifest, rightManifest, '2026-08-01T00:10:00.000Z');
       assert.equal(comparison.schema, WEB_CAPTURE_COMPARISON_SCHEMA);
-      assert.equal(comparison.version, 5);
+      assert.equal(comparison.version, 6);
       assert.equal(comparison.screenshot.state, 'same');
       assert.equal(comparison.renderedDom.structure.state, 'different');
       assert.equal(comparison.renderedDom.visibleText.state, 'different');

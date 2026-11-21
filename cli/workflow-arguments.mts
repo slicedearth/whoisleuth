@@ -28,6 +28,11 @@ type MonitorOnceArguments = {
 } & TerminalOptions;
 
 type WatchlistReviewArguments = { action: 'watchlist-review'; operation: 'plan' | 'export'; source: string | null; output: 'terminal' | 'json' } & TerminalOptions;
+type MonitorTickArguments = { action: 'monitor-tick'; source: string; stateSource: string | null; approveNetwork: boolean; output: 'terminal' | 'json' } & TerminalOptions;
+function parseMonitorTickArguments(parsed: ParsedCommandArguments<MonitorTickArguments['action']>): MonitorTickArguments {
+  return { action: 'monitor-tick', source: parsed.positionalValue('source')!, stateSource: parsed.optionValue('--state'),
+    approveNetwork: parsed.hasOption('--approve-network'), output: jsonOutput(parsed), ...terminalOptions(parsed) };
+}
 type DomainFeedArguments = { action: 'domain-feed'; operation: 'review' | 'watch-input'; feedId: string; source: string; contextSource: string | null;
   selection: ReturnType<typeof parseDomainFeedSelectors>; output: 'terminal' | 'json' } & TerminalOptions;
 function parseDomainFeedArguments(parsed: ParsedCommandArguments<DomainFeedArguments['action']>): DomainFeedArguments {
@@ -158,6 +163,7 @@ function parseWorkflowRunArguments(parsed: ParsedCommandArguments<WorkflowRunArg
 }
 
 export const WORKFLOW_ARGUMENT_PARSERS = Object.freeze({
+  'monitor-tick': parseMonitorTickArguments,
   'domain-feed': parseDomainFeedArguments,
   'watchlist-review': parseWatchlistReviewArguments,
   'monitor-once': parseMonitorOnceArguments,

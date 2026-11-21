@@ -117,7 +117,7 @@ describe('discover CLI argument parsing', () => {
       tldText: null,
       dictionarySource: null,
       familyText: null,
-      snapshotSource: null,
+      snapshotSource: null, popularityListSource: null,
     });
   });
 
@@ -136,7 +136,7 @@ describe('discover CLI argument parsing', () => {
       tldText: 'com,net',
       dictionarySource: 'terms.txt',
       familyText: null,
-      snapshotSource: null,
+      snapshotSource: null, popularityListSource: null,
     });
   });
 
@@ -154,7 +154,7 @@ describe('discover CLI argument parsing', () => {
       tldText: null,
       dictionarySource: 'terms.txt',
       familyText: 'pluralization,dictionary',
-      snapshotSource: null,
+      snapshotSource: null, popularityListSource: null,
     });
   });
 

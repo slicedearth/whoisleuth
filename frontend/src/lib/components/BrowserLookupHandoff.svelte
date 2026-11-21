@@ -142,7 +142,7 @@
         spellcheck="false"
         placeholder={destinationKind === 'local_companion' ? 'http://127.0.0.1:4312/review' : 'https://service.example/review'}
       />
-      <small>WHOISleuth does not discover or validate this endpoint. It appends one <code>target</code> query parameter only after you open the reviewed preview.</small>
+      <small>This endpoint is not checked. One <code>target</code> query parameter is added only when you open the reviewed preview.</small>
     {/if}
     <button type="submit" class="btn">Prepare exact preview</button>
   </form>

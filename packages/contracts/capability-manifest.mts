@@ -77,6 +77,8 @@ type CapabilityRecipientClass =
   | 'certificate_transparency_service'
   | 'configured_intelligence_provider'
   | 'selected_public_resolver'
+  | 'selected_network_directory'
+  | 'web_archive_service'
   | 'selected_mail_endpoint'
   | 'configured_worker_store'
   | 'configured_control_provider';
@@ -324,8 +326,12 @@ type CliOperationPolicy =
   | Readonly<{ kind: 'doctor' }>
   | Readonly<{ kind: 'lookup'; command: 'lookup' | 'bulk' | 'discover-scan' }>
   | Readonly<{ kind: 'monitor' }>
+  | Readonly<{ kind: 'local_monitor' }>
   | Readonly<{ kind: 'ct_search' }>
   | Readonly<{ kind: 'posture' }>
+  | Readonly<{ kind: 'resolver_comparison' }>
+  | Readonly<{ kind: 'network_directory' }>
+  | Readonly<{ kind: 'web_archive_history' }>
   | Readonly<{ kind: 'http' }>
   | Readonly<{ kind: 'tls' }>
   | Readonly<{ kind: 'dnssec_validate' }>
@@ -363,6 +369,9 @@ const CLI_OPERATION_POLICY = Object.freeze({
   discover: OFFLINE_PER_ITEM,
   'discover-scan': Object.freeze({ kind: 'lookup', command: 'discover-scan' }),
   posture: Object.freeze({ kind: 'posture' }),
+  'resolver-compare': Object.freeze({ kind: 'resolver_comparison' }),
+  'peeringdb-context': Object.freeze({ kind: 'network_directory' }),
+  'archive-history': Object.freeze({ kind: 'web_archive_history' }),
   http: Object.freeze({ kind: 'http' }),
   tls: Object.freeze({ kind: 'tls' }),
   'dnssec-validate': Object.freeze({ kind: 'dnssec_validate' }),
@@ -395,6 +404,7 @@ const CLI_OPERATION_POLICY = Object.freeze({
   'case-pack': OFFLINE_ALL_OR_NOTHING,
   'domain-control': OFFLINE_PER_SOURCE,
   'monitor-once': Object.freeze({ kind: 'monitor' }),
+  'monitor-tick': Object.freeze({ kind: 'local_monitor' }),
   assurance: OFFLINE_PER_SOURCE,
   'change-packet': offlinePolicy('explicit_document', ['complete', 'partial', 'blocked']),
   'sharing-review': offlinePolicy('explicit_document', ['complete', 'partial', 'blocked']),
@@ -403,8 +413,11 @@ const CLI_OPERATION_POLICY = Object.freeze({
   'domain-feed': offlinePolicy('explicit_per_item', COMPLETE_OR_PARTIAL, 'none', 'cooperative'),
   'workflow-run': Object.freeze({ kind: 'workflow_run' }),
   diff: OFFLINE_PER_SOURCE,
+  view: OFFLINE_ALL_OR_NOTHING,
+  mcp: OFFLINE_ALL_OR_NOTHING,
   reconcile: OFFLINE_PER_SOURCE,
   timeline: OFFLINE_PER_SOURCE,
+  'prior-registration': OFFLINE_PER_SOURCE,
   export: OFFLINE_ALL_OR_NOTHING,
 } as const satisfies Readonly<Record<CliCommand, CliOperationPolicy>>);
 
@@ -929,6 +942,15 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
     ],
   }),
   freezeCapability({
+    id: CAPABILITY_IDS.NETWORK_DIRECTORY, title: 'Selected network directory', job: 'investigate',
+    planes: ['local_cli_network'], trigger: 'explicit_cli_command', networkMode: 'bounded_passive', scanModes: [],
+    disclosedData: ['normalised_target'], recipients: ['selected_network_directory'], requestBudget: 'collector_specific',
+    responseBudget: 'collector_specific', concurrency: 'command_bounded', credentialModel: 'none', retention: 'transient', export: 'none',
+    scoringEffect: 'none', authorisation: 'explicit_network_approval', cancellation: 'cooperative', partialResults: 'explicit_document', outcomes: COMPLETE_OR_LIMITED,
+    privacyLimitations: ['One explicit ASN and minimal fields are sent to the fixed community-maintained directory. No contacts, bulk fetching, retries, cache, export file or hosted redistribution.',
+      'The operator must acknowledge permitted operational use or existing provider permission. Membership and missing entries do not establish ownership, reachability or reputation.'],
+  }),
+  freezeCapability({
     id: CAPABILITY_IDS.DOMAIN_POSTURE,
     title: 'Owned-domain posture review',
     job: 'assure',
@@ -956,6 +978,36 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
     featurePolicyId: 'domain_posture',
     featurePolicyDependencies: ['dns_intelligence'],
     operationBudgetVariants: [{ featureId: 'domain_posture', classId: 'posture_audit' }],
+    legacyCapability: { status: 'supported', execution: 'hosted', scanModes: [] },
+  }),
+  freezeCapability({
+    id: CAPABILITY_IDS.RESOLVER_COMPARISON,
+    title: 'Selected resolver comparison', job: 'assure',
+    planes: ['hosted_bounded_passive'], trigger: 'explicit_browser_action', networkMode: 'bounded_passive', scanModes: ['deep'],
+    disclosedData: ['normalised_target', 'dns_question'], recipients: ['selected_public_resolver'],
+    requestBudget: 'posture_audit', responseBudget: 'collector_specific', concurrency: 'posture_audit',
+    credentialModel: 'none', retention: 'transient', export: 'none', scoringEffect: 'none',
+    authorisation: 'authenticated_explicit_action', cancellation: 'client_stops_waiting', partialResults: 'explicit_per_source', outcomes: COMPLETE_OR_LIMITED,
+    privacyLimitations: ['Explicitly selected HTTPS resolvers receive the hostname and A/AAAA questions. Four requests maximum; normal Lookup, Bulk and monitoring do not invoke this action.',
+      'Resolver agreement is not authoritative truth or local DNSSEC validation. Provider retention policies apply.',
+      'Off unless the deployment operator explicitly enables it; the emergency switch still disables it.'],
+    featurePolicyId: 'resolver_comparison', featurePolicyDependencies: ['dns_intelligence'],
+    operationBudgetVariants: [{ featureId: 'resolver_comparison', classId: 'posture_audit' }],
+    legacyCapability: { status: 'supported', execution: 'hosted', scanModes: [] },
+  }),
+  freezeCapability({
+    id: CAPABILITY_IDS.WEB_ARCHIVE_HISTORY,
+    title: 'Web archive history', job: 'investigate',
+    planes: ['hosted_bounded_passive'], trigger: 'explicit_browser_action', networkMode: 'bounded_passive', scanModes: ['deep'],
+    disclosedData: ['normalised_target'], recipients: ['web_archive_service'],
+    requestBudget: 'certificate_search', responseBudget: 'collector_specific', concurrency: 'certificate_search',
+    credentialModel: 'none', retention: 'transient', export: 'none', scoringEffect: 'none',
+    authorisation: 'authenticated_explicit_action', cancellation: 'client_stops_waiting', partialResults: 'explicit_per_source', outcomes: COMPLETE_OR_LIMITED,
+    privacyLimitations: ['The Internet Archive receives the registrable domain in two requests for its earliest and latest homepage captures. No page content, retries or automatic invocation by Lookup, Bulk or monitoring.',
+      'Captures show when the archive recorded the homepage, not ownership or continuous operation. The archive\u2019s own terms and privacy policy apply.',
+      'Off unless the deployment operator explicitly enables it; the emergency switch still disables it.'],
+    featurePolicyId: 'web_archive_history',
+    operationBudgetVariants: [{ featureId: 'web_archive_history', classId: 'certificate_search' }],
     legacyCapability: { status: 'supported', execution: 'hosted', scanModes: [] },
   }),
   freezeCapability({
@@ -1035,6 +1087,7 @@ const capabilities: readonly CapabilityDefinition[] = Object.freeze([
       'Each admitted resource request discloses its exact URL, including path and query, its GET or HEAD method, and ordinary allowlisted request headers to that public resource endpoint; DNS questions are disclosed to the configured resolver.',
       'Structured outputs exclude request paths, queries, headers and bodies, but the control-sanitised page title and screenshot retain page-controlled content that may reproduce a path or query.',
       'Rendered capture executes page JavaScript and remains separate from hosted Lookup and the distributable CLI.',
+      'An optional local plan selects up to four subsequent URLs in fresh pages within the same total collection bounds; declared selection steps do not establish clicks, form submission or a redirect chain.',
     ],
     renderedCaptureBudget: {
       maxRequests: 100,
@@ -1625,6 +1678,25 @@ function cliOperation(command: CliCommand, capabilityId: CapabilityId): CliOpera
       ],
     });
   }
+  if (policy.kind === 'local_monitor') {
+    return passiveCliOperation(command, capabilityId, {
+      planes: ['local_cli_offline', 'local_cli_network'], networkMode: 'conditional_bounded_passive',
+      recipients: ['registry_service', 'dns_resolver', 'target_public_service'],
+      authorisation: 'explicit_network_approval', cancellation: 'queue_stops_admission', partialResults: 'explicit_per_item',
+      variants: [
+        { id: 'preview', planes: ['local_cli_offline'], trigger: 'explicit_cli_command', networkMode: 'none', disclosedData: ['none'], recipients: ['none'],
+          requestBudget: 'none', responseBudget: 'bounded_local_input', concurrency: 'none', credentialModel: 'none', retention: 'local_output_deliberate',
+          export: 'local_output', scoringEffect: 'none', authorisation: 'explicit_action', cancellation: 'bounded_atomic', partialResults: 'explicit_document', outcomes: COMPLETE_OR_PARTIAL },
+        { id: 'approved_cycle', planes: ['local_cli_network'], trigger: 'explicit_cli_command', networkMode: 'bounded_passive',
+          disclosedData: ['normalised_target', 'registry_query', 'whois_query', 'dns_question', 'homepage_request', 'tls_handshake'],
+          recipients: ['registry_service', 'dns_resolver', 'target_public_service'], requestBudget: 'collector_specific', responseBudget: 'collector_specific',
+          concurrency: 'command_bounded', credentialModel: 'none', retention: 'local_output_deliberate', export: 'local_output', scoringEffect: 'none',
+          authorisation: 'explicit_network_approval', cancellation: 'queue_stops_admission', partialResults: 'explicit_per_item', outcomes: COMPLETE_OR_PARTIAL },
+      ],
+      privacyLimitations: ['A selected private local file retains compact evidence, quota counters and the existing dispatcher cursor; no hosted schedule is enabled.',
+        'The plan selects collection purpose and cadence independently from review priority. No Brand-based risk score is calculated.'],
+    });
+  }
   if (policy.kind === 'monitor') {
     return passiveCliOperation(command, capabilityId, {
       disclosedData: ['normalised_target', 'registry_query', 'whois_query', 'dns_question', 'public_ip_address', 'homepage_request', 'tls_handshake'],
@@ -1657,6 +1729,27 @@ function cliOperation(command: CliCommand, capabilityId: CapabilityId): CliOpera
       privacyLimitations: [
         'The posture review performs bounded RDAP, DNS and MTA-STS publication checks without changing configuration.',
       ],
+    });
+  }
+  if (policy.kind === 'resolver_comparison') {
+    return passiveCliOperation(command, capabilityId, {
+      disclosedData: ['normalised_target', 'dns_question'], recipients: ['selected_public_resolver'],
+      requestBudget: 'collector_specific', partialResults: 'explicit_per_source',
+      privacyLimitations: ['The explicitly selected resolvers receive four bounded A/AAAA questions over HTTPS. No target connection, retry or automatic invocation by other commands.'],
+    });
+  }
+  if (policy.kind === 'web_archive_history') {
+    return passiveCliOperation(command, capabilityId, {
+      disclosedData: ['normalised_target'], recipients: ['web_archive_service'],
+      requestBudget: 'collector_specific', partialResults: 'explicit_per_source',
+      privacyLimitations: ['The Internet Archive receives the registrable domain in two bounded requests for its earliest and latest homepage captures. No page content, retry or automatic invocation by other commands.'],
+    });
+  }
+  if (policy.kind === 'network_directory') {
+    return passiveCliOperation(command, capabilityId, {
+      disclosedData: ['normalised_target'], recipients: ['selected_network_directory'],
+      export: 'none', authorisation: 'explicit_network_approval', cancellation: 'cooperative', partialResults: 'explicit_document',
+      privacyLimitations: ['One ASN is sent to the selected fixed directory for acknowledged permitted operational use or existing provider permission. No contact expansion, cache, output file or automatic invocation. Provider terms still apply.'],
     });
   }
   if (policy.kind === 'http') {

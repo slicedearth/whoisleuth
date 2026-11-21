@@ -5,6 +5,7 @@
   import IntelligenceIcon from './IntelligenceIcon.svelte';
   import MonitorDomainTimeline from '#lib/components/MonitorDomainTimeline.svelte';
   import WatchlistDomainMetadata from '#lib/components/WatchlistDomainMetadata.svelte';
+  import MonitoringPlan from '#lib/components/MonitoringPlan.svelte';
   import type { WatchBrandNames } from '#lib/analysis/watchlist-context-labels.ts';
   import {
     fieldLabels,
@@ -143,6 +144,7 @@
     </section>
   {/if}
   <WatchlistDomainMetadata name={selected} {entry} {brandNames} onrefresh={refresh} />
+  <MonitoringPlan name={selected} {entry} />
   <section id="watchlist-history" class="history card" aria-labelledby="watchlist-history-title" tabindex="-1">
     <header class="section-head">
       <div>
@@ -203,7 +205,7 @@
             {/each}
           </div>
         {:else}
-          <div class="domain-empty"><h4>No retained material changes</h4><p>This means no comparable change for this domain is present in the bounded watchlist history. It does not establish that the domain or its unobserved evidence stayed unchanged.</p></div>
+          <div class="domain-empty"><h4>No retained material changes</h4><p>No material change for this domain appears in the retained watchlist history.</p></div>
         {/if}
       </section>
     {:else}

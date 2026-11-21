@@ -1,7 +1,8 @@
 # WHOISleuth rendered capture companion
 
-This optional package captures one explicitly authorised public, domain-hosted
-web page. Its browser runtime is independent of the main CLI and website.
+This optional package captures explicitly authorised public, domain-hosted
+web pages. It opens one URL by default, with an optional selected sequence.
+Its browser runtime is independent of the main CLI and website.
 IP-literal targets are rejected so every successful manifest remains compatible
 with the domain-only Cases importer. It is separate
 from the distributable WHOISleuth CLI and is never enabled by the hosted
@@ -56,11 +57,29 @@ npm run capture:compare -- ./official/manifest.json ./candidate/manifest.json --
 
 ## Output and collection boundaries
 
+For a selected sequence, add `--navigation-plan ./navigation.json` to the capture
+command. The private local plan lists 1–4 subsequent exact URLs:
+
+```json
+{"schema":"whoisleuth.capture-navigation-plan","version":1,"urls":["https://example.test/next"]}
+```
+
+All URLs are validated before collection starts. Each opens in a fresh page in
+the same disposable browser context; no button is clicked or form submitted.
+The sequence shares the normal request, host, byte and deadline limits rather
+than multiplying them. Its manifest links each selected origin to the preceding
+and resulting capture. A blocked or unavailable step stops the sequence, retains
+earlier captures and marks remaining steps not attempted. Cancellation publishes
+no output. Selected paths and queries remain in the private input plan, not in
+the structured selection history.
+
 The destination must not already exist. The package writes a fixed-size PNG,
-a sanitised DOM digest containing hashes and element counts rather than page
-text or HTML, and a version 3 `whoisleuth.web-capture-manifest` that can be
-reviewed before import into Cases. The manifest also retains one
-control-sanitised page title of up to 300 characters. File permissions are
+a sanitised DOM digest per retained page containing hashes and element counts
+rather than page text or HTML, and a version 4
+`whoisleuth.web-capture-manifest` that can be reviewed before import into Cases.
+Screenshot bytes are limited to 10 MiB and DOM-digest bytes to 1 MiB across the
+whole sequence; the manifest remains limited to 1 MiB. Each capture also retains
+a control-sanitised page title of up to 300 characters. File permissions are
 private where the platform supports POSIX modes.
 If a later refused navigation leaves a browser error page, the partial manifest
 retains request accounting and labels the screenshot as the resulting browser
@@ -101,7 +120,7 @@ attempts and unattributed direct-connection refusals remain explicit counts.
 Disabled transports and interactions not exercised are recorded separately.
 The existing request, host, transfer and deadline limits still apply.
 
-The offline `compare` command accepts selected version-2 and version-3 manifests. Before
+The offline `compare` command accepts selected version-2–4 manifests. Before
 comparing them it verifies the declared artefact sizes, SHA-256 digests, and
 screenshot perceptual hashes against the local files. It then reports exact
 equality for complete bounded preorder element-tag sequences and body text-node
@@ -115,15 +134,19 @@ technology set relationships are also unavailable because omitted activity can
 change them; retained counts and shared observations remain visible for review.
 The comparator makes no request, prints no input
 paths, reports only the page-title equality state rather than either title,
-emits `whoisleuth.web-capture-comparison` version 5, and produces no combined
+emits `whoisleuth.web-capture-comparison` version 6, and produces no combined
 similarity or maliciousness score. Page observations are compared separately:
 script hashes, policy presence, form destinations, navigation order and wording.
 Duplicate observations retain their multiplicity. Historical manifests have no
 page observations; partial capture does not establish an unchanged dependency
 set, and not re-observed never means removed.
 
-Version 5 adds bounded, separately attributed left/right capture and DOM-digest
-limitations without changing the version-4 comparison fields or their meaning.
+Version 6 retains separately attributed capture and DOM-digest limitations and
+adds the selected capture ordinal and sequence completion state. For a manifest
+with several captures, select each explicitly with `--left-capture 1` and/or
+`--right-capture 2` (one-based). Two distinct captures in the same manifest may
+be compared. A sequence with a blocked step stays qualified even when both
+selected captures were retained.
 Historical comparison output is not rewritten; this is an output-only contract,
 not a comparison-document importer. The selected manifest paths are used exactly,
 including meaningful spaces, and are never copied into comparison output.

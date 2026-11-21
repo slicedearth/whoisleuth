@@ -137,8 +137,32 @@ export async function checkCaptureBrowserIsolation(capture: Capture, launch: Lau
       assert.ok(collected.every(url => new URL(url).hostname === 'example.test'));
       navigationRefusals.push(behaviour);
     }
+    const selectedRequests: string[] = [];
+    const selected = await capture({ targetUrl: 'https://example.test/start?selection=private',
+      navigationTargets: ['https://next.example.test/after?selection=private', 'https://refused.example.test/', 'https://unattempted.example.test/'],
+      outputDirectory: path.join(directory, 'selected-navigation'), timeoutMs: 15_000 }, {
+      launchBrowser: launch,
+      resolveAddresses: async hostname => { if (hostname === 'refused.example.test') throw new Error('Synthetic destination refusal'); return [{ address: '192.0.2.10', family: 4 }]; },
+      fetchResource: async (url, options) => {
+        assert.equal(options.method, 'GET'); selectedRequests.push(url);
+        const before = new URL(url).hostname === 'example.test';
+        return new Response(`<!doctype html><title>${before ? 'Before selection' : 'After selection'}</title><main>${before
+          ? '<form method="post" action="https://submit.example.test/never"><input type="password"></form><script>document.forms[0].append(document.createElement("button"));</script>'
+          : '<p>Selected second page</p>'}</main>`, { headers: { 'content-type': 'text/html' } });
+      },
+    });
+    assert.deepEqual(selected.captures.map(item => item.domain), ['example.test', 'next.example.test']);
+    assert.deepEqual(selected.navigation!.steps.map(step => step.state), ['captured', 'captured', 'blocked', 'not_attempted']);
+    assert.ok(selectedRequests.some(url => url.startsWith('https://example.test/start?')));
+    assert.ok(selectedRequests.some(url => url.startsWith('https://next.example.test/after?')));
+    assert.ok(selectedRequests.every(url => ['example.test', 'next.example.test'].includes(new URL(url).hostname)));
+    assert.ok(selected.captures[0]!.pageBehaviour.elements.some(item => item.kind === 'form' && item.passwordFields === 1));
+    assert.equal(selected.captures[1]!.pageBehaviour.elements.some(item => item.kind === 'form'), false);
+    assert.ok(selected.captures[0]!.pageBehaviour.coverage.attempts.every(row => row.origin !== 'https://next.example.test'));
+    assert.ok(selected.captures[1]!.pageBehaviour.coverage.attempts.every(row => row.origin !== 'https://example.test'));
+    assert.doesNotMatch(JSON.stringify(selected), /selection=private|\/start\?|\/after\?/u);
     assert.equal(connections, 0);
-    return { directConnections: connections, rows, navigationRefusals };
+    return { directConnections: connections, rows, navigationRefusals, navigationSteps: selected.navigation!.steps.map(step => step.state) };
   } finally {
     if (sink.listening) await new Promise<void>((resolve, reject) => sink.close(error => error ? reject(error) : resolve()));
     await rm(directory, { recursive: true, force: true });

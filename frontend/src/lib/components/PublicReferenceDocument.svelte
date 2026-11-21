@@ -125,7 +125,8 @@
   .reference-shell{display:grid;grid-template-columns:248px minmax(0,1fr);gap:clamp(36px,4vw,64px);align-items:start;--reference-anchor-offset:24px}
   .reference-document{min-width:0;max-width:1120px;font-family:var(--font-sans);line-height:1.65}
   .breadcrumbs{display:flex;align-items:baseline;flex-wrap:wrap;gap:8px;margin:0 0 16px;color:var(--muted);font:650 var(--text-2xs) var(--font-sans);line-height:1.4}
-  .breadcrumbs a{color:var(--accent)}
+  /* Keep breadcrumb links at least 24px tall for pointer and touch targets. */
+  .breadcrumbs a{display:inline-flex;align-items:center;min-height:24px;color:var(--accent)}
   .reference-heading{max-width:900px;padding:0 0 32px}
   .reference-heading h1{max-width:820px;margin:.35rem 0 .8rem;font:750 clamp(1.9rem,4vw,2.8rem)/1.15 var(--font-sans);letter-spacing:-.035em}
   .reference-heading>p:not(.eyebrow){max-width:72ch;margin:.65rem 0 0;color:var(--muted);font-size:1rem;line-height:1.6}

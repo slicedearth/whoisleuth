@@ -248,3 +248,18 @@ describe('Bulk scan normalizer', () => {
     }), /does not match its registrable-domain evidence/u);
   });
 });
+
+test('Bulk qualifies the creation date by the registration source that supplied it, in page memory only', () => {
+  const context = { targetDomain: 'candidate.example', mode: 'fast', profile: null, candidate: null } as const;
+  const body = (rdap: Record<string, unknown>, source: string | undefined) => ({
+    availability: { applicable: true, domain: 'candidate.example', state: 'registered', confidence: 'high',
+      createdDateIso: '2024-03-01T00:00:00.000Z', ...(source ? { source } : {}) },
+    diagnostics: { version: 7, rdap, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+  }) as unknown as CompactLookupHttpResponse;
+  const qualified = normalizeBulkScanResult(body({ status: 'complete' }, 'rdap'), context);
+  assert.deepEqual(qualified.registrationCreation, { createdAt: '2024-03-01T00:00:00.000Z', source: 'Registry RDAP' });
+  assert.equal(normalizeBulkScanResult(body({ status: 'partial', complete: false }, 'rdap'), context).registrationCreation, null);
+  assert.equal(normalizeBulkScanResult(body({ status: 'complete' }, undefined), context).registrationCreation, null, 'an unattributed date is not used');
+  assert.equal(qualified.saved.createdDate, '2024-03-01T00:00:00.000Z', 'the displayed date is unchanged');
+  assert.equal(Object.hasOwn(toBulkSessionResult(qualified), 'registrationCreation'), false);
+});

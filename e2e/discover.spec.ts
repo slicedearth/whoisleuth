@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { expect, test } from './fixtures';
 import { currentBrandProfileBrowserStore, currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, holdBrowserLocalReads, holdBrowserLocalTransaction, holdNextBrowserLocalCommitAcknowledgement, migrateLegacyBrowserData, readBrowserLocalCollection, useTheme } from './helpers';
 import { BASE_URL } from './constants.ts';
@@ -254,7 +255,7 @@ test('certificate search exposes and enforces the shared bounded query contract'
   const input = page.getByRole('textbox', { name: 'Certificate-log keyword' });
   await expect(input).toHaveAttribute('maxlength', '200');
   await expect(page.locator('#ct-query-guidance')).toContainText('up to 200 characters');
-  await expect(page.locator('#ct-query-guidance')).toContainText('does not submit the target for a live website scan');
+  await expect(page.locator('#ct-query-guidance')).toContainText('Search public certificate names');
 
   const sameOriginHeaders = { Origin: BASE_URL, 'Sec-Fetch-Site': 'same-origin' };
   const missingResponse = await request.get('/api/ct-search', { headers: sameOriginHeaders });
@@ -310,6 +311,88 @@ test('registry-scoped nameserver results disclose their lower-bound scope and co
   await expect(page).toHaveURL(/\/bulk/);
   await expect(page.locator('#domains')).toHaveValue('matched.example');
   await expect(page.locator('.handoff')).toContainText('Loaded 1 candidate from Nameservers');
+});
+
+test('a selected popularity list marks ranked candidates without uploading the list', async ({ page }) => {
+  await page.getByRole('textbox', { name: 'Brand or domain' }).fill('acme');
+  await page.getByRole('textbox', { name: 'TLDs' }).fill('com');
+  await page.getByRole('button', { name: 'Generate candidates' }).click();
+  const first = page.locator('.candidate').first();
+  const domain = (await first.locator('label strong').textContent())?.trim() ?? '';
+  expect(domain).toMatch(/\.com$/u);
+  const uploads: string[] = [];
+  page.on('request', (request) => { if (request.method() !== 'GET') uploads.push(request.url()); });
+
+  const picker = page.locator('details.popularity-list');
+  await picker.locator(':scope > summary').click();
+  await picker.locator('input[type="file"]').setInputFiles({ name: 'tranco.csv', mimeType: 'text/csv',
+    buffer: Buffer.from(`rank,domain\n1,unrelated.example\n42,${domain}\nnot-a-row,,\n`) });
+  await expect(picker.getByRole('status')).toHaveText('Using 2 ranked domains; 1 unreadable line skipped.');
+  await expect(picker).toContainText('lookalikes can also be popular');
+  await expect(first.getByText('Ranked #42 in selected list', { exact: true })).toBeVisible();
+  await expect(page.getByText(/Ranked #\d+ in selected list/u)).toHaveCount(1);
+  expect(uploads).toEqual([]);
+  await picker.getByRole('button', { name: 'Clear list', exact: true }).click();
+  await expect(page.getByText(/Ranked #\d+ in selected list/u)).toHaveCount(0);
+
+  // A slower earlier read never replaces a later choice or brings back a cleared list.
+  // Holding the request for slow.csv delays that worker's read until it is released.
+  await page.evaluate(() => {
+    const state = window as typeof window & { releaseSlowList?: () => void };
+    type Post = (this: Worker, message: unknown) => void;
+    const post = Worker.prototype.postMessage as Post;
+    (Worker.prototype as unknown as { postMessage: Post }).postMessage = function (message) {
+      const send = () => post.call(this, message);
+      if ((message as { file?: File } | null)?.file?.name === 'slow.csv') state.releaseSlowList = send;
+      else send();
+    };
+  });
+  const choose = (name: string, rank: number) => picker.locator('input[type="file"]').setInputFiles({
+    name, mimeType: 'text/csv', buffer: Buffer.from(`rank,domain\n${rank},${domain}\n`) });
+  const release = () => page.evaluate(() => (window as typeof window & { releaseSlowList?: () => void }).releaseSlowList?.());
+  await choose('slow.csv', 7);
+  await expect(picker.getByRole('status')).toHaveText('Reading slow.csv…');
+  await choose('fast.csv', 9);
+  await expect(first.getByText('Ranked #9 in selected list', { exact: true })).toBeVisible();
+  await release();
+  await expect(picker.getByRole('status')).toHaveText('Using 1 ranked domain.');
+  await expect(first.getByText('Ranked #9 in selected list', { exact: true })).toBeVisible();
+  await expect(page.getByText('Ranked #7 in selected list', { exact: true })).toHaveCount(0);
+  await choose('slow.csv', 7);
+  await picker.getByRole('button', { name: 'Clear list', exact: true }).click();
+  await release();
+  await expect(picker.getByRole('status')).toHaveText('Popularity list cleared.');
+  await expect(page.getByText(/Ranked #\d+ in selected list/u)).toHaveCount(0);
+});
+
+test.describe('popularity rank in Bulk', () => {
+  test.use({ allowExpectedBulkLookup400Noise: true });
+
+  test('a selected list rank and digest travel to Bulk without the list', async ({ page }) => {
+    await page.route('**/api/lookup**', (route) =>
+      route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: 'Rejected in test' }) }));
+    await page.getByRole('textbox', { name: 'Brand or domain' }).fill('acme');
+    await page.getByRole('textbox', { name: 'TLDs' }).fill('com');
+    await page.getByRole('button', { name: 'Generate candidates' }).click();
+    const first = page.locator('.candidate').first();
+    const domain = (await first.locator('label strong').textContent())?.trim() ?? '';
+    expect(domain).toMatch(/\.com$/u);
+    const list = `rank,domain\n1,unrelated.example\n42,${domain}\n`;
+    const picker = page.locator('details.popularity-list');
+    await picker.locator(':scope > summary').click();
+    await picker.locator('input[type="file"]').setInputFiles({ name: 'tranco.csv', mimeType: 'text/csv', buffer: Buffer.from(list) });
+    await expect(first.getByText('Ranked #42 in selected list', { exact: true })).toBeVisible();
+
+    await first.locator('input[type="checkbox"]').check();
+    await page.getByRole('button', { name: 'Continue to Bulk with 1' }).click();
+    await expect(page).toHaveURL(/\/bulk/);
+    expect(JSON.stringify(await page.evaluate(() => ({ ...sessionStorage })))).not.toContain('unrelated.example');
+    await page.getByRole('button', { name: /^Scan 1 domain$/ }).click();
+    await expect(page.locator('.status')).toHaveText('Completed 1 of 1 lookups.', { timeout: 20_000 });
+    const digest = createHash('sha256').update(list).digest('hex').slice(0, 12);
+    await expect(page.locator('.results-table tbody tr', { hasText: domain }).first().locator('.popularity-label'))
+      .toHaveText(`Ranked #42 in selected list · sha256:${digest}`);
+  });
 });
 
 test('lookalike generation discloses its limits and paginates every retained candidate', async ({ page }) => {
@@ -944,6 +1027,35 @@ test.describe('CT provenance badge in Bulk results', () => {
     await expect(ctDetails).toContainText('4 distinct certificates');
     await expect(ctDetails.locator('time[datetime="2026-06-01T00:00:00.000Z"]')).toBeVisible();
   });
+});
+
+test('Bulk marks a CT candidate whose earliest certificate predates its current registration', async ({ page }) => {
+  // example.invalid was first logged on 1 January 2026; other.invalid on 1 February 2026.
+  const created: Record<string, string> = { 'example.invalid': '2026-05-01T00:00:00.000Z', 'other.invalid': '2025-01-01T00:00:00.000Z' };
+  await page.route('**/api/lookup?*', (route) => {
+    const domain = new URL(route.request().url()).searchParams.get('q') ?? '';
+    return route.fulfill({ json: {
+      availability: { applicable: true, domain, observedAt: '2026-07-20T00:05:00.000Z', state: 'registered', confidence: 'high',
+        registrar: { name: 'Example Registrar' }, createdDate: created[domain], source: 'rdap', nameservers: ['ns1.shared.example'] },
+      diagnostics: { version: 7, rdap: { status: 'complete', fetchedAt: '2026-07-20T00:00:00.000Z' }, whois: { status: 'skipped' }, availability: { status: 'complete' } },
+    } });
+  });
+  await mockCtSearch(page, structuredResponse);
+  await runCtSearch(page);
+  await page.getByRole('button', { name: 'Select filtered (2)' }).click();
+  await page.getByRole('button', { name: 'Continue to Bulk with 2' }).click();
+  await page.getByRole('button', { name: /^Scan 2 domains$/ }).click();
+  await expect(page.locator('.status')).toHaveText('Completed 2 of 2 lookups.', { timeout: 20_000 });
+
+  const earlier = page.locator('.results-table tbody tr', { hasText: 'example.invalid' }).first();
+  await expect(earlier.getByText('Certificate logged before current registration', { exact: true })).toBeVisible();
+  await earlier.locator('details.ct-source summary').click();
+  await expect(earlier.locator('details.ct-source')).toContainText('120 days before the current registration was created');
+  await expect(earlier.locator('details.ct-source')).toContainText('does not identify a previous or current owner');
+  const later = page.locator('.results-table tbody tr', { hasText: 'other.invalid' }).first();
+  await expect(later.getByText('Certificate logged before current registration', { exact: true })).toHaveCount(0);
+  await later.locator('details.ct-source summary').click();
+  await expect(later.locator('details.ct-source')).toContainText('does not show that the current registration is the first');
 });
 
 test('a complete CT baseline persists across reload and labels newly observed domains', async ({ page }) => {

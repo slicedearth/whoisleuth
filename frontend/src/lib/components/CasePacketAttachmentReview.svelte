@@ -144,7 +144,7 @@
           <EvidenceFileExport getFiles={exportFiles} {validateSelection} workflow="Selected response evidence files" disabled={busy} onbusy={exportBusyHandler(exportEpoch)} />
         {/key}
       {:else if selected.length}<p>Check the selected originals, or remove references that remain missing or unverified, before preparing a package.</p>{/if}
-      <details><summary>How this check works</summary><p>Times describe file checks, not evidence observations; availability is not monitored. Comparisons use the same full reference, including its source and observation time. Changing selection cancels an unfinished check. Changing packet inputs, leaving this phase or closing this review clears its temporary check and selection. Export checks the current bytes again. Existing files and the packet remain unchanged.</p></details>
+      <details><summary>How this check works</summary><p>Times show when files were checked, not when evidence was observed, and availability is not monitored. Each comparison uses the full reference, including its source and observation time. Changing the selection cancels an unfinished check; changing packet inputs or leaving this review clears it. Export checks the bytes again, and nothing here changes the files or the packet.</p></details>
     </div>
   {/if}
 </details>

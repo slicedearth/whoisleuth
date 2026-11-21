@@ -256,3 +256,19 @@ describe('strict domain validation against hostile sessionStorage payloads', () 
     ), null);
   });
 });
+
+test('popularity rank provenance survives the handoff only in its exact bounded form', () => {
+  const digest = 'b'.repeat(64);
+  const loaded = roundTrip('typosquat', [
+    { domain: 'ranked.example', source: 'example', mutationTypes: [], popularityRank: { rank: 42, listSha256: digest, list: 'not retained' } },
+    { domain: 'zero.example', source: 'example', mutationTypes: [], popularityRank: { rank: 0, listSha256: digest } },
+    { domain: 'digest.example', source: 'example', mutationTypes: [], popularityRank: { rank: 3, listSha256: 'B'.repeat(64) } },
+    { domain: 'plain.example', source: 'example', mutationTypes: [] },
+  ]);
+  assert.deepEqual(loaded.candidates.map((candidate) => [candidate.domain, candidate.popularityRank ?? null]), [
+    ['ranked.example', { rank: 42, listSha256: digest }],
+    ['zero.example', null],
+    ['digest.example', null],
+    ['plain.example', null],
+  ]);
+});

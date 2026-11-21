@@ -39,6 +39,8 @@ const RECIPIENT_LABELS = {
   certificate_transparency_service: 'Configured certificate-transparency service',
   configured_intelligence_provider: 'Configured intelligence or feed service',
   selected_public_resolver: 'Explicitly selected public resolver',
+  selected_network_directory: 'Explicitly selected network directory',
+  web_archive_service: 'Internet Archive Wayback Machine',
   selected_mail_endpoint: 'Explicitly selected mail endpoint',
   configured_worker_store: 'Configured worker store',
   configured_control_provider: 'Configured control provider',

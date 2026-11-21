@@ -41,6 +41,18 @@ describe('ctCsvFields', () => {
     ]);
   });
 
+  test('observed columns keep log dates when the provenance also carries validity starts', () => {
+    const fields = ctCsvFields({
+      firstObservedAt: '2026-01-01T00:00:00.000Z',
+      lastObservedAt: '2026-06-01T00:00:00.000Z',
+      certificateCount: 3,
+      hostnames: ['a.example.com'],
+      firstValidFrom: '2026-03-01T00:00:00.000Z',
+      lastValidFrom: '2026-03-01T00:00:00.000Z',
+    } as Parameters<typeof ctCsvFields>[0]);
+    assert.deepStrictEqual(fields, ['2026-01-01T00:00:00.000Z', '2026-06-01T00:00:00.000Z', '3', 'a.example.com']);
+  });
+
   test('ordinary (non-CT) rows produce four empty fields', () => {
     assert.deepStrictEqual(ctCsvFields(null), ['', '', '', '']);
     assert.deepStrictEqual(ctCsvFields(undefined), ['', '', '', '']);

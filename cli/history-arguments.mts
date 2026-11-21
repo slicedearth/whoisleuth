@@ -15,7 +15,17 @@ type DiffArguments = {
   leftSessionId: string | null;
   rightSessionId: string | null;
   output: 'terminal' | 'json';
+  browse?: boolean;
 } & TerminalOptions;
+
+type ViewArguments = {
+  action: 'view';
+  source: string | null;
+  browse: boolean;
+  output: 'terminal' | 'json';
+} & TerminalOptions;
+
+type McpArguments = { action: 'mcp'; sources: readonly string[] };
 
 type ReconcileArguments = {
   action: 'reconcile';
@@ -26,6 +36,14 @@ type ReconcileArguments = {
 type TimelineArguments = {
   action: 'timeline';
   sources: readonly string[];
+  output: 'terminal' | 'json';
+} & TerminalOptions;
+
+type PriorRegistrationArguments = {
+  action: 'prior-registration';
+  source: string | null;
+  certificateResults: string | null;
+  archiveHistory: string | null;
   output: 'terminal' | 'json';
 } & TerminalOptions;
 
@@ -49,10 +67,19 @@ function parseDiffArguments(parsed: ParsedCommandArguments<DiffArguments['action
       throw new CliUsageError(`${option} requires one bounded saved-session ID.`);
     }
   }
-  return { action: 'diff', ...compared, leftSessionId, rightSessionId };
+  return { action: 'diff', ...compared, leftSessionId, rightSessionId, ...(parsed.hasOption('--browse') ? { browse: true } : {}) };
 }
 
 export const HISTORY_ARGUMENT_PARSERS = Object.freeze({
+  mcp: (parsed: ParsedCommandArguments<McpArguments['action']>): McpArguments => {
+    const sources = parsed.positionalValues('sources');
+    if (sources.includes('-') || new Set(sources).size !== sources.length) throw new CliUsageError('MCP requires distinct named evidence files; stdin is reserved for the protocol.');
+    return { action: 'mcp', sources };
+  },
+  view: (parsed: ParsedCommandArguments<ViewArguments['action']>): ViewArguments => ({
+    action: 'view', source: parsed.positionalValue('source'), browse: parsed.hasOption('--browse'),
+    output: jsonOutput(parsed), ...terminalOptions(parsed),
+  }),
   diff: parseDiffArguments,
   reconcile: (parsed: ParsedCommandArguments<ReconcileArguments['action']>): ReconcileArguments => ({
     action: 'reconcile',
@@ -63,6 +90,14 @@ export const HISTORY_ARGUMENT_PARSERS = Object.freeze({
   timeline: (parsed: ParsedCommandArguments<TimelineArguments['action']>): TimelineArguments => ({
     action: 'timeline',
     sources: uniqueSources(parsed, 'timeline'),
+    output: jsonOutput(parsed),
+    ...terminalOptions(parsed),
+  }),
+  'prior-registration': (parsed: ParsedCommandArguments<PriorRegistrationArguments['action']>): PriorRegistrationArguments => ({
+    action: 'prior-registration',
+    source: parsed.positionalValue('source'),
+    certificateResults: parsed.optionValue('--ct-results'),
+    archiveHistory: parsed.optionValue('--archive-history'),
     output: jsonOutput(parsed),
     ...terminalOptions(parsed),
   }),

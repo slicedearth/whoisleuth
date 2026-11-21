@@ -6,6 +6,8 @@ import {
 import type { Candidate } from '../candidate-handoff-core.ts';
 import { canonicalRegistrableDomain } from '../../../../packages/analysis/registrable-domain.mts';
 import { registryDateIso } from '../../../../packages/evidence/registry-dates.mts';
+import { selectRegistrationCreation } from '../../../../packages/evidence/prior-registration.mts';
+import { lookupRegistrationCreatedObservations } from '../../../../lib/lookup-key-facts.mts';
 import { normalizeExplicitIsoTimestamp } from '../../../../packages/evidence/observation.mts';
 import { analyzeDomainIdn } from './idn-confusables.ts';
 import { compactHttpObservation } from './http-summary.ts';
@@ -124,6 +126,8 @@ export function failedBulkScanResult(
     registrant: null,
     abuseEvidence: null,
     ct: context.candidate?.certificateTransparency ?? null,
+    popularity: context.candidate?.popularityRank ?? null,
+    registrationCreation: null,
     idn,
     dns: null,
     dnssec: null,
@@ -275,6 +279,14 @@ export function normalizeBulkScanResult(
     registrant,
     abuseEvidence: abuseEmail ? { abuseEmail } : null,
     ct: context.candidate?.certificateTransparency ?? null,
+    popularity: context.candidate?.popularityRank ?? null,
+    // The condensed response keeps the registration decision's source and each
+    // source's diagnostic state, so the shared rule qualifies the creation date
+    // exactly as Lookup does. It stays in page memory, not in a saved session.
+    registrationCreation: selectRegistrationCreation(
+      lookupRegistrationCreatedObservations({ type: 'domain', availability: body.availability, diagnostics: body.diagnostics })
+        .map((item) => ({ source: item.source, value: item.value, sourceState: item.sourceState, complete: item.complete })),
+    ),
     idn,
     dns: compactDnsEvidence(availability.dns),
     dnssec: boundedText(availability.dnssec, 40),

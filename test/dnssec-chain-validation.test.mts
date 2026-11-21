@@ -240,6 +240,32 @@ describe('isolated cryptographic DNSSEC validation', () => {
     );
   });
 
+  test('decodes binary NSEC next-name labels in escaped presentation form', () => {
+    // Compact denial responses name the immediate successor with a single
+    // zero-octet label; any octet is valid in a DNS label.
+    const owner = 'www.example.test';
+    const nextWire = Buffer.concat([Buffer.from([1, 0x00]), wireName(owner)]);
+    const bitmap = Buffer.from([0x00, 0x01, 0x40]);
+    const nsec = record(owner, DNS_TYPE_NSEC, Buffer.concat([nextWire, bitmap]),
+      { kind: 'NSEC', nextName: '', types: new Set([DNS_TYPE_A]) }, 'authority');
+    const query = buildDnssecQuery(owner, DNS_TYPE_DS, 0x2345);
+    const parsed = parseDnssecResponse(response(query, owner, DNS_TYPE_DS, [], [nsec]),
+      { transactionId: 0x2345, name: owner, type: DNS_TYPE_DS });
+    const decoded = parsed.records.find((item) => item.type === DNS_TYPE_NSEC);
+    assert.equal(decoded?.data.kind, 'NSEC');
+    assert.equal(decoded?.data.kind === 'NSEC' ? decoded.data.nextName : null, '\\000.www.example.test');
+    // The exact wire bytes, not the presentation text, remain signed data.
+    assert.deepEqual(decoded?.canonicalRdata, Buffer.concat([nextWire, bitmap]));
+
+    // A dot or backslash inside one label cannot collide with a multi-label name.
+    const dotted = record(owner, DNS_TYPE_NSEC, Buffer.concat([Buffer.from([3, 0x61, 0x2e, 0x5c]), wireName('example.test'), bitmap]),
+      { kind: 'NSEC', nextName: '', types: new Set([DNS_TYPE_A]) }, 'authority');
+    const parsedDotted = parseDnssecResponse(response(query, owner, DNS_TYPE_DS, [], [dotted]),
+      { transactionId: 0x2345, name: owner, type: DNS_TYPE_DS });
+    const dottedRecord = parsedDotted.records.find((item) => item.type === DNS_TYPE_NSEC);
+    assert.equal(dottedRecord?.data.kind === 'NSEC' ? dottedRecord.data.nextName : null, 'a\\046\\092.example.test');
+  });
+
   test('orders unique canonical RDATA independently of RDLENGTH for supported RRset types', () => {
     const owner = 'example.test';
     const key = keyFixture(owner);

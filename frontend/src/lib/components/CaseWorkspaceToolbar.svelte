@@ -43,15 +43,17 @@
 <style>
   .case-toolbar{display:flex;flex-wrap:wrap;justify-content:space-between;gap:14px;align-items:end;padding:16px}
   .case-workspace-controls{min-width:0}
+  .track{flex:1 1 420px;min-width:0;max-width:600px}
   .track>label{display:block;margin-bottom:6px;color:var(--text);font:600 var(--text-xs) var(--mono)}
   .track>div{display:flex;gap:8px}
-  .track input{min-width:230px;min-height:var(--control-h)}
-  .track .primary{min-height:var(--control-h)}
+  .track input{flex:1;min-width:0;min-height:var(--control-h)}
+  .track .primary{flex:none;min-height:var(--control-h);white-space:nowrap}
   .message{color:var(--accent);font-size:var(--text-sm)}
   .calibration-note{margin:8px 2px 0;color:var(--muted);font-size:var(--text-2xs);line-height:1.5}
   @media(max-width:800px){
     .case-toolbar{flex-direction:column;align-items:stretch}
+    .track{flex-basis:auto;max-width:none}
     .track>div{flex-direction:column}
-    .track input{min-width:0}
+    .top-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,140px),1fr))}
   }
 </style>

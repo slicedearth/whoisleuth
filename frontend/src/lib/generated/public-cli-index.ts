@@ -1,6 +1,6 @@
 // Generated from canonical runtime-neutral metadata. Do not edit by hand.
 export const PUBLIC_CLI_INDEX = {
-  "commandCount": 53,
+  "commandCount": 60,
   "groups": [
     "investigate",
     "respond",
@@ -106,6 +106,27 @@ export const PUBLIC_CLI_INDEX = {
     {
       "id": "posture",
       "summary": "Review DNS and mail posture",
+      "group": "investigate",
+      "common": false,
+      "mode": "network"
+    },
+    {
+      "id": "resolver-compare",
+      "summary": "Compare selected DNS resolvers",
+      "group": "investigate",
+      "common": false,
+      "mode": "network"
+    },
+    {
+      "id": "peeringdb-context",
+      "summary": "Read selected network-directory context",
+      "group": "investigate",
+      "common": false,
+      "mode": "network"
+    },
+    {
+      "id": "archive-history",
+      "summary": "Read web archive capture history",
       "group": "investigate",
       "common": false,
       "mode": "network"
@@ -307,6 +328,13 @@ export const PUBLIC_CLI_INDEX = {
       "mode": "network"
     },
     {
+      "id": "monitor-tick",
+      "summary": "Run a resumable local monitoring cycle",
+      "group": "assure",
+      "common": false,
+      "mode": "network"
+    },
+    {
       "id": "assurance",
       "summary": "Review domain change, recovery, or retirement plans",
       "group": "assure",
@@ -363,6 +391,20 @@ export const PUBLIC_CLI_INDEX = {
       "mode": "offline"
     },
     {
+      "id": "view",
+      "summary": "Read a saved Lookup or evidence export offline, or browse a saved Lookup",
+      "group": "investigate",
+      "common": true,
+      "mode": "offline"
+    },
+    {
+      "id": "mcp",
+      "summary": "Serve selected evidence read-only over local MCP",
+      "group": "utilities",
+      "common": false,
+      "mode": "offline"
+    },
+    {
       "id": "reconcile",
       "summary": "Reconcile independently labelled observations",
       "group": "assure",
@@ -373,6 +415,13 @@ export const PUBLIC_CLI_INDEX = {
       "id": "timeline",
       "summary": "Build same-domain history from saved lookups",
       "group": "assure",
+      "common": false,
+      "mode": "offline"
+    },
+    {
+      "id": "prior-registration",
+      "summary": "Compare registration date with earlier observations",
+      "group": "investigate",
       "common": false,
       "mode": "offline"
     },

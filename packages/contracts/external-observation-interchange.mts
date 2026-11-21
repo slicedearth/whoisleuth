@@ -1,6 +1,8 @@
 import { defineSchemaCompatibility } from './schema-compatibility.mts';
 import { defineSchemaLifecycleFamily } from './schema-lifecycle.mts';
 
+export const RECON_JSONL_FORMATS = ['dnsx-jsonl', 'httpx-jsonl'] as const;
+
 export const EXTERNAL_OBSERVATION_INTERCHANGE_CONTRACT_OWNER = 'packages/contracts/external-observation-interchange.mts';
 
 export const EXTERNAL_FINDINGS_SCHEMA = 'whoisleuth.external-findings';

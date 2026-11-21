@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import DisclosureToggleIcon from './DisclosureToggleIcon.svelte';
 
   let {
     title,
@@ -32,7 +33,7 @@
     onclick={toggle}
   >
     <span><strong>{title}</strong><small>{description}</small></span>
-    <span aria-hidden="true">{expanded ? '−' : '+'}</span>
+    <span aria-hidden="true"><DisclosureToggleIcon {expanded} /></span>
   </button>
   {#if expanded}<div class="mobile-disclosure-content">{@render children()}</div>{/if}
 </section>
@@ -43,6 +44,6 @@
   .mobile-disclosure-toggle span:first-child{display:grid;min-width:0;gap:3px}
   .mobile-disclosure-toggle strong{font:700 var(--text-sm) var(--mono)}
   .mobile-disclosure-toggle small{color:var(--muted);font-size:var(--text-xs);font-weight:400;line-height:1.4}
-  .mobile-disclosure-toggle span:last-child{flex:0 0 auto;color:var(--accent);font:700 var(--text-lg) var(--mono)}
+  .mobile-disclosure-toggle span:last-child{flex:0 0 auto;color:var(--accent)}
   .mobile-disclosure-content{min-width:0}
 </style>

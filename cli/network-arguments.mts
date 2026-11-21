@@ -57,6 +57,12 @@ type TlsArguments = {
   output: 'terminal' | 'json';
 } & TerminalOptions;
 
+type ResolverComparisonArguments = {
+  action: 'resolver-compare'; hostname: string; resolvers: string; output: 'terminal' | 'json';
+} & TerminalOptions;
+type WebArchiveHistoryArguments = { action: 'archive-history'; domain: string; output: 'terminal' | 'json' } & TerminalOptions;
+type PeeringDirectoryArguments = { action: 'peeringdb-context'; asn: string; permittedUse: true } & TerminalOptions;
+
 function parsePostureArguments(parsed: ParsedCommandArguments<PostureArguments['action']>): PostureArguments {
   const mailProfile =
     parsed.optionValue('--mail-profile') ?? commandDefaultText('posture', '--mail-profile');
@@ -102,6 +108,16 @@ function parseMailTransportArguments(parsed: ParsedCommandArguments<MailTranspor
 }
 
 export const NETWORK_ARGUMENT_PARSERS = Object.freeze({
+  'peeringdb-context': (parsed: ParsedCommandArguments<PeeringDirectoryArguments['action']>): PeeringDirectoryArguments => ({
+    action: 'peeringdb-context', asn: parsed.positionalValue('asn')!, permittedUse: true, ...terminalOptions(parsed),
+  }),
+  'resolver-compare': (parsed: ParsedCommandArguments<ResolverComparisonArguments['action']>): ResolverComparisonArguments => ({
+    action: 'resolver-compare', hostname: parsed.positionalValue('hostname')!, resolvers: parsed.optionValue('--resolvers')!,
+    output: jsonOutput(parsed), ...terminalOptions(parsed),
+  }),
+  'archive-history': (parsed: ParsedCommandArguments<WebArchiveHistoryArguments['action']>): WebArchiveHistoryArguments => ({
+    action: 'archive-history', domain: parsed.positionalValue('domain')!, output: jsonOutput(parsed), ...terminalOptions(parsed),
+  }),
   'ct-search': (parsed: ParsedCommandArguments<CtSearchArguments['action']>): CtSearchArguments =>
     singleInputAction('ct-search', parsed, 'keyword'),
   posture: parsePostureArguments,

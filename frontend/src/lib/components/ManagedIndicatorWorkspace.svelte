@@ -141,7 +141,7 @@
       <p>Keep the manifest and its predecessor. Importing an export into another system is a separate action.</p>
     </section>
   {/if}
-  <details><summary>Revision behaviour</summary><p>Expiry and withdrawal are separate. Missing candidates are unchanged. Renewals do not refresh the original observation. Withdrawn identities cannot be revived; a reintroduced domain gets a new identity. MISP receives expiry as a review deadline, not an automatic deletion rule. These files contain domains and your review basis; review them before sharing.</p></details>
+  <details><summary>Revision behaviour</summary><p>Expiry and withdrawal are separate, and candidates left out of a revision are unchanged. Renewing keeps the original observation time. A withdrawn identity cannot be revived: a reintroduced domain gets a new one. MISP receives expiry as a review deadline, not a deletion rule. These files contain domains and your review basis, so review them before sharing.</p></details>
 </section>
 
 <style>

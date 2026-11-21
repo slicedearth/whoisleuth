@@ -16,6 +16,7 @@ export function releasePreparationCommands(version: string, current: string): re
   return [
     ...(version === current ? [] : [[npmExecutableName(), 'version', version, '--no-git-tag-version', '--ignore-scripts']]),
     [process.execPath, 'tools/public-product-catalogue.mts', '--write'],
+    [process.execPath, 'tools/evidence-storage-measurement.mts', '--write'],
     [process.execPath, 'tools/release-version-check.mts'],
   ];
 }

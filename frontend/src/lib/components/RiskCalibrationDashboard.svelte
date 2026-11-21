@@ -65,7 +65,7 @@
     </label>
   </header>
 
-  <p class="boundary">This review describes only the supplied labelled sample. It does not recommend a threshold, tune Risk, prove maliciousness or safety, make a request, or retain the file.</p>
+  <p class="boundary">This review describes only the supplied labelled sample. The file is not uploaded or kept, and Risk settings are not changed.</p>
 
   {#if error}
     <div class="report-message error" role="alert"><strong>Summary not loaded</strong><span>{error}</span></div>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { HANDOFF_SOURCE_LABELS } from '#lib/candidate-handoff-core.ts';
+  import DisclosureToggleIcon from '#lib/components/DisclosureToggleIcon.svelte';
   import { downloadLocalFile } from '#lib/download-local-file.ts';
   import { goto } from '$app/navigation';
   import { page as routePage } from '$app/state';
@@ -35,7 +36,7 @@
   import {
     canonicalBulkTargets,
   } from '#lib/analysis/bulk-scan-normalizer.ts';
-  import { parseDomainInput } from '#lib/analysis/utils.ts';
+  import { looksLikeLookupToken, parseDomainInput } from '#lib/analysis/utils.ts';
   import {
     buildScanRelationships,
     RELATIONSHIP_EVIDENCE_VERSION,
@@ -483,6 +484,10 @@
     `${scan.revision}\u0000${sessionState.currentId || 'transient'}\u0000${scanStartedAt}`,
   );
   const parsedInput = $derived(parseDomainInput(input));
+  // The server stays the only validator and every entry is still sent. The
+  // queue may give a neutral hint from the local list heuristic, but it never
+  // predicts a rejection.
+  const implausibleEntries = $derived(parsedInput.entries.filter((entry) => !looksLikeLookupToken(entry)));
   const scanTargets = $derived(canonicalBulkTargets(parsedInput.entries));
   const equivalentTargetCount = $derived(
     Math.max(0, parsedInput.entries.length - scanTargets.length),
@@ -1463,6 +1468,7 @@
   entryCount={scanTargets.length}
   queryLimit={currentQueryLimit}
   duplicateCount={parsedInput.duplicates}
+  implausibleEntries={implausibleEntries}
   equivalentCount={equivalentTargetCount}
   inputTooLarge={parsedInput.tooLarge}
   {importDomainFile}
@@ -1487,7 +1493,7 @@
     onclick={toggleWorkspaceTools}
   >
     <span><strong>Workspace tools</strong><small>Saved sessions, views, and review queues</small></span>
-    <span aria-hidden="true">{workspaceToolsOpen ? '−' : '+'}</span>
+    <span aria-hidden="true"><DisclosureToggleIcon expanded={workspaceToolsOpen} /></span>
   </button>
   {#if workspaceToolsOpen}
     <div id="bulk-workspace-content" class="bulk-workspace-content">
@@ -1690,7 +1696,6 @@
   .mobile-workspace-toggle span:last-child {
     flex: 0 0 auto;
     color: var(--accent);
-    font: 700 var(--text-lg) var(--mono);
   }
   .bulk-workspace-content {
     display: block;

@@ -15,7 +15,7 @@ function renderCapabilityManifestMarkdown(
   manifest: CapabilityManifest = CAPABILITY_MANIFEST,
 ): string {
   const lines = [
-    '# Capability and Data-flow Contract',
+    '# Capability and data-flow contract',
     '',
     '> Generated from `packages/contracts/capability-manifest.mts`. Run `npm run capabilities:check` to verify this file.',
     '',

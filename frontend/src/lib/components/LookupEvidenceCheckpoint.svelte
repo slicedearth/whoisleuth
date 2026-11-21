@@ -86,7 +86,7 @@
     <div>
       <p class="eyebrow">Field checkpoint</p>
       <h4 id={headingId}>{title}</h4>
-      <p>Choose only the facts needed for later review. Raw registry payloads, contacts, scripts, and unselected fields are not stored by this action.</p>
+      <p>Choose the facts to keep for later review. Only the selected facts are saved.</p>
     </div>
     <button class="btn" type="button" disabled={actionBusy || !selectedFields.length} onclick={() => void save()}>Save {selectedFields.length || ''} checkpoint fact{selectedFields.length === 1 ? '' : 's'}</button>
   </header>
@@ -119,7 +119,7 @@
       {/each}
     </div>
   {:else}
-    <p class="empty">No normalised fact is currently available to checkpoint. This does not mean the evidence is absent elsewhere.</p>
+    <p class="empty">No normalised fact is available to checkpoint yet.</p>
   {/if}
 
   {#if transitionComparison.length}
@@ -142,7 +142,7 @@
           </article>
         {/each}
       </div>
-      <p class="limit">Verified means the current bounded observation matched the analyst's declared preserve/change expectation. It does not establish ownership, operational correctness, or a completed acquisition.</p>
+      <p class="limit">Verified means the current observation matches the expectation you declared.</p>
     </section>
   {/if}
 
@@ -161,7 +161,7 @@
           </article>
         {/each}
       </div>
-      <p class="limit">A failed, incomplete, or differently scoped later lookup never replaces the saved checkpoint. Missing, unavailable, conflicting, incomparable, and not-recorded states remain distinct from a material change.</p>
+      <p class="limit">A later Lookup that fails or covers a different scope does not replace this checkpoint.</p>
     </details>
   {/if}
 </section>

@@ -81,6 +81,10 @@
   let registryScope = $state('com');
   let customDictionaryText = $state('');
   let candidates = $state<Candidate[]>([]);
+  const candidateDomains = $derived(candidates.map((candidate) => candidate.domain));
+  // Ranks from the popularity list selected in the results panel, carried to
+  // Bulk with the list's digest; the list itself never leaves the page.
+  let popularity = $state<Readonly<{ listSha256: string; ranks: ReadonlyMap<string, number> }> | null>(null);
   let generatedContext = $state<Candidate[]>([]);
   let excludedOpen = $state(false), excludedPage = $state(1);
   let excludedHeading = $state<HTMLHeadingElement>();
@@ -749,6 +753,8 @@
           firstObservedAt: candidate.certificateTransparency.firstObservedAt,
           lastObservedAt: candidate.certificateTransparency.lastObservedAt,
           hostnames: candidate.certificateTransparency.hostnames.map(String),
+          validityRange: candidate.certificateTransparency.firstValidFrom && candidate.certificateTransparency.lastValidFrom
+            ? { first: candidate.certificateTransparency.firstValidFrom, last: candidate.certificateTransparency.lastValidFrom } : null,
         } : null,
       };
     });
@@ -756,7 +762,14 @@
 
   async function sendToBulk() {
     if (!selectedCandidates.length) return;
-    const handoffResult = saveCandidateHandoff(mode, selectedCandidates, generatedContext);
+    const ranked = popularity;
+    const handoffCandidates = ranked
+      ? selectedCandidates.map((candidate) => {
+        const rank = ranked.ranks.get(candidate.domain);
+        return rank === undefined ? candidate : { ...candidate, popularityRank: { rank, listSha256: ranked.listSha256 } };
+      })
+      : selectedCandidates;
+    const handoffResult = saveCandidateHandoff(mode, handoffCandidates, generatedContext);
     if (!handoffResult.saved) {
       error = handoffResult.reason === 'too_large'
         ? 'The selected candidates are too large to transfer safely. Reduce the selection and try again.'
@@ -827,7 +840,7 @@
       maxCandidates={MAX_GENERATED_CANDIDATES}
     />
   {/if}
-  {#if mode==='certificate-transparency'}<p class="generation-limits" id="ct-query-guidance">Search public certificate names using a keyword of up to {MAX_CT_QUERY_LENGTH} characters. This does not submit the target for a live website scan.</p>{/if}
+  {#if mode==='certificate-transparency'}<p class="generation-limits" id="ct-query-guidance">Search public certificate names using a keyword of up to {MAX_CT_QUERY_LENGTH} characters.</p>{/if}
   {#if mode==='nameserver'}<p class="generation-limits" id="rdap-search-guidance">Search the official registry for domains using this nameserver. Results cover that domain ending only and may be incomplete.</p>{/if}
   {#if mode==='keyword'}<p class="generation-limits" id="generation-limits">Generation is bounded to {MAX_GENERATION_TLDS} TLDs, {MAX_NAME_VARIANTS.toLocaleString()} label variants, and {MAX_GENERATED_CANDIDATES.toLocaleString()} candidates per run.</p>{/if}
   {#if localContextStatus}<p class="local-context-status" role="status">{localContextStatus}</p>{/if}
@@ -855,9 +868,9 @@
     <summary>Excluded by exact profile match ({exclusionReview.excluded.length})</summary>
     {#if excludedOpen}
       <h3 tabindex="-1" bind:this={excludedHeading}>Exact profile exclusions</h3>
-      <p>These candidates remain visible here without collection or selection for Bulk. A profile declaration or exclusion is not a safety verdict.</p>
+      <p>These candidates stay visible here but are not collected or sent to Bulk. An exclusion does not mark a domain as safe.</p>
       <button class="btn" onclick={reapplyCandidateExclusions} disabled={profileSourceState !== 'ready'}>Re-evaluate retained candidates without collection</button>
-      <p>Expired exceptions, materially changed provenance or a new independent rule return candidates to eligibility. Re-evaluation uses only the retained page-memory candidates.</p>
+      <p>Expired exceptions, changed provenance or a new rule make candidates eligible again.</p>
       {#if exclusionReview.limitation}<p role="status">{exclusionReview.limitation}</p>
       {:else if !exclusionReview.excluded.length}<p>No candidates were excluded from this admitted set.</p>{/if}
       {#if exclusionReview.truncated}<p>Candidate admission was capped. Omitted candidates were not evaluated.</p>{/if}
@@ -872,7 +885,7 @@
 {/if}
 
 {#if candidates.length}
-  <section class="card candidate-retention"><h2>Review before monitoring</h2><p>Retain the exact selected domains for the active Brand without running Lookup, adding a scan or scheduling requests. {selectedCandidates.length} selected across filters; review at most 200 at a time.</p><button class="btn" disabled={!profile || profileSourceState !== 'ready' || !selectedCandidates.length || selectedCandidates.length > 200 || retainingCandidates} onclick={() => void retainSelectedCandidates()}>Retain selected for Brand review</button>{#if profile}<p>Selected Brand: {profile.name}. Other Brand decisions remain separate.</p>{:else}<p>Select a Brand Profile before retaining candidate review context.</p>{/if}</section>
+  <section class="card candidate-retention"><h2>Review before monitoring</h2><p>Keep the selected domains for the active Brand. No Lookup or scan runs. {selectedCandidates.length} selected across filters; review at most 200 at a time.</p><button class="btn" disabled={!profile || profileSourceState !== 'ready' || !selectedCandidates.length || selectedCandidates.length > 200 || retainingCandidates} onclick={() => void retainSelectedCandidates()}>Retain selected for Brand review</button>{#if profile}<p>Selected Brand: {profile.name}.</p>{:else}<p>Select a Brand Profile before retaining candidate review context.</p>{/if}</section>
   {#if mode === 'typosquat' || mode === 'keyword'}
     <DiscoverIdnPolicyReview candidates={idnPolicyCandidates} />
   {/if}
@@ -900,6 +913,8 @@
     {reviewControlsActive}
     {resetReviewControls}
     rows={candidateDisplayRows()}
+    candidateDomains={candidateDomains}
+    onpopularitychange={(value) => popularity = value}
     visibleCount={visible.length}
     {currentPage}
     {pageCount}

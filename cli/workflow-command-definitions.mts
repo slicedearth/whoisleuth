@@ -2,8 +2,22 @@ import { INVESTIGATION_PLAN_RECIPES, RUNNABLE_INVESTIGATION_PLAN_RECIPES } from 
 import { positional, OPTIONAL_FILE_POSITIONAL, constraint, commandSeed, integer, BASE_INTEGER_RANGE, file, optionDefinition } from './command-definition.mts';
 import { DOMAIN_FEED_CATALOGUE } from '../packages/monitoring/domain-feed.mts';
 import { WATCHLIST_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
+import { MONITORING_PLAN_INPUT_SCHEMA, MONITORING_PLAN_SCHEMA, LOCAL_MONITOR_STATE_SCHEMA } from '../packages/contracts/monitoring-plan.mts';
 
 export const WORKFLOW_COMMAND_DEFINITIONS = Object.freeze({
+  'monitor-tick': commandSeed({
+    reference: { description: 'Preview a per-domain monitoring plan, or explicitly execute one bounded local cycle.',
+      example: 'whoisleuth monitor-tick plan.json --state monitor-state.json --approve-network --json --output observations.json',
+      boundary: 'Without --approve-network this is an offline preview. Execution requires --state and admits at most 100 distinct registrable domains. Purpose (Fast registration or Deep website/mail), cadence and review priority are independent. The existing dispatcher starts at most two serial Lookups within its 24-second cycle; a daily attempt quota, durable cursor, leases, oldest-due fairness and failure backoff survive resume. Attempts are saved before collection, including cancelled attempts. The private state is locked and atomically replaced; configuration changes require a deliberately new file. Do not run copied state files concurrently. Output is an ordinary Watchlist export; the first actual local cycle establishes its own baseline, rather than arbitrarily choosing among overlapping saved observations. No daemon, operating-system schedule, hosted setting, paid provider or automatic retry is enabled.' },
+    collection: { scope: 'Offline preview unless --approve-network; then at most two serial, explicitly configured Fast/Deep compact Lookups per cycle, with a bounded daily attempt quota.' },
+    summary: 'Run a resumable local monitoring cycle', options: ['--state', '--approve-network', '--json', '--quiet', '--no-color'],
+    positionals: Object.freeze([positional('source', 'file', 1, 1)]),
+    constraints: Object.freeze([constraint({ kind: 'requires_all', option: '--approve-network', requiredOptions: ['--state'] })]),
+    handlerOwner: 'workflow', networkEffect: 'conditional_network', common: false,
+    schemaIdentifiers: Object.freeze([MONITORING_PLAN_INPUT_SCHEMA, MONITORING_PLAN_SCHEMA, LOCAL_MONITOR_STATE_SCHEMA, 'whoisleuth.watchlists']),
+    primaryArtefacts: Object.freeze(['Private resumable monitor state', 'Ordinary Watchlist export']), planSupport: true,
+    additionalOutputFormats: Object.freeze([]), bootstrapProfile: 'allowed',
+  }),
   'domain-feed': commandSeed({
     reference: { description: 'Review exact hosts or literal terms in a selected local plain-domain feed.',
       example: 'whoisleuth domain-feed review tif-mini feed.txt --select host:candidate.example --json',

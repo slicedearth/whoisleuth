@@ -213,6 +213,20 @@ const SHARED_COMMAND_OPTIONS = [
     "defaultDescription": null
   },
   {
+    "option": "--input-format",
+    "scope": "command",
+    "usage": "--input-format \u003cmapping|dnsx-jsonl|httpx-jsonl>",
+    "description": "Select the local observation input format.",
+    "values": [
+      "mapping",
+      "dnsx-jsonl",
+      "httpx-jsonl"
+    ],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": "mapping"
+  },
+  {
     "option": "--junit",
     "scope": "command",
     "usage": "--junit",
@@ -551,7 +565,7 @@ const SHARED_COMMAND_OPTIONS = [
     "option": "--tlds",
     "scope": "command",
     "usage": "--tlds \u003cvalue>",
-    "description": "Use this comma-separated set of domain endings.",
+    "description": "Use this comma-separated set of domain endings. The TLD typo family separately adds delegated typing variants of the seed's ending; leave it out with --families.",
     "values": [],
     "repeatable": false,
     "ranges": [],
@@ -611,6 +625,16 @@ const SHARED_COMMAND_OPTIONS = [
     "scope": "command",
     "usage": "--snapshot \u003cfile>",
     "description": "Use this retained observation snapshot.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--popularity-list",
+    "scope": "command",
+    "usage": "--popularity-list \u003cfile>",
+    "description": "Mark candidates found in this ranked domain list, such as a downloaded Tranco CSV.",
     "values": [],
     "repeatable": false,
     "ranges": [],
@@ -762,6 +786,26 @@ const SHARED_COMMAND_OPTIONS = [
     "scope": "command",
     "usage": "--owned-domain",
     "description": "Declare that the reviewed domain is owned by the analyst.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--resolvers",
+    "scope": "command",
+    "usage": "--resolvers \u003cvalue>",
+    "description": "Explicitly select two HTTPS DNS resolvers: cloudflare,google.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--permitted-use",
+    "scope": "command",
+    "usage": "--permitted-use",
+    "description": "Acknowledge permitted operational use or existing permission under the selected directory’s terms.",
     "values": [],
     "repeatable": false,
     "ranges": [],
@@ -1119,6 +1163,29 @@ const SHARED_COMMAND_OPTIONS = [
     "defaultDescription": null
   },
   {
+    "option": "--page-origin",
+    "scope": "command",
+    "usage": "--page-origin \u003cvalue>",
+    "description": "For HAR intake without a recorded document request, select which recorded origin was the page. The terminal summary labels it as your selection.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--assist-proof",
+    "scope": "command",
+    "usage": "--assist-proof \u003cct|timestamp>",
+    "description": "Select bounded local proof files interactively; prompts use stderr and no request is made.",
+    "values": [
+      "ct",
+      "timestamp"
+    ],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
     "option": "--mmdb",
     "scope": "command",
     "usage": "--mmdb \u003cfile>",
@@ -1289,6 +1356,26 @@ const SHARED_COMMAND_OPTIONS = [
     "defaultDescription": null
   },
   {
+    "option": "--state",
+    "scope": "command",
+    "usage": "--state \u003cfile>",
+    "description": "Retain bounded local monitoring progress and attempt accounting in this private file.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--approve-network",
+    "scope": "command",
+    "usage": "--approve-network",
+    "description": "Approve the workflow’s declared network steps for this invocation.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
     "option": "--marking",
     "scope": "command",
     "usage": "--marking \u003cclear|green|amber|amber-strict|red>",
@@ -1431,16 +1518,6 @@ const SHARED_COMMAND_OPTIONS = [
     "defaultDescription": null
   },
   {
-    "option": "--approve-network",
-    "scope": "command",
-    "usage": "--approve-network",
-    "description": "Approve the workflow’s declared network steps for this invocation.",
-    "values": [],
-    "repeatable": false,
-    "ranges": [],
-    "defaultDescription": null
-  },
-  {
     "option": "--resume",
     "scope": "command",
     "usage": "--resume \u003cfile>",
@@ -1491,6 +1568,46 @@ const SHARED_COMMAND_OPTIONS = [
     "defaultDescription": null
   },
   {
+    "option": "--stdio",
+    "scope": "command",
+    "usage": "--stdio",
+    "description": "Serve the optional local read-only MCP protocol on stdin/stdout.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--allow-model-disclosure",
+    "scope": "command",
+    "usage": "--allow-model-disclosure",
+    "description": "Acknowledge that the connected client may send selected evidence to its model provider.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--ct-results",
+    "scope": "command",
+    "usage": "--ct-results \u003cfile>",
+    "description": "Read certificate-log search JSON written by ct-search --json.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
+    "option": "--archive-history",
+    "scope": "command",
+    "usage": "--archive-history \u003cfile>",
+    "description": "Read web archive history JSON written by archive-history --json.",
+    "values": [],
+    "repeatable": false,
+    "ranges": [],
+    "defaultDescription": null
+  },
+  {
     "option": "--compact",
     "scope": "command",
     "usage": "--compact",
@@ -1502,7 +1619,7 @@ const SHARED_COMMAND_OPTIONS = [
   }
 ] as const;
 export const PUBLIC_CLI_CATALOGUE = {
-  "commandCount": 53,
+  "commandCount": 60,
   "groups": [
     "investigate",
     "respond",
@@ -1862,15 +1979,15 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "map-observations",
       "summary": "Apply a declarative observation map offline",
-      "description": "Apply one bounded declarative field-mapping profile to local source observations.",
+      "description": "Convert selected local observations using a declarative profile or a bounded dnsx/httpx JSONL adapter.",
       "group": "respond",
       "common": false,
-      "usage": "whoisleuth map-observations [\u003csource>] [--json] [--quiet] [--no-color]",
+      "usage": "whoisleuth map-observations [\u003csource>] [--input-format \u003cmapping|dnsx-jsonl|httpx-jsonl>] [--json] [--quiet] [--no-color]",
       "example": "whoisleuth map-observations mapping.json --json",
-      "boundary": "Profiles select allowlisted dotted fields only. They execute no scripts, make no requests, and emit the browser-compatible external-findings contract.",
+      "boundary": "Profiles select allowlisted dotted fields only. --input-format dnsx-jsonl or httpx-jsonl reads 384 KiB and 500 rows at most, preserving exact hostnames and supplied timestamps without inferring complete collection. Raw bodies, headers, query-bearing URLs and file paths are excluded. No scripts or requests run. Output uses the existing browser-compatible external-findings contract; malformed rows or retained-limit omissions produce exit 4 with a notice on stderr.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads one mapping document capped at 4 MiB and executes no scripts or requests."
+        "scope": "Reads one mapping document capped at 4 MiB, or selected producer JSONL capped at 384 KiB. Executes no scripts or requests."
       },
       "inputs": [
         {
@@ -1884,11 +2001,12 @@ export const PUBLIC_CLI_CATALOGUE = {
         }
       ],
       "importantOptions": [
+        "--input-format",
         "--json",
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[20], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -1898,7 +2016,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002eexternal-observation-mapping"
       ],
       "inputLimits": [
-        "Reads one mapping document capped at 4 MiB and executes no scripts or requests.",
+        "Reads one mapping document capped at 4 MiB, or selected producer JSONL capped at 384 KiB. Executes no scripts or requests.",
         "source: 0-1 file value"
       ],
       "outputLimits": [
@@ -2065,7 +2183,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[20], SHARED_COMMAND_OPTIONS[21], SHARED_COMMAND_OPTIONS[22], SHARED_COMMAND_OPTIONS[23], SHARED_COMMAND_OPTIONS[24], SHARED_COMMAND_OPTIONS[25], SHARED_COMMAND_OPTIONS[26], SHARED_COMMAND_OPTIONS[27], SHARED_COMMAND_OPTIONS[28], SHARED_COMMAND_OPTIONS[29], SHARED_COMMAND_OPTIONS[30], SHARED_COMMAND_OPTIONS[31], SHARED_COMMAND_OPTIONS[32], SHARED_COMMAND_OPTIONS[33], SHARED_COMMAND_OPTIONS[34], SHARED_COMMAND_OPTIONS[35], SHARED_COMMAND_OPTIONS[36], SHARED_COMMAND_OPTIONS[37], SHARED_COMMAND_OPTIONS[38], SHARED_COMMAND_OPTIONS[39], SHARED_COMMAND_OPTIONS[40], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[21], SHARED_COMMAND_OPTIONS[22], SHARED_COMMAND_OPTIONS[23], SHARED_COMMAND_OPTIONS[24], SHARED_COMMAND_OPTIONS[25], SHARED_COMMAND_OPTIONS[26], SHARED_COMMAND_OPTIONS[27], SHARED_COMMAND_OPTIONS[28], SHARED_COMMAND_OPTIONS[29], SHARED_COMMAND_OPTIONS[30], SHARED_COMMAND_OPTIONS[31], SHARED_COMMAND_OPTIONS[32], SHARED_COMMAND_OPTIONS[33], SHARED_COMMAND_OPTIONS[34], SHARED_COMMAND_OPTIONS[35], SHARED_COMMAND_OPTIONS[36], SHARED_COMMAND_OPTIONS[37], SHARED_COMMAND_OPTIONS[38], SHARED_COMMAND_OPTIONS[39], SHARED_COMMAND_OPTIONS[40], SHARED_COMMAND_OPTIONS[41], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "conditional_network",
       "disclosureClass": "conditional_bounded_passive",
       "explicitAuthorisationRequired": false,
@@ -2186,7 +2304,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[41], SHARED_COMMAND_OPTIONS[20], SHARED_COMMAND_OPTIONS[42], SHARED_COMMAND_OPTIONS[43], SHARED_COMMAND_OPTIONS[44], SHARED_COMMAND_OPTIONS[45], SHARED_COMMAND_OPTIONS[46], SHARED_COMMAND_OPTIONS[47], SHARED_COMMAND_OPTIONS[48], SHARED_COMMAND_OPTIONS[24], SHARED_COMMAND_OPTIONS[25], SHARED_COMMAND_OPTIONS[49], SHARED_COMMAND_OPTIONS[50], SHARED_COMMAND_OPTIONS[51], SHARED_COMMAND_OPTIONS[40], SHARED_COMMAND_OPTIONS[29], SHARED_COMMAND_OPTIONS[35], SHARED_COMMAND_OPTIONS[36], SHARED_COMMAND_OPTIONS[37], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[42], SHARED_COMMAND_OPTIONS[21], SHARED_COMMAND_OPTIONS[43], SHARED_COMMAND_OPTIONS[44], SHARED_COMMAND_OPTIONS[45], SHARED_COMMAND_OPTIONS[46], SHARED_COMMAND_OPTIONS[47], SHARED_COMMAND_OPTIONS[48], SHARED_COMMAND_OPTIONS[49], SHARED_COMMAND_OPTIONS[25], SHARED_COMMAND_OPTIONS[26], SHARED_COMMAND_OPTIONS[50], SHARED_COMMAND_OPTIONS[51], SHARED_COMMAND_OPTIONS[52], SHARED_COMMAND_OPTIONS[41], SHARED_COMMAND_OPTIONS[30], SHARED_COMMAND_OPTIONS[36], SHARED_COMMAND_OPTIONS[37], SHARED_COMMAND_OPTIONS[38], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "conditional_network",
       "disclosureClass": "conditional_bounded_passive",
       "explicitAuthorisationRequired": false,
@@ -2430,12 +2548,12 @@ export const PUBLIC_CLI_CATALOGUE = {
       "description": "Generate bounded lookalike-domain candidates from a brand or registrable domain, including multi-part public suffixes.",
       "group": "investigate",
       "common": true,
-      "usage": "whoisleuth discover [\u003csubject>] [--json|--jsonl|--domains] [--preset \u003ccommon|impersonation|all>|--families \u003cvalue>] [--tlds \u003cvalue>] [--keyboard \u003cqwerty|azerty|qwertz|all>] [--dictionary \u003cfile>] [--snapshot \u003cfile>] [--quiet] [--no-color]",
+      "usage": "whoisleuth discover [\u003csubject>] [--json|--jsonl|--domains] [--preset \u003ccommon|impersonation|all>|--families \u003cvalue>] [--tlds \u003cvalue>] [--keyboard \u003cqwerty|azerty|qwertz|all>] [--dictionary \u003cfile>] [--snapshot \u003cfile>] [--popularity-list \u003cfile>] [--quiet] [--no-color]",
       "example": "whoisleuth discover example.test --preset common --jsonl",
-      "boundary": "Generation and optional local snapshot comparison are offline. Candidates are leads only and are not resolved, registered, or classified as malicious.",
+      "boundary": "Generation, optional local snapshot comparison and an optional selected popularity list are offline. Candidates are leads only and are not resolved, registered, or classified as malicious; a popularity rank does not make a candidate safe or connected to the brand.",
       "collection": {
         "mode": "offline",
-        "scope": "Generates a bounded candidate set from local rules, dictionaries, and optional saved snapshots."
+        "scope": "Generates a bounded candidate set from local rules, dictionaries, optional saved snapshots and an optional ranked domain list of up to 32 MiB."
       },
       "inputs": [
         {
@@ -2455,13 +2573,14 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--keyboard",
         "--dictionary",
         "--snapshot",
+        "--popularity-list",
         "--json",
         "--jsonl",
         "--domains",
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[52], SHARED_COMMAND_OPTIONS[53], SHARED_COMMAND_OPTIONS[54], SHARED_COMMAND_OPTIONS[55], SHARED_COMMAND_OPTIONS[56], SHARED_COMMAND_OPTIONS[57], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[41], SHARED_COMMAND_OPTIONS[44], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[53], SHARED_COMMAND_OPTIONS[54], SHARED_COMMAND_OPTIONS[55], SHARED_COMMAND_OPTIONS[56], SHARED_COMMAND_OPTIONS[57], SHARED_COMMAND_OPTIONS[58], SHARED_COMMAND_OPTIONS[59], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[42], SHARED_COMMAND_OPTIONS[45], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -2473,7 +2592,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002ecli.discovery-snapshot"
       ],
       "inputLimits": [
-        "Generates a bounded candidate set from local rules, dictionaries, and optional saved snapshots.",
+        "Generates a bounded candidate set from local rules, dictionaries, optional saved snapshots and an optional ranked domain list of up to 32 MiB.",
         "subject: 0-1 text value"
       ],
       "outputLimits": [
@@ -2579,7 +2698,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[52], SHARED_COMMAND_OPTIONS[53], SHARED_COMMAND_OPTIONS[54], SHARED_COMMAND_OPTIONS[55], SHARED_COMMAND_OPTIONS[56], SHARED_COMMAND_OPTIONS[24], SHARED_COMMAND_OPTIONS[25], SHARED_COMMAND_OPTIONS[58], SHARED_COMMAND_OPTIONS[59], SHARED_COMMAND_OPTIONS[49], SHARED_COMMAND_OPTIONS[60], SHARED_COMMAND_OPTIONS[61], SHARED_COMMAND_OPTIONS[50], SHARED_COMMAND_OPTIONS[51], SHARED_COMMAND_OPTIONS[62], SHARED_COMMAND_OPTIONS[46], SHARED_COMMAND_OPTIONS[47], SHARED_COMMAND_OPTIONS[63], SHARED_COMMAND_OPTIONS[64], SHARED_COMMAND_OPTIONS[40], SHARED_COMMAND_OPTIONS[29], SHARED_COMMAND_OPTIONS[35], SHARED_COMMAND_OPTIONS[36], SHARED_COMMAND_OPTIONS[37], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[41], SHARED_COMMAND_OPTIONS[42], SHARED_COMMAND_OPTIONS[43], SHARED_COMMAND_OPTIONS[44], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[53], SHARED_COMMAND_OPTIONS[54], SHARED_COMMAND_OPTIONS[55], SHARED_COMMAND_OPTIONS[56], SHARED_COMMAND_OPTIONS[57], SHARED_COMMAND_OPTIONS[25], SHARED_COMMAND_OPTIONS[26], SHARED_COMMAND_OPTIONS[60], SHARED_COMMAND_OPTIONS[61], SHARED_COMMAND_OPTIONS[50], SHARED_COMMAND_OPTIONS[62], SHARED_COMMAND_OPTIONS[63], SHARED_COMMAND_OPTIONS[51], SHARED_COMMAND_OPTIONS[52], SHARED_COMMAND_OPTIONS[64], SHARED_COMMAND_OPTIONS[47], SHARED_COMMAND_OPTIONS[48], SHARED_COMMAND_OPTIONS[65], SHARED_COMMAND_OPTIONS[66], SHARED_COMMAND_OPTIONS[41], SHARED_COMMAND_OPTIONS[30], SHARED_COMMAND_OPTIONS[36], SHARED_COMMAND_OPTIONS[37], SHARED_COMMAND_OPTIONS[38], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[42], SHARED_COMMAND_OPTIONS[43], SHARED_COMMAND_OPTIONS[44], SHARED_COMMAND_OPTIONS[45], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "conditional_network",
       "disclosureClass": "conditional_bounded_passive",
       "explicitAuthorisationRequired": false,
@@ -2690,7 +2809,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[65], SHARED_COMMAND_OPTIONS[66], SHARED_COMMAND_OPTIONS[67], SHARED_COMMAND_OPTIONS[68], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[69], SHARED_COMMAND_OPTIONS[70], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[67], SHARED_COMMAND_OPTIONS[68], SHARED_COMMAND_OPTIONS[69], SHARED_COMMAND_OPTIONS[70], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[71], SHARED_COMMAND_OPTIONS[72], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "always_network",
       "disclosureClass": "bounded_passive",
       "explicitAuthorisationRequired": false,
@@ -2743,6 +2862,228 @@ export const PUBLIC_CLI_CATALOGUE = {
         "documentStates": [],
         "privacyLimitations": [
           "The posture review performs bounded RDAP, DNS and MTA-STS publication checks without changing configuration."
+        ]
+      }
+    },
+    {
+      "id": "resolver-compare",
+      "summary": "Compare selected DNS resolvers",
+      "description": "Compare explicitly selected public resolvers for one hostname, keeping A and AAAA outcomes separate.",
+      "group": "investigate",
+      "common": false,
+      "usage": "whoisleuth resolver-compare \u003chostname> --resolvers \u003cvalue> [--json] [--quiet] [--no-color]",
+      "example": "whoisleuth resolver-compare host.example.test --resolvers cloudflare,google --json",
+      "boundary": "The two selected HTTPS resolvers receive the hostname and A/AAAA questions. Four requests maximum, no retries or target connections; agreement is not authoritative truth, local DNSSEC validation or a safety verdict.",
+      "collection": {
+        "mode": "network",
+        "scope": "Two fixed HTTPS resolver APIs; at most four A/AAAA requests, two concurrent providers, 64 KiB per response and ten seconds total."
+      },
+      "inputs": [
+        {
+          "name": "hostname",
+          "valueKind": "text",
+          "minimum": 1,
+          "maximum": 1,
+          "values": [],
+          "inputSource": "argv",
+          "requiredWhenOptions": []
+        }
+      ],
+      "importantOptions": [
+        "--resolvers",
+        "--json",
+        "--quiet",
+        "--no-color"
+      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[73], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "networkEffect": "always_network",
+      "disclosureClass": "bounded_passive",
+      "explicitAuthorisationRequired": false,
+      "planSupport": false,
+      "failurePolicySupport": false,
+      "supportedSchemaIdentifiers": [
+        "whoisleuth\u002eresolver-comparison"
+      ],
+      "inputLimits": [
+        "Two fixed HTTPS resolver APIs; at most four A/AAAA requests, two concurrent providers, 64 KiB per response and ten seconds total.",
+        "hostname: 1-1 text value"
+      ],
+      "outputLimits": [
+        "Output is bounded by the command-owned formatter and document contract.",
+        "Selected file output is atomic and replacement requires --force."
+      ],
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
+      ],
+      "fileOutput": true,
+      "primaryEvidenceArtefacts": [],
+      "capability": {
+        "familyId": "resolver_comparison",
+        "networkMode": "bounded_passive",
+        "dataSent": [
+          "normalised_target",
+          "dns_question"
+        ],
+        "recipients": [
+          "selected_public_resolver"
+        ],
+        "authorisation": "explicit_action",
+        "retention": "local_output_deliberate",
+        "export": "local_output",
+        "outcomes": [
+          "complete",
+          "partial"
+        ],
+        "documentStates": [],
+        "privacyLimitations": [
+          "The explicitly selected resolvers receive four bounded A/AAAA questions over HTTPS. No target connection, retry or automatic invocation by other commands."
+        ]
+      }
+    },
+    {
+      "id": "peeringdb-context",
+      "summary": "Read selected network-directory context",
+      "description": "Read one ASN’s minimal community-maintained network-directory context for permitted operational use.",
+      "group": "investigate",
+      "common": false,
+      "usage": "whoisleuth peeringdb-context \u003casn> --permitted-use [--quiet] [--no-color]",
+      "example": "whoisleuth peeringdb-context AS64496 --permitted-use",
+      "boundary": "One fixed HTTPS request, no authentication, retries, contact expansion, cache, hosted redistribution or export file. --permitted-use acknowledges an allowed operational purpose or existing provider permission; it does not grant rights. Directory membership is not authority, reachability, ownership or reputation.",
+      "collection": {
+        "mode": "network",
+        "scope": "Sends one explicit ASN to PeeringDB, depth zero, minimal fields, two-row ambiguity detection, 32 KiB response and eight-second deadline."
+      },
+      "inputs": [
+        {
+          "name": "asn",
+          "valueKind": "text",
+          "minimum": 1,
+          "maximum": 1,
+          "values": [],
+          "inputSource": "argv",
+          "requiredWhenOptions": []
+        }
+      ],
+      "importantOptions": [
+        "--permitted-use",
+        "--quiet",
+        "--no-color"
+      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[74], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "networkEffect": "always_network",
+      "disclosureClass": "bounded_passive",
+      "explicitAuthorisationRequired": false,
+      "planSupport": false,
+      "failurePolicySupport": false,
+      "supportedSchemaIdentifiers": [],
+      "inputLimits": [
+        "Sends one explicit ASN to PeeringDB, depth zero, minimal fields, two-row ambiguity detection, 32 KiB response and eight-second deadline.",
+        "asn: 1-1 text value"
+      ],
+      "outputLimits": [
+        "Output is bounded by the command-owned formatter and document contract."
+      ],
+      "presentationOptions": [],
+      "fileOutput": false,
+      "primaryEvidenceArtefacts": [],
+      "capability": {
+        "familyId": "network_directory",
+        "networkMode": "bounded_passive",
+        "dataSent": [
+          "normalised_target"
+        ],
+        "recipients": [
+          "selected_network_directory"
+        ],
+        "authorisation": "explicit_network_approval",
+        "retention": "local_output_deliberate",
+        "export": "none",
+        "outcomes": [
+          "complete",
+          "partial"
+        ],
+        "documentStates": [],
+        "privacyLimitations": [
+          "One ASN is sent to the selected fixed directory for acknowledged permitted operational use or existing provider permission. No contact expansion, cache, output file or automatic invocation. Provider terms still apply."
+        ]
+      }
+    },
+    {
+      "id": "archive-history",
+      "summary": "Read web archive capture history",
+      "description": "Read the earliest and latest web archive captures of one domain’s homepage.",
+      "group": "investigate",
+      "common": false,
+      "usage": "whoisleuth archive-history \u003cdomain> [--json] [--quiet] [--no-color]",
+      "example": "whoisleuth archive-history example.test --json",
+      "boundary": "The Internet Archive receives the domain in two requests, with no retries and no page content retained. A capture records when the archive saw the homepage; it does not establish ownership, continuous operation or an earlier registration on its own.",
+      "collection": {
+        "mode": "network",
+        "scope": "The fixed Internet Archive capture index; two requests, 16 KiB per response and twelve seconds total."
+      },
+      "inputs": [
+        {
+          "name": "domain",
+          "valueKind": "text",
+          "minimum": 1,
+          "maximum": 1,
+          "values": [],
+          "inputSource": "argv",
+          "requiredWhenOptions": []
+        }
+      ],
+      "importantOptions": [
+        "--json",
+        "--quiet",
+        "--no-color"
+      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "networkEffect": "always_network",
+      "disclosureClass": "bounded_passive",
+      "explicitAuthorisationRequired": false,
+      "planSupport": false,
+      "failurePolicySupport": false,
+      "supportedSchemaIdentifiers": [
+        "whoisleuth\u002eweb-archive-history"
+      ],
+      "inputLimits": [
+        "The fixed Internet Archive capture index; two requests, 16 KiB per response and twelve seconds total.",
+        "domain: 1-1 text value"
+      ],
+      "outputLimits": [
+        "Output is bounded by the command-owned formatter and document contract.",
+        "Selected file output is atomic and replacement requires --force."
+      ],
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
+      ],
+      "fileOutput": true,
+      "primaryEvidenceArtefacts": [],
+      "capability": {
+        "familyId": "web_archive_history",
+        "networkMode": "bounded_passive",
+        "dataSent": [
+          "normalised_target"
+        ],
+        "recipients": [
+          "web_archive_service"
+        ],
+        "authorisation": "explicit_action",
+        "retention": "local_output_deliberate",
+        "export": "local_output",
+        "outcomes": [
+          "complete",
+          "partial"
+        ],
+        "documentStates": [],
+        "privacyLimitations": [
+          "The Internet Archive receives the registrable domain in two bounded requests for its earliest and latest homepage captures. No page content, retry or automatic invocation by other commands."
         ]
       }
     },
@@ -2936,7 +3277,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[60], SHARED_COMMAND_OPTIONS[71], SHARED_COMMAND_OPTIONS[72], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[62], SHARED_COMMAND_OPTIONS[75], SHARED_COMMAND_OPTIONS[76], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "always_network",
       "disclosureClass": "bounded_authorised_active",
       "explicitAuthorisationRequired": true,
@@ -3019,7 +3360,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[60], SHARED_COMMAND_OPTIONS[71], SHARED_COMMAND_OPTIONS[72], SHARED_COMMAND_OPTIONS[73], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[62], SHARED_COMMAND_OPTIONS[75], SHARED_COMMAND_OPTIONS[76], SHARED_COMMAND_OPTIONS[77], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "always_network",
       "disclosureClass": "bounded_authorised_active",
       "explicitAuthorisationRequired": true,
@@ -3322,7 +3663,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--suffix",
         "--scenario"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[74], SHARED_COMMAND_OPTIONS[75], SHARED_COMMAND_OPTIONS[76]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[78], SHARED_COMMAND_OPTIONS[79], SHARED_COMMAND_OPTIONS[80]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -3558,7 +3899,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[18], SHARED_COMMAND_OPTIONS[77], SHARED_COMMAND_OPTIONS[78], SHARED_COMMAND_OPTIONS[79], SHARED_COMMAND_OPTIONS[80], SHARED_COMMAND_OPTIONS[81], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[34], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[18], SHARED_COMMAND_OPTIONS[81], SHARED_COMMAND_OPTIONS[82], SHARED_COMMAND_OPTIONS[83], SHARED_COMMAND_OPTIONS[84], SHARED_COMMAND_OPTIONS[85], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[35], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -3722,7 +4063,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[18], SHARED_COMMAND_OPTIONS[82], SHARED_COMMAND_OPTIONS[83], SHARED_COMMAND_OPTIONS[84], SHARED_COMMAND_OPTIONS[85], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[18], SHARED_COMMAND_OPTIONS[86], SHARED_COMMAND_OPTIONS[87], SHARED_COMMAND_OPTIONS[88], SHARED_COMMAND_OPTIONS[89], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -3798,7 +4139,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "importantOptions": [
         "--private-key-file"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[86]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[90]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -3871,7 +4212,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[87], SHARED_COMMAND_OPTIONS[88], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[91], SHARED_COMMAND_OPTIONS[92], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -4260,7 +4601,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[89], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[93], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -4314,9 +4655,9 @@ export const PUBLIC_CLI_CATALOGUE = {
       "description": "Review selected messages, indicators, document links, QR destinations, HTTP archives or identity events locally. Plain text offers phone candidates; --intake-context adds explicit selections and source declarations.",
       "group": "investigate",
       "common": true,
-      "usage": "whoisleuth intake \u003ctext|email|calendar|qr|pdf|docx|har|identity> [\u003csource>] [--json] [--reported-action \u003creported-action>] [--trusted-auth-header \u003cvalue>] [--intake-context \u003cfile>] [--strict-exit] [--quiet] [--no-color]",
+      "usage": "whoisleuth intake \u003ctext|email|calendar|qr|pdf|docx|har|identity> [\u003csource>] [--json] [--reported-action \u003creported-action>] [--trusted-auth-header \u003cvalue>] [--intake-context \u003cfile>] [--page-origin \u003cvalue>] [--strict-exit] [--quiet] [--no-color]",
       "example": "whoisleuth intake email message.eml --json",
-      "boundary": "Offline only: no destination, embedded command, phone number or QR payload is opened, contacted or executed. Output omits original bodies, subjects, address local parts, URL paths, queries and fragments. Literal IPs and labelled hashes are bounded text observations, not lookup targets or verdicts; headers, URL contents, QR, HAR and identity-event fields are not scanned for them. Plain-text phone discovery writes only counts, source digest, ranges and status to stderr; --quiet suppresses it. Optional --intake-context reads one separate file up to 8 KiB, not stdin. Version 1 carries distribution declarations; version 2 can also bind explicit phone selections and a supplied destination pair to the exact input digest. Selected phone strings and source declarations enter output; unselected candidates and exact private URLs do not. Authentication headers remain attributed claims. Selected PDF and DOCX review retains part identities and extraction coverage; embedded raster QR support does not imply complete rendered-page review. HAR retains minimised request order and timings, never replay authority, headers, cookies or bodies. Use --strict-exit to return 4 for partial coverage.",
+      "boundary": "Offline only: no destination, embedded command, phone number or QR payload is opened, contacted or executed. Output omits original bodies, subjects, address local parts, URL paths, queries and fragments. Literal IPs and labelled hashes are bounded text observations, not lookup targets or verdicts; headers, URL contents, QR, HAR and identity-event fields are not scanned for them. Plain-text phone discovery writes only counts, source digest, ranges and status to stderr; --quiet suppresses it. Optional --intake-context reads one separate file up to 8 KiB, not stdin. Version 1 carries distribution declarations; version 2 can also bind explicit phone selections and a supplied destination pair to the exact input digest. Selected phone strings and source declarations enter output; unselected candidates and exact private URLs do not. Authentication headers remain attributed claims. Selected PDF and DOCX review retains part identities and extraction coverage; embedded raster QR support does not imply complete rendered-page review. HAR retains minimised request order and timings, never replay authority, headers, cookies or bodies; when no document request is recorded, --page-origin selects one recorded origin as the page for the terminal host summary, labelled as your selection. Use --strict-exit to return 4 for partial coverage.",
       "collection": {
         "mode": "offline",
         "scope": "Reads one selected text, MIME email, calendar, PNG, PDF, DOCX, HAR or identity-event JSON file and, only with --intake-context, one bounded declaration/selection file. No collection or automatic case write."
@@ -4355,11 +4696,12 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--reported-action",
         "--trusted-auth-header",
         "--intake-context",
+        "--page-origin",
         "--strict-exit",
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[90], SHARED_COMMAND_OPTIONS[89], SHARED_COMMAND_OPTIONS[91], SHARED_COMMAND_OPTIONS[34], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[94], SHARED_COMMAND_OPTIONS[93], SHARED_COMMAND_OPTIONS[95], SHARED_COMMAND_OPTIONS[96], SHARED_COMMAND_OPTIONS[35], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -4413,10 +4755,10 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "review-evidence",
       "summary": "Review supplied evidence offline",
-      "description": "Review versioned protocol evidence, source-qualified infrastructure snapshots/comparisons, incident sequences, domain history, platform objects, storefronts, connector configuration or an explicitly selected internal containment handoff offline.",
+      "description": "Review supplied protocol evidence, certificate-log inclusion proofs, timestamp tokens, BIMI certificate/logo material, selected warning lists, monitoring workload plans, infrastructure snapshots/comparisons, incident sequences, domain history, platform objects, storefronts, connector configuration or an explicitly selected internal containment handoff offline. Use --assist-proof ct or --assist-proof timestamp for guided selection of raw local proof files instead of preparing JSON; prompts use stderr and require a terminal.",
       "group": "investigate",
       "common": true,
-      "usage": "whoisleuth review-evidence [\u003csource>] [--mmdb \u003cfile>] [--json] [--strict-exit] [--quiet] [--no-color]",
+      "usage": "whoisleuth review-evidence [\u003csource>] [--assist-proof \u003cct|timestamp>] [--mmdb \u003cfile>] [--json] [--strict-exit] [--quiet] [--no-color]",
       "example": "whoisleuth review-evidence domain-change.json --json --strict-exit",
       "boundary": "The command reads only the supplied document and, with --mmdb, one explicitly selected local database up to 512 MiB. MMDB parsing and lookup run in one disposable worker with a ten-second processing deadline and an 8 KiB result limit. Version-2 MMDB queries require a justified age policy; unavailable or partial current reviews return 4 under --strict-exit. Historical version-1 MMDB queries preserve their output without freshness admission. Domain-history v2 accepts explicit source-linked registration boundaries; v1 retains its original semantics. Internal containment selects retained next-step assertions and supporting pins after explicit audience-disclosure review; it does not change their state or execute controls. No database is bundled, downloaded, updated or transmitted. It performs no DNS, RDAP, BGP, GeoIP-provider, TLS, HTTP, certificate-authority, or SMTP request.",
       "collection": {
@@ -4435,13 +4777,14 @@ export const PUBLIC_CLI_CATALOGUE = {
         }
       ],
       "importantOptions": [
+        "--assist-proof",
         "--mmdb",
         "--json",
         "--strict-exit",
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[92], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[34], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[97], SHARED_COMMAND_OPTIONS[98], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[35], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -4457,6 +4800,16 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002econnector-review.input",
         "whoisleuth\u002eincident-sequence.input",
         "whoisleuth\u002ecli.offline-evidence-review",
+        "whoisleuth\u002ebimi-certificate.input",
+        "whoisleuth\u002ebimi-certificate.review",
+        "whoisleuth\u002ect-inclusion-proof.input",
+        "whoisleuth\u002ect-inclusion-proof",
+        "whoisleuth\u002etimestamp-token.input",
+        "whoisleuth\u002etimestamp-token",
+        "whoisleuth\u002emonitoring-plan.input",
+        "whoisleuth\u002emonitoring-plan",
+        "whoisleuth\u002eselected-service-context.input",
+        "whoisleuth\u002eselected-service-context",
         "whoisleuth\u002erdap-search-input",
         "whoisleuth\u002ednssec-evidence-input",
         "whoisleuth\u002etlsa-evidence-input",
@@ -4596,7 +4949,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "boundary": "No database, browser launch, request or external report is created. Select --case-id when a file contains multiple cases. Existing files require --force; --expect-file-digest sha256:\u003cdigest> additionally checks the exact file reviewed earlier. Source and output leases reject concurrent changes. Interrupted .workflow.lock files require deliberate inspection. Recheck records supplied observations; it does not collect them. Not reproduced requires an existing saved question, a complete observation and comparable conditions. Working exports include private analyst content and file references, not attached file bytes.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads exact case schemas 15 or 16 or 17 or 18 or 19 or 20. Input is bounded to 16 MiB including formatting; the complete canonical case store must fit 4 MiB without pruning. Writes current schema 20."
+        "scope": "Reads exact case schemas 15 or 16 or 17 or 18 or 19 or 20 or 21 or 22. Input is bounded to 16 MiB including formatting; the complete canonical case store must fit 4 MiB without pruning. Writes current schema 22."
       },
       "inputs": [
         {
@@ -4644,7 +4997,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--json",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[93], SHARED_COMMAND_OPTIONS[94], SHARED_COMMAND_OPTIONS[95], SHARED_COMMAND_OPTIONS[96], SHARED_COMMAND_OPTIONS[97], SHARED_COMMAND_OPTIONS[98], SHARED_COMMAND_OPTIONS[99], SHARED_COMMAND_OPTIONS[100], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[99], SHARED_COMMAND_OPTIONS[100], SHARED_COMMAND_OPTIONS[101], SHARED_COMMAND_OPTIONS[102], SHARED_COMMAND_OPTIONS[103], SHARED_COMMAND_OPTIONS[104], SHARED_COMMAND_OPTIONS[105], SHARED_COMMAND_OPTIONS[106], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -4654,7 +5007,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002ecase-export"
       ],
       "inputLimits": [
-        "Reads exact case schemas 15 or 16 or 17 or 18 or 19 or 20. Input is bounded to 16 MiB including formatting; the complete canonical case store must fit 4 MiB without pruning. Writes current schema 20.",
+        "Reads exact case schemas 15 or 16 or 17 or 18 or 19 or 20 or 21 or 22. Input is bounded to 16 MiB including formatting; the complete canonical case store must fit 4 MiB without pruning. Writes current schema 22.",
         "operation: 1-1 enum value",
         "source: 0-1 file value"
       ],
@@ -4790,7 +5143,7 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "case-pack",
       "summary": "Build a reviewed case package",
-      "description": "Package browser-created case records from schemas 15 or 16 or 17 or 18 or 19 or 20 as a reviewed, audience-specific Case-pack v2 with current schema 20.",
+      "description": "Package browser-created case records from schemas 15 or 16 or 17 or 18 or 19 or 20 or 21 or 22 as a reviewed, audience-specific Case-pack v2 with current schema 22.",
       "group": "respond",
       "common": true,
       "usage": "whoisleuth case-pack [\u003csource>] --audience \u003cinternal|trusted|public> --reviewed [--json] [--quiet] [--no-color]",
@@ -4798,7 +5151,7 @@ export const PUBLIC_CLI_CATALOGUE = {
       "boundary": "The command creates a separate offline package without changing the source or durable cases and requires an explicit review acknowledgement. Every audience, including public, retains domain evidence, case, pin and decision identifiers, tags, decision summaries and rationale. Review that analyst-authored content as well as the exclusions before sharing.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads one bounded case export from schemas 15 or 16 or 17 or 18 or 19 or 20 and writes a separate audience-specific Case-pack v2."
+        "scope": "Reads one bounded case export from schemas 15 or 16 or 17 or 18 or 19 or 20 or 21 or 22 and writes a separate audience-specific Case-pack v2."
       },
       "inputs": [
         {
@@ -4818,7 +5171,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[101], SHARED_COMMAND_OPTIONS[102], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[107], SHARED_COMMAND_OPTIONS[108], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -4829,7 +5182,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "whoisleuth\u002ecase-report"
       ],
       "inputLimits": [
-        "Reads one bounded case export from schemas 15 or 16 or 17 or 18 or 19 or 20 and writes a separate audience-specific Case-pack v2.",
+        "Reads one bounded case export from schemas 15 or 16 or 17 or 18 or 19 or 20 or 21 or 22 and writes a separate audience-specific Case-pack v2.",
         "source: 0-1 file value"
       ],
       "outputLimits": [
@@ -4980,7 +5333,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[103], SHARED_COMMAND_OPTIONS[104], SHARED_COMMAND_OPTIONS[105], SHARED_COMMAND_OPTIONS[106], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[20], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[109], SHARED_COMMAND_OPTIONS[110], SHARED_COMMAND_OPTIONS[111], SHARED_COMMAND_OPTIONS[112], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[21], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "always_network",
       "disclosureClass": "bounded_passive",
       "explicitAuthorisationRequired": false,
@@ -5038,6 +5391,98 @@ export const PUBLIC_CLI_CATALOGUE = {
         "privacyLimitations": [
           "The one-shot monitor reads selected local control state and performs only the bounded scheduled review collection.",
           "Its checkpoint and review evidence do not calculate Risk or Opportunity scores."
+        ]
+      }
+    },
+    {
+      "id": "monitor-tick",
+      "summary": "Run a resumable local monitoring cycle",
+      "description": "Preview a per-domain monitoring plan, or explicitly execute one bounded local cycle.",
+      "group": "assure",
+      "common": false,
+      "usage": "whoisleuth monitor-tick \u003csource> [--state \u003cfile>] [--approve-network] [--json] [--quiet] [--no-color]",
+      "example": "whoisleuth monitor-tick plan.json --state monitor-state.json --approve-network --json --output observations.json",
+      "boundary": "Without --approve-network this is an offline preview. Execution requires --state and admits at most 100 distinct registrable domains. Purpose (Fast registration or Deep website/mail), cadence and review priority are independent. The existing dispatcher starts at most two serial Lookups within its 24-second cycle; a daily attempt quota, durable cursor, leases, oldest-due fairness and failure backoff survive resume. Attempts are saved before collection, including cancelled attempts. The private state is locked and atomically replaced; configuration changes require a deliberately new file. Do not run copied state files concurrently. Output is an ordinary Watchlist export; the first actual local cycle establishes its own baseline, rather than arbitrarily choosing among overlapping saved observations. No daemon, operating-system schedule, hosted setting, paid provider or automatic retry is enabled.",
+      "collection": {
+        "mode": "network",
+        "scope": "Offline preview unless --approve-network; then at most two serial, explicitly configured Fast/Deep compact Lookups per cycle, with a bounded daily attempt quota."
+      },
+      "inputs": [
+        {
+          "name": "source",
+          "valueKind": "file",
+          "minimum": 1,
+          "maximum": 1,
+          "values": [],
+          "inputSource": "argv",
+          "requiredWhenOptions": []
+        }
+      ],
+      "importantOptions": [
+        "--state",
+        "--approve-network",
+        "--json",
+        "--quiet",
+        "--no-color"
+      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[113], SHARED_COMMAND_OPTIONS[114], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "networkEffect": "conditional_network",
+      "disclosureClass": "bounded_authorised_active",
+      "explicitAuthorisationRequired": true,
+      "planSupport": true,
+      "failurePolicySupport": false,
+      "supportedSchemaIdentifiers": [
+        "whoisleuth\u002emonitoring-plan.input",
+        "whoisleuth\u002emonitoring-plan",
+        "whoisleuth\u002elocal-monitor-state",
+        "whoisleuth\u002ewatchlists"
+      ],
+      "inputLimits": [
+        "Offline preview unless --approve-network; then at most two serial, explicitly configured Fast/Deep compact Lookups per cycle, with a bounded daily attempt quota.",
+        "source: 1-1 file value"
+      ],
+      "outputLimits": [
+        "Output is bounded by the command-owned formatter and document contract.",
+        "Selected file output is atomic and replacement requires --force."
+      ],
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
+      ],
+      "fileOutput": true,
+      "primaryEvidenceArtefacts": [
+        "Private resumable monitor state",
+        "Ordinary Watchlist export"
+      ],
+      "capability": {
+        "familyId": "lookup",
+        "networkMode": "conditional_bounded_passive",
+        "dataSent": [
+          "normalised_target",
+          "registry_query",
+          "whois_query",
+          "dns_question",
+          "homepage_request",
+          "tls_handshake"
+        ],
+        "recipients": [
+          "registry_service",
+          "dns_resolver",
+          "target_public_service"
+        ],
+        "authorisation": "explicit_network_approval",
+        "retention": "local_output_deliberate",
+        "export": "local_output",
+        "outcomes": [
+          "complete",
+          "partial"
+        ],
+        "documentStates": [],
+        "privacyLimitations": [
+          "A selected private local file retains compact evidence, quota counters and the existing dispatcher cursor; no hosted schedule is enabled.",
+          "The plan selects collection purpose and cadence independently from review priority. No Brand-based risk score is calculated."
         ]
       }
     },
@@ -5233,7 +5678,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[107], SHARED_COMMAND_OPTIONS[108], SHARED_COMMAND_OPTIONS[109], SHARED_COMMAND_OPTIONS[110], SHARED_COMMAND_OPTIONS[111], SHARED_COMMAND_OPTIONS[112], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[115], SHARED_COMMAND_OPTIONS[116], SHARED_COMMAND_OPTIONS[117], SHARED_COMMAND_OPTIONS[118], SHARED_COMMAND_OPTIONS[119], SHARED_COMMAND_OPTIONS[120], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -5333,7 +5778,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[113], SHARED_COMMAND_OPTIONS[114], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[121], SHARED_COMMAND_OPTIONS[122], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -5550,7 +5995,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[115], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[123], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
@@ -5660,7 +6105,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[116], SHARED_COMMAND_OPTIONS[117], SHARED_COMMAND_OPTIONS[118], SHARED_COMMAND_OPTIONS[119], SHARED_COMMAND_OPTIONS[120], SHARED_COMMAND_OPTIONS[121], SHARED_COMMAND_OPTIONS[122], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[124], SHARED_COMMAND_OPTIONS[125], SHARED_COMMAND_OPTIONS[126], SHARED_COMMAND_OPTIONS[114], SHARED_COMMAND_OPTIONS[127], SHARED_COMMAND_OPTIONS[128], SHARED_COMMAND_OPTIONS[129], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "conditional_network",
       "disclosureClass": "bounded_authorised_active",
       "explicitAuthorisationRequired": true,
@@ -5734,15 +6179,15 @@ export const PUBLIC_CLI_CATALOGUE = {
     {
       "id": "diff",
       "summary": "Compare two compatible retained artefacts",
-      "description": "Compare an earlier and later artefact from the same retained Lookup, Bulk-session, or domain-portfolio family.",
+      "description": "Compare two artefacts from the same saved Lookup, Lookup evidence export, Bulk-session, or domain-portfolio family.",
       "group": "assure",
       "common": true,
-      "usage": "whoisleuth diff \u003csources...> [--left-session \u003cvalue>] [--right-session \u003cvalue>] [--json] [--quiet] [--no-color]",
-      "example": "whoisleuth diff earlier.json later.json --json",
-      "boundary": "Comparison is offline: the left input is earlier and the right input is later. Inputs must belong to the same supported family. Saved Lookups can describe the same or different domains; same-domain comparisons preserve observation times and collection uncertainty. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.",
+      "usage": "whoisleuth diff \u003csources...> [--left-session \u003cvalue>] [--right-session \u003cvalue>] [--browse] [--json] [--quiet] [--no-color]",
+      "example": "whoisleuth diff left.json right.json --json",
+      "boundary": "Comparison is offline, and both inputs must belong to the same supported family. Saved Lookups and Lookup evidence exports are compared as left and right in the order given; each side keeps its own observation or export time. Bulk-session and domain-portfolio exports must be given earlier first, by saved-session or review time. Saved Lookups can describe the same or different domains; --browse opens their searchable comparison panels. Same-domain comparisons preserve observation times and collection uncertainty. Two Lookup evidence exports for one target, including browser downloads, use the same validation and difference classes as browser evidence replay. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.",
       "collection": {
         "mode": "offline",
-        "scope": "Reads two compatible retained artefacts capped at 8 MiB each and retains no source paths."
+        "scope": "Reads two compatible retained artefacts capped at 8 MiB each, or 5 MiB for a Lookup evidence export, and retains no source paths."
       },
       "inputs": [
         {
@@ -5758,21 +6203,23 @@ export const PUBLIC_CLI_CATALOGUE = {
       "importantOptions": [
         "--left-session",
         "--right-session",
+        "--browse",
         "--json",
         "--quiet",
         "--no-color"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[123], SHARED_COMMAND_OPTIONS[124], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[130], SHARED_COMMAND_OPTIONS[131], SHARED_COMMAND_OPTIONS[33], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,
       "planSupport": false,
       "failurePolicySupport": false,
       "supportedSchemaIdentifiers": [
-        "whoisleuth\u002ecli.lookup-diff"
+        "whoisleuth\u002ecli.lookup-diff",
+        "whoisleuth\u002ecli.lookup-evidence-diff"
       ],
       "inputLimits": [
-        "Reads two compatible retained artefacts capped at 8 MiB each and retains no source paths.",
+        "Reads two compatible retained artefacts capped at 8 MiB each, or 5 MiB for a Lookup evidence export, and retains no source paths.",
         "sources: 2-2 file values"
       ],
       "outputLimits": [
@@ -5804,6 +6251,156 @@ export const PUBLIC_CLI_CATALOGUE = {
         "outcomes": [
           "complete",
           "partial"
+        ],
+        "documentStates": [],
+        "privacyLimitations": [
+          "The command reads only selected bounded local input and makes no network request.",
+          "Output remains under the operator's local retention and deletion control."
+        ]
+      }
+    },
+    {
+      "id": "view",
+      "summary": "Read a saved Lookup or evidence export offline, or browse a saved Lookup",
+      "description": "Read one saved Lookup or Lookup evidence export without collecting again.",
+      "group": "investigate",
+      "common": true,
+      "usage": "whoisleuth view [\u003csource>] [--browse] [--json] [--quiet] [--no-color]",
+      "example": "whoisleuth view lookup.json --browse",
+      "boundary": "The command validates one saved Lookup or Lookup evidence export offline. Evidence exports, including browser downloads, use the same validation and summary as browser evidence replay. --browse opens the existing searchable terminal panels for a saved Lookup and reserves interactive stdin for navigation; it cannot be combined with redirected output. No file is modified and no source is contacted.",
+      "collection": {
+        "mode": "offline",
+        "scope": "Reads one saved Lookup capped at 8 MiB or one evidence export capped at 5 MiB."
+      },
+      "inputs": [
+        {
+          "name": "source",
+          "valueKind": "file",
+          "minimum": 0,
+          "maximum": 1,
+          "values": [],
+          "inputSource": "argv_or_stdin",
+          "requiredWhenOptions": []
+        }
+      ],
+      "importantOptions": [
+        "--browse",
+        "--json",
+        "--quiet",
+        "--no-color"
+      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[33], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "networkEffect": "offline",
+      "disclosureClass": "none",
+      "explicitAuthorisationRequired": false,
+      "planSupport": false,
+      "failurePolicySupport": false,
+      "supportedSchemaIdentifiers": [
+        "whoisleuth\u002ecli.lookup",
+        "whoisleuth\u002ecli.lookup-evidence-view"
+      ],
+      "inputLimits": [
+        "Reads one saved Lookup capped at 8 MiB or one evidence export capped at 5 MiB.",
+        "source: 0-1 file value"
+      ],
+      "outputLimits": [
+        "Output is bounded by the command-owned formatter and document contract.",
+        "Selected file output is atomic and replacement requires --force."
+      ],
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
+      ],
+      "fileOutput": true,
+      "primaryEvidenceArtefacts": [
+        "Saved Lookup",
+        "Lookup evidence replay"
+      ],
+      "capability": {
+        "familyId": "offline_review",
+        "networkMode": "none",
+        "dataSent": [
+          "none"
+        ],
+        "recipients": [
+          "none"
+        ],
+        "authorisation": "explicit_action",
+        "retention": "local_output_deliberate",
+        "export": "local_output",
+        "outcomes": [
+          "complete"
+        ],
+        "documentStates": [],
+        "privacyLimitations": [
+          "The command reads only selected bounded local input and makes no network request.",
+          "Output remains under the operator's local retention and deletion control."
+        ]
+      }
+    },
+    {
+      "id": "mcp",
+      "summary": "Serve selected evidence read-only over local MCP",
+      "description": "Serve minimised selected evidence to a compatible local MCP client over stdio.",
+      "group": "utilities",
+      "common": false,
+      "usage": "whoisleuth mcp \u003csources...> --stdio --allow-model-disclosure",
+      "example": "whoisleuth mcp --stdio --allow-model-disclosure lookup.json evidence.json",
+      "boundary": "Offline and read-only: inspect selected immutable evidence, verify artefacts, compare saved Lookups and prepare no-request collection plans. No arbitrary paths, shell commands, writes, live collection, public port or default file discovery. The connected client may send returned evidence to its model provider; acknowledge this at startup. Raw publications, contacts, page text and Case notes are not exposed. Stdout is reserved for protocol messages.",
+      "collection": {
+        "mode": "offline",
+        "scope": "Reads 1 to 8 explicit files, at most 8 MiB each and 16 MiB combined. Protocol input is limited to 32 KiB per message and tool output to 64 KiB."
+      },
+      "inputs": [
+        {
+          "name": "sources",
+          "valueKind": "file",
+          "minimum": 1,
+          "maximum": 8,
+          "values": [],
+          "inputSource": "argv",
+          "requiredWhenOptions": []
+        }
+      ],
+      "importantOptions": [
+        "--stdio",
+        "--allow-model-disclosure"
+      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[132], SHARED_COMMAND_OPTIONS[133]],
+      "networkEffect": "offline",
+      "disclosureClass": "none",
+      "explicitAuthorisationRequired": false,
+      "planSupport": false,
+      "failurePolicySupport": false,
+      "supportedSchemaIdentifiers": [],
+      "inputLimits": [
+        "Reads 1 to 8 explicit files, at most 8 MiB each and 16 MiB combined. Protocol input is limited to 32 KiB per message and tool output to 64 KiB.",
+        "sources: 1-8 file values"
+      ],
+      "outputLimits": [
+        "Output is bounded by the command-owned formatter and document contract."
+      ],
+      "presentationOptions": [],
+      "fileOutput": false,
+      "primaryEvidenceArtefacts": [
+        "Minimised selected evidence"
+      ],
+      "capability": {
+        "familyId": "offline_review",
+        "networkMode": "none",
+        "dataSent": [
+          "none"
+        ],
+        "recipients": [
+          "none"
+        ],
+        "authorisation": "explicit_action",
+        "retention": "local_output_deliberate",
+        "export": "local_output",
+        "outcomes": [
+          "complete"
         ],
         "documentStates": [],
         "privacyLimitations": [
@@ -5969,6 +6566,87 @@ export const PUBLIC_CLI_CATALOGUE = {
       }
     },
     {
+      "id": "prior-registration",
+      "summary": "Compare registration date with earlier observations",
+      "description": "Compare a domain’s registration creation date with earlier certificate-log and web archive observations.",
+      "group": "investigate",
+      "common": false,
+      "usage": "whoisleuth prior-registration [\u003csource>] [--ct-results \u003cfile>] [--archive-history \u003cfile>] [--json] [--quiet] [--no-color]",
+      "example": "whoisleuth prior-registration lookup.json --ct-results ct.json --archive-history archive.json --json",
+      "boundary": "The command is offline. It reads a saved domain Lookup or evidence export with ct-search and archive-history JSON for the same domain, and uses the same comparison as browser Bulk review and Lookup’s web archive panel. An earlier observation suggests an earlier registration; it does not identify an owner, a transfer or intent, and no earlier observation does not show a first registration.",
+      "collection": {
+        "mode": "offline",
+        "scope": "Reads one saved Lookup or evidence export capped at 8 MiB and up to two supporting results capped at 4 MiB each."
+      },
+      "inputs": [
+        {
+          "name": "source",
+          "valueKind": "file",
+          "minimum": 0,
+          "maximum": 1,
+          "values": [],
+          "inputSource": "argv_or_stdin",
+          "requiredWhenOptions": []
+        }
+      ],
+      "importantOptions": [
+        "--ct-results",
+        "--archive-history",
+        "--json",
+        "--quiet",
+        "--no-color"
+      ],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[134], SHARED_COMMAND_OPTIONS[135], SHARED_COMMAND_OPTIONS[7], SHARED_COMMAND_OPTIONS[9], SHARED_COMMAND_OPTIONS[10]],
+      "networkEffect": "offline",
+      "disclosureClass": "none",
+      "explicitAuthorisationRequired": false,
+      "planSupport": false,
+      "failurePolicySupport": false,
+      "supportedSchemaIdentifiers": [
+        "whoisleuth\u002ecli.prior-registration"
+      ],
+      "inputLimits": [
+        "Reads one saved Lookup or evidence export capped at 8 MiB and up to two supporting results capped at 4 MiB each.",
+        "source: 0-1 file value"
+      ],
+      "outputLimits": [
+        "Output is bounded by the command-owned formatter and document contract.",
+        "Selected file output is atomic and replacement requires --force."
+      ],
+      "presentationOptions": [
+        {
+          "option": "--json",
+          "format": "JSON"
+        }
+      ],
+      "fileOutput": true,
+      "primaryEvidenceArtefacts": [
+        "Prior registration review"
+      ],
+      "capability": {
+        "familyId": "offline_review",
+        "networkMode": "none",
+        "dataSent": [
+          "none"
+        ],
+        "recipients": [
+          "none"
+        ],
+        "authorisation": "explicit_action",
+        "retention": "local_output_deliberate",
+        "export": "local_output",
+        "outcomes": [
+          "complete",
+          "partial"
+        ],
+        "documentStates": [],
+        "privacyLimitations": [
+          "The command reads only selected bounded local input and makes no network request.",
+          "Output remains under the operator's local retention and deletion control."
+        ]
+      }
+    },
+    {
       "id": "export",
       "summary": "Convert a lookup to an evidence report",
       "description": "Convert one saved lookup into a versioned evidence report.",
@@ -5998,7 +6676,7 @@ export const PUBLIC_CLI_CATALOGUE = {
         "--compact",
         "--no-attribution"
       ],
-      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[21], SHARED_COMMAND_OPTIONS[22], SHARED_COMMAND_OPTIONS[125], SHARED_COMMAND_OPTIONS[23]],
+      "options": [SHARED_COMMAND_OPTIONS[0], SHARED_COMMAND_OPTIONS[1], SHARED_COMMAND_OPTIONS[2], SHARED_COMMAND_OPTIONS[3], SHARED_COMMAND_OPTIONS[4], SHARED_COMMAND_OPTIONS[5], SHARED_COMMAND_OPTIONS[22], SHARED_COMMAND_OPTIONS[23], SHARED_COMMAND_OPTIONS[136], SHARED_COMMAND_OPTIONS[24]],
       "networkEffect": "offline",
       "disclosureClass": "none",
       "explicitAuthorisationRequired": false,

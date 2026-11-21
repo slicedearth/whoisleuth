@@ -405,9 +405,9 @@
         </select></label>
         {#if reasonSourceRow?.lifecycle.decision}
           {@const previous = reasonSourceRow.lifecycle.decision}
-          <p>Saved for <strong>{reasonSourceRow.candidate.domain}</strong> on {formatEvidenceDate(previous.reviewedAt)}. This is earlier wording, not a finding about the current selection.</p>
+          <p>Saved for <strong>{reasonSourceRow.candidate.domain}</strong> on {formatEvidenceDate(previous.reviewedAt)}.</p>
           <p class="saved-reason">{previous.rationale}</p>
-          {#if previous.rationale.length > MAX_CANDIDATE_TEXT}<p>This reason is longer than the current {MAX_CANDIDATE_TEXT}-character field. It remains readable here; no shortened copy is substituted.</p>{/if}
+          {#if previous.rationale.length > MAX_CANDIDATE_TEXT}<p>This reason is longer than the current {MAX_CANDIDATE_TEXT}-character limit and is shown in full here.</p>{/if}
           <button class="btn" type="button" onclick={reuseReason} disabled={!chosen.length || previous.rationale.length > MAX_CANDIDATE_TEXT}>{reason ? 'Replace draft reason with this text' : 'Use this reason'}</button>
           <p>Only text is copied. Selection, decisions, evidence, dates, priority and destination stay unchanged.</p>
         {/if}
@@ -431,9 +431,9 @@
           >{/each}</select
       ></label
     >
-    {#if campaignDefault !== null}<p>Retained campaign revisions suggest {campaignDefault}; this is a draft default only. Manual Watchlist priorities stay unchanged unless explicitly replaced.</p>
+    {#if campaignDefault !== null}<p>Campaigns suggest {campaignDefault} as the default. Existing Watchlist priorities stay unless you replace them.</p>
       {#if priorityEdited}<button class="btn" onclick={() => { priorityEdited = false; }}>Use retained campaign default</button>{/if}
-    {:else if chosen.length}<p>No single retained campaign default applies to this selection. Mixed, manual or unavailable revisions do not infer a priority.</p>{/if}
+    {:else if chosen.length}<p>No single campaign default applies to this selection.</p>{/if}
     <label
       ><input type="checkbox" bind:checked={replaceExistingContext} /> Explicitly replace priority/reason
       in existing selected Brand contexts</label
@@ -494,10 +494,9 @@
         ></label
       >
       {#if exceptionRow && exceptionRule && exceptionRow.matches.some((match) => match.ruleKey === exceptionRule)}<p
-          >Impact preview: only {exceptionDomain}, only {active.name}, only this exact rule. {exceptionRow
-            .matches.length - 1} other matching rule(s) remain independently eligible. Reason and expiry
-          are taken from the review fields above. This cannot suppress monitored material changes or change
-          official/partner declarations.</p
+          >Impact preview: applies only to {exceptionDomain}, {active.name} and this exact rule. {exceptionRow
+            .matches.length - 1} other matching rule(s) still apply. Reason and expiry come from the review
+          fields above.</p
         ><button
           class="btn"
           onclick={() => void saveException()}

@@ -6,6 +6,7 @@ import { describe, test } from 'node:test';
 
 import { CLI_COMMAND_REGISTRY } from '../cli/command-reference.mts';
 import { runCli } from '../cli/runner.mts';
+import { parseLookupEvidenceReplay } from '../frontend/src/lib/analysis/lookup-evidence-replay.ts';
 import { createCase, CASE_SCHEMA_VERSION } from '../packages/cases/case-model.mts';
 import {
   INVESTIGATION_PLAN_RECIPES,
@@ -32,6 +33,7 @@ import {
   renderPublicCoverageSummaryModule,
   renderPublicExamplesIndexModule,
   renderPublicExamplesModule,
+  renderPublicTerminalDemoModule,
   renderPublicExampleOutputModules,
   GENERATED_MODULE_NOTICE,
   renderPublicMethodologyModule,
@@ -60,6 +62,32 @@ function strings(value: unknown): string[] {
 }
 
 describe('public product catalogue', () => {
+  test('the two-command Lookup handoff retains a private original and creates a validated browser replay', async t => {
+    const now = '2026-10-01T00:00:00.000Z';
+    t.mock.timers.enable({ apis: ['Date'], now: Date.parse(now) });
+    const root = mkdtempSync(path.join(tmpdir(), 'whoisleuth-lookup-handoff-'));
+    try {
+      const fixture = JSON.parse(readFileSync(new URL('./fixtures/cli-lookup-v1.json', import.meta.url), 'utf8'));
+      fixture.rdap.data = { publication: 'private-original-payload' };
+      const recipe = CLI_PUBLIC_GUIDANCE.interchangeRecipes.find(item => item.id === 'lookup-replay')!;
+      const sink = { write() {} };
+      for (const command of recipe.commands) {
+        const argv = command.split(' ').slice(1).map(token => ['lookup.json', 'evidence.json'].includes(token) ? path.join(root, token) : token);
+        let diagnostics = '';
+        assert.equal(await runCli(argv, { stdout: sink, stderr: { write(value) { diagnostics += value; } }, now: () => now,
+          runUnifiedLookup: async () => fixture }), 0, diagnostics);
+      }
+      const original = readFileSync(path.join(root, 'lookup.json'), 'utf8');
+      const portable = readFileSync(path.join(root, 'evidence.json'), 'utf8');
+      assert.match(original, /private-original-payload/u);
+      assert.doesNotMatch(portable, /private-original-payload/u);
+      await assert.rejects(parseLookupEvidenceReplay(original), /private CLI Lookup/u);
+      const replay = await parseLookupEvidenceReplay(portable);
+      assert.equal(replay.target, 'example.test');
+      assert.equal(replay.exportedAt, now);
+      assert.equal(replay.availability, 'registered');
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
   test('Watchlist export help agrees with an actual offline export', async () => {
     let help = '', exported = '';
     const input = readFileSync(new URL('./fixtures/brand-candidate-workflow/candidate-watch-input-v1.json', import.meta.url), 'utf8');
@@ -233,6 +261,7 @@ describe('public product catalogue', () => {
       ['public-cli-catalogue.ts', renderPublicCliCatalogueModule()],
       ['public-cli-grammar.ts', renderPublicCliGrammarModule()],
       ['public-cli-guidance.ts', renderPublicCliGuidanceModule()],
+      ['public-terminal-demo.ts', renderPublicTerminalDemoModule()],
       ['public-cli-index.ts', renderPublicCliIndexModule()],
       ['public-coverage.ts', renderPublicCoverageModule()],
       ['public-coverage-summary.ts', renderPublicCoverageSummaryModule()],

@@ -54,6 +54,18 @@ export type CtProvenance = {
   firstObservedAt: string | null;
   lastObservedAt: string | null;
   certificateCount: number;
+  /**
+   * Set when a source reported a first observation later than its last. The
+   * pair is ordered for display, but its earliest date is not established.
+   */
+  chronologyContradicted?: true;
+  /**
+   * Validity-start range of certificates whose source rows published no log
+   * entry time. Kept apart from the log observation dates above: it dates a
+   * certificate, not a public log observation, and is shown only as context.
+   */
+  firstValidFrom?: string;
+  lastValidFrom?: string;
 };
 
 export type CtCandidate = {
@@ -181,13 +193,19 @@ export function normalizeCtProvenance(raw: unknown): CtProvenance | null {
   if (!record) return null;
   const certificateCount = normalizePositiveCount(record.certificateCount);
   if (certificateCount === null) return null;
-  const provenance = {
+  // An unpublished local build marked matches whose dates might be validity
+  // starts with dateBasis: 'validity_start'. Those dates cannot be told apart
+  // from log observations, so they are excluded rather than migrated.
+  const ambiguousDates = record.dateBasis !== undefined;
+  const provenance: CtProvenance = {
     hostnames: normalizeHostnames(record.hostnames),
-    firstObservedAt: normalizeTimestamp(record.firstObservedAt),
-    lastObservedAt: normalizeTimestamp(record.lastObservedAt),
+    firstObservedAt: ambiguousDates ? null : normalizeTimestamp(record.firstObservedAt),
+    lastObservedAt: ambiguousDates ? null : normalizeTimestamp(record.lastObservedAt),
     certificateCount,
   };
-  // A first observation later than the last one is contradictory; order them.
+  // A first observation later than the last one is contradictory; order them
+  // for display and keep the contradiction so no inference relies on the pair.
+  // A flag carried from an earlier normalisation survives a handoff round trip.
   if (
     provenance.firstObservedAt !== null &&
     provenance.lastObservedAt !== null &&
@@ -196,6 +214,17 @@ export function normalizeCtProvenance(raw: unknown): CtProvenance | null {
     const swap = provenance.firstObservedAt;
     provenance.firstObservedAt = provenance.lastObservedAt;
     provenance.lastObservedAt = swap;
+    provenance.chronologyContradicted = true;
+  } else if (record.chronologyContradicted === true) {
+    provenance.chronologyContradicted = true;
+  }
+  // The validity range is optional context; both ends must be valid and
+  // ordered, otherwise it is left out rather than guessed.
+  const firstValidFrom = normalizeTimestamp(record.firstValidFrom);
+  const lastValidFrom = normalizeTimestamp(record.lastValidFrom);
+  if (firstValidFrom !== null && lastValidFrom !== null && firstValidFrom <= lastValidFrom) {
+    provenance.firstValidFrom = firstValidFrom;
+    provenance.lastValidFrom = lastValidFrom;
   }
   if (
     provenance.hostnames.length === 0 &&
@@ -225,8 +254,23 @@ export function mergeCtProvenance(
     firstObservedAt: earlier(a.firstObservedAt, b.firstObservedAt),
     lastObservedAt: later(a.lastObservedAt, b.lastObservedAt),
     certificateCount: Math.max(a.certificateCount, b.certificateCount),
+    ...(a.chronologyContradicted || b.chronologyContradicted ? { chronologyContradicted: true as const } : {}),
+    ...mergedValidityRange(a, b),
   };
 }
+
+function mergedValidityRange(a: CtProvenance, b: CtProvenance): Pick<CtProvenance, 'firstValidFrom' | 'lastValidFrom'> {
+  const first = earlier(a.firstValidFrom ?? null, b.firstValidFrom ?? null);
+  const last = later(a.lastValidFrom ?? null, b.lastValidFrom ?? null);
+  return first !== null && last !== null ? { firstValidFrom: first, lastValidFrom: last } : {};
+}
+
+/** Shared labels: log observation dates and validity-start context are never relabelled as each other. */
+export const CT_DATE_LABELS = Object.freeze({
+  firstObserved: 'Earliest CT observation',
+  lastObserved: 'Latest CT observation',
+  validityRange: 'Validity starts without a published log time',
+});
 
 /** Bounded source label; matches the handoff's own source bound. */
 function boundedSource(label: unknown): string {

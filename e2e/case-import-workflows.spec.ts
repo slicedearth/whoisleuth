@@ -3,7 +3,7 @@ import { openCaseMetadata, openCaseSection, openConsoleView } from './console-na
 import { createHash } from 'node:crypto';
 import { gzipSync, zipSync } from 'fflate';
 import { expect, test } from './fixtures';
-import { expectFocusedResultsVisible, expectNoHorizontalOverflow, failNextBrowserLocalCollectionReadAfterWrite, failNextBrowserLocalManifestWrite, readBrowserLocalCollection, runBulkScan, useTheme } from './helpers';
+import { expectFocusedResultsVisible, expectNoHorizontalOverflow, failNextBrowserLocalCollectionReadAfterWrite, failNextBrowserLocalManifestWrite, holdBrowserLocalTransaction, readBrowserLocalCollection, runBulkScan, useTheme } from './helpers';
 import { createCase, openCaseResponseWorkspace, openCasesView } from './case-test-fixtures';
 import { CASE_SCHEMA_VERSION } from '../packages/contracts/case-portability.mts';
 import { EXTERNAL_FINDINGS_VERSION } from '../packages/interchange/external-findings-import.mts';
@@ -13,6 +13,36 @@ import { buildCaseExport, serializeCaseStore } from '../packages/cases/case-stor
 import { MAX_CASE_IMPORT_BYTES, MAX_CASE_STORE_BYTES } from '../packages/contracts/case-portability.mts';
 
 // Bounded external evidence imports, Case management and Bulk handoff coverage.
+
+test('selected reconnaissance JSONL is reviewed locally before exact-host Case import', async ({ page }, testInfo) => {
+  await openCasesView(page);
+  const importer = page.locator('details').filter({ has: page.getByText('Import external observations and claims', { exact: true }) });
+  await importer.locator(':scope > summary').click();
+  await importer.getByRole('combobox', { name: 'For JSONL files, select the producer' }).selectOption('httpx-jsonl');
+  await importer.locator('input[type="file"]').setInputFiles({ name: 'observations.jsonl', mimeType: 'application/x-ndjson',
+    buffer: Buffer.from(JSON.stringify({ url: 'https://portal.example.test/private?token=secret',
+      timestamp: '2026-08-01T00:00:00.000Z', status_code: 200, failed: false, title: 'Retained example page', body: 'private-body' })) });
+  const review = importer.getByRole('region', { name: 'Import content review' });
+  await expect(review).toContainText('Retained example page');
+  await expect(review).toContainText('unknown');
+  await expect(page.locator('.case-head')).toHaveCount(0);
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const theme of ['light', 'dark'] as const) {
+      await useTheme(page, theme);
+      await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) await testInfo.attach(`recon-import-${width}-${theme}`, {
+        body: await importer.screenshot(), contentType: 'image/png',
+      });
+    }
+  }
+  await review.getByRole('button', { name: 'Import into cases', exact: true }).click();
+  await expect(page.locator('.case-head')).toContainText('portal.example.test');
+  const saved = await readBrowserLocalCollection(page, 'cases', { minimumRecords: 1 });
+  const retained = JSON.stringify(saved.records);
+  expect(retained).toContain('portal.example.test');
+  expect(retained).not.toMatch(/token=|private-body/);
+});
 
 test('a complete maximum-size Case file imports without losing records or notes', async ({ page }, testInfo) => {
   const source = caseStoreAtCapacity();
@@ -792,9 +822,22 @@ test.describe('cases from Bulk', () => {
     await runBulkScan(page, bulkDomains);
 
     const caseCell = page.locator('td[data-label="Case"]').first();
-    await caseCell.getByRole('button', { name: /Create case/ }).click();
-    await expect(caseCell.locator('select.case-disp')).toBeVisible();
-    await expect(caseCell.getByRole('link', { name: 'Open' })).toBeVisible();
+    const create = caseCell.getByRole('button', { name: /Create case/ });
+    const disposition = caseCell.locator('select.case-disp');
+    const release = await holdBrowserLocalTransaction(page);
+    try {
+      await create.focus();
+      await page.keyboard.press('Enter');
+      await expect(create).toBeFocused();
+      await page.keyboard.press('Enter');
+      await expect(disposition).toHaveCount(0);
+    } finally {
+      await release();
+    }
+    // The repeat activation did not take focus ownership from the original save.
+    await expect(disposition).toBeVisible();
+    await expect(disposition).toBeFocused();
+    await expect(caseCell.getByRole('link', { name: /^Open case for / })).toBeVisible();
 
     await page.goto('/monitor');
     await openConsoleView(page, 'cases');

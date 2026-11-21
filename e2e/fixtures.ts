@@ -4,6 +4,7 @@ import {
   PLAYWRIGHT_AUTOMATIC_GUARD_OPTIONS,
   PLAYWRIGHT_NETWORK_GUARD_ROUTE_PATTERN,
   isInjectedBrowserLayoutDiagnostic,
+  isNativePromiseResolutionDiagnostic,
   isCancelledSessionPageDiagnostic,
   isNativePreloadTimingDiagnostic,
   isPolicyFixtureDiagnostic,
@@ -36,6 +37,15 @@ export function isLookupEndpointUrl(url: string, allowedOrigin: string = ALLOWED
   }
 }
 
+function isLoginEndpointUrl(url: string, allowedOrigin: string = ALLOWED_ORIGIN): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.origin === allowedOrigin && parsed.pathname === '/api/login';
+  } catch {
+    return false;
+  }
+}
+
 function isLogoutEndpointUrl(url: string, allowedOrigin: string = ALLOWED_ORIGIN): boolean {
   try {
     const parsed = new URL(url);
@@ -57,6 +67,7 @@ const CHROME_HTTP_400_NOISE_RE = /^Failed to load resource: the server responded
 const CHROME_HTTP_429_NOISE_RE = /^Failed to load resource: the server responded with a status of 429\b/;
 const CHROME_HTTP_504_NOISE_RE = /^Failed to load resource: the server responded with a status of 504\b/;
 const CHROME_HTTP_500_NOISE_RE = /^Failed to load resource: the server responded with a status of 500\b/;
+const CHROME_HTTP_401_NOISE_RE = /^Failed to load resource: the server responded with a status of 401\b/;
 
 // Installs an active request interceptor on a BrowserContext: every request
 // is either passed through (allowed origin) or aborted client-side before it
@@ -109,6 +120,9 @@ type Options = {
   // Opt-in for the exact failed-sign-out test. Chromium reports the handled
   // fixture 500 at the network layer even though the UI retains the session.
   allowExpectedLogout500Noise: boolean;
+  // Opt-in for the exact rejected sign-in test. Chromium reports the handled
+  // 401 from /api/login at the network layer; other endpoints stay strict.
+  allowExpectedLogin401Noise?: boolean;
   // Only the native policy-enforcement fixture deliberately generates CSP errors.
   allowExpectedPolicyFixtureDiagnostics?: boolean;
 };
@@ -122,7 +136,7 @@ type GuardOptions = Options & { browserName: string };
 export async function installBrowserGuards(browser: Browser, options: GuardOptions) {
   const { networkGuardOrigin, browserName, allowExpectedBulkLookup400Noise,
     allowExpectedLookup429Noise, allowExpectedLookup504Noise, allowExpectedLogout500Noise,
-    allowExpectedPolicyFixtureDiagnostics = false } = options;
+    allowExpectedLogin401Noise = false, allowExpectedPolicyFixtureDiagnostics = false } = options;
   const origin = new URL(networkGuardOrigin);
   if (origin.origin !== networkGuardOrigin || origin.protocol !== 'http:'
     || origin.hostname !== '127.0.0.1' || !origin.port) throw new Error('Browser fixtures require one exact loopback origin.');
@@ -184,15 +198,17 @@ export async function installBrowserGuards(browser: Browser, options: GuardOptio
         const onConsole = (message: ConsoleMessage) => {
           const type = message.type();
           if (type !== 'error' && type !== 'warning') return;
-          const text = message.text(), url = message.location().url;
+          const text = message.text(), location = message.location(), url = location.url;
           if (isInjectedBrowserLayoutDiagnostic(browserName, type, text, url)) { diagnostic(text); return; }
+          if (isNativePromiseResolutionDiagnostic(browserName, type, text, url, location.lineNumber, page.url(), networkGuardOrigin)) { diagnostic('Firefox deferred native promise resolution.'); return; }
           if (browserName === 'webkit' && type === 'warning') { pendingNativeWarnings.push({ text, url }); return; }
           if (allowExpectedPolicyFixtureDiagnostics && isPolicyFixtureDiagnostic(browserName, type, text, url, page.url(), networkGuardOrigin)) { diagnostic(text); return; }
           if (type === 'error' && ((isLookupEndpointUrl(url, networkGuardOrigin)
             && ((allowExpectedBulkLookup400Noise && CHROME_HTTP_400_NOISE_RE.test(text))
               || (allowExpectedLookup429Noise && CHROME_HTTP_429_NOISE_RE.test(text))
               || (allowExpectedLookup504Noise && CHROME_HTTP_504_NOISE_RE.test(text))))
-            || (allowExpectedLogout500Noise && isLogoutEndpointUrl(url, networkGuardOrigin) && CHROME_HTTP_500_NOISE_RE.test(text)))) return;
+            || (allowExpectedLogout500Noise && isLogoutEndpointUrl(url, networkGuardOrigin) && CHROME_HTTP_500_NOISE_RE.test(text))
+            || (allowExpectedLogin401Noise && isLoginEndpointUrl(url, networkGuardOrigin) && CHROME_HTTP_401_NOISE_RE.test(text)))) return;
           consoleIssues.push(`console.${type}: ${text}`);
         };
         const onError = (error: Error) => { pendingErrors.push(error); };
@@ -265,15 +281,18 @@ export const test = base.extend<Options & Fixtures>({
   allowExpectedLookup429Noise: [false, { option: true }],
   allowExpectedLookup504Noise: [false, { option: true }],
   allowExpectedLogout500Noise: [false, { option: true }],
+  allowExpectedLogin401Noise: [false, { option: true }],
   allowExpectedPolicyFixtureDiagnostics: [false, { option: true }],
   networkAndConsoleGuard: [
     async ({ browser, context, browserName, networkGuardOrigin, allowExpectedBulkLookup400Noise,
-      allowExpectedLookup429Noise, allowExpectedLookup504Noise, allowExpectedLogout500Noise, allowExpectedPolicyFixtureDiagnostics }, use, testInfo) => {
+      allowExpectedLookup429Noise, allowExpectedLookup504Noise, allowExpectedLogout500Noise, allowExpectedLogin401Noise,
+      allowExpectedPolicyFixtureDiagnostics }, use, testInfo) => {
       // Depend on the default context so guard failures are recorded before
       // its trace-retention decision, including failures detected at teardown.
       void context;
       const guard = await installBrowserGuards(browser, { browserName, networkGuardOrigin, allowExpectedBulkLookup400Noise,
         allowExpectedLookup429Noise, allowExpectedLookup504Noise, allowExpectedLogout500Noise,
+        allowExpectedLogin401Noise: allowExpectedLogin401Noise ?? false,
         allowExpectedPolicyFixtureDiagnostics: allowExpectedPolicyFixtureDiagnostics ?? false });
       try { await use(); } finally { await guard.dispose(); }
       if (guard.diagnostics.length) await testInfo.attach('browser-engine-diagnostics', {

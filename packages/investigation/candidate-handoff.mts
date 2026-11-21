@@ -47,12 +47,23 @@ const DISCOVER_HANDOFF_SOURCES = new Set<HandoffSource>([
 
 export type CertificateTransparencyProvenance = CtProvenance;
 
+/** The rank an analyst-selected popularity list gave this candidate, identified by the list's SHA-256. */
+export type PopularityRankProvenance = Readonly<{ rank: number; listSha256: string }>;
+
 export type Candidate = {
   domain: string;
   source: string;
   mutationTypes: string[];
   certificateTransparency?: CertificateTransparencyProvenance | null;
+  popularityRank?: PopularityRankProvenance;
 };
+
+export function normalizePopularityRankProvenance(value: unknown): PopularityRankProvenance | null {
+  const record = plainRecord(value);
+  if (!record || !Number.isSafeInteger(record.rank) || Number(record.rank) < 1
+    || typeof record.listSha256 !== 'string' || !/^[a-f0-9]{64}$/u.test(record.listSha256)) return null;
+  return Object.freeze({ rank: Number(record.rank), listSha256: record.listSha256 });
+}
 
 export type CandidateHandoff = {
   version: typeof HANDOFF_VERSION;
@@ -117,6 +128,8 @@ export function normalizeCandidate(value: unknown): Candidate | null {
   };
   const ct = normalizeCtProvenance(record?.certificateTransparency);
   if (ct) candidate.certificateTransparency = ct;
+  const popularityRank = normalizePopularityRankProvenance(record?.popularityRank);
+  if (popularityRank) candidate.popularityRank = popularityRank;
   return candidate;
 }
 

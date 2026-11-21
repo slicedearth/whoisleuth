@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tokenLabel } from '../../../../packages/analysis/display-label.mts';
   import { formatEvidenceDate } from '#lib/analysis/evidence-time.ts';
   import { tick } from 'svelte';
   import { compareSavedBulkSessions, type BulkSession, type BulkSessionSavePreview } from '#lib/bulk-sessions.ts';
@@ -160,7 +161,7 @@
           <div>
             <h3>{session.name}</h3>
             <p>{session.mode === 'deep' ? 'Deep' : 'Fast'} · {session.results.length}/{session.domains.length} processed · {sourceSummary(session)}</p>
-            <p>Profile context: {session.profileContext.sourceState.replace('_', ' ')}{session.profileContext.limitation ? ` — ${session.profileContext.limitation}` : ''}</p>
+            <p>Profile context: {tokenLabel(session.profileContext.sourceState)}{session.profileContext.limitation ? ` — ${session.profileContext.limitation}` : ''}</p>
             <dl>
               <div><dt>Complete</dt><dd>{completedCount(session)}</dd></div>
               <div><dt>Failed</dt><dd>{failedCount(session)}</dd></div>

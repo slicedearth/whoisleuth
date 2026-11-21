@@ -15,6 +15,12 @@ For an explicitly selected local IP-location database, see the
 Current reviews retain exact-byte identity and intrinsic metadata, and require
 an analyst-justified freshness policy. No database is downloaded or updated.
 
+The [offline review guide](cli.md#offline-certificate-log-and-timestamp-proofs)
+also documents certificate-log inclusion, timestamp tokens, selected warning
+data and monitoring workload previews. Proof checks stay separate; incomplete
+verification or stale/undated selected warning data returns 4 under
+`--strict-exit`. Workload preview does not schedule collection.
+
 ## Installation
 
 Use the [installation guide](cli.md#installation) for runtime requirements,
@@ -191,13 +197,13 @@ no target values, URLs, contacts or raw errors and does not prove network
 delivery. It stays in full private Lookup JSON; the minimised `export` report
 does not include it. `--plan` remains offline and produces no completed receipt.
 
-Case schema 20 also retains this context when an analyst saves a completed Lookup
-assessment or selected checkpoint facts. A selected checkpoint saves only its
-selected pins and one payload-free receipt, not every Lookup result. Ordinary
-backups and internal case packs preserve it. Trusted/public case packs, case
-reports and response packets omit receipts; shared assessment identities are
-recomputed without them. Historical case formats remain readable without
-inventing missing collection choices.
+Case schema 20 and later also retain this context when an analyst saves a
+completed Lookup assessment or selected checkpoint facts. A selected checkpoint
+saves only its selected pins and one payload-free receipt, not every Lookup
+result. Ordinary backups and internal case packs preserve it. Trusted/public
+case packs, case reports and response packets omit receipts; shared assessment
+identities are recomputed without them. Historical case formats remain readable
+without inventing missing collection choices.
 
 `verify-artifact` checks a recognised structure and its applicable integrity
 contract. `interchange-report` describes retained and omitted fields.

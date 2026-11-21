@@ -2,6 +2,8 @@
   import LookupEvidenceSection from './LookupEvidenceSection.svelte';
   import LookupFamilySummary from './LookupFamilySummary.svelte';
   import DeferredSurface from './DeferredSurface.svelte';
+  import LookupRegistrationHistory from './LookupRegistrationHistory.svelte';
+  import type { LookupKeyFact } from '../../../../lib/lookup-key-facts.mts';
   import type { LookupSectionControls } from '#lib/controllers/lookup-section-navigation.ts';
   import type { buildLookupRouteAnalysis } from '#lib/analysis/lookup-route-analysis.ts';
   import type { LookupVisualView } from './LookupVisualWorkspace.svelte';
@@ -14,12 +16,18 @@
     surfaces,
     controls,
     resultType,
+    registrationHistory = null,
     visualView = $bindable(),
   }: {
     analysis: Analysis;
     surfaces: ReturnType<typeof lookupSectionSurfaces>['relationships-history'];
     controls: LookupSectionControls;
     resultType: string;
+    registrationHistory?: Readonly<{
+      domain: string;
+      creation: Readonly<{ createdAt: string; source: string }> | null;
+      observations: readonly LookupKeyFact[];
+    }> | null;
     visualView: LookupVisualView;
   } = $props();
   const {
@@ -71,5 +79,6 @@
         onnavigate: controls.onnavigate,
       }}
     />
+    {#if registrationHistory}<LookupRegistrationHistory {...registrationHistory} />{/if}
   {/if}
 </LookupEvidenceSection>

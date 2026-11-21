@@ -26,7 +26,7 @@
   </table></div>
   {#if !rows.length}<p>No contributor references retained for this selection; check source/window and view-cap exclusions.</p>{/if}
   {#if pages > 1}<nav aria-label="Operations contributor pages"><button class="btn" type="button" disabled={currentPage <= 1} onclick={() => page = currentPage - 1}>Previous contributors</button><span>Page {currentPage} of {pages}</span><button class="btn" type="button" disabled={currentPage >= pages} onclick={() => page = currentPage + 1}>Next contributors</button></nav>{/if}
-  <details><summary>About this review</summary><p>References use the same calculation as the aggregate metrics but stay in page memory, outside exports. Cases remain distinct by ID. Provider assertions and independent changed reviews are separate; neither establishes removal, causation or campaign elimination. Review recurrence, dispute and restoration in the retained Case evidence.</p></details>
+  <details><summary>About this review</summary><p>References use the same calculation as the totals and stay in page memory, outside exports. Each Case counts once. Provider assertions and independent reviews are counted separately; neither proves removal or cause. Check recurrence, dispute and restoration in the Case evidence.</p></details>
 </details>
 
 <style>

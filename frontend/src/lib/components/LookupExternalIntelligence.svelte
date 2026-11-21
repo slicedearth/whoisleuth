@@ -31,7 +31,7 @@
 
 <section class="threat-intelligence evidence-card card" aria-labelledby="threat-intelligence-title">
   <header class="section-head"><div><p class="eyebrow">External intelligence</p><h4 id="threat-intelligence-title">Archived provider verdicts</h4></div><span>Separately attributed</span></header>
-  <p class="card-note">Third-party observations remain attributed and do not decide availability. Risk changes only when qualifying records agree across at least two publisher families. Publisher diversity does not establish independent underlying reports; shared submissions and unknown collection methods remain limitations.</p>
+  <p class="card-note">Third-party results are credited to their publishers and do not decide availability. Risk changes only when records agree across at least two publisher families. Publisher diversity does not establish independent underlying reports.</p>
   {#if withheld.length}
     <section class="callout warn" aria-label="Withheld external-intelligence records">
       <p>Some external-intelligence data could not be used. This is not evidence of no findings.</p>

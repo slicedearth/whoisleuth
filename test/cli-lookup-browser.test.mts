@@ -26,6 +26,8 @@ import {
 import { formatTerminalLookup } from '../cli/formatters/terminal.mts';
 import { runCli } from '../cli/runner.mts';
 import EXIT_CODES from '../cli/exit-codes.mts';
+import { classifyQuery } from '../lib/classify.mts';
+import { buildCliLookupDocument, serializeCliLookupDocument } from '../cli/saved-lookup.mts';
 
 function lookupDocument() {
   return {
@@ -151,11 +153,62 @@ class BrowserOutput extends EventEmitter {
 }
 
 describe('lookup terminal evidence browser', () => {
+  test('opens validated saved evidence and comparisons through the real offline command paths', async () => {
+    const earlier = serializeCliLookupDocument(buildCliLookupDocument('example.test', classifyQuery('example.test'), lookupDocument(), '2026-08-13T00:00:00.000Z', 'deep'));
+    const laterResult = lookupDocument();
+    laterResult.availability.dns.records.a = ['192.0.2.20'];
+    const later = serializeCliLookupDocument(buildCliLookupDocument('example.test', classifyQuery('example.test'), laterResult, '2026-08-14T00:00:00.000Z', 'deep'));
+    for (const argv of [['view', 'earlier.json', '--browse'], ['diff', 'earlier.json', 'later.json', '--browse']]) {
+      const input = new BrowserInput();
+      const output = new BrowserOutput();
+      const stderr = capture();
+      let reads = 0;
+      input.resume = () => {
+        input.paused = false;
+        queueMicrotask(() => input.emit('data', '/192.0.2.10\r'));
+        queueMicrotask(() => input.emit('data', 'q'));
+      };
+      const code = await runCli(argv, {
+        stdin: input, stdout: output, stderr: stderr.stream, environment: { TERM: 'xterm' },
+        now: () => '2026-08-15T00:00:00.000Z',
+        readDiffInput: (source) => { reads += 1; return source === 'earlier.json' ? earlier : later; },
+        runUnifiedLookup: () => assert.fail('Offline viewing must not collect'),
+      });
+      assert.equal(code, EXIT_CODES.SUCCESS, stderr.value());
+      assert.equal(reads, argv[0] === 'view' ? 1 : 2);
+      assert.match(output.value, /192\.0\.2\.10/u);
+      if (argv[0] === 'diff') {
+        assert.match(output.value, /192\.0\.2\.20/u);
+        assert.match(output.value, /different/u);
+        assert.match(output.value, /not recorded|unavailable/u);
+      }
+      assert.equal(input.isRaw, false);
+      assert.equal(input.paused, true);
+      assert.equal(input.listenerCount('data'), 0);
+      assert.equal(stderr.value(), '');
+    }
+  });
+
+  test('rejects noninteractive or stdin browsing and incompatible output before reading files', async () => {
+    for (const argv of [
+      ['view', 'earlier.json', '--browse'], ['view', '--browse'],
+      ['diff', '-', 'later.json', '--browse'], ['diff', 'earlier.json', 'later.json', '--browse', '--json'],
+      ['view', 'earlier.json', '--browse', '--output', 'result.txt'],
+    ]) {
+      const code = await runCli(argv, {
+        stdout: capture().stream, stderr: capture().stream,
+        readDiffInput: () => assert.fail('Invalid browsing must not read evidence'),
+      });
+      assert.equal(code, EXIT_CODES.USAGE);
+    }
+  });
+
   test('builds bounded DNS, mail, web, TLS, source, and collection panels from one retained result', () => {
     const document = lookupDocument();
     const panels = buildLookupBrowserPanels(document);
     assert.deepEqual(panels.map((panel) => panel.label), [
       'Target',
+      'Key facts',
       'Registration',
       'DNS',
       'Mail',
@@ -188,7 +241,7 @@ describe('lookup terminal evidence browser', () => {
       .filter((line) => line.endsWith(':'))
       .map((line) => line.slice(0, -1));
     const panels = buildLookupBrowserPanels(document);
-    assert.equal(terminalHeadings.length, 10);
+    assert.equal(terminalHeadings.length, 11);
     assert.deepEqual(panels.map((panel) => panel.label), terminalHeadings);
     assert.equal(panels.at(-1)?.label, 'Collection');
     const matches = findLookupBrowserMatches(panels, document.generatedAt);
@@ -227,9 +280,9 @@ describe('lookup terminal evidence browser', () => {
   test('renders a height-bounded, width-bounded view without untrusted controls', () => {
     const document = lookupDocument();
     document.query = `example.test\n${'界'.repeat(400)}`;
-    const rendered = renderLookupBrowser(document, { activeIndex: 2, width: 54, height: 12, color: false });
+    const rendered = renderLookupBrowser(document, { activeIndex: 3, width: 54, height: 12, color: false });
     assert.match(rendered, /WHOISleuth evidence browser/u);
-    assert.match(rendered, /View 3\/9/u);
+    assert.match(rendered, /View 4\/10/u);
     assert.match(rendered, /DNS:/u);
     assert.match(rendered, /Target\s+example\.test.*…/u);
     assert.match(rendered, /Mode\s+deep/u);
@@ -287,7 +340,7 @@ describe('lookup terminal evidence browser', () => {
     });
     input.emit('data', '\u001b');
     input.emit('data', '[C');
-    input.emit('data', '3');
+    input.emit('data', '4');
     output.rows = 12;
     output.emit('resize');
     input.emit('data', '\u001b');
@@ -297,7 +350,7 @@ describe('lookup terminal evidence browser', () => {
     input.emit('data', 'q');
     await browsing;
     assert.match(output.value, /\u001b\[\?1049h/u);
-    assert.match(output.value, /Registration:/u);
+    assert.match(output.value, /Key facts:/u);
     assert.match(output.value, /DNS:/u);
     assert.match(output.value, /lines 2-/u);
     assert.match(output.value, /\u001b\[\?1049l/u);
@@ -415,7 +468,7 @@ describe('lookup terminal evidence browser', () => {
     assert.match(output.value, /rdap\s+success · complete · Fixture source settled\./u);
     releaseCollection();
     await new Promise<void>((resolve) => setImmediate(resolve));
-    assert.match(output.value, /View 1\/9/u);
+    assert.match(output.value, /View 1\/10/u);
     input.emit('data', 'q');
     assert.equal((await browsing).schema, 'whoisleuth.cli.lookup');
     assert.equal(collectionCalls, 1);
@@ -562,8 +615,11 @@ describe('lookup terminal evidence browser', () => {
     input.emit('data', '?');
     input.emit('data', '/DNS\r');
     assert.match(output.value, /Match 1\//u);
+    // The first match is the DNS source label in Key facts; the next is in the DNS panel.
+    assert.match(output.value, /Key facts:/u);
+    input.emit('data', 'n');
     assert.match(output.value, /DNS:/u);
-    input.emit('data', 'nNq');
+    input.emit('data', 'Nq');
     await browsing;
   });
 

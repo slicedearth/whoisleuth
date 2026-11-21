@@ -4,7 +4,8 @@ import { BulkCaseActions, bulkCaseInput, type BulkCaseContext } from '../fronten
 import { BulkMonitorActions } from '../frontend/src/lib/controllers/bulk-monitor-actions.ts';
 import { planWatchlistUpdate } from '../packages/workspace/watchlist-store.mts';
 import { BrowserLocalDataError } from '../frontend/src/lib/browser-local-data-content.ts';
-import { createCase, type CaseRecord } from '../packages/cases/case-model.mts';
+import { createCase, openOrCreateCase, updateCase, type CaseRecord } from '../packages/cases/case-model.mts';
+import { MAX_CASE_ANALYST_CONTEXT } from '../packages/cases/case-analyst-context.mts';
 import { relationshipObservation } from '../packages/comparison/relationship-evidence.mts';
 import type { ScanResult } from '../frontend/src/lib/analysis/bulk-result-model.ts';
 import { buildBulkResultsCsv } from '../frontend/src/lib/analysis/bulk-export.ts';
@@ -24,8 +25,7 @@ function row(domain = 'candidate.example'): ScanResult {
   };
 }
 
-function harness(overrides: Partial<BulkCaseContext['api']> = {}) {
-  const record = createCase({ domain: 'candidate.example' }, '2026-01-01T00:00:00.000Z');
+function harness(overrides: Partial<BulkCaseContext['api']> = {}, record = createCase({ domain: 'candidate.example' }, '2026-01-01T00:00:00.000Z')) {
   let published: CaseRecord[] = [];
   const unexpected = async (): Promise<never> => { throw new Error('Unexpected operation'); };
   const api: BulkCaseContext['api'] = {
@@ -50,6 +50,11 @@ test('Bulk Case projection retains unknown evidence and excludes contacts', () =
   assert.equal(projected.evidence?.profileContextState, 'unavailable');
   assert.equal(projected.evidence?.profileContextLimitation, 'Unavailable context');
   assert.doesNotMatch(JSON.stringify(projected), /Private person|private@example|registrant|abuseEmail/u);
+  assert.equal(Object.hasOwn(projected, 'popularityRank'), false);
+  // A Discover popularity rank travels as analyst context beside the evidence, never inside it.
+  const ranked = bulkCaseInput({ ...row(), popularity: { rank: 42, listSha256: 'd'.repeat(64) } });
+  assert.deepEqual(ranked.popularityRank, { rank: 42, listSha256: 'd'.repeat(64) });
+  assert.doesNotMatch(JSON.stringify(ranked.evidence), /listSha256|popularity/u);
 });
 
 test('committed pruning receipts survive aggregate summaries, later rejection and refresh failure', async () => {
@@ -90,6 +95,41 @@ test('Case actions preserve the selected incident and publish the committed snap
   assert.deepEqual(h.published(), [h.record]);
   assert.match(h.actions.state.status, /change was saved, but cases could not be reread/u);
   assert.equal(h.actions.state.busy, false);
+});
+
+test('Bulk commits evidence for a full Case and reports the omitted rank in individual and batch feedback', async () => {
+  const earlier = '2026-01-01T00:00:00.000Z', observed = '2026-01-02T00:00:00.000Z';
+  let full = createCase({ domain: 'candidate.example' }, earlier);
+  for (let index = 0; index < MAX_CASE_ANALYST_CONTEXT; index++) {
+    full = updateCase([full], full.id, {
+      popularityRank: { rank: index + 1, listSha256: index.toString(16).padStart(64, '0') },
+    }, earlier).record;
+  }
+  let stored = [full];
+  const h = harness({
+    openCase: async (input, selection) => {
+      const opened = openOrCreateCase(stored, input, observed, selection);
+      stored = opened.cases;
+      return { ...opened, pruned: 0 };
+    },
+    editCase: async (id, patch) => {
+      const edited = updateCase(stored, id, patch, observed);
+      stored = edited.cases;
+      return { ...edited, pruned: 0 };
+    },
+    loadCases: async () => stored,
+  }, full);
+  const ranked = { ...row(), popularity: { rank: 42, listSha256: 'f'.repeat(64) } };
+  await h.actions.open(ranked);
+  const saved = h.published().find(record => record.id === full.id);
+  assert.equal(saved?.evidenceHistory.length, 1);
+  assert.deepEqual(saved?.analystContext, full.analystContext);
+  assert.match(h.actions.state.status, /refreshed.*rank was not saved/iu);
+
+  await h.actions.createSelected([ranked, row('another.example')]);
+  assert.match(h.actions.state.status, /2 committed.*rank was not saved/iu);
+  assert.equal(stored.length, 2);
+  assert.deepEqual(stored.find(record => record.id === full.id)?.analystContext, full.analystContext);
 });
 
 test('single-row and batch Case actions cannot overlap', async () => {

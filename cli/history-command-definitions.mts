@@ -1,22 +1,65 @@
 import { LOOKUP_EVIDENCE_SCHEMA_VERSION, V1_PUBLIC_LOOKUP_EVIDENCE_SCHEMA_VERSION } from '../packages/contracts/lookup-evidence.mts';
 import { PUBLISHED_V2_LOOKUP_EVIDENCE_VERSIONS, positional, OPTIONAL_FILE_POSITIONAL, constraint, EMPTY_CONSTRAINTS, commandSeed } from './command-definition.mts';
+import { MAX_MCP_EVIDENCE_FILES, MAX_MCP_EVIDENCE_BYTES, MAX_MCP_TOTAL_BYTES, MAX_MCP_MESSAGE_BYTES, MAX_MCP_OUTPUT_BYTES } from '../packages/contracts/local-tool-adapter.mts';
 
 export const HISTORY_COMMAND_DEFINITIONS = Object.freeze({
-  diff: commandSeed({
+  mcp: commandSeed({
     reference: {
-      description: 'Compare an earlier and later artefact from the same retained Lookup, Bulk-session, or domain-portfolio family.',
-      example: 'whoisleuth diff earlier.json later.json --json',
-      boundary: 'Comparison is offline: the left input is earlier and the right input is later. Inputs must belong to the same supported family. Saved Lookups can describe the same or different domains; same-domain comparisons preserve observation times and collection uncertainty. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.',
+      description: 'Serve minimised selected evidence to a compatible local MCP client over stdio.',
+      example: 'whoisleuth mcp --stdio --allow-model-disclosure lookup.json evidence.json',
+      boundary: 'Offline and read-only: inspect selected immutable evidence, verify artefacts, compare saved Lookups and prepare no-request collection plans. No arbitrary paths, shell commands, writes, live collection, public port or default file discovery. The connected client may send returned evidence to its model provider; acknowledge this at startup. Raw publications, contacts, page text and Case notes are not exposed. Stdout is reserved for protocol messages.',
     },
-    collection: { scope: 'Reads two compatible retained artefacts capped at 8 MiB each and retains no source paths.' },
-    summary: 'Compare two compatible retained artefacts',
-    options: ['--left-session', '--right-session', '--json', '--quiet', '--no-color'],
-    positionals: Object.freeze([positional('sources', 'file', 2, 2)]),
-    constraints: EMPTY_CONSTRAINTS,
+    collection: { scope: `Reads 1 to ${MAX_MCP_EVIDENCE_FILES} explicit files, at most ${MAX_MCP_EVIDENCE_BYTES / 1024 / 1024} MiB each and ${MAX_MCP_TOTAL_BYTES / 1024 / 1024} MiB combined. Protocol input is limited to ${MAX_MCP_MESSAGE_BYTES / 1024} KiB per message and tool output to ${MAX_MCP_OUTPUT_BYTES / 1024} KiB.` },
+    summary: 'Serve selected evidence read-only over local MCP',
+    options: ['--stdio', '--allow-model-disclosure'],
+    commonOptions: ['--help'],
+    positionals: Object.freeze([positional('sources', 'file', 1, MAX_MCP_EVIDENCE_FILES)]),
+    constraints: Object.freeze([
+      constraint({ kind: 'required', options: ['--stdio', '--allow-model-disclosure'] }),
+    ]),
+    handlerOwner: 'history', networkEffect: 'offline', common: false,
+    schemaIdentifiers: Object.freeze([]), primaryArtefacts: Object.freeze(['Minimised selected evidence']),
+    planSupport: false, additionalOutputFormats: Object.freeze([]), bootstrapProfile: 'allowed',
+  }),
+  view: commandSeed({
+    reference: {
+      description: 'Read one saved Lookup or Lookup evidence export without collecting again.',
+      example: 'whoisleuth view lookup.json --browse',
+      boundary: 'The command validates one saved Lookup or Lookup evidence export offline. Evidence exports, including browser downloads, use the same validation and summary as browser evidence replay. --browse opens the existing searchable terminal panels for a saved Lookup and reserves interactive stdin for navigation; it cannot be combined with redirected output. No file is modified and no source is contacted.',
+    },
+    collection: { scope: 'Reads one saved Lookup capped at 8 MiB or one evidence export capped at 5 MiB.' },
+    summary: 'Read a saved Lookup or evidence export offline, or browse a saved Lookup',
+    options: ['--browse', '--json', '--quiet', '--no-color'],
+    positionals: OPTIONAL_FILE_POSITIONAL,
+    constraints: Object.freeze([
+      constraint({ kind: 'excludes_all', option: '--browse', excludedOptions: ['--json', '--quiet'] }),
+    ]),
     handlerOwner: 'history',
     networkEffect: 'offline',
     common: true,
-    schemaIdentifiers: Object.freeze(['whoisleuth.cli.lookup-diff']),
+    schemaIdentifiers: Object.freeze(['whoisleuth.cli.lookup', 'whoisleuth.cli.lookup-evidence-view']),
+    primaryArtefacts: Object.freeze(['Saved Lookup', 'Lookup evidence replay']),
+    planSupport: false,
+    additionalOutputFormats: Object.freeze([]),
+    bootstrapProfile: 'allowed',
+  }),
+  diff: commandSeed({
+    reference: {
+      description: 'Compare two artefacts from the same saved Lookup, Lookup evidence export, Bulk-session, or domain-portfolio family.',
+      example: 'whoisleuth diff left.json right.json --json',
+      boundary: 'Comparison is offline, and both inputs must belong to the same supported family. Saved Lookups and Lookup evidence exports are compared as left and right in the order given; each side keeps its own observation or export time. Bulk-session and domain-portfolio exports must be given earlier first, by saved-session or review time. Saved Lookups can describe the same or different domains; --browse opens their searchable comparison panels. Same-domain comparisons preserve observation times and collection uncertainty. Two Lookup evidence exports for one target, including browser downloads, use the same validation and difference classes as browser evidence replay. For a multi-session Bulk export, --left-session selects a session from the left file and --right-session selects one from the right; missing, unavailable, equal, and different evidence remain separate states.',
+    },
+    collection: { scope: 'Reads two compatible retained artefacts capped at 8 MiB each, or 5 MiB for a Lookup evidence export, and retains no source paths.' },
+    summary: 'Compare two compatible retained artefacts',
+    options: ['--left-session', '--right-session', '--browse', '--json', '--quiet', '--no-color'],
+    positionals: Object.freeze([positional('sources', 'file', 2, 2)]),
+    constraints: Object.freeze([
+      constraint({ kind: 'excludes_all', option: '--browse', excludedOptions: ['--json', '--quiet', '--left-session', '--right-session'] }),
+    ]),
+    handlerOwner: 'history',
+    networkEffect: 'offline',
+    common: true,
+    schemaIdentifiers: Object.freeze(['whoisleuth.cli.lookup-diff', 'whoisleuth.cli.lookup-evidence-diff']),
     primaryArtefacts: Object.freeze(['Retained-evidence comparison']),
     planSupport: false,
     additionalOutputFormats: Object.freeze([]),
@@ -58,6 +101,27 @@ export const HISTORY_COMMAND_DEFINITIONS = Object.freeze({
     common: false,
     schemaIdentifiers: Object.freeze(['whoisleuth.cli.lookup-timeline']),
     primaryArtefacts: Object.freeze(['Bounded retained-observation timeline']),
+    planSupport: false,
+    additionalOutputFormats: Object.freeze([]),
+    bootstrapProfile: 'allowed',
+  }),
+  'prior-registration': commandSeed({
+    reference: {
+      description: 'Compare a domain\u2019s registration creation date with earlier certificate-log and web archive observations.',
+      example: 'whoisleuth prior-registration lookup.json --ct-results ct.json --archive-history archive.json --json',
+      boundary: 'The command is offline. It reads a saved domain Lookup or evidence export with ct-search and archive-history JSON for the same domain, and uses the same comparison as browser Bulk review and Lookup\u2019s web archive panel. An earlier observation suggests an earlier registration; it does not identify an owner, a transfer or intent, and no earlier observation does not show a first registration.',
+    },
+    collection: { scope: 'Reads one saved Lookup or evidence export capped at 8 MiB and up to two supporting results capped at 4 MiB each.' },
+    summary: 'Compare registration date with earlier observations',
+    options: ['--ct-results', '--archive-history', '--json', '--quiet', '--no-color'],
+    positionals: OPTIONAL_FILE_POSITIONAL,
+    // At least one supporting result is required; the runner reports a missing pair as a usage error.
+    constraints: EMPTY_CONSTRAINTS,
+    handlerOwner: 'history',
+    networkEffect: 'offline',
+    common: false,
+    schemaIdentifiers: Object.freeze(['whoisleuth.cli.prior-registration']),
+    primaryArtefacts: Object.freeze(['Prior registration review']),
     planSupport: false,
     additionalOutputFormats: Object.freeze([]),
     bootstrapProfile: 'allowed',

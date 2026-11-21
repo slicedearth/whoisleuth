@@ -61,8 +61,8 @@
   <button type="button" class="btn" onclick={() => clear()}>Clear comparison</button>
   <CaseHandoffComparisonView comparison={result} />
   <details><summary>Formats and comparison scope</summary>
-    <p>Ordinary single-Case exports with schemas {CLI_CASE_PACK_INPUT_CASE_VERSIONS.join(', ')} and response packets with schemas {SUPPORTED_CASE_RESPONSE_PACKET_VERSIONS.join(', ')} are supported. Both selections must be the same kind of file. Packet structure, reviewed-input binding and integrity are checked before comparison; older packets without a reviewed-input binding keep their original contract. CLI packs and encrypted containers are not accepted here. Use the separate package review to unlock a handoff and deliberately select its exported JSON.</p>
-    <p>Records align only by exact IDs. Shared-record order changes are shown separately; other arrays compare as complete values. All selected fields participate, including recipient routes, limitations and scope. Packet generation times, authorisations and integrity blocks describe that packet, not new evidence, submission, acceptance or permission to act. File digests do not authenticate a reviewer. This view adds no import permission and has no download action.</p>
+    <p>Choose two ordinary single-Case exports (schemas {CLI_CASE_PACK_INPUT_CASE_VERSIONS.join(', ')}) or two response packets (schemas {SUPPORTED_CASE_RESPONSE_PACKET_VERSIONS.join(', ')}). Packet structure, reviewed-input binding and integrity are checked first. CLI packs and encrypted containers are not accepted; unlock them in package review and select the exported JSON.</p>
+    <p>Records are matched by exact ID, and every selected field is compared, including recipient routes, limitations and scope. Order changes in shared records are shown separately. Packet times, authorisations and integrity blocks describe the packet itself, not new evidence or permission to act. This view is read-only.</p>
     <p>Copies remain in page memory until replaced, cleared, this comparison is closed or the Case is left. These full private exports can contain notes, filenames and response details.</p>
   </details>
 </section>

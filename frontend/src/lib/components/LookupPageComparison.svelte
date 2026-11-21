@@ -40,12 +40,12 @@
         </article>
       {/each}
     </div>
-    <p class="callout warn page-comparison-note">Each component stands on its own and there is no overall page-similarity score. Page-identity matches remain review context and do not add Risk points; separately reviewed favicon and official-asset observations may contribute under their own bounded rules. Shared templates, providers, libraries, or analytics can produce matches, which do not prove common ownership, copying, intent, or maliciousness.</p>
+    <p class="callout warn page-comparison-note">Each component is compared on its own; there is no overall page-similarity score. Matches do not add Risk points; favicon and official-asset checks are scored separately. Shared templates, providers or analytics often cause matches.</p>
   </section>
 {:else if unavailable}
   <section class="page-comparison unavailable-comparison evidence-card card" aria-labelledby="page-comparison-title">
     <header class="section-head"><div><p class="eyebrow">Active Brand Profile</p><h4 id="page-comparison-title">Official-site comparison</h4></div><span class="partial">Unavailable</span></header>
-    <p class="card-note">No current compatible page fingerprint was captured, so the saved official-site baseline cannot be compared with this result. This does not indicate that the pages differ.</p>
+    <p class="card-note">No compatible page fingerprint was captured, so this result cannot be compared with the saved official-site baseline.</p>
   </section>
 {/if}
 

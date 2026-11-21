@@ -11,6 +11,7 @@
   import type { CampaignRecord } from '#lib/campaigns.ts';
   import type { CommonInfrastructureSnapshot } from '#lib/analysis/common-infrastructure.ts';
   import InfrastructureEditionPicker from './InfrastructureEditionPicker.svelte';
+  import SelectedServiceContext from './SelectedServiceContext.svelte';
 
   let {
     campaign,
@@ -108,6 +109,7 @@
   <p class="qualification">Choose a Brand Profile explicitly linked by these Cases to review their retained cross-case rationale. Campaign membership stays unchanged; no new request is made.</p>
   {#key campaign.id}
     <InfrastructureEditionPicker edition={infrastructureEdition} onchange={(edition) => { infrastructureEdition = edition; }} />
+    <SelectedServiceContext targets={campaign.domains} />
   {/key}
 
   {#if review.sources.cases === 'loading'}

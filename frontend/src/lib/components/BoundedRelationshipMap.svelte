@@ -165,7 +165,7 @@
         {#each graph.nodes.filter((node) => node.kind === 'target') as node (node.id)}
           <circle cx={node.x} cy={node.y} r="96" class="focus-halo"></circle>
         {/each}
-        <g class="links">
+        <g class="links chart-fade">
           {#each graph.links as link (link.id)}
             <path
               d={linkPath(link)}
@@ -176,6 +176,10 @@
               class:muted={linkIsMuted(link)}
               marker-end={directed ? `url(#${markerId})` : undefined}
             ><title>{link.detail || link.kind}</title></path>
+            {#if directed && filtersActive && link.kind === 'observed' && !linkIsMuted(link)}
+              <!-- Direction cue only on solid observed links; dashed states keep their own meaning. -->
+              <path d={linkPath(link)} class="link-flow chart-flow"></path>
+            {/if}
             <circle
               cx={link.targetX}
               cy={link.targetY}
@@ -188,13 +192,14 @@
             ></circle>
           {/each}
         </g>
-        <g class="nodes">
+        <g class="nodes chart-fade" style="--chart-index:3">
           {#each graph.nodes as node (node.id)}
             <g
               transform={`translate(${node.x} ${node.y})`}
               class={`node kind-${node.kind} cluster-${node.clusterIndex}`}
               class:muted={nodeIsMuted(node)}
             >
+              {#if selectedGroup && node.kind !== 'target' && !nodeIsMuted(node)}<circle class="node-halo" r="30"></circle>{/if}
               {#if node.kind === 'target'}
                 <rect
                   class="node-shape target-shape"
@@ -301,6 +306,10 @@
   .links path.derived{stroke:color-mix(in srgb,var(--accent) 56%,var(--border));stroke-dasharray:7 4}
   .links path.summary{stroke-dasharray:2 4}
   .links path.muted,.links circle.muted{opacity:.1}
+  .links :is(path,circle),.node{transition:opacity .2s var(--ease-out)}
+  .links .link-flow{stroke:var(--accent);stroke-width:1.6;opacity:.75}
+  .node-halo{fill:color-mix(in srgb,var(--cluster-tone) 10%,transparent);stroke:color-mix(in srgb,var(--cluster-tone) 30%,transparent);stroke-width:1;pointer-events:none}
+  @media (prefers-reduced-motion: reduce){.links :is(path,circle),.node{transition:none}}
   .links circle{fill:color-mix(in srgb,var(--muted) 64%,transparent)}
   .links circle.partial,.links circle.unknown,.links circle.derived,.links circle.summary{fill:var(--panel-raised);stroke:color-mix(in srgb,var(--muted) 64%,transparent);stroke-width:1}
   .node{--cluster-tone:var(--accent)}

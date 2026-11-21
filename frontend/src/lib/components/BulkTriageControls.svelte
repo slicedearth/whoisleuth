@@ -229,7 +229,7 @@
   .filters span{color:var(--muted);font-weight:400}
   .filters .active span{color:inherit}
   .indicator-format{display:flex;min-width:0;align-items:center;gap:6px;padding:0 4px 0 10px;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--muted);font:600 var(--text-2xs) var(--mono)}
-  .indicator-format select{min-width:0;min-height:32px;border:0;background:var(--panel-raised);font-size:var(--text-2xs)}
+  .indicator-format select{min-width:0;min-height:32px;border:0;background-color:var(--panel-raised);font-size:var(--text-2xs)}
   .indicator-status{color:var(--amber)!important}
   .risk-comparability-note{margin:10px 0 0;padding:9px 10px;border-left:3px solid var(--muted);background:color-mix(in srgb,var(--muted) 5%,transparent);line-height:1.5}
   .risk-comparability-note strong{color:var(--text)}

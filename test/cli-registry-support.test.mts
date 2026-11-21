@@ -157,6 +157,9 @@ describe('registry-support runner', () => {
     assert.match(stdout.value(), /does not test current live reachability/);
     assert.match(stdout.value(), /not evidence that the domain is unregistered/);
     assert.doesNotMatch(stdout.value(), /Domain is (?:unregistered|safe)/);
+    // Terminal terms match the browser catalogue, and encoding names keep their spelling.
+    assert.match(stdout.value(), /^Test scenarios /mu);
+    assert.doesNotMatch(stdout.value(), /Fixture states|Verified by|Utf 8/u);
   });
 
   test('renders registry-policy restrictions from the actual catalogue', async () => {

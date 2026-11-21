@@ -476,8 +476,7 @@
                 </div>
               {:else}
                 <p class="field-note"
-                  >No normalised fact is currently available to retain. This does not imply that
-                  evidence is absent.</p
+                  >No normalised fact is available to retain yet.</p
                 >
               {/if}
             </details>
@@ -617,9 +616,12 @@
           <strong>{abuseRecipientKindLabel(route.kind)}</strong>
           <span>{route.contact}</span>
           <p><b>{route.channel}</b> · source: {route.source}</p>
-          {#if route.limitations.length}<ul
-              >{#each route.limitations as limitation}<li>{limitation}</li>{/each}</ul
-            >{/if}
+          {#if route.limitations.length}
+            <details class="route-notes">
+              <summary>Source scope and limits</summary>
+              <ul>{#each route.limitations as limitation}<li>{limitation}</li>{/each}</ul>
+            </details>
+          {/if}
           {#if route.officialSourceUrl}<p class="route-source"
               ><a href={route.officialSourceUrl} target="_blank" rel="noreferrer"
                 >Review the official route source <IntelligenceIcon name="arrow-up-right" size={16} /></a
@@ -995,6 +997,8 @@
     font-size: var(--text-2xs);
     line-height: 1.45;
   }
+  .route-notes { margin-top: 8px; }
+  .route-notes > summary { cursor: pointer; color: var(--muted); font: 650 var(--text-2xs) var(--mono); }
   .coverage {
     margin-top: 10px;
     border: 1px solid var(--border);

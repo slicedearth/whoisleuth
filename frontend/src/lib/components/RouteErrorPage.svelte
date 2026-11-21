@@ -8,7 +8,7 @@
 </script>
 
 <svelte:head>
-  <title>{missing ? 'Page not found' : 'Page unavailable'} — WHOISleuth</title>
+  <title>{missing ? 'Page not found' : 'Page unavailable'} | WHOISleuth</title>
   <meta name="robots" content="noindex, nofollow" />
 </svelte:head>
 
@@ -32,7 +32,7 @@
   header{padding:20px 0;border-bottom:1px solid var(--border)}
   .brand{display:inline-flex;align-items:center;gap:12px;min-height:44px;color:var(--text);text-decoration:none}
   .mark{width:36px;height:36px;flex:none}
-  main{flex:1;padding:clamp(40px,8vh,100px) 0;max-width:720px}
+  main{flex:1;padding:clamp(40px,8vh,100px) 0 0;max-width:720px}
   .status{font:700 var(--text-sm) var(--mono);color:var(--interface-accent);margin:0 0 16px}
   h1{font-size:clamp(2rem,5vw,3rem);line-height:1.15;margin:0 0 20px;overflow-wrap:anywhere}
   main>p:not(.status){color:var(--muted);line-height:1.7;max-width:56ch}

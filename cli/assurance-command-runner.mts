@@ -1,4 +1,6 @@
 import { Buffer } from 'node:buffer';
+import { convertReconJsonl } from '../packages/interchange/recon-jsonl-import.mts';
+import { MAX_EXTERNAL_FINDINGS_IMPORT_BYTES } from '../packages/interchange/external-findings-import.mts';
 import { readBoundedRegularFile } from '../lib/bounded-file.mts';
 import { buildInvestigationPackage } from '../packages/investigation/investigation-package.mts';
 import { encryptInvestigationPackage } from '../packages/investigation/investigation-package-crypto.mts';
@@ -158,6 +160,7 @@ async function runObservationBridgeCommand(
   context: CliCommandContext,
 ): Promise<number> {
   const mapping = args.action === 'map-observations';
+  const reconFormat = args.action === 'map-observations' && args.inputFormat !== 'mapping' ? args.inputFormat : undefined;
   context.setFailureLabel(mapping ? 'External observation mapping' : 'Open Asset Model export');
   let input: string;
   try {
@@ -165,14 +168,23 @@ async function runObservationBridgeCommand(
       ? await dependencies.readArtifactInput(args.source)
       : await context.readInput(
         args.source,
-        MAX_EXTERNAL_OBSERVATION_MAPPING_BYTES,
+        reconFormat ? MAX_EXTERNAL_FINDINGS_IMPORT_BYTES : MAX_EXTERNAL_OBSERVATION_MAPPING_BYTES,
         mapping ? 'External observation mapping input' : 'Open Asset Model bridge input',
       );
   } catch (error) {
     if (error instanceof CliUsageError) throw error;
     throw new CliUsageError(`Could not read ${mapping ? 'observation mapping' : 'asset bridge'} input: ${boundedCliErrorMessage(error, 'Input could not be read')}`);
   }
-  if (!input.trim()) throw new CliUsageError(`${args.action} requires one versioned JSON file or a document on stdin.`);
+  if (!input.trim()) throw new CliUsageError(`${args.action} requires one non-empty input file or document on stdin.`);
+  if (reconFormat) {
+    let report;
+    try { report = convertReconJsonl(input, reconFormat); }
+    catch (error) { throw new CliUsageError(boundedCliErrorMessage(error, 'Reconnaissance input is invalid')); }
+    if (!args.quiet) context.writeStdout(args.output === 'json' ? formatJsonDocument(report.document)
+      : context.terminal(formatExternalObservationMapping(report.document), args.color));
+    context.writeStderr(`Imported preview: ${report.accepted} findings from ${report.inputRows} rows; ${report.rejected} rejected, ${report.duplicates} duplicates, retained limits ${report.truncated ? 'reached' : 'not reached'}. No Case was changed.\n`);
+    return report.rejected || report.truncated ? EXIT_CODES.PARTIAL_FAILURE : EXIT_CODES.SUCCESS;
+  }
   let parsed: unknown;
   try {
     scanBoundedJson(input);

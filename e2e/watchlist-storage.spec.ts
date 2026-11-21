@@ -1,7 +1,8 @@
 import { openConsoleView } from './console-navigation';
+import { captureVisualEvidenceEnabled } from '../tools/playwright-execution-contract.mts';
 import { readFileSync } from 'node:fs';
 import { expect, test } from './fixtures';
-import { currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, failNextBrowserLocalCollectionReadAfterWrite, readBrowserLocalCollection } from './helpers';
+import { currentBrowserLocalDocument, expectNoHorizontalOverflow, failBrowserLocalManifestWrites, failNextBrowserLocalCollectionReadAfterWrite, readBrowserLocalCollection, useTheme } from './helpers';
 import { appendWatchlistScan } from '../packages/workspace/watchlist-history.mts';
 import { WATCHLIST_SCHEMA_VERSION } from '../packages/contracts/workspace-portability.mts';
 import { watchlistV5Boundary } from '../test/helpers/watchlist-v5-boundary.mts';
@@ -70,6 +71,52 @@ test('incomplete web collection is visible while a usable Watchlist baseline sur
   expect(stored.records[0]!.value.results[0]!.riskScore).toBe(10);
   await page.setViewportSize({ width: 320, height: 700 });
   await expectNoHorizontalOverflow(page);
+});
+
+test('watchlist workload preview separates purpose and cadence without collecting or changing saved state', async ({ page }, testInfo) => {
+  await page.clock.setFixedTime(new Date(NOW));
+  let requests = 0;
+  await page.route('**/api/lookup?*', () => { requests++; throw new Error('Planning must not collect'); });
+  await seed(page, { Example: entry('example.test') });
+  const original = await readBrowserLocalCollection(page, 'watchlists', { minimumRecords: 1 });
+  await page.getByRole('row', { name: /Example/u }).getByRole('button', { name: 'History', exact: true }).click();
+  const plan = page.locator('.monitoring-plan');
+  await plan.locator(':scope > summary').click();
+  await expect(plan.locator('dd').nth(0)).toHaveText('1');
+  await expect(plan.locator('dd').nth(1)).toHaveText('7');
+  await plan.getByRole('combobox', { name: 'Collection purpose', exact: true }).selectOption('configuration');
+  await plan.getByRole('combobox', { name: 'Check interval', exact: true }).selectOption('6');
+  await expect(plan.locator('dd').nth(1)).toHaveText('28');
+  await plan.getByText('Targets and execution requirements', { exact: true }).click();
+  await expect(plan).toContainText('example.test');
+  await expect(plan).toContainText('Deep collection is not available in hosted monitoring');
+  await plan.getByText('Per-domain collection settings', { exact: true }).click();
+  await plan.getByRole('combobox', { name: 'Domain collection purpose', exact: true }).selectOption('registration');
+  await plan.getByRole('combobox', { name: 'Domain check interval', exact: true }).selectOption('24');
+  await plan.getByRole('combobox', { name: 'Domain review priority', exact: true }).selectOption('p1');
+  await expect(plan.locator('dd').nth(1)).toHaveText('7');
+  await expect(plan.getByRole('combobox', { name: 'Collection purpose', exact: true })).toHaveValue('configuration');
+  const downloaded = page.waitForEvent('download');
+  await plan.getByRole('button', { name: 'Download local monitoring plan', exact: true }).click();
+  const stream = await (await downloaded).createReadStream();
+  if (!stream) throw new Error('The selected local plan download was unavailable.');
+  const chunks: Buffer[] = []; for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+  const selection = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  expect(selection.targetPolicies).toEqual([{ domain: 'example.test', purpose: 'registration', intervalHours: 24, priority: 'p1' }]);
+  for (const theme of ['light', 'dark'] as const) {
+    await useTheme(page, theme);
+    for (const width of [320, 390, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(plan.getByRole('combobox', { name: 'Collection purpose', exact: true })).toBeVisible();
+      await expectNoHorizontalOverflow(page);
+      if (captureVisualEvidenceEnabled()) {
+        await plan.evaluate(element => window.scrollTo({ top: window.scrollY + element.getBoundingClientRect().top - 140, behavior: 'instant' }));
+        await page.screenshot({ path: testInfo.outputPath(`monitoring-plan-${theme}-${width}.png`) });
+      }
+    }
+  }
+  expect((await readBrowserLocalCollection(page, 'watchlists')).records).toEqual(original.records);
+  expect(requests).toBe(0);
 });
 
 test('unknown Watchlist times remain visible and portable without invented dates', async ({ page }) => {

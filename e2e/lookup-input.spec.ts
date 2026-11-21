@@ -71,7 +71,7 @@ test('ordinary URL lookup sends only its full hostname and rejects credentials b
   await page.locator('.task-guidance').getByLabel('Analyst question').selectOption('general');
   await query.fill('https://portal.example.test:8443/private-path?private-query=present#private-fragment');
   await submit.click();
-  await expect(page.getByRole('heading', { name: 'registered', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Registered', exact: true })).toBeVisible();
   await expect(submit).toBeEnabled();
   expect(requests).toHaveLength(1);
   expect(new URL(requests[0]!).searchParams.get('q')).toBe('portal.example.test');
@@ -288,9 +288,13 @@ test('deep lookup reports pending elapsed time and final source settle timing', 
   await expect(pending).toContainText('Only the final validated response can be retained.');
   await expect(page.getByRole('region', { name: 'Lookup source progress' })).toContainText('Waiting for source updates');
   await expect(page.getByRole('button', { name: 'Cancel lookup' })).toBeVisible();
+  const skeleton = page.getByTestId('lookup-result-skeleton');
+  await expect(skeleton).toBeVisible();
+  await expect(skeleton).toHaveAttribute('aria-hidden', 'true');
   releaseLookup?.();
 
   await expect(page.getByRole('heading', { name: 'registered' })).toBeVisible();
+  await expect(skeleton).toHaveCount(0);
   await page.getByRole('button', { name: 'Expand details: Source quality evidence' }).click();
   const coverage = page.getByRole('region', { name: 'Evidence coverage' });
   await expect(coverage).toBeVisible();
@@ -707,8 +711,8 @@ test('a completed Case action cannot publish beneath a replacement Lookup', asyn
 
 test('a delayed replay comparison cannot rebind to a replacement primary capture', async ({ page }, testInfo) => {
   const replay = page.locator('details.replay');
-  await replay.locator('summary').focus();
-  await replay.locator('summary').press('Enter');
+  await replay.locator(':scope > summary').focus();
+  await replay.locator(':scope > summary').press('Enter');
   if (captureVisualEvidenceEnabled()) {
     for (const theme of ['dark', 'light'] as const) {
       await useTheme(page, theme);
@@ -740,13 +744,14 @@ test('a delayed replay comparison cannot rebind to a replacement primary capture
       });
     };
   });
-  await replay.locator('input[type="file"]').last().setInputFiles({
+  const comparisonInput = replay.getByRole('region', { name: 'Compare another capture', exact: true }).locator('input[type="file"]');
+  await comparisonInput.setInputFiles({
     name: 'comparison-b.json',
     mimeType: 'application/json',
     buffer: Buffer.from(replayEvidence('primary-a.example.test', 'Registrar B')),
   });
   await expect(replay.getByText('Reading second evidence…', { exact: true })).toBeVisible();
-  await replay.locator('input[type="file"]').last().evaluate((control) => {
+  await comparisonInput.evaluate((control) => {
     if (!(control instanceof HTMLInputElement) || !control.value) throw new Error('The held comparison input must retain its selection.');
     Reflect.set(window, '__heldComparisonControl', control);
   });
@@ -948,7 +953,7 @@ test('does not show a saved Fast result after a same-domain Deep handoff', async
   await page.getByLabel('Scan mode').selectOption('deep');
   await page.getByRole('button', { name: 'Scan 1 domain' }).click();
   await expect(page.locator('.results-table tbody tr')).toHaveCount(1);
-  await page.getByRole('button', { name: 'Inspect', exact: true }).click();
+  await page.getByRole('button', { name: `Inspect ${domain}`, exact: true }).click();
 
   await expect(page.locator('#query')).toHaveValue(domain);
   await expect(page.getByRole('radio', { name: /Deep/u })).toBeChecked();

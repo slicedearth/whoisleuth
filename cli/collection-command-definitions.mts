@@ -214,11 +214,11 @@ export const COLLECTION_COMMAND_DEFINITIONS = Object.freeze({
         'Generate bounded lookalike-domain candidates from a brand or registrable domain, including multi-part public suffixes.',
       example: 'whoisleuth discover example.test --preset common --jsonl',
       boundary:
-        'Generation and optional local snapshot comparison are offline. Candidates are leads only and are not resolved, registered, or classified as malicious.',
+        'Generation, optional local snapshot comparison and an optional selected popularity list are offline. Candidates are leads only and are not resolved, registered, or classified as malicious; a popularity rank does not make a candidate safe or connected to the brand.',
     },
     collection: {
       scope:
-        'Generates a bounded candidate set from local rules, dictionaries, and optional saved snapshots.',
+        'Generates a bounded candidate set from local rules, dictionaries, optional saved snapshots and an optional ranked domain list of up to 32 MiB.',
     },
     summary: 'Generate lookalike candidates offline',
     options: [
@@ -228,6 +228,7 @@ export const COLLECTION_COMMAND_DEFINITIONS = Object.freeze({
       '--keyboard',
       '--dictionary',
       '--snapshot',
+      '--popularity-list',
       '--json',
       '--jsonl',
       '--domains',

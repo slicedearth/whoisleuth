@@ -223,6 +223,9 @@ function formatCases(cases: readonly CaseRecord[], digest: string): string {
       for (const event of action.history) lines.push(`  Event ${event.occurredAt} · ${event.sourceClass} · ${event.nextState}${event.objectOutcome ? ` · reported ${event.objectOutcome}` : ''}`,
         `    Scope: ${event.responseObjects?.map(object => `${object.kind}: ${safeTerminalValue(object.identifier)}`).join('; ') || 'unknown binding'}`);
     }
+    for (const entry of record.analystContext ?? []) {
+      lines.push(`Analyst context ${entry.recordedAt} · ranked #${entry.rank} in a selected popularity list · sha256:${entry.listSha256}`);
+    }
     for (const review of record.observedEffects.reviews) lines.push(`Recheck ${safeTerminalValue(review.observedAt, 'time unavailable')} · ${review.state} · ${review.completeness} · ${safeTerminalValue(review.source)}`,
       `  Object: ${review.responseObject ? `${review.responseObject.kind}: ${safeTerminalValue(review.responseObject.identifier)}` : 'unknown binding'}${review.objectOutcome ? ` · observed ${review.objectOutcome}` : ''}`);
     lines.push(`Other retained records: ${record.evidenceHistory.length} snapshots, ${record.actions.length} actions, ${record.assertions.length} assertions, ${record.attachments?.length ?? 0} file references.`, '');

@@ -3,6 +3,7 @@ import { canReadInteractiveLine, type TerminalInput as LookupBrowserInput } from
 
 import type { LookupSourceSettlement } from '../lib/lookup.mts';
 import type { UnknownRecord } from './saved-lookup.mts';
+import type { CliLookupDiffDocument } from './lookup-diff.mts';
 import { safeTerminalValue } from './formatters/terminal.mts';
 import {
   terminalPresentation,
@@ -21,6 +22,7 @@ import {
   buildLookupBrowserHelpFrame,
   buildLookupBrowserFrame,
   buildLookupBrowserPanels,
+  buildLookupDiffBrowserPanels,
   buildLookupBrowserSearchFrame,
   buildLookupCollectionFrame,
   findLookupBrowserMatches,
@@ -80,6 +82,7 @@ function canBrowseLookup(
 
 type InternalLookupBrowserOptions = LookupBrowserOptions & Readonly<{
   document?: UnknownRecord;
+  panels?: readonly LookupBrowserPanel[];
   query?: string;
   mode?: 'fast' | 'deep';
   plannedSources?: readonly string[];
@@ -119,7 +122,7 @@ function runLookupBrowserSession(options: InternalLookupBrowserOptions): Promise
   const settledSourceIds = new Set<string>();
   let document: UnknownRecord | null = options.document || null;
   let collecting = document === null;
-  let panels = document ? buildLookupBrowserPanels(document) : [];
+  let panels = document ? [...(options.panels || buildLookupBrowserPanels(document))] : [];
   let activeIndex = 0;
   let scrollOffset = 0;
   let maximumScrollOffset = 0;
@@ -175,6 +178,7 @@ function runLookupBrowserSession(options: InternalLookupBrowserOptions): Promise
             : `No matches · ${safeTerminalValue(searchQuery, 'search')}`
           : undefined;
         const frame = buildLookupBrowserFrame(document, {
+          panels,
           activeIndex,
           scrollOffset,
           ...geometry,
@@ -555,6 +559,14 @@ function browseLookupDocument(document: UnknownRecord, options: LookupBrowserOpt
   return runLookupBrowserSession({ ...options, document }).then(() => undefined);
 }
 
+function browseLookupComparison(document: CliLookupDiffDocument, options: LookupBrowserOptions): Promise<void> {
+  return runLookupBrowserSession({
+    ...options,
+    document: { query: `${document.left.domain} ↔ ${document.right.domain}`, mode: 'offline comparison' },
+    panels: buildLookupDiffBrowserPanels(document),
+  }).then(() => undefined);
+}
+
 function browseLookupOperation(options: LookupBrowserOperationOptions): Promise<UnknownRecord> {
   return runLookupBrowserSession(options);
 }
@@ -567,10 +579,12 @@ export {
   MAX_LOOKUP_BROWSER_SEARCH_SCALARS,
   browseLookupOperation,
   browseLookupDocument,
+  browseLookupComparison,
   boundedSearchText,
   buildLookupBrowserHelpFrame,
   buildLookupBrowserFrame,
   buildLookupBrowserPanels,
+  buildLookupDiffBrowserPanels,
   buildLookupBrowserSearchFrame,
   buildLookupCollectionFrame,
   canBrowseLookup,

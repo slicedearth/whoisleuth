@@ -3,6 +3,11 @@ import { MESSAGE_INTAKE_KINDS, MESSAGE_INTAKE_SCHEMA } from '../packages/contrac
 import { IDENTITY_EVENTS_INPUT_SCHEMA } from '../packages/contracts/identity-events.mts';
 import { CONTEXT_INPUT_SCHEMAS, CONTEXT_REVIEW_SCHEMA } from '../packages/contracts/context-review.mts';
 import { CASE_CONTAINMENT_INPUT_SCHEMA, CASE_CONTAINMENT_HANDOFF_SCHEMA } from '../packages/cases/case-containment-handoff.mts';
+import { BIMI_CERTIFICATE_INPUT_SCHEMA, BIMI_CERTIFICATE_REVIEW_SCHEMA } from '../packages/contracts/bimi-certificate.mts';
+import { CT_INCLUSION_INPUT_SCHEMA, CT_INCLUSION_REVIEW_SCHEMA } from '../packages/contracts/ct-inclusion-proof.mts';
+import { TIMESTAMP_TOKEN_INPUT_SCHEMA, TIMESTAMP_TOKEN_REVIEW_SCHEMA } from '../packages/contracts/timestamp-token.mts';
+import { MONITORING_PLAN_INPUT_SCHEMA, MONITORING_PLAN_SCHEMA } from '../packages/contracts/monitoring-plan.mts';
+import { SELECTED_SERVICE_CONTEXT_INPUT_SCHEMA, SELECTED_SERVICE_CONTEXT_SCHEMA } from '../packages/contracts/selected-service-context.mts';
 import { INTAKE_CONTEXT_SCHEMA } from '../packages/investigation/intake-context.mts';
 import { MANAGED_INDICATOR_SET_SCHEMA, MAX_MANAGED_INDICATOR_SET_BYTES, MAX_MANAGED_INDICATOR_PLAN_BYTES } from '../packages/contracts/analyst-interchange.mts';
 import { CLI_CASE_OPERATIONS, CLI_INDICATOR_OPERATIONS, positional, OPTIONAL_FILE_POSITIONAL, constraint, EMPTY_CONSTRAINTS, commandSeed } from './command-definition.mts';
@@ -159,11 +164,11 @@ export const REVIEW_COMMAND_DEFINITIONS = Object.freeze({
     reference: {
       description: 'Review selected messages, indicators, document links, QR destinations, HTTP archives or identity events locally. Plain text offers phone candidates; --intake-context adds explicit selections and source declarations.',
       example: 'whoisleuth intake email message.eml --json',
-      boundary: 'Offline only: no destination, embedded command, phone number or QR payload is opened, contacted or executed. Output omits original bodies, subjects, address local parts, URL paths, queries and fragments. Literal IPs and labelled hashes are bounded text observations, not lookup targets or verdicts; headers, URL contents, QR, HAR and identity-event fields are not scanned for them. Plain-text phone discovery writes only counts, source digest, ranges and status to stderr; --quiet suppresses it. Optional --intake-context reads one separate file up to 8 KiB, not stdin. Version 1 carries distribution declarations; version 2 can also bind explicit phone selections and a supplied destination pair to the exact input digest. Selected phone strings and source declarations enter output; unselected candidates and exact private URLs do not. Authentication headers remain attributed claims. Selected PDF and DOCX review retains part identities and extraction coverage; embedded raster QR support does not imply complete rendered-page review. HAR retains minimised request order and timings, never replay authority, headers, cookies or bodies. Use --strict-exit to return 4 for partial coverage.',
+      boundary: 'Offline only: no destination, embedded command, phone number or QR payload is opened, contacted or executed. Output omits original bodies, subjects, address local parts, URL paths, queries and fragments. Literal IPs and labelled hashes are bounded text observations, not lookup targets or verdicts; headers, URL contents, QR, HAR and identity-event fields are not scanned for them. Plain-text phone discovery writes only counts, source digest, ranges and status to stderr; --quiet suppresses it. Optional --intake-context reads one separate file up to 8 KiB, not stdin. Version 1 carries distribution declarations; version 2 can also bind explicit phone selections and a supplied destination pair to the exact input digest. Selected phone strings and source declarations enter output; unselected candidates and exact private URLs do not. Authentication headers remain attributed claims. Selected PDF and DOCX review retains part identities and extraction coverage; embedded raster QR support does not imply complete rendered-page review. HAR retains minimised request order and timings, never replay authority, headers, cookies or bodies; when no document request is recorded, --page-origin selects one recorded origin as the page for the terminal host summary, labelled as your selection. Use --strict-exit to return 4 for partial coverage.',
     },
     collection: { scope: 'Reads one selected text, MIME email, calendar, PNG, PDF, DOCX, HAR or identity-event JSON file and, only with --intake-context, one bounded declaration/selection file. No collection or automatic case write.' },
     summary: 'Review selected files and identity events offline',
-    options: ['--json', '--reported-action', '--trusted-auth-header', '--intake-context', '--strict-exit', '--quiet', '--no-color'],
+    options: ['--json', '--reported-action', '--trusted-auth-header', '--intake-context', '--page-origin', '--strict-exit', '--quiet', '--no-color'],
     positionals: Object.freeze([positional('kind', 'enum', 1, 1, MESSAGE_INTAKE_KINDS), positional('source', 'file', 0, 1, [], 'argv_or_stdin')]),
     constraints: EMPTY_CONSTRAINTS, handlerOwner: 'review', networkEffect: 'offline', common: true,
     schemaIdentifiers: Object.freeze([MESSAGE_INTAKE_SCHEMA, INTAKE_CONTEXT_SCHEMA, IDENTITY_EVENTS_INPUT_SCHEMA]), primaryArtefacts: Object.freeze([]),
@@ -171,13 +176,13 @@ export const REVIEW_COMMAND_DEFINITIONS = Object.freeze({
   }),
   "review-evidence": commandSeed({
     reference: {
-      description: 'Review versioned protocol evidence, source-qualified infrastructure snapshots/comparisons, incident sequences, domain history, platform objects, storefronts, connector configuration or an explicitly selected internal containment handoff offline.',
+      description: 'Review supplied protocol evidence, certificate-log inclusion proofs, timestamp tokens, BIMI certificate/logo material, selected warning lists, monitoring workload plans, infrastructure snapshots/comparisons, incident sequences, domain history, platform objects, storefronts, connector configuration or an explicitly selected internal containment handoff offline. Use --assist-proof ct or --assist-proof timestamp for guided selection of raw local proof files instead of preparing JSON; prompts use stderr and require a terminal.',
       example: 'whoisleuth review-evidence domain-change.json --json --strict-exit',
       boundary: 'The command reads only the supplied document and, with --mmdb, one explicitly selected local database up to 512 MiB. MMDB parsing and lookup run in one disposable worker with a ten-second processing deadline and an 8 KiB result limit. Version-2 MMDB queries require a justified age policy; unavailable or partial current reviews return 4 under --strict-exit. Historical version-1 MMDB queries preserve their output without freshness admission. Domain-history v2 accepts explicit source-linked registration boundaries; v1 retains its original semantics. Internal containment selects retained next-step assertions and supporting pins after explicit audience-disclosure review; it does not change their state or execute controls. No database is bundled, downloaded, updated or transmitted. It performs no DNS, RDAP, BGP, GeoIP-provider, TLS, HTTP, certificate-authority, or SMTP request.',
     },
     collection: { scope: 'Reads one bounded versioned evidence or request-planning document and, only with --mmdb, one selected bounded local database. Performs no collection.' },
     summary: 'Review supplied evidence offline',
-    options: ['--mmdb', '--json', '--strict-exit', '--quiet', '--no-color'],
+    options: ['--assist-proof', '--mmdb', '--json', '--strict-exit', '--quiet', '--no-color'],
     positionals: OPTIONAL_FILE_POSITIONAL,
     constraints: EMPTY_CONSTRAINTS,
     handlerOwner: 'review',
@@ -189,6 +194,16 @@ export const REVIEW_COMMAND_DEFINITIONS = Object.freeze({
     CASE_CONTAINMENT_HANDOFF_SCHEMA,
     ...CONTEXT_INPUT_SCHEMAS,
     'whoisleuth.cli.offline-evidence-review',
+    BIMI_CERTIFICATE_INPUT_SCHEMA,
+    BIMI_CERTIFICATE_REVIEW_SCHEMA,
+    CT_INCLUSION_INPUT_SCHEMA,
+    CT_INCLUSION_REVIEW_SCHEMA,
+    TIMESTAMP_TOKEN_INPUT_SCHEMA,
+    TIMESTAMP_TOKEN_REVIEW_SCHEMA,
+    MONITORING_PLAN_INPUT_SCHEMA,
+    MONITORING_PLAN_SCHEMA,
+    SELECTED_SERVICE_CONTEXT_INPUT_SCHEMA,
+    SELECTED_SERVICE_CONTEXT_SCHEMA,
     'whoisleuth.rdap-search-input',
     'whoisleuth.dnssec-evidence-input',
     'whoisleuth.tlsa-evidence-input',

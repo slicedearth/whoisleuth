@@ -33,12 +33,12 @@ export const PUBLIC_COVERAGE = {
     }
   ],
   "summary": {
-    "capabilityFamilies": 33,
-    "cliOperations": 53,
+    "capabilityFamilies": 36,
+    "cliOperations": 60,
     "registrySnapshot": {
       "schema": "whoisleuth\u002eregistry-standards-coverage",
       "version": 1,
-      "verifiedAt": "2026-10-30",
+      "verifiedAt": "2026-11-21",
       "counts": {
         "activeTlds": 1436,
         "countryCode": 309,
@@ -616,6 +616,33 @@ export const PUBLIC_COVERAGE = {
       ]
     },
     {
+      "id": "network_directory",
+      "title": "Selected network directory",
+      "job": "investigate",
+      "implemented": true,
+      "reviewBasis": "Versioned capability contract and deterministic repository verification",
+      "optionalOrConfigurationDependent": false,
+      "executionPlanes": [
+        "local_cli_network"
+      ],
+      "scanModes": [],
+      "networkMode": "bounded_passive",
+      "runtimeAvailability": "not_evaluated_by_public_catalogue",
+      "outcomes": [
+        "complete",
+        "partial",
+        "blocked",
+        "unsupported",
+        "unavailable",
+        "budget_exhausted"
+      ],
+      "partialResultContract": "explicit_document",
+      "limitations": [
+        "One explicit ASN and minimal fields are sent to the fixed community-maintained directory. No contacts, bulk fetching, retries, cache, export file or hosted redistribution.",
+        "The operator must acknowledge permitted operational use or existing provider permission. Membership and missing entries do not establish ownership, reachability or reputation."
+      ]
+    },
+    {
       "id": "domain_posture",
       "title": "Owned-domain posture review",
       "job": "assure",
@@ -642,6 +669,66 @@ export const PUBLIC_COVERAGE = {
       "limitations": [
         "Posture findings describe bounded public registry, DNS and MTA-STS publication evidence and never change configuration.",
         "Inherited DMARC and direct parent delegation require a separate opt-in: up to 32 additional TXT questions within ten seconds cover ancestor policies, reporting-destination boundaries and authorisation. One parent NS discovery and A/AAAA discovery for at most two parent servers precede one pinned public-address DNS/TCP question per server. No messages are sent; recursive policy and direct referral observations remain separate."
+      ]
+    },
+    {
+      "id": "resolver_comparison",
+      "title": "Selected resolver comparison",
+      "job": "assure",
+      "implemented": true,
+      "reviewBasis": "Versioned capability contract and deterministic repository verification",
+      "optionalOrConfigurationDependent": false,
+      "executionPlanes": [
+        "hosted_bounded_passive"
+      ],
+      "scanModes": [
+        "deep"
+      ],
+      "networkMode": "bounded_passive",
+      "runtimeAvailability": "not_evaluated_by_public_catalogue",
+      "outcomes": [
+        "complete",
+        "partial",
+        "blocked",
+        "unsupported",
+        "unavailable",
+        "budget_exhausted"
+      ],
+      "partialResultContract": "explicit_per_source",
+      "limitations": [
+        "Explicitly selected HTTPS resolvers receive the hostname and A/AAAA questions. Four requests maximum; normal Lookup, Bulk and monitoring do not invoke this action.",
+        "Resolver agreement is not authoritative truth or local DNSSEC validation. Provider retention policies apply.",
+        "Off unless the deployment operator explicitly enables it; the emergency switch still disables it."
+      ]
+    },
+    {
+      "id": "web_archive_history",
+      "title": "Web archive history",
+      "job": "investigate",
+      "implemented": true,
+      "reviewBasis": "Versioned capability contract and deterministic repository verification",
+      "optionalOrConfigurationDependent": false,
+      "executionPlanes": [
+        "hosted_bounded_passive"
+      ],
+      "scanModes": [
+        "deep"
+      ],
+      "networkMode": "bounded_passive",
+      "runtimeAvailability": "not_evaluated_by_public_catalogue",
+      "outcomes": [
+        "complete",
+        "partial",
+        "blocked",
+        "unsupported",
+        "unavailable",
+        "budget_exhausted"
+      ],
+      "partialResultContract": "explicit_per_source",
+      "limitations": [
+        "The Internet Archive receives the registrable domain in two requests for its earliest and latest homepage captures. No page content, retries or automatic invocation by Lookup, Bulk or monitoring.",
+        "Captures show when the archive recorded the homepage, not ownership or continuous operation. The archive’s own terms and privacy policy apply.",
+        "Off unless the deployment operator explicitly enables it; the emergency switch still disables it."
       ]
     },
     {
@@ -728,7 +815,8 @@ export const PUBLIC_COVERAGE = {
       "limitations": [
         "Each admitted resource request discloses its exact URL, including path and query, its GET or HEAD method, and ordinary allowlisted request headers to that public resource endpoint; DNS questions are disclosed to the configured resolver.",
         "Structured outputs exclude request paths, queries, headers and bodies, but the control-sanitised page title and screenshot retain page-controlled content that may reproduce a path or query.",
-        "Rendered capture executes page JavaScript and remains separate from hosted Lookup and the distributable CLI."
+        "Rendered capture executes page JavaScript and remains separate from hosted Lookup and the distributable CLI.",
+        "An optional local plan selects up to four subsequent URLs in fresh pages within the same total collection bounds; declared selection steps do not establish clicks, form submission or a redirect chain."
       ]
     },
     {

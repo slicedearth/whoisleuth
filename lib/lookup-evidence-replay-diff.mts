@@ -1,0 +1,267 @@
+import { lookupEvidenceReplayPageFactComparable, type LookupEvidenceReplay } from './lookup-evidence-replay.mts';
+import { sourceEligibility } from '../packages/evidence/evidence-eligibility.mts';
+
+export const LOOKUP_EVIDENCE_REPLAY_DIFF_VERSION = 1;
+const MAX_DIFF_ROWS = 64;
+const HOSTNAME_SCOPED_SOURCES = new Set(['dns', 'http', 'tls', 'page-identity', 'technology', 'security-posture', 'network-context', 'sslbl']);
+const WEB_SCOPED_SOURCES = new Set(['http', 'page-identity', 'technology', 'security-posture']);
+
+function selectedPageContext(left: LookupEvidenceReplay, right: LookupEvidenceReplay): boolean {
+  return left.webObservationMode === 'selected_url' || right.webObservationMode === 'selected_url';
+}
+
+function sameObservationTarget(left: LookupEvidenceReplay, right: LookupEvidenceReplay): boolean {
+  return sameCanonicalText(left.observationHostname ?? left.caseDomain ?? left.target,
+    right.observationHostname ?? right.caseDomain ?? right.target);
+}
+
+export type LookupEvidenceReplayDiffRow = Readonly<{
+  id: string;
+  label: string;
+  kind: 'collection_quality_difference' | 'interpretation_difference' | 'observed_change' | 'unchanged';
+  left: string;
+  right: string;
+  explanation: string;
+}>;
+
+// Browser replay and the CLI name each difference class with these labels.
+export const LOOKUP_EVIDENCE_REPLAY_DIFF_KIND_LABELS: Readonly<Record<LookupEvidenceReplayDiffRow['kind'], string>> = Object.freeze({
+  observed_change: 'observed change',
+  collection_quality_difference: 'collection difference',
+  interpretation_difference: 'interpretation difference',
+  unchanged: 'unchanged',
+});
+export const LOOKUP_EVIDENCE_REPLAY_DIFF_NO_CHANGES = 'No differences were found in the compared facts and sources.';
+
+function sameCanonicalText(left: unknown, right: unknown): boolean {
+  return String(left ?? '').trim().toLowerCase() === String(right ?? '').trim().toLowerCase();
+}
+
+function sameExactText(left: unknown, right: unknown): boolean {
+  return String(left ?? '').trim() === String(right ?? '').trim();
+}
+
+const CASE_INSENSITIVE_FACTS = new Set([
+  'registration.domain',
+  'registration.nameservers',
+  'website.activity',
+  'tls.connected-address',
+  'tls.certificate-fingerprint',
+  'page.password-field',
+  'page.external-form-action',
+]);
+
+function sameUrl(left: unknown, right: unknown): boolean {
+  try {
+    const before = new URL(String(left ?? '').trim());
+    const after = new URL(String(right ?? '').trim());
+    return before.protocol.toLowerCase() === after.protocol.toLowerCase()
+      && before.hostname.toLowerCase() === after.hostname.toLowerCase()
+      && before.port === after.port
+      && before.username === after.username
+      && before.password === after.password
+      && before.pathname === after.pathname
+      && before.search === after.search
+      && before.hash === after.hash;
+  } catch {
+    return sameExactText(left, right);
+  }
+}
+
+function sameFactValue(id: string, left: unknown, right: unknown): boolean {
+  if (id === 'website.final-url') return sameUrl(left, right);
+  return CASE_INSENSITIVE_FACTS.has(id)
+    ? sameCanonicalText(left, right)
+    : sameExactText(left, right);
+}
+
+function explicitlyCompleteSourceState(state: string, complete: boolean | null): boolean {
+  return sourceEligibility({ state, complete }, { requireExplicitComplete: true }).eligible;
+}
+
+function factSourceExplicitlyComplete(
+  fact: LookupEvidenceReplay['facts'][number] | undefined,
+  fallbackFact: LookupEvidenceReplay['facts'][number] | undefined,
+  replay: LookupEvidenceReplay,
+): boolean {
+  const factId = fact?.id ?? fallbackFact?.id;
+  if (factId && !lookupEvidenceReplayPageFactComparable(replay, factId)) return false;
+  if (fact) return (fact.id === 'dns.a' || fact.id === 'dns.aaaa') && fact.sourceState === 'not_found'
+    ? fact.sourceComplete === true : explicitlyCompleteSourceState(fact.sourceState, fact.sourceComplete);
+  if (!fallbackFact) return false;
+  if (fallbackFact.id === 'dns.a' || fallbackFact.id === 'dns.aaaa') return false;
+  const source = replay.sources.find((item) => item.id === fallbackFact.sourceId);
+  return Boolean(source && explicitlyCompleteSourceState(source.state, source.complete));
+}
+
+type ReplayMetadataKey = 'pagePublicationMetadata' | 'httpDeliveryMetadata';
+
+function appendMetadataRows(
+  rows: LookupEvidenceReplayDiffRow[],
+  left: LookupEvidenceReplay,
+  right: LookupEvidenceReplay,
+  key: ReplayMetadataKey,
+  label: string,
+): void {
+  const before = left[key];
+  const after = right[key];
+  if (!before && !after) return;
+  const id = key === 'pagePublicationMetadata' ? 'publication' : 'delivery';
+  if (!sameObservationTarget(left, right) || selectedPageContext(left, right)) {
+    rows.push({ id: `metadata:${id}`, label, kind: 'collection_quality_difference',
+      left: left.observationHostname ?? left.caseDomain ?? left.target,
+      right: right.observationHostname ?? right.caseDomain ?? right.target,
+      explanation: 'These observations have different hostnames or a selected URL whose complete identity is not retained; their values are not evidence of change at one target.' });
+    return;
+  }
+  if (left.schemaVersion !== right.schemaVersion && (!before || !after)) {
+    rows.push({
+      id: `metadata:${id}`,
+      label,
+      kind: 'interpretation_difference',
+      left: before ? 'represented' : `not represented by schema ${left.schemaVersion}`,
+      right: after ? 'represented' : `not represented by schema ${right.schemaVersion}`,
+      explanation: 'The evidence schemas represent different bounded metadata contracts, so this is not reported as target change.',
+    });
+    return;
+  }
+  if (!before || !after) {
+    rows.push({
+      id: `metadata:${id}`,
+      label,
+      kind: 'collection_quality_difference',
+      left: before ? `${before.status} metadata` : 'not recorded',
+      right: after ? `${after.status} metadata` : 'not recorded',
+      explanation: 'One capture does not contain this optional metadata, so no target change is inferred.',
+    });
+    return;
+  }
+  const rowIds = [...new Set([...before.rows.map((item) => item.id), ...after.rows.map((item) => item.id)])].sort();
+  for (const rowId of rowIds) {
+    const beforeRow = before.rows.find((item) => item.id === rowId);
+    const afterRow = after.rows.find((item) => item.id === rowId);
+    const unchanged = Boolean(beforeRow && afterRow && sameExactText(beforeRow.value, afterRow.value));
+    const complete = before.complete && after.complete;
+    const kind = unchanged ? 'unchanged' : complete ? 'observed_change' : 'collection_quality_difference';
+    rows.push({
+      id: `metadata:${rowId}`,
+      label: beforeRow?.label ?? afterRow?.label ?? label,
+      kind,
+      left: beforeRow?.value ?? 'not recorded',
+      right: afterRow?.value ?? 'not recorded',
+      explanation: kind === 'observed_change'
+        ? 'The bounded metadata value differs between two complete retained observations.'
+        : kind === 'collection_quality_difference'
+          ? 'At least one metadata observation is partial or missing, so the difference is not represented as target change.'
+          : 'The bounded metadata value is unchanged.',
+    });
+  }
+}
+
+export function buildLookupEvidenceReplayDiff(
+  left: LookupEvidenceReplay,
+  right: LookupEvidenceReplay,
+) {
+  if (left.target.toLowerCase() !== right.target.toLowerCase()) {
+    throw new Error('Two-capture evidence comparison requires exports for the same target.');
+  }
+  const rows: LookupEvidenceReplayDiffRow[] = [];
+  const observationTargetChanged = !sameObservationTarget(left, right);
+  if (observationTargetChanged) rows.push({
+    id: 'collection:hostname', label: 'DNS, TLS and web observation hostname', kind: 'collection_quality_difference',
+    left: left.observationHostname ?? left.caseDomain ?? left.target,
+    right: right.observationHostname ?? right.caseDomain ?? right.target,
+    explanation: 'Registration identity is unchanged, but supporting observations examined different hostnames.',
+  });
+  const sourceIds = [...new Set([...left.sources.map((item) => item.id), ...right.sources.map((item) => item.id)])].sort();
+  for (const id of sourceIds) {
+    const before = left.sources.find((item) => item.id === id);
+    const after = right.sources.find((item) => item.id === id);
+    const unchanged = before && after && before.state === after.state && before.complete === after.complete;
+    rows.push({
+      id: `source:${id}`,
+      label: before?.label ?? after?.label ?? id,
+      kind: unchanged ? 'unchanged' : 'collection_quality_difference',
+      left: before ? `${before.state}${before.complete === false ? ' · incomplete' : ''}` : 'not recorded',
+      right: after ? `${after.state}${after.complete === false ? ' · incomplete' : ''}` : 'not recorded',
+      explanation: unchanged
+        ? 'The retained source state and completeness are unchanged.'
+        : 'Source state or completeness differs, so missing or changed facts may reflect collection conditions rather than target change.',
+    });
+  }
+  const factIds = [...new Set([...left.facts.map((item) => item.id), ...right.facts.map((item) => item.id)])].sort();
+  for (const id of factIds) {
+    const before = left.facts.find((item) => item.id === id);
+    const after = right.facts.find((item) => item.id === id);
+    const label = before?.label ?? after?.label ?? id;
+    const sourcesExplicitlyComplete = factSourceExplicitlyComplete(before, after, left)
+      && factSourceExplicitlyComplete(after, before, right);
+    const unchanged = before && after && sameFactValue(id, before.value, after.value);
+    const sourceChanged = Boolean(before && after && before.sourceId !== after.sourceId);
+    const scopeChanged = [before?.sourceId, after?.sourceId].some((source) => source && (
+      observationTargetChanged && HOSTNAME_SCOPED_SOURCES.has(source)
+      || selectedPageContext(left, right) && WEB_SCOPED_SOURCES.has(source)));
+    const incompleteDnsFamily = (id === 'dns.a' || id === 'dns.aaaa') && !sourcesExplicitlyComplete;
+    const incompletePage = !lookupEvidenceReplayPageFactComparable(left, id) || !lookupEvidenceReplayPageFactComparable(right, id);
+    // Page facts are qualified on both sides before their values are compared.
+    const kind = sourceChanged || scopeChanged || incompleteDnsFamily || incompletePage
+      ? 'collection_quality_difference'
+      : unchanged
+      ? 'unchanged'
+      : (!before || !after) && !sourcesExplicitlyComplete
+        ? 'collection_quality_difference'
+        : 'observed_change';
+    rows.push({
+      id: `fact:${id}`,
+      label,
+      kind,
+      left: before?.value ?? 'not recorded',
+      right: after?.value ?? 'not recorded',
+      explanation: kind === 'observed_change'
+        ? 'The bounded normalised value differs between two retained observations.'
+        : kind === 'collection_quality_difference'
+          ? scopeChanged
+            ? 'The hostname differs or a selected URL has no retained complete target identity; this is not reported as change at one target.'
+            : sourceChanged
+            ? 'The retained source attribution changed, so the values are not represented as a target change even when they differ.'
+            : incompleteDnsFamily
+              ? 'The DNS family outcome is unknown or incomplete on at least one side; this is not evidence of address removal.'
+              : incompletePage
+                ? 'Page collection was incomplete or unavailable on at least one side, so this page result is not represented as a target change.'
+              : 'One observation lacks this fact without explicitly complete positive source evidence on both sides; this is a collection or provenance difference, not observed removal.'
+          : 'The bounded normalised value is unchanged.',
+    });
+  }
+  appendMetadataRows(rows, left, right, 'pagePublicationMetadata', 'Homepage publication metadata');
+  appendMetadataRows(rows, left, right, 'httpDeliveryMetadata', 'HTTP delivery metadata');
+  if (left.generatorVersion !== right.generatorVersion) {
+    rows.push({
+      id: 'interpretation:generator-version',
+      label: 'WHOISleuth interpretation version',
+      kind: 'interpretation_difference',
+      left: left.generatorVersion ?? 'not recorded',
+      right: right.generatorVersion ?? 'not recorded',
+      explanation: 'The exports were produced by different application versions, so derived or normalised output may reflect an interpretation change.',
+    });
+  }
+  const retained = rows.slice(0, MAX_DIFF_ROWS);
+  return Object.freeze({
+    version: LOOKUP_EVIDENCE_REPLAY_DIFF_VERSION,
+    target: left.target,
+    left: Object.freeze({ exportedAt: left.exportedAt, digestSha256: left.digestSha256 }),
+    right: Object.freeze({ exportedAt: right.exportedAt, digestSha256: right.digestSha256 }),
+    rows: Object.freeze(retained),
+    counts: Object.freeze({
+      observedChanges: retained.filter((item) => item.kind === 'observed_change').length,
+      collectionDifferences: retained.filter((item) => item.kind === 'collection_quality_difference').length,
+      interpretationDifferences: retained.filter((item) => item.kind === 'interpretation_difference').length,
+      unchanged: retained.filter((item) => item.kind === 'unchanged').length,
+    }),
+    truncated: rows.length > retained.length,
+    limitations: Object.freeze([
+      'This offline comparison uses only two selected evidence exports and makes no network request.',
+      'Observed differences can reflect target change, publication lag, or collection conditions and require analyst review.',
+      'Collection-quality and interpretation differences are kept separate from observed evidence changes.',
+    ]),
+  });
+}
